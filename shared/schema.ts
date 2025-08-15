@@ -164,7 +164,7 @@ export const scraperConfigs = pgTable("scraper_configs", {
   username: text("username"),
   password: text("password"), // Should be encrypted in production
   searchCriteria: jsonb("search_criteria").default({}),
-  schedule: text("schedule").notNull().default("0 */2 * * *"), // Every 2 hours
+  schedule: text("schedule").notNull().default("*/1 * * * * *"), // Every 1 second
   autoCreateLoads: boolean("auto_create_loads").notNull().default(true),
   defaultCustomerId: varchar("default_customer_id").references(() => customers.id),
   lastRunAt: timestamp("last_run_at"),

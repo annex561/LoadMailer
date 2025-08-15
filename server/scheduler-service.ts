@@ -65,9 +65,11 @@ export class SchedulerService {
         return;
       }
 
-      // Schedule the task
+      // Schedule the task with seconds support
       const task = cron.schedule(config.schedule, async () => {
         await this.executeScraperTask(config.id, scraper);
+      }, {
+        scheduled: false
       });
 
       // Store the scheduled task
