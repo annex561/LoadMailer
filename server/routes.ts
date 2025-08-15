@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { analyticsService } from "./analytics-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations } from "@shared/schema";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -618,6 +619,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(location);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch driver location" });
+    }
+  });
+
+  // Analytics and Reporting Routes
+  app.get('/api/analytics/dashboard', async (req, res) => {
+    try {
+      const dashboardData = await analyticsService.getDashboardAnalytics();
+      res.json(dashboardData);
+    } catch (error) {
+      console.error('Dashboard analytics error:', error);
+      res.status(500).json({ error: 'Failed to fetch dashboard analytics' });
+    }
+  });
+
+  app.get('/api/analytics/driver-performance', async (req, res) => {
+    try {
+      const { period = 'monthly', startDate, endDate } = req.query;
+      const performance = await analyticsService.getDriverPerformance({
+        period: period as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+      });
+      res.json(performance);
+    } catch (error) {
+      console.error('Driver performance analytics error:', error);
+      res.status(500).json({ error: 'Failed to fetch driver performance' });
+    }
+  });
+
+  app.get('/api/analytics/customer-insights', async (req, res) => {
+    try {
+      const { period = 'monthly', startDate, endDate } = req.query;
+      const insights = await analyticsService.getCustomerInsights({
+        period: period as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+      });
+      res.json(insights);
+    } catch (error) {
+      console.error('Customer insights error:', error);
+      res.status(500).json({ error: 'Failed to fetch customer insights' });
+    }
+  });
+
+  app.get('/api/analytics/business-metrics', async (req, res) => {
+    try {
+      const { period = 'monthly', metricType } = req.query;
+      const metrics = await analyticsService.getBusinessMetrics({
+        period: period as string,
+        metricType: metricType as string,
+      });
+      res.json(metrics);
+    } catch (error) {
+      console.error('Business metrics error:', error);
+      res.status(500).json({ error: 'Failed to fetch business metrics' });
+    }
+  });
+
+  app.get('/api/analytics/load-trends', async (req, res) => {
+    try {
+      const { days = 30 } = req.query;
+      const trends = await analyticsService.getLoadTrends(Number(days));
+      res.json(trends);
+    } catch (error) {
+      console.error('Load trends error:', error);
+      res.status(500).json({ error: 'Failed to fetch load trends' });
+    }
+  });
+
+  app.get('/api/analytics/revenue-analytics', async (req, res) => {
+    try {
+      const { period = 'monthly', startDate, endDate } = req.query;
+      const revenue = await analyticsService.getRevenueAnalytics({
+        period: period as string,
+        startDate: startDate as string,
+        endDate: endDate as string,
+      });
+      res.json(revenue);
+    } catch (error) {
+      console.error('Revenue analytics error:', error);
+      res.status(500).json({ error: 'Failed to fetch revenue analytics' });
+    }
+  });
+
+  app.post('/api/reports/generate', async (req, res) => {
+    try {
+      const reportConfig = req.body;
+      const report = await analyticsService.generateReport(reportConfig);
+      res.json(report);
+    } catch (error) {
+      console.error('Report generation error:', error);
+      res.status(500).json({ error: 'Failed to generate report' });
+    }
+  });
+
+  app.get('/api/reports/templates', async (req, res) => {
+    try {
+      const templates = await storage.getReportTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error('Report templates error:', error);
+      res.status(500).json({ error: 'Failed to fetch report templates' });
+    }
+  });
+
+  app.post('/api/reports/templates', async (req, res) => {
+    try {
+      const template = await storage.createReportTemplate(req.body);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error('Create report template error:', error);
+      res.status(500).json({ error: 'Failed to create report template' });
     }
   });
 

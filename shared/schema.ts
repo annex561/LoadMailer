@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, real, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -92,6 +92,67 @@ export const driverLocations = pgTable("driver_locations", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Analytics and Reporting Tables
+export const driverPerformanceMetrics = pgTable("driver_performance_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  period: text("period").notNull(), // 'daily', 'weekly', 'monthly'
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  loadsCompleted: integer("loads_completed").notNull().default(0),
+  onTimeDeliveries: integer("on_time_deliveries").notNull().default(0),
+  totalMiles: real("total_miles").notNull().default(0),
+  totalRevenue: real("total_revenue").notNull().default(0),
+  averageRating: real("average_rating").default(0),
+  fuelEfficiency: real("fuel_efficiency").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const customerAnalytics = pgTable("customer_analytics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").references(() => customers.id).notNull(),
+  period: text("period").notNull(), // 'daily', 'weekly', 'monthly', 'yearly'
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  totalLoads: integer("total_loads").notNull().default(0),
+  totalRevenue: real("total_revenue").notNull().default(0),
+  averageLoadValue: real("average_load_value").default(0),
+  onTimeDeliveryRate: real("on_time_delivery_rate").default(0),
+  repeatCustomerScore: real("repeat_customer_score").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const businessMetrics = pgTable("business_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  metricType: text("metric_type").notNull(), // 'revenue', 'loads', 'efficiency', 'costs'
+  period: text("period").notNull(), // 'daily', 'weekly', 'monthly', 'yearly'
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  value: real("value").notNull(),
+  target: real("target").default(0),
+  previousPeriodValue: real("previous_period_value").default(0),
+  growthRate: real("growth_rate").default(0),
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const reportTemplates = pgTable("report_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  reportType: text("report_type").notNull(), // 'driver_performance', 'customer_analytics', 'business_overview', 'custom'
+  filters: jsonb("filters").default({}),
+  chartTypes: jsonb("chart_types").default([]),
+  metrics: jsonb("metrics").default([]),
+  schedule: text("schedule"), // 'daily', 'weekly', 'monthly', null for on-demand
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertDriverSchema = createInsertSchema(drivers).omit({
   id: true,
@@ -133,6 +194,29 @@ export const insertDriverLocationSchema = createInsertSchema(driverLocations).om
   createdAt: true,
 });
 
+export const insertDriverPerformanceMetricsSchema = createInsertSchema(driverPerformanceMetrics).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCustomerAnalyticsSchema = createInsertSchema(customerAnalytics).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertBusinessMetricsSchema = createInsertSchema(businessMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertReportTemplateSchema = createInsertSchema(reportTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const driverOnboardingSchema = createInsertSchema(drivers).omit({
   id: true,
   createdAt: true,
@@ -163,6 +247,18 @@ export type InsertOnboardingToken = z.infer<typeof insertOnboardingTokenSchema>;
 
 export type DriverLocation = typeof driverLocations.$inferSelect;
 export type InsertDriverLocation = z.infer<typeof insertDriverLocationSchema>;
+
+export type DriverPerformanceMetrics = typeof driverPerformanceMetrics.$inferSelect;
+export type InsertDriverPerformanceMetrics = z.infer<typeof insertDriverPerformanceMetricsSchema>;
+
+export type CustomerAnalytics = typeof customerAnalytics.$inferSelect;
+export type InsertCustomerAnalytics = z.infer<typeof insertCustomerAnalyticsSchema>;
+
+export type BusinessMetrics = typeof businessMetrics.$inferSelect;
+export type InsertBusinessMetrics = z.infer<typeof insertBusinessMetricsSchema>;
+
+export type ReportTemplate = typeof reportTemplates.$inferSelect;
+export type InsertReportTemplate = z.infer<typeof insertReportTemplateSchema>;
 
 export type DriverOnboarding = z.infer<typeof driverOnboardingSchema>;
 
