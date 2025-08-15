@@ -723,10 +723,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DAT Scraper Routes - Placeholder for UI integration
+  // DAT Scraper Routes - Full implementation
+  app.get('/api/scraper-configs', async (req, res) => {
+    try {
+      const configs = await storage.getAllScraperConfigs();
+      res.json(configs);
+    } catch (error) {
+      console.error('Error fetching scraper configs:', error);
+      res.status(500).json({ message: 'Failed to fetch scraper configs' });
+    }
+  });
+
+  app.post('/api/scraper-configs', async (req, res) => {
+    try {
+      const config = await storage.createScraperConfig(req.body);
+      res.json(config);
+    } catch (error) {
+      console.error('Error creating scraper config:', error);
+      res.status(500).json({ message: 'Failed to create scraper config' });
+    }
+  });
+
+  app.patch('/api/scraper-configs/:id', async (req, res) => {
+    try {
+      const config = await storage.updateScraperConfig(req.params.id, req.body);
+      if (!config) {
+        return res.status(404).json({ message: 'Scraper config not found' });
+      }
+      
+      // Update the scheduled task
+      await schedulerService.updateTask(config);
+      
+      res.json(config);
+    } catch (error) {
+      console.error('Error updating scraper config:', error);
+      res.status(500).json({ message: 'Failed to update scraper config' });
+    }
+  });
+
+  app.post('/api/scraper-configs/:id/run', async (req, res) => {
+    try {
+      const result = await schedulerService.runTaskNow(req.params.id);
+      res.json(result);
+    } catch (error) {
+      console.error('Error running scraper:', error);
+      res.status(500).json({ message: 'Failed to run scraper' });
+    }
+  });
+
+  // Scraper logs routes
+  app.get('/api/scraper-logs', async (req, res) => {
+    try {
+      const logs = await storage.getAllScraperLogs();
+      res.json(logs);
+    } catch (error) {
+      console.error('Error fetching scraper logs:', error);
+      res.status(500).json({ message: 'Failed to fetch scraper logs' });
+    }
+  });
+
   app.get('/api/scraper-status', async (req, res) => {
     try {
-      res.json({ message: 'DAT Scraper integration ready for configuration' });
+      res.json({ message: 'DAT Scraper integration active and running' });
     } catch (error) {
       console.error('Failed to get scraper status:', error);
       res.status(500).json({ error: 'Failed to get scraper status' });
