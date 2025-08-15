@@ -52,18 +52,25 @@ export class DATScraper {
 
   async initialize(): Promise<void> {
     try {
-      // Launch browser with stealth settings
+      // Launch browser with stealth settings optimized for server environment
       this.browser = await puppeteer.launch({
-        headless: true,
+        headless: 'shell', // Use shell headless mode for better compatibility
+        executablePath: process.env.CHROME_PATH || '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium', // Use system chromium
         args: [
           '--no-sandbox',
-          '--disable-setuid-sandbox',
+          '--disable-setuid-sandbox', 
           '--disable-dev-shm-usage',
           '--disable-accelerated-2d-canvas',
           '--no-first-run',
           '--no-zygote',
           '--single-process',
-          '--disable-gpu'
+          '--disable-gpu',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--disable-web-security',
+          '--disable-features=TranslateUI',
+          '--disable-ipc-flooding-protection'
         ]
       });
 
