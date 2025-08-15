@@ -329,7 +329,7 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Auto-assign based on availability</SelectItem>
+                          <SelectItem value="auto">Auto-assign based on availability</SelectItem>
                           {drivers.filter(driver => driver.status === "available").map((driver) => (
                             <SelectItem key={driver.id} value={driver.id}>
                               {driver.name} - {driver.status}
