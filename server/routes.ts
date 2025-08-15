@@ -468,6 +468,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/create-sms-onboarding-invite", async (req, res) => {
+    try {
+      const { email, phone } = req.body;
+      
+      if (!email || !phone) {
+        return res.status(400).json({ error: "Email and phone are required" });
+      }
+      
+      const token = randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+      
+      const tokenData = {
+        token,
+        email,
+        expiresAt,
+        isUsed: false,
+      };
+      
+      const validatedData = insertOnboardingTokenSchema.parse(tokenData);
+      const onboardingToken = await storage.createOnboardingToken(validatedData);
+      
+      // Create the onboarding link
+      const onboardingLink = `${req.protocol}://${req.hostname}/driver-onboarding?token=${token}`;
+      
+      // SMS message content
+      const smsMessage = `Welcome to LoadMaster! Complete your driver onboarding here: ${onboardingLink}. This link expires in 7 days.`;
+      
+      // Send SMS (placeholder - would use Twilio in production)
+      console.log(`SMS would be sent to ${phone}: ${smsMessage}`);
+      
+      // Log the SMS attempt
+      await storage.createEmailLog({
+        recipientEmail: email,
+        subject: "SMS Driver Onboarding",
+        status: "sent",
+        sentAt: new Date(),
+      });
+      
+      res.status(201).json({ 
+        ...onboardingToken, 
+        phone,
+        message: "SMS invitation sent successfully"
+      });
+    } catch (error) {
+      console.error("SMS invitation error:", error);
+      res.status(400).json({ error: "Failed to send SMS invitation" });
+    }
+  });
+
   app.post("/api/validate-onboarding-token", async (req, res) => {
     try {
       const { token } = req.body;

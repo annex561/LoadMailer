@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle } from "lucide-react";
+import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle } from "lucide-react";
 import type { Driver, OnboardingToken } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,10 +18,17 @@ const inviteDriverSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
 });
 
+const smsDriverSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  phone: z.string().min(10, "Please enter a valid phone number"),
+});
+
 type InviteDriverForm = z.infer<typeof inviteDriverSchema>;
+type SMSDriverForm = z.infer<typeof smsDriverSchema>;
 
 export default function DriverManagement() {
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showSMSModal, setShowSMSModal] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -30,6 +37,14 @@ export default function DriverManagement() {
     resolver: zodResolver(inviteDriverSchema),
     defaultValues: {
       email: "",
+    },
+  });
+
+  const smsForm = useForm<SMSDriverForm>({
+    resolver: zodResolver(smsDriverSchema),
+    defaultValues: {
+      email: "",
+      phone: "",
     },
   });
 
@@ -71,6 +86,31 @@ export default function DriverManagement() {
       toast({
         title: "Error",
         description: "Failed to create invitation",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createSMSInviteMutation = useMutation({
+    mutationFn: async (data: SMSDriverForm) => {
+      const response = await apiRequest("POST", "/api/create-sms-onboarding-invite", data);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding-tokens"] });
+      
+      toast({
+        title: "SMS Invitation Sent",
+        description: `Onboarding link sent to ${data.phone}`,
+      });
+      
+      smsForm.reset();
+      setShowSMSModal(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to send SMS invitation",
         variant: "destructive",
       });
     },
@@ -182,7 +222,7 @@ export default function DriverManagement() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Current Drivers */}
         <Card>
           <CardHeader>
@@ -276,6 +316,119 @@ export default function DriverManagement() {
                   No drivers onboarded yet. Send your first invitation to get started.
                 </div>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Create New Driver via SMS */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Create New Driver</CardTitle>
+                <p className="text-sm text-gray-500">Send SMS onboarding link</p>
+              </div>
+              <Dialog open={showSMSModal} onOpenChange={setShowSMSModal}>
+                <DialogTrigger asChild>
+                  <Button className="bg-green-600 text-white hover:bg-green-700" data-testid="button-create-driver-sms">
+                    <MessageCircle className="mr-2 w-4 h-4" />
+                    Send SMS Link
+                  </Button>
+                </DialogTrigger>
+                <DialogContent data-testid="create-driver-sms-modal">
+                  <DialogHeader>
+                    <DialogTitle>Create Driver via SMS</DialogTitle>
+                    <p className="text-sm text-gray-500">Send an onboarding link via text message</p>
+                  </DialogHeader>
+                  <Form {...smsForm}>
+                    <form onSubmit={smsForm.handleSubmit((data) => createSMSInviteMutation.mutate(data))} className="space-y-4">
+                      <FormField
+                        control={smsForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Driver Phone Number</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                type="tel"
+                                placeholder="(555) 123-4567"
+                                data-testid="input-driver-phone"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={smsForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Driver Email</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                type="email"
+                                placeholder="driver@example.com"
+                                data-testid="input-driver-email-sms"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <div className="flex items-start space-x-3">
+                          <MessageCircle className="text-blue-600 w-5 h-5 mt-0.5" />
+                          <div>
+                            <h4 className="font-medium text-blue-800">SMS Invitation</h4>
+                            <p className="text-sm text-blue-700 mt-1">
+                              The driver will receive a text message with a secure onboarding link. Once they complete registration, they'll be automatically added to your fleet.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex justify-end space-x-4">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => setShowSMSModal(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          type="submit" 
+                          disabled={createSMSInviteMutation.isPending}
+                          className="bg-green-600 hover:bg-green-700"
+                          data-testid="button-send-sms-invite"
+                        >
+                          {createSMSInviteMutation.isPending ? "Sending..." : "Send SMS Invite"}
+                        </Button>
+                      </div>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MessageCircle className="text-green-600 w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Quick Driver Onboarding</h3>
+              <p className="text-gray-500 mb-4 max-w-xs mx-auto">
+                Send a text message with an onboarding link to instantly add new drivers to your fleet.
+              </p>
+              <Button 
+                onClick={() => setShowSMSModal(true)}
+                className="bg-green-600 text-white hover:bg-green-700"
+                data-testid="button-open-sms-modal"
+              >
+                <MessageCircle className="mr-2 w-4 h-4" />
+                Create New Driver
+              </Button>
             </div>
           </CardContent>
         </Card>
