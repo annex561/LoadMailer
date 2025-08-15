@@ -29,8 +29,8 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
   const form = useForm<InsertLoad>({
     resolver: zodResolver(insertLoadSchema),
     defaultValues: {
-      customerId: load?.customerId || "",
-      driverId: load?.driverId || "",
+      customerId: load?.customerId || undefined,
+      driverId: load?.driverId || undefined,
       description: load?.description || "",
       weight: load?.weight || 0,
       priority: load?.priority || "standard",
