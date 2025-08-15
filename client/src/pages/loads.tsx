@@ -14,7 +14,7 @@ export default function Loads() {
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [editingLoad, setEditingLoad] = useState<LoadWithRelations | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const { data: loads = [], isLoading } = useQuery<LoadWithRelations[]>({
     queryKey: ["/api/loads"],
@@ -26,7 +26,7 @@ export default function Loads() {
       load.customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       load.driver?.name.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = !statusFilter || load.status === statusFilter;
+    const matchesStatus = !statusFilter || statusFilter === "all" || load.status === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
@@ -101,7 +101,7 @@ export default function Loads() {
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="scheduled">Scheduled</SelectItem>
                   <SelectItem value="in_transit">In Transit</SelectItem>
                   <SelectItem value="delivered">Delivered</SelectItem>

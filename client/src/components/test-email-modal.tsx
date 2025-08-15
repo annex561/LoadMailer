@@ -32,7 +32,7 @@ export default function TestEmailModal({ isOpen, onClose, template }: TestEmailM
     resolver: zodResolver(testEmailSchema),
     defaultValues: {
       recipientEmail: "",
-      loadId: "",
+      loadId: "sample",
     },
   });
 
@@ -116,7 +116,7 @@ export default function TestEmailModal({ isOpen, onClose, template }: TestEmailM
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Use sample test data</SelectItem>
+                      <SelectItem value="sample">Use sample test data</SelectItem>
                       {loads.slice(0, 10).map((load) => (
                         <SelectItem key={load.id} value={load.id}>
                           {load.loadNumber} - {load.customer.name}

@@ -322,7 +322,7 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Assign Driver</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value} data-testid="select-driver">
+                      <Select onValueChange={field.onChange} defaultValue={field.value || undefined} data-testid="select-driver">
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select driver or auto-assign" />
