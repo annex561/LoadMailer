@@ -264,14 +264,14 @@ export default function EmailTemplateFormModal({
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h5 className="text-sm font-medium text-gray-900 mb-2">Available Variables</h5>
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                    <div>• {{loadNumber}}</div>
-                    <div>• {{customerName}}</div>
-                    <div>• {{driverName}}</div>
-                    <div>• {{pickupAddress}}</div>
-                    <div>• {{deliveryAddress}}</div>
-                    <div>• {{pickupDate}}</div>
-                    <div>• {{deliveryDate}}</div>
-                    <div>• {{specialInstructions}}</div>
+                    <div>• {"{{loadNumber}}"}</div>
+                    <div>• {"{{customerName}}"}</div>
+                    <div>• {"{{driverName}}"}</div>
+                    <div>• {"{{pickupAddress}}"}</div>
+                    <div>• {"{{deliveryAddress}}"}</div>
+                    <div>• {"{{pickupDate}}"}</div>
+                    <div>• {"{{deliveryDate}}"}</div>
+                    <div>• {"{{specialInstructions}}"}</div>
                   </div>
                 </div>
               </div>
