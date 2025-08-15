@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { analyticsService } from "./analytics-service";
+import { schedulerService } from "./scheduler-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations } from "@shared/schema";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -98,6 +99,14 @@ async function sendAutomatedEmails(load: LoadWithRelations, trigger: string) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize scheduler service on startup
+  try {
+    await schedulerService.initialize();
+    console.log('Scheduler service initialized');
+  } catch (error) {
+    console.error('Failed to initialize scheduler service:', error);
+  }
+
   // Driver routes
   app.get("/api/drivers", async (req, res) => {
     try {
@@ -679,8 +688,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/analytics/load-trends', async (req, res) => {
     try {
-      const { days = 30 } = req.query;
-      const trends = await analyticsService.getLoadTrends(Number(days));
+      const { days = '7' } = req.query;
+      const trends = await analyticsService.getLoadTrends(parseInt(days as string));
       res.json(trends);
     } catch (error) {
       console.error('Load trends error:', error);
@@ -688,7 +697,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/analytics/revenue-analytics', async (req, res) => {
+  app.get('/api/analytics/revenue', async (req, res) => {
     try {
       const { period = 'monthly', startDate, endDate } = req.query;
       const revenue = await analyticsService.getRevenueAnalytics({
@@ -703,7 +712,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/reports/generate', async (req, res) => {
+  app.post('/api/analytics/generate-report', async (req, res) => {
     try {
       const reportConfig = req.body;
       const report = await analyticsService.generateReport(reportConfig);
@@ -714,23 +723,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/reports/templates', async (req, res) => {
+  // DAT Scraper Routes - Placeholder for UI integration
+  app.get('/api/scraper-status', async (req, res) => {
     try {
-      const templates = await storage.getReportTemplates();
-      res.json(templates);
+      res.json({ message: 'DAT Scraper integration ready for configuration' });
     } catch (error) {
-      console.error('Report templates error:', error);
-      res.status(500).json({ error: 'Failed to fetch report templates' });
-    }
-  });
-
-  app.post('/api/reports/templates', async (req, res) => {
-    try {
-      const template = await storage.createReportTemplate(req.body);
-      res.status(201).json(template);
-    } catch (error) {
-      console.error('Create report template error:', error);
-      res.status(500).json({ error: 'Failed to create report template' });
+      console.error('Failed to get scraper status:', error);
+      res.status(500).json({ error: 'Failed to get scraper status' });
     }
   });
 

@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -52,6 +52,20 @@ export interface IStorage {
 
   // Driver onboarding
   completeDriverOnboarding(data: DriverOnboarding, token: string): Promise<Driver>;
+
+  // Scraper configuration operations
+  getScraperConfig(id: string): Promise<ScraperConfig | undefined>;
+  getAllScraperConfigs(): Promise<ScraperConfig[]>;
+  createScraperConfig(config: InsertScraperConfig): Promise<ScraperConfig>;
+  updateScraperConfig(id: string, config: Partial<InsertScraperConfig>): Promise<ScraperConfig | undefined>;
+  deleteScraperConfig(id: string): Promise<boolean>;
+
+  // Scraper log operations
+  getScraperLog(id: string): Promise<ScraperLog | undefined>;
+  getAllScraperLogs(): Promise<ScraperLog[]>;
+  createScraperLog(log: InsertScraperLog): Promise<ScraperLog>;
+  updateScraperLog(id: string, log: Partial<InsertScraperLog>): Promise<ScraperLog | undefined>;
+  getScraperLogsByConfig(configId: string): Promise<ScraperLog[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -62,6 +76,8 @@ export class MemStorage implements IStorage {
   private emailLogs: Map<string, EmailLog> = new Map();
   private onboardingTokens: Map<string, OnboardingToken> = new Map();
   private driverLocations: Map<string, DriverLocation> = new Map();
+  private scraperConfigs: Map<string, ScraperConfig> = new Map();
+  private scraperLogs: Map<string, ScraperLog> = new Map();
   private loadCounter = 1;
 
   constructor() {
@@ -76,6 +92,10 @@ export class MemStorage implements IStorage {
       email: "mike.johnson@company.com",
       phone: "(555) 123-4567",
       status: "available",
+      licenseNumber: "DL12345678",
+      emergencyContact: "Jane Johnson",
+      emergencyPhone: "(555) 987-6543",
+      isOnboarded: true,
       createdAt: new Date(),
     };
     
@@ -85,6 +105,10 @@ export class MemStorage implements IStorage {
       email: "sarah.williams@company.com",
       phone: "(555) 987-6543",
       status: "on_route",
+      licenseNumber: "DL87654321",
+      emergencyContact: "John Williams",
+      emergencyPhone: "(555) 321-0987",
+      isOnboarded: true,
       createdAt: new Date(),
     };
 
@@ -509,6 +533,83 @@ export class MemStorage implements IStorage {
     await this.markTokenAsUsed(tokenString);
     
     return updatedDriver;
+  }
+
+  // Scraper configuration operations
+  async getScraperConfig(id: string): Promise<ScraperConfig | undefined> {
+    return this.scraperConfigs.get(id);
+  }
+
+  async getAllScraperConfigs(): Promise<ScraperConfig[]> {
+    return Array.from(this.scraperConfigs.values());
+  }
+
+  async createScraperConfig(config: InsertScraperConfig): Promise<ScraperConfig> {
+    const id = randomUUID();
+    const newConfig: ScraperConfig = {
+      ...config,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.scraperConfigs.set(id, newConfig);
+    return newConfig;
+  }
+
+  async updateScraperConfig(id: string, config: Partial<InsertScraperConfig>): Promise<ScraperConfig | undefined> {
+    const existing = this.scraperConfigs.get(id);
+    if (!existing) return undefined;
+
+    const updated: ScraperConfig = {
+      ...existing,
+      ...config,
+      updatedAt: new Date(),
+    };
+    this.scraperConfigs.set(id, updated);
+    return updated;
+  }
+
+  async deleteScraperConfig(id: string): Promise<boolean> {
+    return this.scraperConfigs.delete(id);
+  }
+
+  // Scraper log operations
+  async getScraperLog(id: string): Promise<ScraperLog | undefined> {
+    return this.scraperLogs.get(id);
+  }
+
+  async getAllScraperLogs(): Promise<ScraperLog[]> {
+    return Array.from(this.scraperLogs.values())
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async createScraperLog(log: InsertScraperLog): Promise<ScraperLog> {
+    const id = randomUUID();
+    const newLog: ScraperLog = {
+      ...log,
+      id,
+      createdAt: new Date(),
+    };
+    this.scraperLogs.set(id, newLog);
+    return newLog;
+  }
+
+  async updateScraperLog(id: string, log: Partial<InsertScraperLog>): Promise<ScraperLog | undefined> {
+    const existing = this.scraperLogs.get(id);
+    if (!existing) return undefined;
+
+    const updated: ScraperLog = {
+      ...existing,
+      ...log,
+    };
+    this.scraperLogs.set(id, updated);
+    return updated;
+  }
+
+  async getScraperLogsByConfig(configId: string): Promise<ScraperLog[]> {
+    return Array.from(this.scraperLogs.values())
+      .filter(log => log.configId === configId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 }
 

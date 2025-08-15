@@ -153,6 +153,39 @@ export const reportTemplates = pgTable("report_templates", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// DAT Scraper Tables
+export const scraperConfigs = pgTable("scraper_configs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("dat"), // 'dat', 'loadboard', 'custom'
+  enabled: boolean("enabled").notNull().default(false),
+  loginUrl: text("login_url").notNull(),
+  searchUrl: text("search_url").notNull(),
+  username: text("username"),
+  password: text("password"), // Should be encrypted in production
+  searchCriteria: jsonb("search_criteria").default({}),
+  schedule: text("schedule").notNull().default("0 */2 * * *"), // Every 2 hours
+  autoCreateLoads: boolean("auto_create_loads").notNull().default(true),
+  defaultCustomerId: varchar("default_customer_id").references(() => customers.id),
+  lastRunAt: timestamp("last_run_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const scraperLogs = pgTable("scraper_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  configId: varchar("config_id").references(() => scraperConfigs.id).notNull(),
+  status: text("status").notNull(), // 'success', 'error', 'running'
+  loadsScraped: integer("loads_scraped").notNull().default(0),
+  loadsCreated: integer("loads_created").notNull().default(0),
+  errorMessage: text("error_message"),
+  executionTime: integer("execution_time"), // milliseconds
+  startedAt: timestamp("started_at").notNull(),
+  completedAt: timestamp("completed_at"),
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertDriverSchema = createInsertSchema(drivers).omit({
   id: true,
@@ -217,6 +250,17 @@ export const insertReportTemplateSchema = createInsertSchema(reportTemplates).om
   updatedAt: true,
 });
 
+export const insertScraperConfigSchema = createInsertSchema(scraperConfigs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertScraperLogSchema = createInsertSchema(scraperLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const driverOnboardingSchema = createInsertSchema(drivers).omit({
   id: true,
   createdAt: true,
@@ -259,6 +303,12 @@ export type InsertBusinessMetrics = z.infer<typeof insertBusinessMetricsSchema>;
 
 export type ReportTemplate = typeof reportTemplates.$inferSelect;
 export type InsertReportTemplate = z.infer<typeof insertReportTemplateSchema>;
+
+export type ScraperConfig = typeof scraperConfigs.$inferSelect;
+export type InsertScraperConfig = z.infer<typeof insertScraperConfigSchema>;
+
+export type ScraperLog = typeof scraperLogs.$inferSelect;
+export type InsertScraperLog = z.infer<typeof insertScraperLogSchema>;
 
 export type DriverOnboarding = z.infer<typeof driverOnboardingSchema>;
 
