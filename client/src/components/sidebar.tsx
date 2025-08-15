@@ -1,11 +1,12 @@
 import { Link, useLocation } from "wouter";
-import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText } from "lucide-react";
+import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard, section: "main" },
   { name: "Manage Loads", href: "/loads", icon: Package, section: "main" },
   { name: "Contacts", href: "/contacts", icon: Users, section: "main" },
+  { name: "Driver Management", href: "/driver-management", icon: UserPlus, section: "main" },
   { name: "Email Templates", href: "/templates", icon: Mail, section: "main" },
   { name: "Analytics", href: "/analytics", icon: BarChart3, section: "reports" },
   { name: "Email Logs", href: "/email-logs", icon: FileText, section: "reports" },

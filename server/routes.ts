@@ -1,8 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, type LoadWithRelations } from "@shared/schema";
+import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations } from "@shared/schema";
 import nodemailer from "nodemailer";
+import { randomUUID } from "crypto";
 
 // Email service configuration
 const transporter = nodemailer.createTransport({
@@ -435,6 +436,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch dashboard stats" });
+    }
+  });
+
+  // Driver onboarding routes
+  app.post("/api/create-onboarding-invite", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      
+      const token = randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+      
+      const tokenData = {
+        token,
+        email,
+        expiresAt,
+        isUsed: false,
+      };
+      
+      const validatedData = insertOnboardingTokenSchema.parse(tokenData);
+      const onboardingToken = await storage.createOnboardingToken(validatedData);
+      
+      res.status(201).json(onboardingToken);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create onboarding invitation" });
+    }
+  });
+
+  app.post("/api/validate-onboarding-token", async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ error: "Token is required" });
+      }
+      
+      const onboardingToken = await storage.getOnboardingToken(token);
+      
+      if (!onboardingToken) {
+        return res.json({ valid: false, error: "Token not found" });
+      }
+      
+      if (onboardingToken.isUsed) {
+        return res.json({ valid: false, error: "Token already used" });
+      }
+      
+      if (new Date(onboardingToken.expiresAt) < new Date()) {
+        return res.json({ valid: false, error: "Token expired" });
+      }
+      
+      res.json({ valid: true, email: onboardingToken.email });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to validate token" });
+    }
+  });
+
+  app.post("/api/driver-onboarding", async (req, res) => {
+    try {
+      const { token, ...driverData } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ error: "Token is required" });
+      }
+      
+      const validatedData = driverOnboardingSchema.parse(driverData);
+      const driver = await storage.completeDriverOnboarding(validatedData, token);
+      
+      res.status(201).json(driver);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to complete onboarding" });
+    }
+  });
+
+  app.get("/api/onboarding-tokens", async (req, res) => {
+    try {
+      const tokens = await storage.getAllOnboardingTokens();
+      res.json(tokens);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch onboarding tokens" });
+    }
+  });
+
+  // Driver location routes
+  app.post("/api/driver-location", async (req, res) => {
+    try {
+      const validatedData = insertDriverLocationSchema.parse(req.body);
+      const location = await storage.createDriverLocation(validatedData);
+      res.status(201).json(location);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid location data" });
+    }
+  });
+
+  app.get("/api/driver-locations", async (req, res) => {
+    try {
+      const { driverId } = req.query;
+      
+      if (driverId && typeof driverId === "string") {
+        const locations = await storage.getDriverLocationHistory(driverId);
+        res.json(locations);
+      } else {
+        // Return current locations for all drivers
+        const drivers = await storage.getAllDrivers();
+        const locationsPromises = drivers.map(async (driver) => {
+          const currentLocation = await storage.getDriverCurrentLocation(driver.id);
+          return currentLocation ? { ...currentLocation, driver } : null;
+        });
+        
+        const locations = (await Promise.all(locationsPromises)).filter(Boolean);
+        res.json(locations);
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch driver locations" });
+    }
+  });
+
+  app.get("/api/drivers/:id/location", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const location = await storage.getDriverCurrentLocation(id);
+      
+      if (!location) {
+        return res.status(404).json({ error: "Driver location not found" });
+      }
+      
+      res.json(location);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch driver location" });
     }
   });
 

@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -38,6 +38,20 @@ export interface IStorage {
   createEmailLog(log: InsertEmailLog): Promise<EmailLog>;
   updateEmailLog(id: string, log: Partial<InsertEmailLog>): Promise<EmailLog | undefined>;
   getEmailLogsByLoad(loadId: string): Promise<EmailLogWithRelations[]>;
+
+  // Onboarding token operations
+  createOnboardingToken(token: InsertOnboardingToken): Promise<OnboardingToken>;
+  getOnboardingToken(token: string): Promise<OnboardingToken | undefined>;
+  getAllOnboardingTokens(): Promise<OnboardingToken[]>;
+  markTokenAsUsed(token: string): Promise<boolean>;
+
+  // Driver location operations
+  createDriverLocation(location: InsertDriverLocation): Promise<DriverLocation>;
+  getDriverCurrentLocation(driverId: string): Promise<DriverLocation | undefined>;
+  getDriverLocationHistory(driverId: string): Promise<DriverLocation[]>;
+
+  // Driver onboarding
+  completeDriverOnboarding(data: DriverOnboarding, token: string): Promise<Driver>;
 }
 
 export class MemStorage implements IStorage {
@@ -46,6 +60,8 @@ export class MemStorage implements IStorage {
   private loads: Map<string, Load> = new Map();
   private emailTemplates: Map<string, EmailTemplate> = new Map();
   private emailLogs: Map<string, EmailLog> = new Map();
+  private onboardingTokens: Map<string, OnboardingToken> = new Map();
+  private driverLocations: Map<string, DriverLocation> = new Map();
   private loadCounter = 1;
 
   constructor() {
@@ -408,6 +424,91 @@ export class MemStorage implements IStorage {
   async getEmailLogsByLoad(loadId: string): Promise<EmailLogWithRelations[]> {
     const allLogs = await this.getAllEmailLogs();
     return allLogs.filter(log => log.loadId === loadId);
+  }
+
+  // Onboarding token operations
+  async createOnboardingToken(insertToken: InsertOnboardingToken): Promise<OnboardingToken> {
+    const id = randomUUID();
+    const token: OnboardingToken = {
+      ...insertToken,
+      id,
+      createdAt: new Date(),
+    };
+    this.onboardingTokens.set(insertToken.token, token);
+    return token;
+  }
+
+  async getOnboardingToken(tokenString: string): Promise<OnboardingToken | undefined> {
+    return this.onboardingTokens.get(tokenString);
+  }
+
+  async getAllOnboardingTokens(): Promise<OnboardingToken[]> {
+    return Array.from(this.onboardingTokens.values()).sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async markTokenAsUsed(tokenString: string): Promise<boolean> {
+    const token = this.onboardingTokens.get(tokenString);
+    if (!token) return false;
+    
+    const updatedToken = { ...token, isUsed: true };
+    this.onboardingTokens.set(tokenString, updatedToken);
+    return true;
+  }
+
+  // Driver location operations
+  async createDriverLocation(insertLocation: InsertDriverLocation): Promise<DriverLocation> {
+    const id = randomUUID();
+    const location: DriverLocation = {
+      ...insertLocation,
+      id,
+      createdAt: new Date(),
+    };
+    this.driverLocations.set(id, location);
+    return location;
+  }
+
+  async getDriverCurrentLocation(driverId: string): Promise<DriverLocation | undefined> {
+    const locations = Array.from(this.driverLocations.values())
+      .filter(location => location.driverId === driverId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    return locations[0];
+  }
+
+  async getDriverLocationHistory(driverId: string): Promise<DriverLocation[]> {
+    return Array.from(this.driverLocations.values())
+      .filter(location => location.driverId === driverId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  // Driver onboarding
+  async completeDriverOnboarding(data: DriverOnboarding, tokenString: string): Promise<Driver> {
+    const token = await this.getOnboardingToken(tokenString);
+    if (!token || token.isUsed || new Date(token.expiresAt) < new Date()) {
+      throw new Error('Invalid or expired token');
+    }
+
+    // Create the driver
+    const driverData: InsertDriver = {
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      status: 'available',
+      licenseNumber: data.licenseNumber,
+      emergencyContact: data.emergencyContact,
+      emergencyPhone: data.emergencyPhone,
+    };
+
+    const driver = await this.createDriver(driverData);
+    
+    // Mark driver as onboarded
+    const updatedDriver = { ...driver, isOnboarded: true };
+    this.drivers.set(driver.id, updatedDriver);
+    
+    // Mark token as used
+    await this.markTokenAsUsed(tokenString);
+    
+    return updatedDriver;
   }
 }
 

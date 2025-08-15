@@ -9,6 +9,10 @@ export const drivers = pgTable("drivers", {
   email: text("email").notNull().unique(),
   phone: text("phone").notNull(),
   status: text("status").notNull().default("available"), // available, on_route, unavailable
+  licenseNumber: text("license_number"),
+  emergencyContact: text("emergency_contact"),
+  emergencyPhone: text("emergency_phone"),
+  isOnboarded: boolean("is_onboarded").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -67,6 +71,27 @@ export const emailLogs = pgTable("email_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const onboardingTokens = pgTable("onboarding_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  token: text("token").notNull().unique(),
+  email: text("email").notNull(),
+  isUsed: boolean("is_used").notNull().default(false),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const driverLocations = pgTable("driver_locations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  latitude: text("latitude").notNull(),
+  longitude: text("longitude").notNull(),
+  accuracy: integer("accuracy"),
+  speed: text("speed"),
+  heading: text("heading"),
+  timestamp: timestamp("timestamp").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertDriverSchema = createInsertSchema(drivers).omit({
   id: true,
@@ -98,6 +123,25 @@ export const insertEmailLogSchema = createInsertSchema(emailLogs).omit({
   createdAt: true,
 });
 
+export const insertOnboardingTokenSchema = createInsertSchema(onboardingTokens).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertDriverLocationSchema = createInsertSchema(driverLocations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const driverOnboardingSchema = createInsertSchema(drivers).omit({
+  id: true,
+  createdAt: true,
+  status: true,
+  isOnboarded: true,
+}).extend({
+  confirmPassword: z.string().min(1, "Password confirmation is required"),
+});
+
 // Types
 export type Driver = typeof drivers.$inferSelect;
 export type InsertDriver = z.infer<typeof insertDriverSchema>;
@@ -114,6 +158,14 @@ export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
 export type EmailLog = typeof emailLogs.$inferSelect;
 export type InsertEmailLog = z.infer<typeof insertEmailLogSchema>;
 
+export type OnboardingToken = typeof onboardingTokens.$inferSelect;
+export type InsertOnboardingToken = z.infer<typeof insertOnboardingTokenSchema>;
+
+export type DriverLocation = typeof driverLocations.$inferSelect;
+export type InsertDriverLocation = z.infer<typeof insertDriverLocationSchema>;
+
+export type DriverOnboarding = z.infer<typeof driverOnboardingSchema>;
+
 // Extended types with relations
 export type LoadWithRelations = Load & {
   customer: Customer;
@@ -123,4 +175,8 @@ export type LoadWithRelations = Load & {
 export type EmailLogWithRelations = EmailLog & {
   load?: Load;
   template?: EmailTemplate;
+};
+
+export type DriverWithLocation = Driver & {
+  currentLocation?: DriverLocation;
 };
