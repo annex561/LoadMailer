@@ -200,7 +200,7 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                         </FormControl>
                         <SelectContent>
                           {customers.map((customer) => (
-                            <SelectItem key={customer.id} value={customer.id || ""}>
+                            <SelectItem key={customer.id} value={customer.id}>
                               {customer.name}
                             </SelectItem>
                           ))}
@@ -331,7 +331,7 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                         <SelectContent>
                           <SelectItem value="">Auto-assign based on availability</SelectItem>
                           {drivers.filter(driver => driver.status === "available").map((driver) => (
-                            <SelectItem key={driver.id} value={driver.id || ""}>
+                            <SelectItem key={driver.id} value={driver.id}>
                               {driver.name} - {driver.status}
                             </SelectItem>
                           ))}
