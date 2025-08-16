@@ -445,6 +445,43 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
     }
   }
 
+  async sendOnboardingInvitation(telegramId: string, onboardingToken: string, email: string): Promise<boolean> {
+    if (!this.bot || !this.isRunning) {
+      console.error('Telegram service not initialized');
+      return false;
+    }
+
+    try {
+      const onboardingUrl = `${process.env.REPLIT_APP_URL || 'https://loadmaster.replit.app'}/driver-onboarding?token=${onboardingToken}`;
+      
+      const message = `🚛 **Welcome to LoadMaster!**
+      
+You've been invited to join our fleet management system with GPS tracking capabilities.
+
+📋 **Complete your driver onboarding here:**
+${onboardingUrl}
+
+📧 **Email:** ${email}
+🕐 **Link expires:** 7 days from now
+
+**What you'll get:**
+✅ Real-time load assignments via Telegram
+✅ GPS tracking for route optimization  
+✅ Automated notifications and updates
+✅ Geofencing for pickup/delivery zones
+✅ Performance analytics and reporting
+
+👆 Click the link above to start your onboarding process and familiarize yourself with the LoadMaster system!`;
+
+      await this.bot.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
+      console.log(`Onboarding invitation sent to Telegram ID: ${telegramId}`);
+      return true;
+    } catch (error) {
+      console.error('Error sending onboarding invitation via Telegram:', error);
+      return false;
+    }
+  }
+
   stop(): void {
     if (this.bot) {
       this.bot.stopPolling();

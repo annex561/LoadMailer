@@ -558,6 +558,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/create-telegram-onboarding-invite", async (req, res) => {
+    try {
+      const { email, telegramId } = req.body;
+      
+      if (!email || !telegramId) {
+        return res.status(400).json({ error: "Email and Telegram ID are required" });
+      }
+      
+      const token = randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+      
+      const tokenData = {
+        token,
+        email,
+        expiresAt,
+        isUsed: false,
+      };
+      
+      const validatedData = insertOnboardingTokenSchema.parse(tokenData);
+      const onboardingToken = await storage.createOnboardingToken(validatedData);
+      
+      // Send Telegram onboarding invitation
+      const sent = await telegramLoadService.sendOnboardingInvitation(telegramId, token, email);
+      
+      if (!sent) {
+        return res.status(500).json({ error: "Failed to send Telegram invitation" });
+      }
+      
+      // Log the Telegram attempt
+      await storage.createEmailLog({
+        recipientEmail: email,
+        subject: "Telegram Driver Onboarding",
+        status: "sent",
+        sentAt: new Date(),
+      });
+      
+      res.status(201).json({ 
+        ...onboardingToken, 
+        telegramId,
+        message: "Telegram invitation sent successfully"
+      });
+    } catch (error) {
+      console.error("Telegram invitation error:", error);
+      res.status(400).json({ error: "Failed to send Telegram invitation" });
+    }
+  });
+
   app.post("/api/validate-onboarding-token", async (req, res) => {
     try {
       const { token } = req.body;
