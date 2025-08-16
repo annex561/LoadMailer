@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Loads from "@/pages/loads";
 import DATLoads from "@/pages/dat-loads";
+import TelegramDispatching from "@/pages/telegram-dispatching";
 import Contacts from "@/pages/contacts";
 import Templates from "@/pages/templates";
 import DriverManagement from "@/pages/driver-management";
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/loads" component={Loads} />
       <Route path="/dat-loads" component={DATLoads} />
+      <Route path="/telegram-dispatching" component={TelegramDispatching} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/templates" component={Templates} />
       <Route path="/driver-management" component={DriverManagement} />

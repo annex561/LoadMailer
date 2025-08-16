@@ -98,6 +98,12 @@ export interface IStorage {
   // Driver telegram operations
   getDriverByTelegramId(telegramId: string): Promise<Driver | undefined>;
   getDriversWithTelegramEnabled(): Promise<Driver[]>;
+  
+  // Load offer statistics
+  getLoadOffersByDriver(driverId: string): Promise<LoadOffer[]>;
+  getLoadOffersWithDetails(): Promise<(LoadOffer & { load: LoadWithRelations; driver: Driver })[]>;
+  getDriverLoadOfferStats(driverId: string): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}>;
+  getAllDriverLoadOfferStats(): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -870,6 +876,59 @@ export class MemStorage implements IStorage {
   async getDriversWithTelegramEnabled(): Promise<Driver[]> {
     return Array.from(this.drivers.values())
       .filter(driver => driver.telegramId && driver.enableTelegramNotifications);
+  }
+  
+  // Load offer statistics
+  async getLoadOffersByDriver(driverId: string): Promise<LoadOffer[]> {
+    return Array.from(this.loadOffers.values())
+      .filter(offer => offer.driverId === driverId)
+      .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+  }
+  
+  async getLoadOffersWithDetails(): Promise<(LoadOffer & { load: LoadWithRelations; driver: Driver })[]> {
+    const offers: (LoadOffer & { load: LoadWithRelations; driver: Driver })[] = [];
+    
+    for (const offer of Array.from(this.loadOffers.values())) {
+      const load = await this.getLoad(offer.loadId);
+      const driver = await this.getDriver(offer.driverId);
+      
+      if (load && driver) {
+        offers.push({ ...offer, load, driver });
+      }
+    }
+    
+    return offers.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+  }
+  
+  async getDriverLoadOfferStats(driverId: string): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}> {
+    const driver = await this.getDriver(driverId);
+    if (!driver) {
+      throw new Error('Driver not found');
+    }
+    
+    const offers = await this.getLoadOffersByDriver(driverId);
+    
+    return {
+      driverId,
+      driverName: driver.name,
+      totalOffers: offers.length,
+      accepted: offers.filter(o => o.status === 'accepted').length,
+      declined: offers.filter(o => o.status === 'declined').length,
+      timeout: offers.filter(o => o.status === 'timeout').length,
+      pending: offers.filter(o => o.status === 'pending').length
+    };
+  }
+  
+  async getAllDriverLoadOfferStats(): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}[]> {
+    const drivers = await this.getDriversWithTelegramEnabled();
+    const stats = [];
+    
+    for (const driver of drivers) {
+      const driverStats = await this.getDriverLoadOfferStats(driver.id);
+      stats.push(driverStats);
+    }
+    
+    return stats;
   }
 }
 

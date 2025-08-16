@@ -1001,6 +1001,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Telegram Load Dispatching routes
+  app.get("/api/telegram/load-offers", async (req, res) => {
+    try {
+      const offers = await storage.getLoadOffersWithDetails();
+      res.json(offers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch load offers" });
+    }
+  });
+
+  app.get("/api/telegram/driver-stats", async (req, res) => {
+    try {
+      const stats = await storage.getAllDriverLoadOfferStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch driver stats" });
+    }
+  });
+
+  app.get("/api/telegram/driver-stats/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const stats = await storage.getDriverLoadOfferStats(id);
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch driver stats" });
+    }
+  });
+
+  app.get("/api/telegram/test-load", async (req, res) => {
+    try {
+      const result = await telegramLoadService.sendTestLoad();
+      res.json({ success: result, message: result ? "Test load sent successfully" : "No loads available or service not running" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send test load" });
+    }
+  });
+
+  app.get("/api/telegram/service-status", async (req, res) => {
+    try {
+      const isRunning = telegramLoadService.isServiceRunning();
+      const config = telegramLoadService.getConfig();
+      res.json({ isRunning, config });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get service status" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
