@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Play, Settings, Bot, Clock, CheckCircle, XCircle, RotateCcw } from "lucide-react";
+import { Plus, Play, Settings, Bot, Clock, CheckCircle, XCircle, RotateCcw, Hourglass } from "lucide-react";
 import type { ScraperConfig, ScraperLog } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +39,6 @@ const scraperConfigSchema = z.object({
 type ScraperConfigForm = z.infer<typeof scraperConfigSchema>;
 
 const schedulePresets = [
-  { value: "*/1 * * * * *", label: "Every 1 second" },
   { value: "*/30 * * * * *", label: "Every 30 seconds" },
   { value: "*/1 * * * *", label: "Every minute" },
   { value: "*/5 * * * *", label: "Every 5 minutes" },
@@ -66,7 +65,7 @@ export default function ScraperManagement() {
       searchUrl: "https://dat.com/search/loads",
       username: "",
       password: "",
-      schedule: "*/1 * * * * *",
+      schedule: "*/30 * * * * *",
       autoCreateLoads: true,
       defaultCustomerId: "",
       searchCriteria: {
@@ -217,7 +216,12 @@ export default function ScraperManagement() {
     }
     
     if (latestLog.status === 'running') {
-      return <Badge className="bg-yellow-100 text-yellow-600 border-0">Running</Badge>;
+      return (
+        <Badge className="bg-yellow-100 text-yellow-600 border-0 flex items-center gap-1">
+          <Hourglass className="w-3 h-3 animate-spin" />
+          Scraping...
+        </Badge>
+      );
     } else if (latestLog.status === 'success') {
       return <Badge className="bg-green-100 text-green-600 border-0">Success</Badge>;
     } else {
@@ -277,7 +281,11 @@ export default function ScraperManagement() {
                 </p>
               </div>
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="text-green-600 w-6 h-6" />
+                {scraperLogs.some(log => log.status === 'running') ? (
+                  <Hourglass className="text-green-600 w-6 h-6 animate-spin" />
+                ) : (
+                  <CheckCircle className="text-green-600 w-6 h-6" />
+                )}
               </div>
             </div>
           </CardContent>
