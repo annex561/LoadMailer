@@ -103,13 +103,86 @@ export const onboardingTokens = pgTable("onboarding_tokens", {
 export const driverLocations = pgTable("driver_locations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   driverId: varchar("driver_id").references(() => drivers.id).notNull(),
-  latitude: text("latitude").notNull(),
-  longitude: text("longitude").notNull(),
-  accuracy: integer("accuracy"),
-  speed: text("speed"),
-  heading: text("heading"),
+  latitude: real("latitude").notNull(),
+  longitude: real("longitude").notNull(),
+  altitude: real("altitude"),
+  accuracy: real("accuracy"), // in meters
+  speed: real("speed"), // in mph
+  heading: real("heading"), // degrees from north
   timestamp: timestamp("timestamp").notNull(),
+  address: text("address"), // Reverse geocoded address
+  loadId: varchar("load_id").references(() => loads.id), // Associated load if any
+  isActive: boolean("is_active").notNull().default(true), // Current location vs historical
+  batteryLevel: integer("battery_level"), // Device battery percentage
+  signalStrength: integer("signal_strength"), // GPS signal strength
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const geofences = pgTable("geofences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // pickup, delivery, depot, restricted
+  centerLatitude: real("center_latitude").notNull(),
+  centerLongitude: real("center_longitude").notNull(),
+  radius: real("radius").notNull(), // in meters
+  loadId: varchar("load_id").references(() => loads.id), // Associated load for pickup/delivery zones
+  customerId: varchar("customer_id").references(() => customers.id), // Customer-specific geofences
+  isActive: boolean("is_active").notNull().default(true),
+  notificationSettings: jsonb("notification_settings").default({}), // When to alert
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const geofenceEvents = pgTable("geofence_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  geofenceId: varchar("geofence_id").references(() => geofences.id).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  eventType: text("event_type").notNull(), // entered, exited, dwelling
+  timestamp: timestamp("timestamp").notNull(),
+  latitude: real("latitude").notNull(),
+  longitude: real("longitude").notNull(),
+  dwellTime: integer("dwell_time"), // minutes spent in geofence
+  loadId: varchar("load_id").references(() => loads.id),
+  wasNotified: boolean("was_notified").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const routes = pgTable("routes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  status: text("status").notNull().default("planned"), // planned, active, completed, deviated
+  startLatitude: real("start_latitude").notNull(),
+  startLongitude: real("start_longitude").notNull(),
+  endLatitude: real("end_latitude").notNull(),
+  endLongitude: real("end_longitude").notNull(),
+  plannedRoute: jsonb("planned_route"), // Array of coordinates
+  actualRoute: jsonb("actual_route"), // Array of actual coordinates
+  plannedDistance: real("planned_distance"), // in miles
+  actualDistance: real("actual_distance"), // in miles
+  plannedDuration: integer("planned_duration"), // in minutes
+  actualDuration: integer("actual_duration"), // in minutes
+  estimatedArrival: timestamp("estimated_arrival"),
+  actualArrival: timestamp("actual_arrival"),
+  deviationAlerts: jsonb("deviation_alerts").default([]), // Array of deviation events
+  trafficData: jsonb("traffic_data").default({}), // Traffic information
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const gpsDevices = pgTable("gps_devices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  deviceId: text("device_id").notNull().unique(), // Device IMEI or unique identifier
+  deviceType: text("device_type").notNull().default("mobile"), // mobile, eld, standalone
+  status: text("status").notNull().default("active"), // active, inactive, offline
+  lastHeartbeat: timestamp("last_heartbeat"),
+  firmwareVersion: text("firmware_version"),
+  batteryLevel: integer("battery_level"),
+  settings: jsonb("settings").default({}), // Device-specific settings
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Analytics and Reporting Tables
@@ -289,6 +362,29 @@ export const insertDriverLocationSchema = createInsertSchema(driverLocations).om
   createdAt: true,
 });
 
+export const insertGeofenceSchema = createInsertSchema(geofences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGeofenceEventSchema = createInsertSchema(geofenceEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertRouteSchema = createInsertSchema(routes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertGpsDeviceSchema = createInsertSchema(gpsDevices).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertDriverPerformanceMetricsSchema = createInsertSchema(driverPerformanceMetrics).omit({
   id: true,
   createdAt: true,
@@ -425,4 +521,34 @@ export type EmailLogWithRelations = EmailLog & {
 
 export type DriverWithLocation = Driver & {
   currentLocation?: DriverLocation;
+  gpsDevice?: GpsDevice;
+};
+
+export type Geofence = typeof geofences.$inferSelect;
+export type InsertGeofence = z.infer<typeof insertGeofenceSchema>;
+
+export type GeofenceEvent = typeof geofenceEvents.$inferSelect;
+export type InsertGeofenceEvent = z.infer<typeof insertGeofenceEventSchema>;
+
+export type Route = typeof routes.$inferSelect;
+export type InsertRoute = z.infer<typeof insertRouteSchema>;
+
+export type GpsDevice = typeof gpsDevices.$inferSelect;
+export type InsertGpsDevice = z.infer<typeof insertGpsDeviceSchema>;
+
+export type LoadWithRoute = LoadWithRelations & {
+  route?: Route;
+  geofences?: Geofence[];
+};
+
+export type DriverLocationUpdate = {
+  latitude: number;
+  longitude: number;
+  altitude?: number;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+  timestamp: Date;
+  batteryLevel?: number;
+  signalStrength?: number;
 };

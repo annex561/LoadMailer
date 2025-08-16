@@ -5,7 +5,8 @@ import { analyticsService } from "./analytics-service";
 import { schedulerService } from "./scheduler-service";
 import { loadExpirationService } from "./load-expiration-service";
 import { telegramLoadService } from "./telegram-service";
-import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations } from "@shared/schema";
+import { gpsTrackingService } from "./gps-tracking-service";
+import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema } from "@shared/schema";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
 
@@ -123,6 +124,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('Telegram Load Service initialized');
   } catch (error) {
     console.error('Failed to initialize Telegram Load Service:', error);
+  }
+
+  // Initialize GPS Tracking Service on startup
+  try {
+    await gpsTrackingService.initialize();
+    console.log('GPS Tracking Service initialized');
+  } catch (error) {
+    console.error('Failed to initialize GPS Tracking Service:', error);
   }
 
   // Driver routes
@@ -677,6 +686,266 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(location);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch driver location" });
+    }
+  });
+
+  // GPS Tracking Routes
+  app.post("/api/gps/location-update", async (req, res) => {
+    try {
+      const { driverId, ...locationData } = req.body;
+      
+      if (!driverId) {
+        return res.status(400).json({ error: "Driver ID is required" });
+      }
+      
+      const locationUpdate: DriverLocationUpdate = {
+        ...locationData,
+        timestamp: new Date(locationData.timestamp || Date.now()),
+      };
+      
+      const location = await gpsTrackingService.updateDriverLocation(driverId, locationUpdate);
+      res.json(location);
+    } catch (error) {
+      console.error('GPS location update error:', error);
+      res.status(500).json({ error: "Failed to update driver location" });
+    }
+  });
+
+  app.get("/api/gps/driver/:id/tracking", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const trackingData = await gpsTrackingService.getDriverTracking(id);
+      res.json(trackingData);
+    } catch (error) {
+      console.error('Get driver tracking error:', error);
+      res.status(500).json({ error: "Failed to fetch driver tracking data" });
+    }
+  });
+
+  app.get("/api/gps/drivers/locations", async (req, res) => {
+    try {
+      const locations = await gpsTrackingService.getAllDriverLocations();
+      res.json(locations);
+    } catch (error) {
+      console.error('Get all driver locations error:', error);
+      res.status(500).json({ error: "Failed to fetch driver locations" });
+    }
+  });
+
+  // Geofence routes
+  app.get("/api/gps/geofences", async (req, res) => {
+    try {
+      const geofences = await storage.getAllGeofences();
+      res.json(geofences);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch geofences" });
+    }
+  });
+
+  app.post("/api/gps/geofences", async (req, res) => {
+    try {
+      const validatedData = insertGeofenceSchema.parse(req.body);
+      // Transform the validated data to match the GPS service expected format
+      const geofenceData = {
+        name: validatedData.name,
+        type: validatedData.type,
+        centerLatitude: validatedData.centerLatitude,
+        centerLongitude: validatedData.centerLongitude,
+        radius: validatedData.radius,
+        loadId: validatedData.loadId || undefined,
+        customerId: validatedData.customerId || undefined,
+        notificationSettings: validatedData.notificationSettings,
+      };
+      const geofence = await gpsTrackingService.createGeofence(geofenceData);
+      res.status(201).json(geofence);
+    } catch (error) {
+      console.error('Create geofence error:', error);
+      res.status(400).json({ error: "Invalid geofence data" });
+    }
+  });
+
+  app.put("/api/gps/geofences/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = insertGeofenceSchema.partial().parse(req.body);
+      const geofence = await storage.updateGeofence(id, validatedData);
+      
+      if (!geofence) {
+        return res.status(404).json({ error: "Geofence not found" });
+      }
+      
+      res.json(geofence);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid geofence data" });
+    }
+  });
+
+  app.delete("/api/gps/geofences/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteGeofence(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Geofence not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete geofence" });
+    }
+  });
+
+  // Route tracking routes
+  app.get("/api/gps/routes", async (req, res) => {
+    try {
+      const { status } = req.query;
+      
+      if (status === "active") {
+        const routes = await storage.getActiveRoutes();
+        res.json(routes);
+      } else {
+        const routes = await storage.getAllRoutes();
+        res.json(routes);
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch routes" });
+    }
+  });
+
+  app.post("/api/gps/routes", async (req, res) => {
+    try {
+      const { loadId, driverId } = req.body;
+      
+      if (!loadId || !driverId) {
+        return res.status(400).json({ error: "Load ID and Driver ID are required" });
+      }
+      
+      const route = await gpsTrackingService.createRouteForLoad(loadId, driverId);
+      res.status(201).json(route);
+    } catch (error) {
+      console.error('Create route error:', error);
+      res.status(400).json({ error: "Failed to create route" });
+    }
+  });
+
+  app.get("/api/gps/routes/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const route = await storage.getRoute(id);
+      
+      if (!route) {
+        return res.status(404).json({ error: "Route not found" });
+      }
+      
+      res.json(route);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch route" });
+    }
+  });
+
+  app.put("/api/gps/routes/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = insertRouteSchema.partial().parse(req.body);
+      const route = await storage.updateRoute(id, validatedData);
+      
+      if (!route) {
+        return res.status(404).json({ error: "Route not found" });
+      }
+      
+      res.json(route);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid route data" });
+    }
+  });
+
+  // GPS Device routes
+  app.get("/api/gps/devices", async (req, res) => {
+    try {
+      const devices = await storage.getAllGpsDevices();
+      res.json(devices);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch GPS devices" });
+    }
+  });
+
+  app.post("/api/gps/devices", async (req, res) => {
+    try {
+      const validatedData = insertGpsDeviceSchema.parse(req.body);
+      const device = await storage.createGpsDevice(validatedData);
+      res.status(201).json(device);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid GPS device data" });
+    }
+  });
+
+  app.get("/api/gps/devices/driver/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const device = await storage.getGpsDeviceByDriver(id);
+      
+      if (!device) {
+        return res.status(404).json({ error: "GPS device not found for driver" });
+      }
+      
+      res.json(device);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch GPS device" });
+    }
+  });
+
+  app.put("/api/gps/devices/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = insertGpsDeviceSchema.partial().parse(req.body);
+      const device = await storage.updateGpsDevice(id, validatedData);
+      
+      if (!device) {
+        return res.status(404).json({ error: "GPS device not found" });
+      }
+      
+      res.json(device);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid GPS device data" });
+    }
+  });
+
+  // Geofence Events routes
+  app.get("/api/gps/geofence-events", async (req, res) => {
+    try {
+      const { driverId, hoursBack = 24 } = req.query;
+      
+      if (driverId && typeof driverId === "string") {
+        const events = await storage.getDriverGeofenceEvents(driverId, Number(hoursBack));
+        res.json(events);
+      } else {
+        return res.status(400).json({ error: "Driver ID is required" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch geofence events" });
+    }
+  });
+
+  // GPS Service Status and Config
+  app.get("/api/gps/service/status", async (req, res) => {
+    try {
+      const status = {
+        isRunning: gpsTrackingService.isServiceRunning(),
+        config: gpsTrackingService.getConfig(),
+      };
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch GPS service status" });
+    }
+  });
+
+  app.put("/api/gps/service/config", async (req, res) => {
+    try {
+      const configUpdate = req.body;
+      gpsTrackingService.updateConfig(configUpdate);
+      res.json({ success: true, config: gpsTrackingService.getConfig() });
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update GPS service config" });
     }
   });
 

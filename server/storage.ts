@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -47,8 +47,41 @@ export interface IStorage {
 
   // Driver location operations
   createDriverLocation(location: InsertDriverLocation): Promise<DriverLocation>;
+  updateDriverLocation(id: string, location: Partial<InsertDriverLocation>): Promise<DriverLocation | undefined>;
   getDriverCurrentLocation(driverId: string): Promise<DriverLocation | undefined>;
   getDriverLocationHistory(driverId: string): Promise<DriverLocation[]>;
+  getAllCurrentDriverLocations(): Promise<DriverLocation[]>;
+  cleanupOldDriverLocations(driverId: string, keepCount: number): Promise<void>;
+
+  // GPS Device operations
+  getGpsDevice(id: string): Promise<GpsDevice | undefined>;
+  getAllGpsDevices(): Promise<GpsDevice[]>;
+  createGpsDevice(device: InsertGpsDevice): Promise<GpsDevice>;
+  updateGpsDevice(id: string, device: Partial<InsertGpsDevice>): Promise<GpsDevice | undefined>;
+  getGpsDeviceByDriver(driverId: string): Promise<GpsDevice | undefined>;
+
+  // Geofence operations
+  getGeofence(id: string): Promise<Geofence | undefined>;
+  getAllGeofences(): Promise<Geofence[]>;
+  getActiveGeofences(): Promise<Geofence[]>;
+  createGeofence(geofence: InsertGeofence): Promise<Geofence>;
+  updateGeofence(id: string, geofence: Partial<InsertGeofence>): Promise<Geofence | undefined>;
+  deleteGeofence(id: string): Promise<boolean>;
+
+  // Geofence event operations
+  getGeofenceEvent(id: string): Promise<GeofenceEvent | undefined>;
+  createGeofenceEvent(event: InsertGeofenceEvent): Promise<GeofenceEvent>;
+  getRecentGeofenceEvents(driverId: string, geofenceId: string, limit: number): Promise<GeofenceEvent[]>;
+  getDriverGeofenceEvents(driverId: string, hoursBack: number): Promise<GeofenceEvent[]>;
+
+  // Route operations
+  getRoute(id: string): Promise<Route | undefined>;
+  getAllRoutes(): Promise<Route[]>;
+  getActiveRoutes(): Promise<Route[]>;
+  createRoute(route: InsertRoute): Promise<Route>;
+  updateRoute(id: string, route: Partial<InsertRoute>): Promise<Route | undefined>;
+  getActiveRouteForDriver(driverId: string): Promise<Route | undefined>;
+  deleteRoute(id: string): Promise<boolean>;
 
   // Driver onboarding
   completeDriverOnboarding(data: DriverOnboarding, token: string): Promise<Driver>;
@@ -98,6 +131,12 @@ export interface IStorage {
   // Driver telegram operations
   getDriverByTelegramId(telegramId: string): Promise<Driver | undefined>;
   getDriversWithTelegramEnabled(): Promise<Driver[]>;
+
+  // Load offer statistics operations
+  getLoadOffersByDriver(driverId: string): Promise<LoadOffer[]>;
+  getLoadOffersWithDetails(): Promise<LoadOffer[]>;
+  getDriverLoadOfferStats(driverId: string): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}>;
+  getAllDriverLoadOfferStats(): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}[]>;
   
   // Load offer statistics
   getLoadOffersByDriver(driverId: string): Promise<LoadOffer[]>;
@@ -120,6 +159,10 @@ export class MemStorage implements IStorage {
   private lanePreferences: Map<string, LanePreference> = new Map();
   private avoidLocations: Map<string, AvoidLocation> = new Map();
   private loadOffers: Map<string, LoadOffer> = new Map();
+  private geofences: Map<string, Geofence> = new Map();
+  private geofenceEvents: Map<string, GeofenceEvent> = new Map();
+  private routes: Map<string, Route> = new Map();
+  private gpsDevices: Map<string, GpsDevice> = new Map();
   private loadCounter = 1;
 
   constructor() {
@@ -883,6 +926,228 @@ export class MemStorage implements IStorage {
     return Array.from(this.loadOffers.values())
       .filter(offer => offer.driverId === driverId)
       .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+  }
+
+  // Enhanced driver location operations
+  async updateDriverLocation(id: string, location: Partial<InsertDriverLocation>): Promise<DriverLocation | undefined> {
+    const existing = this.driverLocations.get(id);
+    if (!existing) return undefined;
+
+    const updated: DriverLocation = {
+      ...existing,
+      ...location,
+    };
+    this.driverLocations.set(id, updated);
+    return updated;
+  }
+
+  async getAllCurrentDriverLocations(): Promise<DriverLocation[]> {
+    return Array.from(this.driverLocations.values())
+      .filter(location => location.isActive)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  async cleanupOldDriverLocations(driverId: string, keepCount: number): Promise<void> {
+    const driverLocationList = Array.from(this.driverLocations.values())
+      .filter(location => location.driverId === driverId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // Keep only the most recent locations
+    const toDelete = driverLocationList.slice(keepCount);
+    for (const location of toDelete) {
+      this.driverLocations.delete(location.id);
+    }
+  }
+
+  // GPS Device operations
+  async getGpsDevice(id: string): Promise<GpsDevice | undefined> {
+    return this.gpsDevices.get(id);
+  }
+
+  async getAllGpsDevices(): Promise<GpsDevice[]> {
+    return Array.from(this.gpsDevices.values())
+      .filter(device => device.isActive)
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async createGpsDevice(device: InsertGpsDevice): Promise<GpsDevice> {
+    const id = randomUUID();
+    const newDevice: GpsDevice = {
+      ...device,
+      id,
+      status: device.status || "active",
+      deviceType: device.deviceType || "mobile",
+      isActive: device.isActive !== undefined ? device.isActive : true,
+      settings: device.settings || {},
+      lastHeartbeat: device.lastHeartbeat || null,
+      firmwareVersion: device.firmwareVersion || null,
+      batteryLevel: device.batteryLevel || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.gpsDevices.set(id, newDevice);
+    return newDevice;
+  }
+
+  async updateGpsDevice(id: string, device: Partial<InsertGpsDevice>): Promise<GpsDevice | undefined> {
+    const existing = this.gpsDevices.get(id);
+    if (!existing) return undefined;
+
+    const updated: GpsDevice = {
+      ...existing,
+      ...device,
+      updatedAt: new Date(),
+    };
+    this.gpsDevices.set(id, updated);
+    return updated;
+  }
+
+  async getGpsDeviceByDriver(driverId: string): Promise<GpsDevice | undefined> {
+    return Array.from(this.gpsDevices.values())
+      .find(device => device.driverId === driverId && device.isActive);
+  }
+
+  // Geofence operations
+  async getGeofence(id: string): Promise<Geofence | undefined> {
+    return this.geofences.get(id);
+  }
+
+  async getAllGeofences(): Promise<Geofence[]> {
+    return Array.from(this.geofences.values())
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async getActiveGeofences(): Promise<Geofence[]> {
+    return Array.from(this.geofences.values())
+      .filter(geofence => geofence.isActive)
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async createGeofence(geofence: InsertGeofence): Promise<Geofence> {
+    const id = randomUUID();
+    const newGeofence: Geofence = {
+      ...geofence,
+      id,
+      isActive: geofence.isActive !== undefined ? geofence.isActive : true,
+      notificationSettings: geofence.notificationSettings || {},
+      loadId: geofence.loadId || null,
+      customerId: geofence.customerId || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.geofences.set(id, newGeofence);
+    return newGeofence;
+  }
+
+  async updateGeofence(id: string, geofence: Partial<InsertGeofence>): Promise<Geofence | undefined> {
+    const existing = this.geofences.get(id);
+    if (!existing) return undefined;
+
+    const updated: Geofence = {
+      ...existing,
+      ...geofence,
+      updatedAt: new Date(),
+    };
+    this.geofences.set(id, updated);
+    return updated;
+  }
+
+  async deleteGeofence(id: string): Promise<boolean> {
+    return this.geofences.delete(id);
+  }
+
+  // Geofence event operations
+  async getGeofenceEvent(id: string): Promise<GeofenceEvent | undefined> {
+    return this.geofenceEvents.get(id);
+  }
+
+  async createGeofenceEvent(event: InsertGeofenceEvent): Promise<GeofenceEvent> {
+    const id = randomUUID();
+    const newEvent: GeofenceEvent = {
+      ...event,
+      id,
+      dwellTime: event.dwellTime || null,
+      loadId: event.loadId || null,
+      wasNotified: event.wasNotified !== undefined ? event.wasNotified : false,
+      createdAt: new Date(),
+    };
+    this.geofenceEvents.set(id, newEvent);
+    return newEvent;
+  }
+
+  async getRecentGeofenceEvents(driverId: string, geofenceId: string, limit: number): Promise<GeofenceEvent[]> {
+    return Array.from(this.geofenceEvents.values())
+      .filter(event => event.driverId === driverId && event.geofenceId === geofenceId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
+  }
+
+  async getDriverGeofenceEvents(driverId: string, hoursBack: number): Promise<GeofenceEvent[]> {
+    const cutoffTime = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
+    return Array.from(this.geofenceEvents.values())
+      .filter(event => event.driverId === driverId && new Date(event.timestamp) >= cutoffTime)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  // Route operations
+  async getRoute(id: string): Promise<Route | undefined> {
+    return this.routes.get(id);
+  }
+
+  async getAllRoutes(): Promise<Route[]> {
+    return Array.from(this.routes.values())
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async getActiveRoutes(): Promise<Route[]> {
+    return Array.from(this.routes.values())
+      .filter(route => route.status === 'active' || route.status === 'planned')
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async createRoute(route: InsertRoute): Promise<Route> {
+    const id = randomUUID();
+    const newRoute: Route = {
+      ...route,
+      id,
+      status: route.status || "planned",
+      plannedRoute: route.plannedRoute || null,
+      actualRoute: route.actualRoute || null,
+      plannedDistance: route.plannedDistance || null,
+      actualDistance: route.actualDistance || null,
+      plannedDuration: route.plannedDuration || null,
+      actualDuration: route.actualDuration || null,
+      estimatedArrival: route.estimatedArrival || null,
+      actualArrival: route.actualArrival || null,
+      deviationAlerts: route.deviationAlerts || [],
+      trafficData: route.trafficData || {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.routes.set(id, newRoute);
+    return newRoute;
+  }
+
+  async updateRoute(id: string, route: Partial<InsertRoute>): Promise<Route | undefined> {
+    const existing = this.routes.get(id);
+    if (!existing) return undefined;
+
+    const updated: Route = {
+      ...existing,
+      ...route,
+      updatedAt: new Date(),
+    };
+    this.routes.set(id, updated);
+    return updated;
+  }
+
+  async getActiveRouteForDriver(driverId: string): Promise<Route | undefined> {
+    return Array.from(this.routes.values())
+      .find(route => route.driverId === driverId && (route.status === 'active' || route.status === 'planned'));
+  }
+
+  async deleteRoute(id: string): Promise<boolean> {
+    return this.routes.delete(id);
   }
   
   async getLoadOffersWithDetails(): Promise<(LoadOffer & { load: LoadWithRelations; driver: Driver })[]> {
