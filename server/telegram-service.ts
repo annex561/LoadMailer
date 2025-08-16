@@ -497,6 +497,87 @@ ${onboardingUrl}
   getConfig(): TelegramBotConfig | null {
     return this.config;
   }
+
+  /**
+   * Send bid offer to driver for load bidding system
+   */
+  async sendBidOffer(telegramId: string, bidData: {
+    bidId: string;
+    loadNumber: string;
+    pickupAddress: string;
+    deliveryAddress: string;
+    pickupDate: string;
+    deliveryDate: string;
+    bidAmount: number;
+    margin: number;
+    miles: number;
+    commodity: string;
+    equipment: string;
+    timeoutMinutes: number;
+  }): Promise<number | null> {
+    if (!this.bot || !this.isRunning) {
+      console.log('Telegram service not running');
+      return null;
+    }
+
+    try {
+      const message = `🚛 *NEW LOAD OPPORTUNITY*\n\n` +
+        `📦 Load: ${bidData.loadNumber}\n` +
+        `📍 Pickup: ${bidData.pickupAddress}\n` +
+        `📍 Delivery: ${bidData.deliveryAddress}\n` +
+        `📅 Pickup: ${bidData.pickupDate}\n` +
+        `📅 Delivery: ${bidData.deliveryDate}\n` +
+        `💰 Bid Amount: $${bidData.bidAmount.toFixed(2)}\n` +
+        `📏 Miles: ${bidData.miles}\n` +
+        `📦 Commodity: ${bidData.commodity}\n` +
+        `🚚 Equipment: ${bidData.equipment}\n` +
+        `💵 Your Profit: $${bidData.margin.toFixed(2)}\n\n` +
+        `⏰ Respond within ${bidData.timeoutMinutes} minutes\n\n` +
+        `Accept this load opportunity?`;
+
+      const options = {
+        parse_mode: 'Markdown' as const,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ ACCEPT', callback_data: `bid_accept_${bidData.bidId}` },
+              { text: '❌ DECLINE', callback_data: `bid_decline_${bidData.bidId}` },
+              { text: '💬 NEGOTIATE', callback_data: `bid_negotiate_${bidData.bidId}` }
+            ]
+          ]
+        }
+      };
+
+      const sentMessage = await this.bot.sendMessage(telegramId, message, options);
+      console.log(`Sent bid offer for ${bidData.loadNumber} to Telegram ID: ${telegramId}`);
+      return sentMessage.message_id;
+    } catch (error) {
+      console.error('Error sending bid offer via Telegram:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Send notification to dispatcher
+   */
+  async sendDispatcherNotification(chatId: string, message: string): Promise<number | null> {
+    if (!this.bot || !this.isRunning) {
+      console.log('Telegram service not running');
+      return null;
+    }
+
+    try {
+      const sentMessage = await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+      console.log(`Sent dispatcher notification to chat: ${chatId}`);
+      return sentMessage.message_id;
+    } catch (error) {
+      console.error('Error sending dispatcher notification via Telegram:', error);
+      return null;
+    }
+  }
 }
 
 // Singleton instance

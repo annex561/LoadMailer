@@ -746,3 +746,230 @@ export type ScrapedLoadWithRelations = ScrapedLoad & {
 export type LoadBoardConfigurationWithSource = LoadBoardConfiguration & {
   source: LoadBoardSource;
 };
+
+// Load Bidding System Tables
+export const loadBids = pgTable("load_bids", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").references(() => loads.id),
+  scrapedLoadId: varchar("scraped_load_id").references(() => scrapedLoads.id),
+  loadNumber: text("load_number").notNull(),
+  brokerName: text("broker_name").notNull(),
+  brokerEmail: text("broker_email"),
+  brokerPhone: text("broker_phone"),
+  
+  // Bid details
+  bidAmount: real("bid_amount").notNull(),
+  recommendedAmount: real("recommended_amount"),
+  margin: real("margin"), // profit margin
+  ratePerMile: real("rate_per_mile"),
+  
+  // Load details for bidding
+  pickupAddress: text("pickup_address").notNull(),
+  deliveryAddress: text("delivery_address").notNull(),
+  pickupDate: timestamp("pickup_date").notNull(),
+  deliveryDate: timestamp("delivery_date").notNull(),
+  weight: integer("weight"),
+  commodity: text("commodity"),
+  equipmentType: text("equipment_type").notNull().default("dry_van"),
+  miles: integer("miles"),
+  
+  // Bidding workflow
+  status: text("status").notNull().default("pending_driver"), // pending_driver, driver_accepted, driver_declined, bid_submitted, won, lost, expired
+  requiresEmail: boolean("requires_email").notNull().default(true),
+  bidMethod: text("bid_method").notNull().default("email"), // email, phone, platform
+  
+  // Driver assignment and response
+  assignedDriverId: varchar("assigned_driver_id").references(() => drivers.id),
+  driverResponse: text("driver_response"), // accepted, declined, no_response
+  driverResponseAt: timestamp("driver_response_at"),
+  driverNotes: text("driver_notes"),
+  
+  // Bid submission
+  bidSubmittedAt: timestamp("bid_submitted_at"),
+  bidExpiresAt: timestamp("bid_expires_at"),
+  brokerResponseAt: timestamp("broker_response_at"),
+  brokerResponse: text("broker_response"), // accepted, rejected, countered
+  
+  // Email campaign tracking
+  emailCampaignId: varchar("email_campaign_id"),
+  
+  // Results
+  finalRate: real("final_rate"),
+  actualMargin: real("actual_margin"),
+  notes: text("notes"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const bidResponses = pgTable("bid_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  bidId: varchar("bid_id").references(() => loadBids.id).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  response: text("response").notNull(), // accepted, declined, negotiate
+  responseTime: timestamp("response_time").notNull(),
+  
+  // Driver feedback
+  counterOffer: real("counter_offer"),
+  reason: text("reason"), // rate_too_low, bad_location, equipment_mismatch, scheduling_conflict
+  notes: text("notes"),
+  
+  // Telegram tracking
+  telegramMessageId: text("telegram_message_id"),
+  responseMethod: text("response_method").notNull().default("telegram"), // telegram, phone, email
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const emailCampaigns = pgTable("email_campaigns", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  bidId: varchar("bid_id").references(() => loadBids.id).notNull(),
+  brokerEmail: text("broker_email").notNull(),
+  brokerName: text("broker_name").notNull(),
+  
+  // Campaign details
+  subject: text("subject").notNull(),
+  initialEmailBody: text("initial_email_body").notNull(),
+  bidAmount: real("bid_amount").notNull(),
+  
+  // Campaign status
+  status: text("status").notNull().default("active"), // active, won, lost, expired
+  totalEmails: integer("total_emails").notNull().default(0),
+  lastEmailSentAt: timestamp("last_email_sent_at"),
+  
+  // Results
+  brokerLastResponseAt: timestamp("broker_last_response_at"),
+  brokerLastResponse: text("broker_last_response"),
+  finalOutcome: text("final_outcome"), // won, lost_price, lost_other, expired, no_response
+  winningRate: real("winning_rate"),
+  
+  // Follow-up schedule
+  nextFollowUpAt: timestamp("next_follow_up_at"),
+  followUpCount: integer("follow_up_count").notNull().default(0),
+  maxFollowUps: integer("max_follow_ups").notNull().default(3),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const emailFollowUps = pgTable("email_follow_ups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").references(() => emailCampaigns.id).notNull(),
+  bidId: varchar("bid_id").references(() => loadBids.id).notNull(),
+  
+  // Email details
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  sentAt: timestamp("sent_at").notNull(),
+  
+  // Follow-up type and strategy
+  followUpType: text("follow_up_type").notNull(), // initial, follow_up_1, follow_up_2, final_push, response_to_broker
+  strategy: text("strategy").notNull(), // rate_highlight, urgency, relationship, compromise
+  
+  // Broker response tracking
+  brokerReplied: boolean("broker_replied").notNull().default(false),
+  brokerReplyAt: timestamp("broker_reply_at"),
+  brokerReplyContent: text("broker_reply_content"),
+  brokerSentiment: text("broker_sentiment"), // positive, negative, neutral, interested, not_interested
+  
+  // Email performance
+  emailDelivered: boolean("email_delivered").notNull().default(true),
+  emailOpened: boolean("email_opened").notNull().default(false),
+  emailClicked: boolean("email_clicked").notNull().default(false),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const dispatcherNotifications = pgTable("dispatcher_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  bidId: varchar("bid_id").references(() => loadBids.id),
+  loadId: varchar("load_id").references(() => loads.id),
+  
+  // Notification details
+  notificationType: text("notification_type").notNull(), // driver_accepted, load_won, load_lost, bid_expired, urgent_follow_up
+  priority: text("priority").notNull().default("normal"), // low, normal, high, urgent
+  message: text("message").notNull(),
+  
+  // Telegram details
+  telegramChatId: text("telegram_chat_id").notNull(),
+  telegramMessageId: text("telegram_message_id"),
+  
+  // Status tracking
+  status: text("status").notNull().default("pending"), // pending, sent, delivered, failed
+  sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  errorMessage: text("error_message"),
+  
+  // Dispatcher response
+  dispatcherResponse: text("dispatcher_response"),
+  dispatcherResponseAt: timestamp("dispatcher_response_at"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schemas for bidding tables
+export const insertLoadBidSchema = createInsertSchema(loadBids).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertBidResponseSchema = createInsertSchema(bidResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailCampaignSchema = createInsertSchema(emailCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  totalEmails: true,
+  followUpCount: true,
+});
+
+export const insertEmailFollowUpSchema = createInsertSchema(emailFollowUps).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertDispatcherNotificationSchema = createInsertSchema(dispatcherNotifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Type exports for bidding tables
+export type LoadBid = typeof loadBids.$inferSelect;
+export type InsertLoadBid = z.infer<typeof insertLoadBidSchema>;
+
+export type BidResponse = typeof bidResponses.$inferSelect;
+export type InsertBidResponse = z.infer<typeof insertBidResponseSchema>;
+
+export type EmailCampaign = typeof emailCampaigns.$inferSelect;
+export type InsertEmailCampaign = z.infer<typeof insertEmailCampaignSchema>;
+
+export type EmailFollowUp = typeof emailFollowUps.$inferSelect;
+export type InsertEmailFollowUp = z.infer<typeof insertEmailFollowUpSchema>;
+
+export type DispatcherNotification = typeof dispatcherNotifications.$inferSelect;
+export type InsertDispatcherNotification = z.infer<typeof insertDispatcherNotificationSchema>;
+
+// Extended types with relations for bidding
+export type LoadBidWithRelations = LoadBid & {
+  driver?: Driver;
+  load?: LoadWithRelations;
+  scrapedLoad?: ScrapedLoad;
+  responses?: BidResponse[];
+  emailCampaign?: EmailCampaign;
+};
+
+export type EmailCampaignWithFollowUps = EmailCampaign & {
+  followUps: EmailFollowUp[];
+  bid: LoadBid;
+};
+
+export type BidResponseWithDriver = BidResponse & {
+  driver: Driver;
+  bid: LoadBid;
+};

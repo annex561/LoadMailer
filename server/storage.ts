@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration, type LoadBid, type InsertLoadBid, type BidResponse, type InsertBidResponse, type EmailCampaign, type InsertEmailCampaign, type EmailFollowUp, type InsertEmailFollowUp, type DispatcherNotification, type InsertDispatcherNotification, type LoadBidWithRelations, type EmailCampaignWithFollowUps } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -180,6 +180,45 @@ export interface IStorage {
 
   // Driver availability operations
   getAvailableDrivers(): Promise<Driver[]>;
+
+  // Load Bidding operations
+  getLoadBid(id: string): Promise<LoadBid | undefined>;
+  getAllLoadBids(): Promise<LoadBid[]>;
+  createLoadBid(bid: InsertLoadBid): Promise<LoadBid>;
+  updateLoadBid(id: string, bid: Partial<InsertLoadBid>): Promise<LoadBid | undefined>;
+  deleteLoadBid(id: string): Promise<boolean>;
+  getExpiredBids(): Promise<LoadBid[]>;
+  getDriverTimeoutBids(timeoutMinutes: number): Promise<LoadBid[]>;
+
+  // Bid Response operations
+  getBidResponse(id: string): Promise<BidResponse | undefined>;
+  getAllBidResponses(): Promise<BidResponse[]>;
+  createBidResponse(response: InsertBidResponse): Promise<BidResponse>;
+  updateBidResponse(id: string, response: Partial<InsertBidResponse>): Promise<BidResponse | undefined>;
+  getBidResponsesByBid(bidId: string): Promise<BidResponse[]>;
+  getBidResponsesByDriver(driverId: string): Promise<BidResponse[]>;
+
+  // Email Campaign operations
+  getEmailCampaign(id: string): Promise<EmailCampaign | undefined>;
+  getAllEmailCampaigns(): Promise<EmailCampaign[]>;
+  getActiveCampaigns(): Promise<EmailCampaign[]>;
+  createEmailCampaign(campaign: InsertEmailCampaign): Promise<EmailCampaign>;
+  updateEmailCampaign(id: string, campaign: Partial<InsertEmailCampaign>): Promise<EmailCampaign | undefined>;
+  deleteEmailCampaign(id: string): Promise<boolean>;
+
+  // Email Follow-Up operations
+  getEmailFollowUp(id: string): Promise<EmailFollowUp | undefined>;
+  getAllEmailFollowUps(): Promise<EmailFollowUp[]>;
+  createEmailFollowUp(followUp: InsertEmailFollowUp): Promise<EmailFollowUp>;
+  updateEmailFollowUp(id: string, followUp: Partial<InsertEmailFollowUp>): Promise<EmailFollowUp | undefined>;
+  getEmailFollowUpsByCampaign(campaignId: string): Promise<EmailFollowUp[]>;
+
+  // Dispatcher Notification operations
+  getDispatcherNotification(id: string): Promise<DispatcherNotification | undefined>;
+  getAllDispatcherNotifications(): Promise<DispatcherNotification[]>;
+  createDispatcherNotification(notification: InsertDispatcherNotification): Promise<DispatcherNotification>;
+  updateDispatcherNotification(id: string, notification: Partial<InsertDispatcherNotification>): Promise<DispatcherNotification | undefined>;
+  getDispatcherNotificationsByBid(bidId: string): Promise<DispatcherNotification[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -204,6 +243,11 @@ export class MemStorage implements IStorage {
   private loadBoardConfigurations: Map<string, LoadBoardConfiguration> = new Map();
   private scrapedLoads: Map<string, ScrapedLoad> = new Map();
   private scraperConfigurations: Map<string, ScraperConfiguration> = new Map();
+  private loadBids: Map<string, LoadBid> = new Map();
+  private bidResponses: Map<string, BidResponse> = new Map();
+  private emailCampaigns: Map<string, EmailCampaign> = new Map();
+  private emailFollowUps: Map<string, EmailFollowUp> = new Map();
+  private dispatcherNotifications: Map<string, DispatcherNotification> = new Map();
   private loadCounter = 1;
 
   constructor() {
@@ -1438,6 +1482,223 @@ export class MemStorage implements IStorage {
   async getAvailableDrivers(): Promise<Driver[]> {
     return Array.from(this.drivers.values())
       .filter(driver => driver.status === 'available' && driver.isOnboarded);
+  }
+
+  // Load Bidding operations
+  async getLoadBid(id: string): Promise<LoadBid | undefined> {
+    return this.loadBids.get(id);
+  }
+
+  async getAllLoadBids(): Promise<LoadBid[]> {
+    return Array.from(this.loadBids.values());
+  }
+
+  async createLoadBid(bid: InsertLoadBid): Promise<LoadBid> {
+    const id = randomUUID();
+    const newBid: LoadBid = {
+      ...bid,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.loadBids.set(id, newBid);
+    return newBid;
+  }
+
+  async updateLoadBid(id: string, bid: Partial<InsertLoadBid>): Promise<LoadBid | undefined> {
+    const existing = this.loadBids.get(id);
+    if (!existing) return undefined;
+
+    const updated: LoadBid = {
+      ...existing,
+      ...bid,
+      updatedAt: new Date(),
+    };
+    this.loadBids.set(id, updated);
+    return updated;
+  }
+
+  async deleteLoadBid(id: string): Promise<boolean> {
+    return this.loadBids.delete(id);
+  }
+
+  async getExpiredBids(): Promise<LoadBid[]> {
+    const now = new Date();
+    return Array.from(this.loadBids.values())
+      .filter(bid => bid.bidExpiresAt && bid.bidExpiresAt < now && bid.status === 'bid_submitted');
+  }
+
+  async getDriverTimeoutBids(timeoutMinutes: number): Promise<LoadBid[]> {
+    const timeoutThreshold = new Date(Date.now() - timeoutMinutes * 60 * 1000);
+    return Array.from(this.loadBids.values())
+      .filter(bid => 
+        bid.status === 'pending_driver' && 
+        bid.createdAt && 
+        bid.createdAt < timeoutThreshold
+      );
+  }
+
+  // Bid Response operations
+  async getBidResponse(id: string): Promise<BidResponse | undefined> {
+    return this.bidResponses.get(id);
+  }
+
+  async getAllBidResponses(): Promise<BidResponse[]> {
+    return Array.from(this.bidResponses.values());
+  }
+
+  async createBidResponse(response: InsertBidResponse): Promise<BidResponse> {
+    const id = randomUUID();
+    const newResponse: BidResponse = {
+      ...response,
+      id,
+      createdAt: new Date(),
+    };
+    this.bidResponses.set(id, newResponse);
+    return newResponse;
+  }
+
+  async updateBidResponse(id: string, response: Partial<InsertBidResponse>): Promise<BidResponse | undefined> {
+    const existing = this.bidResponses.get(id);
+    if (!existing) return undefined;
+
+    const updated: BidResponse = {
+      ...existing,
+      ...response,
+    };
+    this.bidResponses.set(id, updated);
+    return updated;
+  }
+
+  async getBidResponsesByBid(bidId: string): Promise<BidResponse[]> {
+    return Array.from(this.bidResponses.values())
+      .filter(response => response.bidId === bidId);
+  }
+
+  async getBidResponsesByDriver(driverId: string): Promise<BidResponse[]> {
+    return Array.from(this.bidResponses.values())
+      .filter(response => response.driverId === driverId);
+  }
+
+  // Email Campaign operations
+  async getEmailCampaign(id: string): Promise<EmailCampaign | undefined> {
+    return this.emailCampaigns.get(id);
+  }
+
+  async getAllEmailCampaigns(): Promise<EmailCampaign[]> {
+    return Array.from(this.emailCampaigns.values());
+  }
+
+  async getActiveCampaigns(): Promise<EmailCampaign[]> {
+    return Array.from(this.emailCampaigns.values())
+      .filter(campaign => campaign.status === 'active');
+  }
+
+  async createEmailCampaign(campaign: InsertEmailCampaign): Promise<EmailCampaign> {
+    const id = randomUUID();
+    const newCampaign: EmailCampaign = {
+      ...campaign,
+      id,
+      totalEmails: 0,
+      followUpCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.emailCampaigns.set(id, newCampaign);
+    return newCampaign;
+  }
+
+  async updateEmailCampaign(id: string, campaign: Partial<InsertEmailCampaign>): Promise<EmailCampaign | undefined> {
+    const existing = this.emailCampaigns.get(id);
+    if (!existing) return undefined;
+
+    const updated: EmailCampaign = {
+      ...existing,
+      ...campaign,
+      updatedAt: new Date(),
+    };
+    this.emailCampaigns.set(id, updated);
+    return updated;
+  }
+
+  async deleteEmailCampaign(id: string): Promise<boolean> {
+    return this.emailCampaigns.delete(id);
+  }
+
+  // Email Follow-up operations
+  async getEmailFollowUp(id: string): Promise<EmailFollowUp | undefined> {
+    return this.emailFollowUps.get(id);
+  }
+
+  async getAllEmailFollowUps(): Promise<EmailFollowUp[]> {
+    return Array.from(this.emailFollowUps.values());
+  }
+
+  async createEmailFollowUp(followUp: InsertEmailFollowUp): Promise<EmailFollowUp> {
+    const id = randomUUID();
+    const newFollowUp: EmailFollowUp = {
+      ...followUp,
+      id,
+      createdAt: new Date(),
+    };
+    this.emailFollowUps.set(id, newFollowUp);
+    return newFollowUp;
+  }
+
+  async updateEmailFollowUp(id: string, followUp: Partial<InsertEmailFollowUp>): Promise<EmailFollowUp | undefined> {
+    const existing = this.emailFollowUps.get(id);
+    if (!existing) return undefined;
+
+    const updated: EmailFollowUp = {
+      ...existing,
+      ...followUp,
+    };
+    this.emailFollowUps.set(id, updated);
+    return updated;
+  }
+
+  async getEmailFollowUpsByCampaign(campaignId: string): Promise<EmailFollowUp[]> {
+    return Array.from(this.emailFollowUps.values())
+      .filter(followUp => followUp.campaignId === campaignId);
+  }
+
+  // Dispatcher Notification operations
+  async getDispatcherNotification(id: string): Promise<DispatcherNotification | undefined> {
+    return this.dispatcherNotifications.get(id);
+  }
+
+  async getAllDispatcherNotifications(): Promise<DispatcherNotification[]> {
+    return Array.from(this.dispatcherNotifications.values());
+  }
+
+  async createDispatcherNotification(notification: InsertDispatcherNotification): Promise<DispatcherNotification> {
+    const id = randomUUID();
+    const newNotification: DispatcherNotification = {
+      ...notification,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.dispatcherNotifications.set(id, newNotification);
+    return newNotification;
+  }
+
+  async updateDispatcherNotification(id: string, notification: Partial<InsertDispatcherNotification>): Promise<DispatcherNotification | undefined> {
+    const existing = this.dispatcherNotifications.get(id);
+    if (!existing) return undefined;
+
+    const updated: DispatcherNotification = {
+      ...existing,
+      ...notification,
+      updatedAt: new Date(),
+    };
+    this.dispatcherNotifications.set(id, updated);
+    return updated;
+  }
+
+  async getDispatcherNotificationsByBid(bidId: string): Promise<DispatcherNotification[]> {
+    return Array.from(this.dispatcherNotifications.values())
+      .filter(notification => notification.bidId === bidId);
   }
 }
 

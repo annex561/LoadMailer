@@ -7,6 +7,7 @@ import { loadExpirationService } from "./load-expiration-service";
 import { telegramLoadService } from "./telegram-service";
 import { gpsTrackingService } from "./gps-tracking-service";
 import { loadBoardService } from "./load-board-service";
+import { biddingService } from "./bidding-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema } from "@shared/schema";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -141,6 +142,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('Load Board Service initialized');
   } catch (error) {
     console.error('Failed to initialize Load Board Service:', error);
+  }
+
+  // Initialize Bidding Service
+  try {
+    await biddingService.initialize();
+    console.log('Bidding Service initialized');
+  } catch (error) {
+    console.error('Failed to initialize Bidding Service:', error);
   }
 
   // Driver routes
@@ -1115,17 +1124,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const importedLoad = await storage.createLoad({
-        loadNumber: scrapedLoad.loadNumber || `IMPORT-${Date.now()}`,
         customerId: defaultCustomer.id,
         driverId: scrapedLoad.matchedDriverId || undefined,
         description: `${scrapedLoad.commodity || 'General Freight'} - ${scrapedLoad.weight || 0} lbs`,
         weight: scrapedLoad.weight || 0,
         priority: scrapedLoad.priority || 'standard',
         pickupAddress: scrapedLoad.pickupAddress || `${scrapedLoad.pickupCity}, ${scrapedLoad.pickupState}`,
-        pickupDate: scrapedLoad.pickupDate,
+        pickupDate: scrapedLoad.pickupDate.toISOString().split('T')[0],
         pickupTime: scrapedLoad.pickupTimeWindow || '08:00',
         deliveryAddress: scrapedLoad.deliveryAddress || `${scrapedLoad.deliveryCity}, ${scrapedLoad.deliveryState}`,
-        deliveryDate: scrapedLoad.deliveryDate,
+        deliveryDate: scrapedLoad.deliveryDate.toISOString().split('T')[0],
         deliveryTime: scrapedLoad.deliveryTimeWindow || '17:00',
         specialInstructions: scrapedLoad.specialRequirements,
         rate: scrapedLoad.rate || null,
@@ -1679,6 +1687,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error sending test load:", error);
       res.status(500).json({ error: "Failed to send test load" });
+    }
+  });
+
+  // Bidding System API endpoints
+  app.get('/api/bidding/status', async (req, res) => {
+    try {
+      const status = {
+        isRunning: biddingService.isServiceRunning(),
+        stats: await biddingService.getBiddingStats(),
+      };
+      res.json(status);
+    } catch (error) {
+      console.error('Error getting bidding status:', error);
+      res.status(500).json({ message: 'Failed to get bidding status' });
+    }
+  });
+
+  // Create bid from scraped load
+  app.post('/api/bidding/create-bid', async (req, res) => {
+    try {
+      const { scrapedLoadId, driverId } = req.body;
+      
+      if (!scrapedLoadId || !driverId) {
+        return res.status(400).json({ message: 'scrapedLoadId and driverId are required' });
+      }
+
+      const bid = await biddingService.createBidFromScrapedLoad(scrapedLoadId, driverId);
+      res.json(bid);
+    } catch (error) {
+      console.error('Error creating bid:', error);
+      res.status(500).json({ message: 'Failed to create bid' });
+    }
+  });
+
+  // Handle driver response to bid
+  app.post('/api/bidding/driver-response', async (req, res) => {
+    try {
+      const { bidId, driverId, response, counterOffer, reason, notes } = req.body;
+      
+      if (!bidId || !driverId || !response) {
+        return res.status(400).json({ message: 'bidId, driverId, and response are required' });
+      }
+
+      await biddingService.handleDriverResponse(bidId, driverId, response, {
+        counterOffer,
+        reason,
+        notes,
+      });
+      
+      res.json({ message: 'Driver response processed successfully' });
+    } catch (error) {
+      console.error('Error processing driver response:', error);
+      res.status(500).json({ message: 'Failed to process driver response' });
+    }
+  });
+
+  // Mark load as won
+  app.post('/api/bidding/mark-won', async (req, res) => {
+    try {
+      const { bidId, finalRate, brokerResponse } = req.body;
+      
+      if (!bidId || !finalRate) {
+        return res.status(400).json({ message: 'bidId and finalRate are required' });
+      }
+
+      await biddingService.markLoadAsWon(bidId, finalRate, brokerResponse);
+      res.json({ message: 'Load marked as won successfully' });
+    } catch (error) {
+      console.error('Error marking load as won:', error);
+      res.status(500).json({ message: 'Failed to mark load as won' });
+    }
+  });
+
+  // Get all load bids
+  app.get('/api/bidding/bids', async (req, res) => {
+    try {
+      const bids = await storage.getAllLoadBids();
+      res.json(bids);
+    } catch (error) {
+      console.error('Error fetching bids:', error);
+      res.status(500).json({ message: 'Failed to fetch bids' });
+    }
+  });
+
+  // Get all email campaigns
+  app.get('/api/bidding/campaigns', async (req, res) => {
+    try {
+      const campaigns = await storage.getAllEmailCampaigns();
+      res.json(campaigns);
+    } catch (error) {
+      console.error('Error fetching campaigns:', error);
+      res.status(500).json({ message: 'Failed to fetch campaigns' });
     }
   });
 
