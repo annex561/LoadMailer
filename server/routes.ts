@@ -737,6 +737,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/scraper-configs', async (req, res) => {
     try {
       const config = await storage.createScraperConfig(req.body);
+      
+      // Schedule the task if it's enabled
+      if (config.enabled) {
+        await schedulerService.scheduleScraperTask(config);
+      }
+      
       res.json(config);
     } catch (error) {
       console.error('Error creating scraper config:', error);
