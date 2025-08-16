@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Loads from "@/pages/loads";
+import DATLoads from "@/pages/dat-loads";
 import Contacts from "@/pages/contacts";
 import Templates from "@/pages/templates";
 import DriverManagement from "@/pages/driver-management";
@@ -19,6 +20,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/loads" component={Loads} />
+      <Route path="/dat-loads" component={DATLoads} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/templates" component={Templates} />
       <Route path="/driver-management" component={DriverManagement} />

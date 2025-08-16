@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { analyticsService } from "./analytics-service";
 import { schedulerService } from "./scheduler-service";
+import { loadExpirationService } from "./load-expiration-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations } from "@shared/schema";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -105,6 +106,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('Scheduler service initialized');
   } catch (error) {
     console.error('Failed to initialize scheduler service:', error);
+  }
+
+  // Initialize load expiration service on startup
+  try {
+    await loadExpirationService.initialize();
+    console.log('Load expiration service initialized');
+  } catch (error) {
+    console.error('Failed to initialize load expiration service:', error);
   }
 
   // Driver routes
@@ -794,6 +803,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Failed to get scraper status:', error);
       res.status(500).json({ error: 'Failed to get scraper status' });
+    }
+  });
+
+  // Load expiration API endpoints
+  app.get("/api/load-expiration-stats", async (req, res) => {
+    try {
+      const stats = await loadExpirationService.getExpirationStats();
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch expiration stats" });
+    }
+  });
+
+  app.post("/api/expire-load/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const success = await loadExpirationService.expireLoadManually(id);
+      
+      if (success) {
+        res.json({ success: true, message: "Load expired successfully" });
+      } else {
+        res.status(400).json({ success: false, error: "Failed to expire load" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to expire load" });
+    }
+  });
+
+  app.post("/api/set-load-expiration/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { expiresAt } = req.body;
+      
+      if (!expiresAt) {
+        return res.status(400).json({ error: "Expiration date is required" });
+      }
+      
+      const success = await loadExpirationService.setLoadExpiration(id, new Date(expiresAt));
+      
+      if (success) {
+        res.json({ success: true, message: "Load expiration set successfully" });
+      } else {
+        res.status(400).json({ success: false, error: "Failed to set load expiration" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to set load expiration" });
+    }
+  });
+
+  app.post("/api/process-load-expirations", async (req, res) => {
+    try {
+      await loadExpirationService.processLoadExpirations();
+      res.json({ success: true, message: "Load expirations processed successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to process load expirations" });
+    }
+  });
+
+  app.get("/api/load-expiration-config", async (req, res) => {
+    try {
+      const config = loadExpirationService.getConfig();
+      res.json(config);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch expiration config" });
     }
   });
 

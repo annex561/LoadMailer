@@ -19,6 +19,13 @@ export interface DATLoadData {
   company?: string;
   contactPhone?: string;
   description?: string;
+  // Temperature/Cooling fields
+  temperatureRequired?: boolean;
+  minTemperature?: number;
+  maxTemperature?: number;
+  temperatureUnit?: string;
+  // Expiration
+  expiresAt?: string;
 }
 
 export interface ScraperConfig {
@@ -505,7 +512,12 @@ export class DATScraper {
       { origin: 'Kansas City, MO', destination: 'Oklahoma City, OK', miles: 350, rate: 980 }
     ];
     
-    const equipmentTypes = ['Dry Van', 'Refrigerated', 'Flatbed', 'Step Deck'];
+    const equipmentTypes = [
+      { type: 'Dry Van', needsTemp: false },
+      { type: 'Refrigerated', needsTemp: true },
+      { type: 'Flatbed', needsTemp: false },
+      { type: 'Step Deck', needsTemp: false }
+    ];
     const companies = ['ABC Logistics', 'FreightCorp', 'Swift Transport', 'Premium Shipping', 'National Freight'];
     
     // Generate 3-5 random loads
@@ -520,23 +532,38 @@ export class DATScraper {
       deliveryDate.setDate(deliveryDate.getDate() + Math.floor(Math.random() * 2) + 1); // 1-2 days after pickup
       
       const weight = Math.floor(Math.random() * 35000) + 10000; // 10k-45k lbs
-      const equipment = equipmentTypes[Math.floor(Math.random() * equipmentTypes.length)];
+      const equipmentInfo = equipmentTypes[Math.floor(Math.random() * equipmentTypes.length)];
       const company = companies[Math.floor(Math.random() * companies.length)];
       
-      return {
+      // Set expiration date - loads expire after 24-48 hours for DAT loads
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + Math.floor(Math.random() * 24) + 24); // 24-48 hours
+      
+      const loadData: DATLoadData = {
         loadNumber: `DAT-${Date.now()}-${index + 1}`,
         origin: route.origin,
         destination: route.destination,
         pickupDate: pickupDate.toISOString().split('T')[0],
         deliveryDate: deliveryDate.toISOString().split('T')[0],
         weight: weight,
-        equipment: equipment,
+        equipment: equipmentInfo.type,
         rate: route.rate + Math.floor(Math.random() * 200) - 100, // +/- $100 variation
         miles: route.miles,
         company: company,
         contactPhone: `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`,
-        description: `${equipment} load from ${route.origin} to ${route.destination} - Via DAT Power Load Board`
+        description: `${equipmentInfo.type} load from ${route.origin} to ${route.destination} - Via DAT Power Load Board`,
+        expiresAt: expiresAt.toISOString()
       };
+      
+      // Add temperature requirements for refrigerated loads
+      if (equipmentInfo.needsTemp) {
+        loadData.temperatureRequired = true;
+        loadData.minTemperature = Math.floor(Math.random() * 30) + 32; // 32-62°F
+        loadData.maxTemperature = loadData.minTemperature + Math.floor(Math.random() * 10) + 5; // +5-15°F range
+        loadData.temperatureUnit = 'F';
+      }
+      
+      return loadData;
     });
     
     console.log(`Created ${sampleLoads.length} realistic sample loads for ${this.config.username}`);
@@ -623,7 +650,17 @@ export class DATScraper {
           customerId = datCustomer.id;
         }
         
-        // Create load with more realistic data
+        // Determine equipment type for schema
+        const equipmentTypeMap: Record<string, string> = {
+          'Dry Van': 'dry_van',
+          'Refrigerated': 'refrigerated',
+          'Flatbed': 'flatbed',
+          'Step Deck': 'step_deck'
+        };
+        
+        const equipmentType = equipmentTypeMap[loadData.equipment] || 'dry_van';
+        
+        // Create load with enhanced DAT fields
         const newLoad = await storage.createLoad({
           customerId,
           description: loadData.description || `${loadData.equipment} load from ${loadData.origin} to ${loadData.destination}`,
@@ -636,7 +673,20 @@ export class DATScraper {
           deliveryDate: loadData.deliveryDate,
           deliveryTime: ['02:00 PM', '04:00 PM', '05:00 PM', '06:00 PM'][Math.floor(Math.random() * 4)],
           specialInstructions: `DAT Load Board - Rate: $${loadData.rate || 0}, Miles: ${loadData.miles || 0}, Equipment: ${loadData.equipment}${loadData.contactPhone ? `, Contact: ${loadData.contactPhone}` : ''}`,
-          status: 'scheduled'
+          status: 'scheduled',
+          // Enhanced DAT fields
+          equipmentType,
+          temperatureRequired: loadData.temperatureRequired || false,
+          minTemperature: loadData.minTemperature,
+          maxTemperature: loadData.maxTemperature,
+          temperatureUnit: loadData.temperatureUnit || 'F',
+          rate: loadData.rate,
+          miles: loadData.miles,
+          company: loadData.company,
+          contactPhone: loadData.contactPhone,
+          sourceBoard: 'dat',
+          expiresAt: loadData.expiresAt,
+          isExpired: false
         });
         
         console.log(`Created load: ${newLoad.loadNumber} from DAT data`);

@@ -42,7 +42,22 @@ export const loads = pgTable("loads", {
   deliveryDate: timestamp("delivery_date").notNull(),
   deliveryTime: text("delivery_time").notNull(),
   specialInstructions: text("special_instructions"),
-  status: text("status").notNull().default("scheduled"), // scheduled, in_transit, delivered, cancelled
+  status: text("status").notNull().default("scheduled"), // scheduled, in_transit, delivered, cancelled, expired
+  // Temperature/Cooling fields
+  equipmentType: text("equipment_type").notNull().default("dry_van"), // dry_van, refrigerated, flatbed, step_deck
+  temperatureRequired: boolean("temperature_required").notNull().default(false),
+  minTemperature: integer("min_temperature"), // in Fahrenheit
+  maxTemperature: integer("max_temperature"), // in Fahrenheit
+  temperatureUnit: text("temperature_unit").default("F"), // F or C
+  // Load expiration
+  expiresAt: timestamp("expires_at"), // When this load should no longer be available
+  isExpired: boolean("is_expired").notNull().default(false),
+  // DAT-style fields
+  rate: real("rate"), // Rate in dollars
+  miles: integer("miles"), // Distance in miles
+  company: text("company"), // Shipping company
+  contactPhone: text("contact_phone"), // Contact phone number
+  sourceBoard: text("source_board").default("manual"), // manual, dat, loadboard
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
