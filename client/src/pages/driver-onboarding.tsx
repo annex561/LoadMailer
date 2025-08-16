@@ -8,9 +8,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Truck, MapPin, Shield, CheckCircle } from "lucide-react";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Truck, MapPin, Shield, CheckCircle, MessageSquare, ExternalLink } from "lucide-react";
 
 export default function DriverOnboarding() {
   const [location] = useLocation();
@@ -18,6 +19,7 @@ export default function DriverOnboarding() {
   const [token, setToken] = useState<string>("");
   const [isTokenValid, setIsTokenValid] = useState<boolean | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [testLoadSent, setTestLoadSent] = useState(false);
 
   const form = useForm<DriverOnboarding>({
     resolver: zodResolver(driverOnboardingSchema),
@@ -29,6 +31,10 @@ export default function DriverOnboarding() {
       emergencyContact: "",
       emergencyPhone: "",
       confirmPassword: "",
+      telegramId: "",
+      telegramUsername: "",
+      city: "",
+      enableTelegramNotifications: false,
     },
   });
 
@@ -64,12 +70,22 @@ export default function DriverOnboarding() {
       });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async (result) => {
       setIsSubmitted(true);
       toast({
         title: "Welcome to LoadMaster!",
         description: "Your driver account has been created successfully",
       });
+      
+      // If Telegram notifications are enabled, send test load
+      if (form.getValues("enableTelegramNotifications") && form.getValues("telegramId")) {
+        try {
+          await apiRequest("POST", "/api/driver-test-load", { driverId: result.driver.id });
+          setTestLoadSent(true);
+        } catch (error) {
+          console.error("Failed to send test load:", error);
+        }
+      }
     },
     onError: (error) => {
       toast({
@@ -126,17 +142,29 @@ export default function DriverOnboarding() {
             </div>
             <CardTitle className="text-success">Welcome Aboard!</CardTitle>
             <CardDescription>
-              Your driver account has been created successfully. You'll start receiving load assignments soon.
+              Your driver account has been created successfully. 
+              {testLoadSent ? "A test load has been sent to your Telegram - please respond to activate your account!" : "You'll start receiving load assignments soon."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="bg-blue-50 p-4 rounded-lg">
               <h4 className="font-medium text-blue-900 mb-2">Next Steps:</h4>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Check your email for login credentials</li>
-                <li>• Download the LoadMaster mobile app</li>
-                <li>• Keep your phone's location services enabled</li>
-                <li>• Wait for your first load assignment</li>
+                {testLoadSent ? (
+                  <>
+                    <li>• Check your Telegram for a test load notification</li>
+                    <li>• Reply to the test load to activate your account</li>
+                    <li>• Once activated, you'll receive loads near your location</li>
+                    <li>• Keep your phone's location services enabled</li>
+                  </>
+                ) : (
+                  <>
+                    <li>• Check your email for login credentials</li>
+                    <li>• Download the LoadMaster mobile app</li>
+                    <li>• Keep your phone's location services enabled</li>
+                    <li>• Wait for your first load assignment</li>
+                  </>
+                )}
               </ul>
             </div>
           </CardContent>
@@ -232,6 +260,7 @@ export default function DriverOnboarding() {
                         <FormControl>
                           <Input 
                             {...field} 
+                            value={field.value || ""}
                             placeholder="DL123456789"
                             data-testid="input-license-number"
                           />
@@ -250,6 +279,7 @@ export default function DriverOnboarding() {
                         <FormControl>
                           <Input 
                             {...field} 
+                            value={field.value || ""}
                             placeholder="Jane Doe"
                             data-testid="input-emergency-contact"
                           />
@@ -268,6 +298,7 @@ export default function DriverOnboarding() {
                         <FormControl>
                           <Input 
                             {...field} 
+                            value={field.value || ""}
                             placeholder="(555) 987-6543"
                             data-testid="input-emergency-phone"
                           />
@@ -276,7 +307,155 @@ export default function DriverOnboarding() {
                       </FormItem>
                     )}
                   />
+
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Current City</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="Atlanta, GA"
+                            data-testid="input-driver-city"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Used for matching loads near your location
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
+
+                {/* Telegram Integration Section */}
+                <Card className="border border-blue-200 bg-blue-50">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <MessageSquare className="w-5 h-5 text-blue-600" />
+                      Telegram Load Notifications
+                    </CardTitle>
+                    <CardDescription>
+                      Receive instant load offers via Telegram for faster response times
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="enableTelegramNotifications"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-telegram-notifications"
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>
+                              Enable Telegram notifications for load offers
+                            </FormLabel>
+                            <FormDescription>
+                              Get instant notifications and respond to loads faster via Telegram
+                            </FormDescription>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+
+                    {form.watch("enableTelegramNotifications") && (
+                      <div className="space-y-4 pt-4 border-t border-blue-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="telegramId"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Telegram ID</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    {...field} 
+                                    value={field.value || ""}
+                                    placeholder="123456789"
+                                    data-testid="input-telegram-id"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Your unique Telegram user ID number
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="telegramUsername"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Telegram Username</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    {...field} 
+                                    value={field.value || ""}
+                                    placeholder="@yourusername"
+                                    data-testid="input-telegram-username"
+                                  />
+                                </FormControl>
+                                <FormDescription>
+                                  Your Telegram username (optional)
+                                </FormDescription>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        {(!form.watch("telegramId") || !form.watch("telegramUsername")) && (
+                          <div className="bg-white border border-blue-300 rounded-lg p-4">
+                            <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
+                              <MessageSquare className="w-4 h-4" />
+                              Don't have Telegram yet?
+                            </h4>
+                            <p className="text-sm text-blue-800 mb-3">
+                              Telegram is a free messaging app that allows you to receive instant load notifications. Create your account and come back to complete your setup.
+                            </p>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-2"
+                                onClick={() => window.open("https://telegram.org/", "_blank")}
+                                data-testid="button-create-telegram"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                                Create Telegram Account
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-2"
+                                onClick={() => window.open("https://t.me/userinfobot", "_blank")}
+                                data-testid="button-get-telegram-id"
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                                Get Your Telegram ID
+                              </Button>
+                            </div>
+                            <p className="text-xs text-blue-700 mt-2">
+                              After creating your account, use @userinfobot to find your Telegram ID, then return here to complete setup.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <div className="flex items-start space-x-3">

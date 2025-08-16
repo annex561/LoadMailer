@@ -238,6 +238,11 @@ export class TelegramLoadService {
 
   private async matchesPreferredLane(load: LoadWithRelations): Promise<boolean> {
     try {
+      // Always allow test loads
+      if (load.sourceBoard === 'test') {
+        return true;
+      }
+
       // Extract states from addresses
       const originState = this.extractStateFromAddress(load.pickupAddress);
       const destinationState = this.extractStateFromAddress(load.deliveryAddress);
@@ -282,6 +287,28 @@ export class TelegramLoadService {
     } catch (error) {
       console.error('Error matching preferred lane:', error);
       return false;
+    }
+  }
+
+  private async getDriversNearLocation(location: string): Promise<Driver[]> {
+    try {
+      const allDrivers = await storage.getDriversWithTelegramEnabled();
+      
+      // For now, simple city-based matching
+      // In production, you'd use proper geolocation services
+      return allDrivers.filter(driver => {
+        if (!driver.city) return false;
+        
+        const driverCity = driver.city.toLowerCase();
+        const loadLocation = location.toLowerCase();
+        
+        // Check if driver city matches or is near the load location
+        return driverCity.includes(loadLocation.split(',')[0].trim().toLowerCase()) ||
+               loadLocation.includes(driverCity.split(',')[0].trim());
+      });
+    } catch (error) {
+      console.error('Error getting drivers near location:', error);
+      return [];
     }
   }
 
@@ -382,7 +409,9 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
       // Get a sample load or create test data
       const loads = await storage.getAllLoads();
       if (loads.length > 0) {
-        await this.processNewLoad(loads[0]);
+        // Find the most recent test load or any available load
+        const testLoad = loads.find(load => load.sourceBoard === 'test') || loads[0];
+        await this.processNewLoad(testLoad);
         return true;
       }
       
@@ -390,6 +419,28 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
       return false;
     } catch (error) {
       console.error('Error sending test load:', error);
+      return false;
+    }
+  }
+
+  async sendTestLoadToDriver(load: LoadWithRelations, driverId: string): Promise<boolean> {
+    if (!this.bot || !this.isRunning) {
+      console.log('Telegram service not running');
+      return false;
+    }
+
+    try {
+      const driver = await storage.getDriver(driverId);
+      if (!driver || !driver.telegramId || !driver.enableTelegramNotifications) {
+        console.log('Driver not found or Telegram not enabled');
+        return false;
+      }
+
+      await this.sendLoadToDriver(load, driver);
+      console.log(`Test load ${load.loadNumber} sent to driver ${driver.name} via Telegram`);
+      return true;
+    } catch (error) {
+      console.error('Error sending test load to driver:', error);
       return false;
     }
   }

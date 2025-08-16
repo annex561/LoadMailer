@@ -1049,6 +1049,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/driver-test-load", async (req, res) => {
+    try {
+      const { driverId } = req.body;
+      if (!driverId) {
+        return res.status(400).json({ error: "Driver ID is required" });
+      }
+
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+
+      if (!driver.telegramId || !driver.enableTelegramNotifications) {
+        return res.status(400).json({ error: "Driver does not have Telegram notifications enabled" });
+      }
+
+      // Create a test load
+      const customers = await storage.getAllCustomers();
+      if (customers.length === 0) {
+        return res.status(400).json({ error: "No customers available for test load" });
+      }
+
+      const testLoad = await storage.createLoad({
+        customerId: customers[0].id,
+        description: "Test Load - Welcome to LoadMaster!",
+        weight: 25000,
+        priority: "standard",
+        pickupAddress: "Atlanta, GA",
+        pickupDate: new Date().toISOString(),
+        pickupTime: "09:00 AM",
+        deliveryAddress: driver.city || "Location TBD",
+        deliveryDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        deliveryTime: "05:00 PM",
+        specialInstructions: "This is a test load to verify your Telegram notifications are working. Please respond to confirm you're ready to receive loads.",
+        rate: 1500,
+        miles: 250,
+        company: "LoadMaster Test",
+        contactPhone: "(555) 123-4567",
+        sourceBoard: "test"
+      });
+
+      // Send the test load via Telegram to specific driver
+      const result = await telegramLoadService.sendTestLoadToDriver(testLoad, driverId);
+      
+      if (result) {
+        res.json({ success: true, message: "Test load sent successfully", loadId: testLoad.id });
+      } else {
+        res.status(500).json({ error: "Failed to send test load via Telegram" });
+      }
+    } catch (error) {
+      console.error("Error sending test load:", error);
+      res.status(500).json({ error: "Failed to send test load" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

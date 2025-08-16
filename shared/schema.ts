@@ -352,6 +352,10 @@ export const driverOnboardingSchema = createInsertSchema(drivers).omit({
   isOnboarded: true,
 }).extend({
   confirmPassword: z.string().min(1, "Password confirmation is required"),
+  telegramId: z.string().optional(),
+  telegramUsername: z.string().optional(),
+  city: z.string().min(1, "City is required for load matching"),
+  enableTelegramNotifications: z.boolean().default(false),
 });
 
 // Types
