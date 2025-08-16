@@ -42,7 +42,7 @@ export class TelegramLoadService {
       this.config = await storage.createTelegramBotConfig({
         botToken: TELEGRAM_TOKEN,
         dispatcherId: DISPATCHER_ID,
-        botUsername: 'LoadMailerBot',
+        botUsername: 'LAMPDispatchbot',
         responseTimeoutMinutes: 3,
         isActive: true
       });

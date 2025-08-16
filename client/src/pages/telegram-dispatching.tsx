@@ -205,7 +205,7 @@ export default function TelegramDispatching() {
                   <div>
                     <p className="font-medium">Telegram Bot Status</p>
                     <p className="text-sm text-gray-600">
-                      {serviceStatus.config?.botUsername || 'LoadMailerBot'} • 
+                      {serviceStatus.config?.botUsername || 'LAMPDispatchbot'} • 
                       Timeout: {serviceStatus.config?.responseTimeoutMinutes || 3} minutes
                     </p>
                   </div>
