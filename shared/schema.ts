@@ -13,6 +13,11 @@ export const drivers = pgTable("drivers", {
   emergencyContact: text("emergency_contact"),
   emergencyPhone: text("emergency_phone"),
   isOnboarded: boolean("is_onboarded").notNull().default(false),
+  // Telegram bot integration
+  telegramId: text("telegram_id").unique(),
+  telegramUsername: text("telegram_username"),
+  city: text("city"),
+  enableTelegramNotifications: boolean("enable_telegram_notifications").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -168,6 +173,48 @@ export const reportTemplates = pgTable("report_templates", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Lane Preferences for Telegram Bot
+export const lanePreferences = pgTable("lane_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fromStates: jsonb("from_states").notNull(), // ["FL", "GA"]
+  toStates: jsonb("to_states").notNull(), // ["NC", "SC"]
+  minRPM: real("min_rpm").notNull(), // Minimum rate per mile
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const avoidLocations = pgTable("avoid_locations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  location: text("location").notNull(), // "NYC", "CA", "Chicago"
+  type: text("type").notNull().default("city"), // city, state, region
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const telegramBotConfig = pgTable("telegram_bot_config", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  botToken: text("bot_token").notNull(),
+  dispatcherId: text("dispatcher_id").notNull(),
+  botUsername: text("bot_username"),
+  responseTimeoutMinutes: integer("response_timeout_minutes").notNull().default(3),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const loadOffers = pgTable("load_offers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  telegramMessageId: text("telegram_message_id"),
+  status: text("status").notNull().default("pending"), // pending, accepted, declined, timeout
+  sentAt: timestamp("sent_at").notNull(),
+  respondedAt: timestamp("responded_at"),
+  timeoutAt: timestamp("timeout_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // DAT Scraper Tables
 export const scraperConfigs = pgTable("scraper_configs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -276,6 +323,28 @@ export const insertScraperLogSchema = createInsertSchema(scraperLogs).omit({
   createdAt: true,
 });
 
+export const insertLanePreferenceSchema = createInsertSchema(lanePreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAvoidLocationSchema = createInsertSchema(avoidLocations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertTelegramBotConfigSchema = createInsertSchema(telegramBotConfig).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertLoadOfferSchema = createInsertSchema(loadOffers).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const driverOnboardingSchema = createInsertSchema(drivers).omit({
   id: true,
   createdAt: true,
@@ -324,6 +393,18 @@ export type InsertScraperConfig = z.infer<typeof insertScraperConfigSchema>;
 
 export type ScraperLog = typeof scraperLogs.$inferSelect;
 export type InsertScraperLog = z.infer<typeof insertScraperLogSchema>;
+
+export type LanePreference = typeof lanePreferences.$inferSelect;
+export type InsertLanePreference = z.infer<typeof insertLanePreferenceSchema>;
+
+export type AvoidLocation = typeof avoidLocations.$inferSelect;
+export type InsertAvoidLocation = z.infer<typeof insertAvoidLocationSchema>;
+
+export type TelegramBotConfig = typeof telegramBotConfig.$inferSelect;
+export type InsertTelegramBotConfig = z.infer<typeof insertTelegramBotConfigSchema>;
+
+export type LoadOffer = typeof loadOffers.$inferSelect;
+export type InsertLoadOffer = z.infer<typeof insertLoadOfferSchema>;
 
 export type DriverOnboarding = z.infer<typeof driverOnboardingSchema>;
 

@@ -1,0 +1,108 @@
+// LoadMailer Bot - Telegram Load Dispatcher
+// Full Setup with Real Token, Dispatcher ID, and Driver Info
+// Built with Puppeteer + Telegram Bot API (node-telegram-bot-api)
+
+const puppeteer = require('puppeteer');
+const TelegramBot = require('node-telegram-bot-api');
+const fs = require('fs');
+
+// ===================== SETTINGS ===================== //
+const TELEGRAM_TOKEN = '8322765631:AAExgmA8q8PEAhhgdhyaIKX0mdVH8bZuN1c';
+const DISPATCHER_ID = '5908383693';
+
+const DRIVERS = [
+  {
+    name: 'Alex Liberty',
+    telegramId: '5908383693',
+    city: 'Atlanta, GA',
+    phone: '+15615777540'
+  }
+];
+
+const PREFERRED_LANES = [
+  { from: ['FL'], to: ['GA'], minRPM: 2.75 },
+  { from: ['FL', 'KY'], to: ['NC', 'SC'], minRPM: 2.6 },
+  { from: ['OH', 'PA'], to: ['MI'], minRPM: 2.85 }
+];
+
+const AVOID_LANES = ['NYC', 'CA', 'Chicago'];
+
+// ===================== TELEGRAM BOT ===================== //
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
+
+// ===================== UTILITIES ===================== //
+function matchesLane(load) {
+  const fromMatch = PREFERRED_LANES.find(lane => lane.from.includes(load.originState));
+  const toMatch = fromMatch && lane.to.includes(load.destinationState);
+  const rpmMatch = fromMatch && load.rpm >= lane.minRPM;
+  const avoidMatch = AVOID_LANES.some(loc => load.origin.includes(loc) || load.destination.includes(loc));
+  return fromMatch && toMatch && rpmMatch && !avoidMatch;
+}
+
+function formatLoadMessage(load) {
+  return `🚛 *New Load Offer*
+Origin: *${load.origin}*
+Destination: *${load.destination}*
+Pick-Up Date: *${load.pickupDate}*
+Weight: *${load.weight} lbs*
+Rate: *$${load.price}*  
+Miles: *${load.miles} mi*  
+Rate/Mile: *$${load.rpm.toFixed(2)}*  
+
+[📦 BOOK NOW](https://t.me/${process.env.BOT_USERNAME}?start=book_${load.id})  |  [❌ DECLINE](https://t.me/${process.env.BOT_USERNAME}?start=decline_${load.id})`;
+}
+
+// ===================== MOCK LOAD FLOW ===================== //
+function sendLoadToDriver(load) {
+  const driver = DRIVERS[0]; // only one driver for now
+  const message = formatLoadMessage(load);
+  bot.sendMessage(driver.telegramId, message, { parse_mode: 'Markdown', disable_web_page_preview: true });
+
+  // 3 minute timeout
+  setTimeout(() => {
+    if (!load.responded) {
+      bot.sendMessage(DISPATCHER_ID, `⏰ No response from ${driver.name} for Load ${load.id} in 3 minutes.`);
+    }
+  }, 180000);
+}
+
+bot.onText(/\/start/, (msg) => {
+  bot.sendMessage(msg.chat.id, 'Welcome to LAMP Load Dispatcher 🚛');
+});
+
+bot.onText(/book_(\d+)/, (msg, match) => {
+  const loadId = match[1];
+  const driver = DRIVERS.find(d => d.telegramId === msg.from.id.toString());
+  bot.sendMessage(driver.telegramId, '✅ Booking request received. Dispatcher is working on it. If no reply in 15 min, feel free to bid on other loads.');
+  bot.sendMessage(DISPATCHER_ID, `📞 *BOOKING CONFIRMATION*
+Driver *${driver.name}* accepted Load ${loadId}.
+Phone: ${driver.phone}
+Location: ${driver.city}
+
+[📞 Call Carrier Now](tel:${driver.phone})`, { parse_mode: 'Markdown' });
+});
+
+bot.onText(/decline_(\d+)/, (msg, match) => {
+  const loadId = match[1];
+  const driver = DRIVERS.find(d => d.telegramId === msg.from.id.toString());
+  bot.sendMessage(DISPATCHER_ID, `❌ Driver ${driver.name} declined Load ${loadId}.`);
+});
+
+// ===================== MANUAL TEST ===================== //
+// Simulated load - replace with scraped data or form input
+const testLoad = {
+  id: 101,
+  origin: 'Atlanta, GA',
+  destination: 'Charlotte, NC',
+  pickupDate: '2025-08-15',
+  weight: 3200,
+  miles: 246,
+  price: 800,
+  rpm: 3.25,
+  originState: 'GA',
+  destinationState: 'NC',
+  responded: false
+};
+
+// Uncomment to test sending a load
+// sendLoadToDriver(testLoad);

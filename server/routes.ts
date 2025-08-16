@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { analyticsService } from "./analytics-service";
 import { schedulerService } from "./scheduler-service";
 import { loadExpirationService } from "./load-expiration-service";
+import { telegramLoadService } from "./telegram-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations } from "@shared/schema";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -114,6 +115,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('Load expiration service initialized');
   } catch (error) {
     console.error('Failed to initialize load expiration service:', error);
+  }
+
+  // Initialize Telegram Load Service on startup
+  try {
+    await telegramLoadService.initialize();
+    console.log('Telegram Load Service initialized');
+  } catch (error) {
+    console.error('Failed to initialize Telegram Load Service:', error);
   }
 
   // Driver routes
@@ -257,6 +266,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Send automated emails for new load
       await sendAutomatedEmails(load, "load_created");
+      
+      // Send load to drivers via Telegram if it matches preferences
+      await telegramLoadService.processNewLoad(load);
       
       res.status(201).json(load);
     } catch (error) {
@@ -867,6 +879,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(config);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch expiration config" });
+    }
+  });
+
+  // Telegram bot API endpoints
+  app.get("/api/telegram/config", async (req, res) => {
+    try {
+      const config = telegramLoadService.getConfig();
+      res.json(config);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch Telegram config" });
+    }
+  });
+
+  app.get("/api/telegram/status", async (req, res) => {
+    try {
+      const isRunning = telegramLoadService.isServiceRunning();
+      res.json({ isRunning, status: isRunning ? 'active' : 'inactive' });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get Telegram service status" });
+    }
+  });
+
+  app.post("/api/telegram/test-load", async (req, res) => {
+    try {
+      const success = await telegramLoadService.sendTestLoad();
+      if (success) {
+        res.json({ success: true, message: "Test load sent successfully" });
+      } else {
+        res.status(400).json({ success: false, error: "Failed to send test load" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send test load" });
+    }
+  });
+
+  // Lane preferences API
+  app.get("/api/lane-preferences", async (req, res) => {
+    try {
+      const preferences = await storage.getAllLanePreferences();
+      res.json(preferences);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch lane preferences" });
+    }
+  });
+
+  app.post("/api/lane-preferences", async (req, res) => {
+    try {
+      const { fromStates, toStates, minRPM } = req.body;
+      const preference = await storage.createLanePreference({
+        fromStates,
+        toStates,
+        minRPM,
+        isActive: true
+      });
+      res.status(201).json(preference);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid lane preference data" });
+    }
+  });
+
+  app.delete("/api/lane-preferences/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteLanePreference(id);
+      if (deleted) {
+        res.status(204).send();
+      } else {
+        res.status(404).json({ error: "Lane preference not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete lane preference" });
+    }
+  });
+
+  // Avoid locations API
+  app.get("/api/avoid-locations", async (req, res) => {
+    try {
+      const locations = await storage.getAllAvoidLocations();
+      res.json(locations);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch avoid locations" });
+    }
+  });
+
+  app.post("/api/avoid-locations", async (req, res) => {
+    try {
+      const { location, type } = req.body;
+      const avoidLocation = await storage.createAvoidLocation({
+        location,
+        type: type || 'city',
+        isActive: true
+      });
+      res.status(201).json(avoidLocation);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid avoid location data" });
+    }
+  });
+
+  app.delete("/api/avoid-locations/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteAvoidLocation(id);
+      if (deleted) {
+        res.status(204).send();
+      } else {
+        res.status(404).json({ error: "Avoid location not found" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete avoid location" });
+    }
+  });
+
+  // Load offers API
+  app.get("/api/load-offers", async (req, res) => {
+    try {
+      const offers = await storage.getAllLoadOffers();
+      res.json(offers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch load offers" });
     }
   });
 

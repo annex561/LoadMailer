@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -66,6 +66,38 @@ export interface IStorage {
   createScraperLog(log: InsertScraperLog): Promise<ScraperLog>;
   updateScraperLog(id: string, log: Partial<InsertScraperLog>): Promise<ScraperLog | undefined>;
   getScraperLogsByConfig(configId: string): Promise<ScraperLog[]>;
+
+  // Telegram bot operations
+  getTelegramBotConfig(id: string): Promise<TelegramBotConfig | undefined>;
+  getAllTelegramBotConfigs(): Promise<TelegramBotConfig[]>;
+  createTelegramBotConfig(config: InsertTelegramBotConfig): Promise<TelegramBotConfig>;
+  updateTelegramBotConfig(id: string, config: Partial<InsertTelegramBotConfig>): Promise<TelegramBotConfig | undefined>;
+  
+  // Lane preference operations
+  getLanePreference(id: string): Promise<LanePreference | undefined>;
+  getAllLanePreferences(): Promise<LanePreference[]>;
+  createLanePreference(pref: InsertLanePreference): Promise<LanePreference>;
+  updateLanePreference(id: string, pref: Partial<InsertLanePreference>): Promise<LanePreference | undefined>;
+  deleteLanePreference(id: string): Promise<boolean>;
+  
+  // Avoid location operations
+  getAvoidLocation(id: string): Promise<AvoidLocation | undefined>;
+  getAllAvoidLocations(): Promise<AvoidLocation[]>;
+  createAvoidLocation(location: InsertAvoidLocation): Promise<AvoidLocation>;
+  updateAvoidLocation(id: string, location: Partial<InsertAvoidLocation>): Promise<AvoidLocation | undefined>;
+  deleteAvoidLocation(id: string): Promise<boolean>;
+  
+  // Load offer operations
+  getLoadOffer(id: string): Promise<LoadOffer | undefined>;
+  getAllLoadOffers(): Promise<LoadOffer[]>;
+  createLoadOffer(offer: InsertLoadOffer): Promise<LoadOffer>;
+  updateLoadOffer(id: string, offer: Partial<InsertLoadOffer>): Promise<LoadOffer | undefined>;
+  getLoadOfferByLoadAndDriver(loadId: string, driverId: string): Promise<LoadOffer | undefined>;
+  updateLoadOfferByLoadAndDriver(loadId: string, driverId: string, offer: Partial<InsertLoadOffer>): Promise<LoadOffer | undefined>;
+  
+  // Driver telegram operations
+  getDriverByTelegramId(telegramId: string): Promise<Driver | undefined>;
+  getDriversWithTelegramEnabled(): Promise<Driver[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -78,6 +110,10 @@ export class MemStorage implements IStorage {
   private driverLocations: Map<string, DriverLocation> = new Map();
   private scraperConfigs: Map<string, ScraperConfig> = new Map();
   private scraperLogs: Map<string, ScraperLog> = new Map();
+  private telegramBotConfigs: Map<string, TelegramBotConfig> = new Map();
+  private lanePreferences: Map<string, LanePreference> = new Map();
+  private avoidLocations: Map<string, AvoidLocation> = new Map();
+  private loadOffers: Map<string, LoadOffer> = new Map();
   private loadCounter = 1;
 
   constructor() {
@@ -96,6 +132,10 @@ export class MemStorage implements IStorage {
       emergencyContact: "Jane Johnson",
       emergencyPhone: "(555) 987-6543",
       isOnboarded: true,
+      telegramId: null,
+      telegramUsername: null,
+      city: null,
+      enableTelegramNotifications: false,
       createdAt: new Date(),
     };
     
@@ -109,6 +149,10 @@ export class MemStorage implements IStorage {
       emergencyContact: "John Williams",
       emergencyPhone: "(555) 321-0987",
       isOnboarded: true,
+      telegramId: null,
+      telegramUsername: null,
+      city: null,
+      enableTelegramNotifications: false,
       createdAt: new Date(),
     };
 
@@ -198,6 +242,14 @@ export class MemStorage implements IStorage {
       ...insertDriver,
       id,
       status: insertDriver.status || "available",
+      licenseNumber: insertDriver.licenseNumber || null,
+      emergencyContact: insertDriver.emergencyContact || null,
+      emergencyPhone: insertDriver.emergencyPhone || null,
+      isOnboarded: insertDriver.isOnboarded || false,
+      telegramId: insertDriver.telegramId || null,
+      telegramUsername: insertDriver.telegramUsername || null,
+      city: insertDriver.city || null,
+      enableTelegramNotifications: insertDriver.enableTelegramNotifications || false,
       createdAt: new Date(),
     };
     this.drivers.set(id, driver);
@@ -297,8 +349,15 @@ export class MemStorage implements IStorage {
       id,
       loadNumber,
       status: insertLoad.status || "scheduled",
+      priority: insertLoad.priority || "standard",
       pickupDate: new Date(insertLoad.pickupDate),
       deliveryDate: new Date(insertLoad.deliveryDate),
+      driverId: insertLoad.driverId || null,
+      equipmentType: insertLoad.equipmentType || "dry_van",
+      temperatureRequired: insertLoad.temperatureRequired || false,
+      isExpired: insertLoad.isExpired || false,
+      temperatureUnit: insertLoad.temperatureUnit || "F",
+      sourceBoard: insertLoad.sourceBoard || "manual",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -456,6 +515,7 @@ export class MemStorage implements IStorage {
     const token: OnboardingToken = {
       ...insertToken,
       id,
+      isUsed: insertToken.isUsed || false,
       createdAt: new Date(),
     };
     this.onboardingTokens.set(insertToken.token, token);
@@ -485,6 +545,9 @@ export class MemStorage implements IStorage {
     const location: DriverLocation = {
       ...insertLocation,
       id,
+      accuracy: insertLocation.accuracy || null,
+      speed: insertLocation.speed || null,
+      heading: insertLocation.heading || null,
       createdAt: new Date(),
     };
     this.driverLocations.set(id, location);
@@ -549,6 +612,15 @@ export class MemStorage implements IStorage {
     const newConfig: ScraperConfig = {
       ...config,
       id,
+      type: config.type || "dat",
+      schedule: config.schedule || "*/1 * * * * *",
+      enabled: config.enabled || false,
+      autoCreateLoads: config.autoCreateLoads || true,
+      username: config.username || null,
+      password: config.password || null,
+      searchCriteria: config.searchCriteria || {},
+      defaultCustomerId: config.defaultCustomerId || null,
+      lastRunAt: config.lastRunAt || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -580,7 +652,7 @@ export class MemStorage implements IStorage {
 
   async getAllScraperLogs(): Promise<ScraperLog[]> {
     return Array.from(this.scraperLogs.values())
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
   }
 
   async createScraperLog(log: InsertScraperLog): Promise<ScraperLog> {
@@ -588,6 +660,12 @@ export class MemStorage implements IStorage {
     const newLog: ScraperLog = {
       ...log,
       id,
+      loadsScraped: log.loadsScraped || 0,
+      loadsCreated: log.loadsCreated || 0,
+      errorMessage: log.errorMessage || null,
+      executionTime: log.executionTime || null,
+      completedAt: log.completedAt || null,
+      metadata: log.metadata || {},
       createdAt: new Date(),
     };
     this.scraperLogs.set(id, newLog);
@@ -609,7 +687,189 @@ export class MemStorage implements IStorage {
   async getScraperLogsByConfig(configId: string): Promise<ScraperLog[]> {
     return Array.from(this.scraperLogs.values())
       .filter(log => log.configId === configId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  // Telegram bot config operations
+  async getTelegramBotConfig(id: string): Promise<TelegramBotConfig | undefined> {
+    return this.telegramBotConfigs.get(id);
+  }
+
+  async getAllTelegramBotConfigs(): Promise<TelegramBotConfig[]> {
+    return Array.from(this.telegramBotConfigs.values());
+  }
+
+  async createTelegramBotConfig(config: InsertTelegramBotConfig): Promise<TelegramBotConfig> {
+    const id = randomUUID();
+    const newConfig: TelegramBotConfig = {
+      ...config,
+      id,
+      botUsername: config.botUsername || null,
+      responseTimeoutMinutes: config.responseTimeoutMinutes || 3,
+      isActive: config.isActive !== undefined ? config.isActive : true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.telegramBotConfigs.set(id, newConfig);
+    return newConfig;
+  }
+
+  async updateTelegramBotConfig(id: string, config: Partial<InsertTelegramBotConfig>): Promise<TelegramBotConfig | undefined> {
+    const existing = this.telegramBotConfigs.get(id);
+    if (!existing) return undefined;
+
+    const updated: TelegramBotConfig = {
+      ...existing,
+      ...config,
+      updatedAt: new Date(),
+    };
+    this.telegramBotConfigs.set(id, updated);
+    return updated;
+  }
+
+  // Lane preference operations
+  async getLanePreference(id: string): Promise<LanePreference | undefined> {
+    return this.lanePreferences.get(id);
+  }
+
+  async getAllLanePreferences(): Promise<LanePreference[]> {
+    return Array.from(this.lanePreferences.values())
+      .filter(pref => pref.isActive)
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async createLanePreference(pref: InsertLanePreference): Promise<LanePreference> {
+    const id = randomUUID();
+    const newPref: LanePreference = {
+      ...pref,
+      id,
+      isActive: pref.isActive !== undefined ? pref.isActive : true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.lanePreferences.set(id, newPref);
+    return newPref;
+  }
+
+  async updateLanePreference(id: string, pref: Partial<InsertLanePreference>): Promise<LanePreference | undefined> {
+    const existing = this.lanePreferences.get(id);
+    if (!existing) return undefined;
+
+    const updated: LanePreference = {
+      ...existing,
+      ...pref,
+      updatedAt: new Date(),
+    };
+    this.lanePreferences.set(id, updated);
+    return updated;
+  }
+
+  async deleteLanePreference(id: string): Promise<boolean> {
+    return this.lanePreferences.delete(id);
+  }
+
+  // Avoid location operations
+  async getAvoidLocation(id: string): Promise<AvoidLocation | undefined> {
+    return this.avoidLocations.get(id);
+  }
+
+  async getAllAvoidLocations(): Promise<AvoidLocation[]> {
+    return Array.from(this.avoidLocations.values())
+      .filter(loc => loc.isActive)
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async createAvoidLocation(location: InsertAvoidLocation): Promise<AvoidLocation> {
+    const id = randomUUID();
+    const newLocation: AvoidLocation = {
+      ...location,
+      id,
+      type: location.type || "city",
+      isActive: location.isActive !== undefined ? location.isActive : true,
+      createdAt: new Date(),
+    };
+    this.avoidLocations.set(id, newLocation);
+    return newLocation;
+  }
+
+  async updateAvoidLocation(id: string, location: Partial<InsertAvoidLocation>): Promise<AvoidLocation | undefined> {
+    const existing = this.avoidLocations.get(id);
+    if (!existing) return undefined;
+
+    const updated: AvoidLocation = {
+      ...existing,
+      ...location,
+    };
+    this.avoidLocations.set(id, updated);
+    return updated;
+  }
+
+  async deleteAvoidLocation(id: string): Promise<boolean> {
+    return this.avoidLocations.delete(id);
+  }
+
+  // Load offer operations
+  async getLoadOffer(id: string): Promise<LoadOffer | undefined> {
+    return this.loadOffers.get(id);
+  }
+
+  async getAllLoadOffers(): Promise<LoadOffer[]> {
+    return Array.from(this.loadOffers.values())
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async createLoadOffer(offer: InsertLoadOffer): Promise<LoadOffer> {
+    const id = randomUUID();
+    const newOffer: LoadOffer = {
+      ...offer,
+      id,
+      status: offer.status || "pending",
+      telegramMessageId: offer.telegramMessageId || null,
+      respondedAt: offer.respondedAt || null,
+      createdAt: new Date(),
+    };
+    this.loadOffers.set(id, newOffer);
+    return newOffer;
+  }
+
+  async updateLoadOffer(id: string, offer: Partial<InsertLoadOffer>): Promise<LoadOffer | undefined> {
+    const existing = this.loadOffers.get(id);
+    if (!existing) return undefined;
+
+    const updated: LoadOffer = {
+      ...existing,
+      ...offer,
+    };
+    this.loadOffers.set(id, updated);
+    return updated;
+  }
+
+  async getLoadOfferByLoadAndDriver(loadId: string, driverId: string): Promise<LoadOffer | undefined> {
+    return Array.from(this.loadOffers.values())
+      .find(offer => offer.loadId === loadId && offer.driverId === driverId);
+  }
+
+  async updateLoadOfferByLoadAndDriver(loadId: string, driverId: string, offer: Partial<InsertLoadOffer>): Promise<LoadOffer | undefined> {
+    const existing = await this.getLoadOfferByLoadAndDriver(loadId, driverId);
+    if (!existing) return undefined;
+
+    const updated: LoadOffer = {
+      ...existing,
+      ...offer,
+    };
+    this.loadOffers.set(existing.id, updated);
+    return updated;
+  }
+
+  // Driver telegram operations
+  async getDriverByTelegramId(telegramId: string): Promise<Driver | undefined> {
+    return Array.from(this.drivers.values())
+      .find(driver => driver.telegramId === telegramId);
+  }
+
+  async getDriversWithTelegramEnabled(): Promise<Driver[]> {
+    return Array.from(this.drivers.values())
+      .filter(driver => driver.telegramId && driver.enableTelegramNotifications);
   }
 }
 
