@@ -594,6 +594,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/onboarding-tokens", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      
+      const token = randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+      
+      const tokenData = {
+        token,
+        email,
+        expiresAt,
+        isUsed: false,
+      };
+      
+      const validatedData = insertOnboardingTokenSchema.parse(tokenData);
+      const onboardingToken = await storage.createOnboardingToken(validatedData);
+      
+      res.status(201).json(onboardingToken);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create onboarding token" });
+    }
+  });
+
   app.get("/api/onboarding-tokens", async (req, res) => {
     try {
       const tokens = await storage.getAllOnboardingTokens();
