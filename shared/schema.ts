@@ -552,3 +552,197 @@ export type DriverLocationUpdate = {
   batteryLevel?: number;
   signalStrength?: number;
 };
+
+// Load Board Integration Tables
+export const loadBoardSources = pgTable("load_board_sources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(), // DAT, Truckstop.com, Sylectus, etc.
+  displayName: text("display_name").notNull(),
+  baseUrl: text("base_url").notNull(),
+  apiEndpoint: text("api_endpoint"),
+  requiresAuth: boolean("requires_auth").notNull().default(false),
+  authType: text("auth_type"), // api_key, oauth, basic_auth, session
+  isActive: boolean("is_active").notNull().default(true),
+  rateLimit: integer("rate_limit").default(60), // requests per minute
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const loadBoardConfigurations = pgTable("load_board_configurations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar("source_id").references(() => loadBoardSources.id).notNull(),
+  name: text("name").notNull(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  credentials: jsonb("credentials").notNull().default({}), // encrypted auth data
+  searchFilters: jsonb("search_filters").notNull().default({}), // search criteria
+  scrapingInterval: integer("scraping_interval").notNull().default(300), // seconds
+  maxLoadsPerRun: integer("max_loads_per_run").default(100),
+  lastScrapedAt: timestamp("last_scraped_at"),
+  lastError: text("last_error"),
+  successCount: integer("success_count").notNull().default(0),
+  errorCount: integer("error_count").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const scrapedLoads = pgTable("scraped_loads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar("source_id").references(() => loadBoardSources.id).notNull(),
+  configId: varchar("config_id").references(() => loadBoardConfigurations.id).notNull(),
+  externalId: text("external_id").notNull(), // load ID from source
+  loadNumber: text("load_number"),
+  
+  // Load details
+  pickupCity: text("pickup_city").notNull(),
+  pickupState: text("pickup_state").notNull(),
+  pickupZip: text("pickup_zip"),
+  pickupAddress: text("pickup_address"),
+  pickupDate: timestamp("pickup_date").notNull(),
+  pickupTimeWindow: text("pickup_time_window"),
+  
+  deliveryCity: text("delivery_city").notNull(),
+  deliveryState: text("delivery_state").notNull(),
+  deliveryZip: text("delivery_zip"),
+  deliveryAddress: text("delivery_address"),
+  deliveryDate: timestamp("delivery_date").notNull(),
+  deliveryTimeWindow: text("delivery_time_window"),
+  
+  // Financial details
+  rate: real("rate"),
+  rateType: text("rate_type"), // flat, per_mile, percentage
+  mileage: integer("mileage"),
+  ratePerMile: real("rate_per_mile"),
+  fuelSurcharge: real("fuel_surcharge"),
+  totalPay: real("total_pay"),
+  
+  // Load specifications
+  weight: integer("weight"),
+  commodity: text("commodity"),
+  equipmentType: text("equipment_type"), // dry_van, flatbed, reefer, etc.
+  truckLength: integer("truck_length"),
+  specialRequirements: text("special_requirements"),
+  
+  // Contact information
+  brokerName: text("broker_name"),
+  brokerPhone: text("broker_phone"),
+  brokerEmail: text("broker_email"),
+  brokerMcNumber: text("broker_mc_number"),
+  
+  // Load status and metadata
+  status: text("status").notNull().default("available"), // available, booked, expired, cancelled
+  priority: text("priority").default("standard"), // standard, high, urgent
+  isExpedited: boolean("is_expedited").notNull().default(false),
+  postedAt: timestamp("posted_at"),
+  expiresAt: timestamp("expires_at"),
+  
+  // Matching and processing
+  isMatched: boolean("is_matched").notNull().default(false),
+  matchScore: real("match_score"), // 0-100 compatibility score
+  matchedDriverId: varchar("matched_driver_id").references(() => drivers.id),
+  isImported: boolean("is_imported").notNull().default(false),
+  importedLoadId: varchar("imported_load_id").references(() => loads.id),
+  
+  // Raw data and metadata
+  rawData: jsonb("raw_data").notNull().default({}), // original scraped data
+  scrapedAt: timestamp("scraped_at").defaultNow(),
+  lastUpdatedAt: timestamp("last_updated_at").defaultNow(),
+});
+
+export const scraperConfigurations = pgTable("scraper_configurations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  
+  // Scraping schedule
+  scheduleType: text("schedule_type").notNull().default("interval"), // interval, cron, manual
+  intervalMinutes: integer("interval_minutes").default(15), // for interval type
+  cronExpression: text("cron_expression"), // for cron type
+  
+  // Scraping filters and preferences
+  searchCriteria: jsonb("search_criteria").notNull().default({}),
+  preferredLanes: jsonb("preferred_lanes").notNull().default([]), // origin/destination preferences
+  avoidLanes: jsonb("avoid_lanes").notNull().default([]),
+  minRate: real("min_rate"),
+  maxRate: real("max_rate"),
+  minRatePerMile: real("min_rate_per_mile"),
+  minMileage: integer("min_mileage"),
+  maxMileage: integer("max_mileage"),
+  equipmentTypes: jsonb("equipment_types").notNull().default([]),
+  maxWeight: integer("max_weight"),
+  
+  // Processing settings
+  autoImportMatches: boolean("auto_import_matches").notNull().default(false),
+  autoAssignDrivers: boolean("auto_assign_drivers").notNull().default(false),
+  minimumMatchScore: real("minimum_match_score").default(75.0),
+  notifyOnNewMatches: boolean("notify_on_new_matches").notNull().default(true),
+  
+  // Performance tracking
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+  averageRunTimeMs: integer("average_run_time_ms"),
+  totalLoadsScraped: integer("total_loads_scraped").notNull().default(0),
+  totalMatchesFound: integer("total_matches_found").notNull().default(0),
+  lastError: text("last_error"),
+  errorCount: integer("error_count").notNull().default(0),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schemas for new tables
+export const insertLoadBoardSourceSchema = createInsertSchema(loadBoardSources).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertLoadBoardConfigurationSchema = createInsertSchema(loadBoardConfigurations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastScrapedAt: true,
+  successCount: true,
+  errorCount: true,
+});
+
+export const insertScrapedLoadSchema = createInsertSchema(scrapedLoads).omit({
+  id: true,
+  scrapedAt: true,
+  lastUpdatedAt: true,
+});
+
+export const insertScraperConfigurationSchema = createInsertSchema(scraperConfigurations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastRunAt: true,
+  nextRunAt: true,
+  totalLoadsScraped: true,
+  totalMatchesFound: true,
+  errorCount: true,
+});
+
+// Type exports for new tables
+export type LoadBoardSource = typeof loadBoardSources.$inferSelect;
+export type InsertLoadBoardSource = z.infer<typeof insertLoadBoardSourceSchema>;
+
+export type LoadBoardConfiguration = typeof loadBoardConfigurations.$inferSelect;
+export type InsertLoadBoardConfiguration = z.infer<typeof insertLoadBoardConfigurationSchema>;
+
+export type ScrapedLoad = typeof scrapedLoads.$inferSelect;
+export type InsertScrapedLoad = z.infer<typeof insertScrapedLoadSchema>;
+
+export type ScraperConfiguration = typeof scraperConfigurations.$inferSelect;
+export type InsertScraperConfiguration = z.infer<typeof insertScraperConfigurationSchema>;
+
+// Extended types with relations
+export type ScrapedLoadWithRelations = ScrapedLoad & {
+  source: LoadBoardSource;
+  config: LoadBoardConfiguration;
+  matchedDriver?: Driver;
+  importedLoad?: LoadWithRelations;
+};
+
+export type LoadBoardConfigurationWithSource = LoadBoardConfiguration & {
+  source: LoadBoardSource;
+};

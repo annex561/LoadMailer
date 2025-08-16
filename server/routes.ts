@@ -6,6 +6,7 @@ import { schedulerService } from "./scheduler-service";
 import { loadExpirationService } from "./load-expiration-service";
 import { telegramLoadService } from "./telegram-service";
 import { gpsTrackingService } from "./gps-tracking-service";
+import { loadBoardService } from "./load-board-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema } from "@shared/schema";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -132,6 +133,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('GPS Tracking Service initialized');
   } catch (error) {
     console.error('Failed to initialize GPS Tracking Service:', error);
+  }
+
+  // Initialize Load Board Service on startup
+  try {
+    await loadBoardService.initialize();
+    console.log('Load Board Service initialized');
+  } catch (error) {
+    console.error('Failed to initialize Load Board Service:', error);
   }
 
   // Driver routes
@@ -994,6 +1003,230 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true, config: gpsTrackingService.getConfig() });
     } catch (error) {
       res.status(400).json({ error: "Failed to update GPS service config" });
+    }
+  });
+
+  // Load Board Management Routes
+  // Load Board Sources
+  app.get("/api/load-boards/sources", async (req, res) => {
+    try {
+      const sources = await storage.getAllLoadBoardSources();
+      res.json(sources);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch load board sources" });
+    }
+  });
+
+  app.post("/api/load-boards/sources", async (req, res) => {
+    try {
+      const source = await storage.createLoadBoardSource(req.body);
+      res.status(201).json(source);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create load board source" });
+    }
+  });
+
+  app.put("/api/load-boards/sources/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const source = await storage.updateLoadBoardSource(id, req.body);
+      if (!source) {
+        return res.status(404).json({ error: "Load board source not found" });
+      }
+      res.json(source);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update load board source" });
+    }
+  });
+
+  // Load Board Configurations
+  app.get("/api/load-boards/configurations", async (req, res) => {
+    try {
+      const configurations = await storage.getAllLoadBoardConfigurations();
+      res.json(configurations);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch load board configurations" });
+    }
+  });
+
+  app.post("/api/load-boards/configurations", async (req, res) => {
+    try {
+      const config = await storage.createLoadBoardConfiguration(req.body);
+      res.status(201).json(config);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create load board configuration" });
+    }
+  });
+
+  app.put("/api/load-boards/configurations/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const config = await storage.updateLoadBoardConfiguration(id, req.body);
+      if (!config) {
+        return res.status(404).json({ error: "Load board configuration not found" });
+      }
+      res.json(config);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update load board configuration" });
+    }
+  });
+
+  // Scraped Loads
+  app.get("/api/load-boards/scraped-loads", async (req, res) => {
+    try {
+      const { hours, matched, sourceId } = req.query;
+      
+      let loads;
+      if (hours) {
+        loads = await storage.getRecentScrapedLoads(Number(hours));
+      } else if (matched === 'true') {
+        loads = await storage.getMatchedScrapedLoads();
+      } else if (sourceId && typeof sourceId === 'string') {
+        loads = await storage.getScrapedLoadsBySource(sourceId);
+      } else {
+        loads = await storage.getAllScrapedLoads();
+      }
+      
+      res.json(loads);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch scraped loads" });
+    }
+  });
+
+  app.post("/api/load-boards/scraped-loads/:id/import", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const scrapedLoad = await storage.getScrapedLoad(id);
+      
+      if (!scrapedLoad) {
+        return res.status(404).json({ error: "Scraped load not found" });
+      }
+
+      if (scrapedLoad.isImported) {
+        return res.status(400).json({ error: "Load already imported" });
+      }
+
+      // Create a new load from scraped data
+      const customers = await storage.getAllCustomers();
+      const defaultCustomer = customers[0];
+      
+      if (!defaultCustomer) {
+        return res.status(400).json({ error: "No customers available for import" });
+      }
+
+      const importedLoad = await storage.createLoad({
+        loadNumber: scrapedLoad.loadNumber || `IMPORT-${Date.now()}`,
+        customerId: defaultCustomer.id,
+        driverId: scrapedLoad.matchedDriverId || undefined,
+        description: `${scrapedLoad.commodity || 'General Freight'} - ${scrapedLoad.weight || 0} lbs`,
+        weight: scrapedLoad.weight || 0,
+        priority: scrapedLoad.priority || 'standard',
+        pickupAddress: scrapedLoad.pickupAddress || `${scrapedLoad.pickupCity}, ${scrapedLoad.pickupState}`,
+        pickupDate: scrapedLoad.pickupDate,
+        pickupTime: scrapedLoad.pickupTimeWindow || '08:00',
+        deliveryAddress: scrapedLoad.deliveryAddress || `${scrapedLoad.deliveryCity}, ${scrapedLoad.deliveryState}`,
+        deliveryDate: scrapedLoad.deliveryDate,
+        deliveryTime: scrapedLoad.deliveryTimeWindow || '17:00',
+        specialInstructions: scrapedLoad.specialRequirements,
+        rate: scrapedLoad.rate || null,
+        miles: scrapedLoad.mileage || null,
+        sourceBoard: 'loadboard',
+      });
+
+      // Update scraped load as imported
+      await storage.updateScrapedLoad(scrapedLoad.externalId, scrapedLoad.sourceId, {
+        isImported: true,
+        importedLoadId: importedLoad.id,
+      });
+
+      res.json({ success: true, importedLoad });
+    } catch (error) {
+      console.error('Import scraped load error:', error);
+      res.status(500).json({ error: "Failed to import scraped load" });
+    }
+  });
+
+  // Scraper Configurations
+  app.get("/api/load-boards/scraper-configs", async (req, res) => {
+    try {
+      const configs = await storage.getAllScraperConfigurations();
+      res.json(configs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch scraper configurations" });
+    }
+  });
+
+  app.post("/api/load-boards/scraper-configs", async (req, res) => {
+    try {
+      const config = await storage.createScraperConfiguration(req.body);
+      res.status(201).json(config);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create scraper configuration" });
+    }
+  });
+
+  app.put("/api/load-boards/scraper-configs/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const config = await storage.updateScraperConfiguration(id, req.body);
+      if (!config) {
+        return res.status(404).json({ error: "Scraper configuration not found" });
+      }
+      res.json(config);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update scraper configuration" });
+    }
+  });
+
+  app.post("/api/load-boards/scraper-configs/:id/run", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await loadBoardService.runScraper(id);
+      res.json(result);
+    } catch (error) {
+      console.error('Manual scraper run error:', error);
+      res.status(500).json({ error: "Failed to run scraper" });
+    }
+  });
+
+  // Load Board Service Management
+  app.get("/api/load-boards/service/status", async (req, res) => {
+    try {
+      const status = {
+        isRunning: loadBoardService.isServiceRunning(),
+        stats: await loadBoardService.getScrapingStats(),
+      };
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch load board service status" });
+    }
+  });
+
+  app.post("/api/load-boards/test-scraper", async (req, res) => {
+    try {
+      // Create a test scraper configuration for demonstration
+      const testConfig = await storage.createScraperConfiguration({
+        name: 'Test Scraper',
+        isEnabled: true,
+        scheduleType: 'manual',
+        searchCriteria: {},
+        preferredLanes: [
+          { fromStates: ['FL'], toStates: ['GA'] },
+          { fromStates: ['GA'], toStates: ['NC'] }
+        ],
+        avoidLanes: [],
+        minRatePerMile: 2.5,
+        equipmentTypes: ['dry_van', 'flatbed'],
+        autoImportMatches: false,
+        minimumMatchScore: 75,
+        notifyOnNewMatches: true,
+      });
+
+      const result = await loadBoardService.runScraper(testConfig.id);
+      res.json({ testConfig, result });
+    } catch (error) {
+      console.error('Test scraper error:', error);
+      res.status(500).json({ error: "Failed to run test scraper" });
     }
   });
 

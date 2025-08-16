@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -143,6 +143,43 @@ export interface IStorage {
   getLoadOffersWithDetails(): Promise<(LoadOffer & { load: LoadWithRelations; driver: Driver })[]>;
   getDriverLoadOfferStats(driverId: string): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}>;
   getAllDriverLoadOfferStats(): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}[]>;
+
+  // Load Board Source operations
+  getLoadBoardSource(id: string): Promise<LoadBoardSource | undefined>;
+  getAllLoadBoardSources(): Promise<LoadBoardSource[]>;
+  createLoadBoardSource(source: InsertLoadBoardSource): Promise<LoadBoardSource>;
+  updateLoadBoardSource(id: string, source: Partial<InsertLoadBoardSource>): Promise<LoadBoardSource | undefined>;
+  deleteLoadBoardSource(id: string): Promise<boolean>;
+
+  // Load Board Configuration operations
+  getLoadBoardConfiguration(id: string): Promise<LoadBoardConfiguration | undefined>;
+  getAllLoadBoardConfigurations(): Promise<LoadBoardConfiguration[]>;
+  getEnabledLoadBoardConfigurations(): Promise<LoadBoardConfiguration[]>;
+  createLoadBoardConfiguration(config: InsertLoadBoardConfiguration): Promise<LoadBoardConfiguration>;
+  updateLoadBoardConfiguration(id: string, config: Partial<InsertLoadBoardConfiguration>): Promise<LoadBoardConfiguration | undefined>;
+  deleteLoadBoardConfiguration(id: string): Promise<boolean>;
+
+  // Scraped Load operations
+  getScrapedLoad(id: string): Promise<ScrapedLoad | undefined>;
+  getAllScrapedLoads(): Promise<ScrapedLoad[]>;
+  getRecentScrapedLoads(hours: number): Promise<ScrapedLoad[]>;
+  getScrapedLoadByExternalId(sourceId: string, externalId: string): Promise<ScrapedLoad | undefined>;
+  createScrapedLoad(load: InsertScrapedLoad): Promise<ScrapedLoad>;
+  updateScrapedLoad(externalId: string, sourceId: string, load: Partial<InsertScrapedLoad>): Promise<ScrapedLoad | undefined>;
+  deleteScrapedLoad(id: string): Promise<boolean>;
+  getMatchedScrapedLoads(): Promise<ScrapedLoad[]>;
+  getScrapedLoadsBySource(sourceId: string): Promise<ScrapedLoad[]>;
+
+  // Scraper Configuration operations
+  getScraperConfiguration(id: string): Promise<ScraperConfiguration | undefined>;
+  getAllScraperConfigurations(): Promise<ScraperConfiguration[]>;
+  getEnabledScraperConfigurations(): Promise<ScraperConfiguration[]>;
+  createScraperConfiguration(config: InsertScraperConfiguration): Promise<ScraperConfiguration>;
+  updateScraperConfiguration(id: string, config: Partial<InsertScraperConfiguration>): Promise<ScraperConfiguration | undefined>;
+  deleteScraperConfiguration(id: string): Promise<boolean>;
+
+  // Driver availability operations
+  getAvailableDrivers(): Promise<Driver[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -163,6 +200,10 @@ export class MemStorage implements IStorage {
   private geofenceEvents: Map<string, GeofenceEvent> = new Map();
   private routes: Map<string, Route> = new Map();
   private gpsDevices: Map<string, GpsDevice> = new Map();
+  private loadBoardSources: Map<string, LoadBoardSource> = new Map();
+  private loadBoardConfigurations: Map<string, LoadBoardConfiguration> = new Map();
+  private scrapedLoads: Map<string, ScrapedLoad> = new Map();
+  private scraperConfigurations: Map<string, ScraperConfiguration> = new Map();
   private loadCounter = 1;
 
   constructor() {
@@ -1194,6 +1235,209 @@ export class MemStorage implements IStorage {
     }
     
     return stats;
+  }
+
+  // Load Board Source operations
+  async getLoadBoardSource(id: string): Promise<LoadBoardSource | undefined> {
+    return this.loadBoardSources.get(id);
+  }
+
+  async getAllLoadBoardSources(): Promise<LoadBoardSource[]> {
+    return Array.from(this.loadBoardSources.values());
+  }
+
+  async createLoadBoardSource(source: InsertLoadBoardSource): Promise<LoadBoardSource> {
+    const id = randomUUID();
+    const newSource: LoadBoardSource = {
+      ...source,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.loadBoardSources.set(id, newSource);
+    return newSource;
+  }
+
+  async updateLoadBoardSource(id: string, source: Partial<InsertLoadBoardSource>): Promise<LoadBoardSource | undefined> {
+    const existing = this.loadBoardSources.get(id);
+    if (!existing) return undefined;
+
+    const updated: LoadBoardSource = {
+      ...existing,
+      ...source,
+      updatedAt: new Date(),
+    };
+    this.loadBoardSources.set(id, updated);
+    return updated;
+  }
+
+  async deleteLoadBoardSource(id: string): Promise<boolean> {
+    return this.loadBoardSources.delete(id);
+  }
+
+  // Load Board Configuration operations
+  async getLoadBoardConfiguration(id: string): Promise<LoadBoardConfiguration | undefined> {
+    return this.loadBoardConfigurations.get(id);
+  }
+
+  async getAllLoadBoardConfigurations(): Promise<LoadBoardConfiguration[]> {
+    return Array.from(this.loadBoardConfigurations.values());
+  }
+
+  async getEnabledLoadBoardConfigurations(): Promise<LoadBoardConfiguration[]> {
+    return Array.from(this.loadBoardConfigurations.values()).filter(config => config.isEnabled);
+  }
+
+  async createLoadBoardConfiguration(config: InsertLoadBoardConfiguration): Promise<LoadBoardConfiguration> {
+    const id = randomUUID();
+    const newConfig: LoadBoardConfiguration = {
+      ...config,
+      id,
+      lastScrapedAt: null,
+      lastError: null,
+      successCount: 0,
+      errorCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.loadBoardConfigurations.set(id, newConfig);
+    return newConfig;
+  }
+
+  async updateLoadBoardConfiguration(id: string, config: Partial<InsertLoadBoardConfiguration>): Promise<LoadBoardConfiguration | undefined> {
+    const existing = this.loadBoardConfigurations.get(id);
+    if (!existing) return undefined;
+
+    const updated: LoadBoardConfiguration = {
+      ...existing,
+      ...config,
+      updatedAt: new Date(),
+    };
+    this.loadBoardConfigurations.set(id, updated);
+    return updated;
+  }
+
+  async deleteLoadBoardConfiguration(id: string): Promise<boolean> {
+    return this.loadBoardConfigurations.delete(id);
+  }
+
+  // Scraped Load operations
+  async getScrapedLoad(id: string): Promise<ScrapedLoad | undefined> {
+    return this.scrapedLoads.get(id);
+  }
+
+  async getAllScrapedLoads(): Promise<ScrapedLoad[]> {
+    return Array.from(this.scrapedLoads.values());
+  }
+
+  async getRecentScrapedLoads(hours: number): Promise<ScrapedLoad[]> {
+    const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
+    return Array.from(this.scrapedLoads.values())
+      .filter(load => new Date(load.scrapedAt || 0) > cutoff)
+      .sort((a, b) => new Date(b.scrapedAt || 0).getTime() - new Date(a.scrapedAt || 0).getTime());
+  }
+
+  async getScrapedLoadByExternalId(sourceId: string, externalId: string): Promise<ScrapedLoad | undefined> {
+    return Array.from(this.scrapedLoads.values())
+      .find(load => load.sourceId === sourceId && load.externalId === externalId);
+  }
+
+  async createScrapedLoad(load: InsertScrapedLoad): Promise<ScrapedLoad> {
+    const id = randomUUID();
+    const newLoad: ScrapedLoad = {
+      ...load,
+      id,
+      scrapedAt: new Date(),
+      lastUpdatedAt: new Date(),
+    };
+    this.scrapedLoads.set(id, newLoad);
+    return newLoad;
+  }
+
+  async updateScrapedLoad(externalId: string, sourceId: string, load: Partial<InsertScrapedLoad>): Promise<ScrapedLoad | undefined> {
+    const existing = Array.from(this.scrapedLoads.values())
+      .find(l => l.externalId === externalId && l.sourceId === sourceId);
+    
+    if (!existing) return undefined;
+
+    const updated: ScrapedLoad = {
+      ...existing,
+      ...load,
+      lastUpdatedAt: new Date(),
+    };
+    this.scrapedLoads.set(existing.id, updated);
+    return updated;
+  }
+
+  async deleteScrapedLoad(id: string): Promise<boolean> {
+    return this.scrapedLoads.delete(id);
+  }
+
+  async getMatchedScrapedLoads(): Promise<ScrapedLoad[]> {
+    return Array.from(this.scrapedLoads.values())
+      .filter(load => load.isMatched)
+      .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+  }
+
+  async getScrapedLoadsBySource(sourceId: string): Promise<ScrapedLoad[]> {
+    return Array.from(this.scrapedLoads.values())
+      .filter(load => load.sourceId === sourceId)
+      .sort((a, b) => new Date(b.scrapedAt || 0).getTime() - new Date(a.scrapedAt || 0).getTime());
+  }
+
+  // Scraper Configuration operations
+  async getScraperConfiguration(id: string): Promise<ScraperConfiguration | undefined> {
+    return this.scraperConfigurations.get(id);
+  }
+
+  async getAllScraperConfigurations(): Promise<ScraperConfiguration[]> {
+    return Array.from(this.scraperConfigurations.values());
+  }
+
+  async getEnabledScraperConfigurations(): Promise<ScraperConfiguration[]> {
+    return Array.from(this.scraperConfigurations.values()).filter(config => config.isEnabled);
+  }
+
+  async createScraperConfiguration(config: InsertScraperConfiguration): Promise<ScraperConfiguration> {
+    const id = randomUUID();
+    const newConfig: ScraperConfiguration = {
+      ...config,
+      id,
+      lastRunAt: null,
+      nextRunAt: null,
+      averageRunTimeMs: null,
+      totalLoadsScraped: 0,
+      totalMatchesFound: 0,
+      lastError: null,
+      errorCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.scraperConfigurations.set(id, newConfig);
+    return newConfig;
+  }
+
+  async updateScraperConfiguration(id: string, config: Partial<InsertScraperConfiguration>): Promise<ScraperConfiguration | undefined> {
+    const existing = this.scraperConfigurations.get(id);
+    if (!existing) return undefined;
+
+    const updated: ScraperConfiguration = {
+      ...existing,
+      ...config,
+      updatedAt: new Date(),
+    };
+    this.scraperConfigurations.set(id, updated);
+    return updated;
+  }
+
+  async deleteScraperConfiguration(id: string): Promise<boolean> {
+    return this.scraperConfigurations.delete(id);
+  }
+
+  // Driver availability operations
+  async getAvailableDrivers(): Promise<Driver[]> {
+    return Array.from(this.drivers.values())
+      .filter(driver => driver.status === 'available' && driver.isOnboarded);
   }
 }
 
