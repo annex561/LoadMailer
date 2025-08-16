@@ -57,7 +57,7 @@ export class BiddingService {
     };
 
     // Email transporter configuration
-    this.emailTransporter = nodemailer.createTransporter({
+    this.emailTransporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.gmail.com",
       port: parseInt(process.env.SMTP_PORT || "587"),
       secure: false,
@@ -111,6 +111,9 @@ export class BiddingService {
 
     // Calculate recommended bid amount
     const originalRate = scrapedLoad.rate;
+    if (!originalRate) {
+      throw new Error('Scraped load does not have a valid rate');
+    }
     const recommendedAmount = originalRate * (1 - this.config.defaultMargin / 100);
     const margin = originalRate - recommendedAmount;
 
@@ -130,7 +133,7 @@ export class BiddingService {
       deliveryDate: scrapedLoad.deliveryDate,
       weight: scrapedLoad.weight,
       commodity: scrapedLoad.commodity,
-      equipmentType: scrapedLoad.equipmentType,
+      equipmentType: scrapedLoad.equipmentType || 'dry_van',
       miles: scrapedLoad.mileage,
       assignedDriverId: driverId,
       bidExpiresAt: new Date(Date.now() + this.config.maxBidTimeoutMinutes * 60 * 1000),
@@ -371,7 +374,6 @@ export class BiddingService {
 
       // Update campaign
       await storage.updateEmailCampaign(campaign.id, {
-        totalEmails: campaign.totalEmails + 1,
         lastEmailSentAt: new Date(),
       });
 
@@ -430,7 +432,6 @@ export class BiddingService {
       : null;
 
     await storage.updateEmailCampaign(campaign.id, {
-      followUpCount: campaign.followUpCount + 1,
       nextFollowUpAt: nextFollowUp,
     });
   }
