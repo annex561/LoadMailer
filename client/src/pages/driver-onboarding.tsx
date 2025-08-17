@@ -31,7 +31,7 @@ interface OnboardingData {
   // Equipment Information
   equipmentType: string;
   weightCapacity: number;
-  preferredLoadTypes: string;
+  loadType: string;
   maxLength: number;
   maxWeight: number;
   vehicleYear: string;
@@ -55,19 +55,12 @@ interface OnboardingData {
 }
 
 const EQUIPMENT_TYPES = [
-  { value: 'sprinter_van', label: 'Sprinter Van' },
-  { value: 'van', label: 'Standard Van' },
-  { value: 'van_lift_gate', label: 'Van with Lift Gate' },
-  { value: 'van_hotshot', label: 'Van Hotshot' },
-  { value: 'straight_box_truck', label: 'Straight Box Truck' },
-  { value: 'box_truck', label: 'Box Truck' },
-  { value: 'moving_van', label: 'Moving Van' },
+  { value: 'vans_standard', label: 'Vans (Standard)' },
+  { value: 'dry_van', label: 'Dry Van' },
+  { value: 'refrigerated', label: 'Refrigerated' },
   { value: 'flatbed', label: 'Flatbed' },
-  { value: 'flatbed_hotshot', label: 'Flatbed Hotshot' },
   { value: 'step_deck', label: 'Step Deck' },
   { value: 'lowboy', label: 'Lowboy' },
-  { value: 'dry_van', label: 'Dry Van' },
-  { value: 'refrigerated', label: 'Refrigerated (Reefer)' },
   { value: 'power_only', label: 'Power Only' },
   { value: 'container', label: 'Container' },
   { value: 'car_carrier', label: 'Car Carrier' },
@@ -100,7 +93,7 @@ export default function DriverOnboarding() {
     medicalCertExpiry: '',
     equipmentType: '',
     weightCapacity: 26000,
-    preferredLoadTypes: 'full_partial',
+    loadType: 'full_partial',
     maxLength: 53,
     maxWeight: 48000,
     vehicleYear: '',
@@ -191,7 +184,7 @@ export default function DriverOnboarding() {
         return formData.licenseNumber && formData.licenseState && formData.licenseExpiry;
       case 2: // Equipment
         return formData.equipmentType && formData.vehicleYear && formData.vehicleMake && 
-               formData.preferredLoadTypes && formData.maxLength > 0;
+               formData.loadType && formData.maxLength > 0 && formData.maxWeight > 0;
       case 3: // Insurance & Banking
         return formData.insuranceProvider && formData.bankName && formData.routingNumber;
       case 4: // Preferences
@@ -358,7 +351,7 @@ export default function DriverOnboarding() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="preferredLoadTypes">Load Type Preference *</Label>
-                  <Select value={formData.preferredLoadTypes} onValueChange={(value) => updateFormData('preferredLoadTypes', value)}>
+                  <Select value={formData.loadType} onValueChange={(value) => updateFormData('loadType', value)}>
                     <SelectTrigger className="bg-white border border-gray-300 shadow-sm" data-testid="select-load-type">
                       <SelectValue placeholder="Select load type" />
                     </SelectTrigger>
@@ -370,7 +363,7 @@ export default function DriverOnboarding() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="maxLength">Maximum Length (ft) *</Label>
+                  <Label htmlFor="maxLength">Length ft *</Label>
                   <Input
                     id="maxLength"
                     type="number"
@@ -382,6 +375,22 @@ export default function DriverOnboarding() {
                     data-testid="input-max-length"
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="maxWeight">Weight lbs *</Label>
+                  <Input
+                    id="maxWeight"
+                    type="number"
+                    value={formData.maxWeight}
+                    onChange={(e) => updateFormData('maxWeight', parseInt(e.target.value) || 0)}
+                    placeholder="26000"
+                    min="1000"
+                    max="80000"
+                    data-testid="input-max-weight"
+                  />
+                </div>
+                <div></div>
               </div>
               <p className="text-sm text-gray-500 mt-2">
                 These preferences help us match you with suitable loads. You'll only receive offers for loads that match your equipment and length requirements.

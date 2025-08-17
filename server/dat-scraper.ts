@@ -515,14 +515,14 @@ export class DATScraper {
     ];
     
     const equipmentTypes = [
-      { type: 'van_hotshot', needsTemp: false },
-      { type: 'sprinter_van', needsTemp: false },
-      { type: 'flatbed_hotshot', needsTemp: false },
-      { type: 'van', needsTemp: false },
+      { type: 'vans_standard', needsTemp: false },
       { type: 'dry_van', needsTemp: false },
       { type: 'refrigerated', needsTemp: true },
       { type: 'flatbed', needsTemp: false },
-      { type: 'step_deck', needsTemp: false }
+      { type: 'step_deck', needsTemp: false },
+      { type: 'lowboy', needsTemp: false },
+      { type: 'power_only', needsTemp: false },
+      { type: 'container', needsTemp: false }
     ];
     const companies = ['ABC Logistics', 'FreightCorp', 'Swift Transport', 'Premium Shipping', 'National Freight'];
     

@@ -42,7 +42,7 @@ export default function ContactFormModal({
           phone: (contact as Driver)?.phone || "",
           status: (contact as Driver)?.status || "available",
           equipmentType: (contact as Driver)?.equipmentType || "sprinter_van",
-          preferredLoadTypes: (contact as Driver)?.preferredLoadTypes || "full_partial",
+          loadType: (contact as Driver)?.loadType || "full_partial",
           maxLength: (contact as Driver)?.maxLength || 53,
         }
       : {
@@ -252,19 +252,12 @@ export default function ContactFormModal({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-white border border-gray-300 shadow-lg">
-                        <SelectItem value="sprinter_van">Sprinter Van</SelectItem>
-                        <SelectItem value="van">Standard Van</SelectItem>
-                        <SelectItem value="van_lift_gate">Van with Lift Gate</SelectItem>
-                        <SelectItem value="van_hotshot">Van Hotshot</SelectItem>
-                        <SelectItem value="straight_box_truck">Straight Box Truck</SelectItem>
-                        <SelectItem value="box_truck">Box Truck</SelectItem>
-                        <SelectItem value="moving_van">Moving Van</SelectItem>
+                        <SelectItem value="vans_standard">Vans (Standard)</SelectItem>
+                        <SelectItem value="dry_van">Dry Van</SelectItem>
+                        <SelectItem value="refrigerated">Refrigerated</SelectItem>
                         <SelectItem value="flatbed">Flatbed</SelectItem>
-                        <SelectItem value="flatbed_hotshot">Flatbed Hotshot</SelectItem>
                         <SelectItem value="step_deck">Step Deck</SelectItem>
                         <SelectItem value="lowboy">Lowboy</SelectItem>
-                        <SelectItem value="dry_van">Dry Van</SelectItem>
-                        <SelectItem value="refrigerated">Refrigerated (Reefer)</SelectItem>
                         <SelectItem value="power_only">Power Only</SelectItem>
                         <SelectItem value="container">Container</SelectItem>
                         <SelectItem value="car_carrier">Car Carrier</SelectItem>
