@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,6 +80,8 @@ const US_STATES = [
 
 export default function DriverOnboarding() {
   const [currentStep, setCurrentStep] = useState(0);
+  const [onboardingToken, setOnboardingToken] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [formData, setFormData] = useState<OnboardingData>({
     name: '',
     email: '',
@@ -116,6 +118,45 @@ export default function DriverOnboarding() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Get token from URL parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+      setOnboardingToken(token);
+    } else {
+      setTokenError('No onboarding token found. Please use the invitation link.');
+    }
+  }, []);
+
+  // Validate the onboarding token
+  const { data: tokenValidation, isLoading: isValidatingToken } = useQuery({
+    queryKey: ['validate-token', onboardingToken],
+    queryFn: async () => {
+      if (!onboardingToken) return null;
+      const response = await fetch('/api/validate-onboarding-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: onboardingToken })
+      });
+      if (!response.ok) throw new Error('Failed to validate token');
+      return response.json();
+    },
+    enabled: !!onboardingToken
+  });
+
+  useEffect(() => {
+    if (tokenValidation && !tokenValidation.valid) {
+      setTokenError(tokenValidation.error || 'Invalid onboarding token');
+    } else if (tokenValidation && tokenValidation.valid) {
+      setTokenError(null);
+      // Pre-fill email if available
+      if (tokenValidation.email && !formData.email) {
+        setFormData(prev => ({ ...prev, email: tokenValidation.email }));
+      }
+    }
+  }, [tokenValidation, formData.email]);
+
   const steps = [
     { title: 'Personal Info', icon: User },
     { title: 'License & Docs', icon: Shield },
@@ -127,16 +168,23 @@ export default function DriverOnboarding() {
 
   const onboardDriverMutation = useMutation({
     mutationFn: async (data: OnboardingData) => {
-      const response = await fetch('/api/drivers', {
+      if (!onboardingToken) {
+        throw new Error('No onboarding token available');
+      }
+      
+      const response = await fetch('/api/driver-onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...data,
-          status: 'available',
-          isOnboarded: true
+          token: onboardingToken,
+          ...data
         })
       });
-      if (!response.ok) throw new Error('Failed to create driver');
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to complete onboarding');
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -146,6 +194,10 @@ export default function DriverOnboarding() {
         description: 'Welcome to LoadMaster. You can now receive load offers.'
       });
       setCurrentStep(5); // Complete step
+      // Redirect to driver dashboard after a short delay
+      setTimeout(() => {
+        setLocation('/driver-dashboard');
+      }, 3000);
     },
     onError: (error: any) => {
       toast({
@@ -599,6 +651,44 @@ export default function DriverOnboarding() {
         return null;
     }
   };
+
+  // Show loading state while validating token
+  if (isValidatingToken) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p>Validating onboarding invitation...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error if token is invalid
+  if (tokenError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <div className="text-red-500 mb-4">
+                <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.888-.833-2.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Invalid Invitation</h3>
+              <p className="text-gray-600 mb-4">{tokenError}</p>
+              <p className="text-sm text-gray-500">Please contact support or request a new invitation link.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (currentStep === 5) {
     return (
