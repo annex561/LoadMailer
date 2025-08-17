@@ -1561,6 +1561,86 @@ Please contact driver if needed.`;
       await this.bot?.sendMessage(chatId, '❌ Error processing delay reason. Please contact dispatch.');
     }
   }
+
+  // Send driver onboarding invitation via Telegram
+  async sendDriverOnboarding(phoneNumber: string, onboardingToken: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (!this.bot) {
+        return { success: false, error: 'Telegram bot not initialized' };
+      }
+
+      // Format the onboarding message
+      const onboardingUrl = `${process.env.REPLIT_DOMAINS || 'http://localhost'}/driver-onboarding?token=${onboardingToken}`;
+      
+      const message = `🚛 *LAMP Logistics Driver Onboarding*
+
+Welcome to our fleet! You've been invited to join LAMP Logistics as a driver.
+
+📋 *Complete Your Registration:*
+${onboardingUrl}
+
+✅ *What You'll Need:*
+• Driver's License Number
+• Emergency Contact Information
+• Equipment Type Preferences
+• Current Location
+
+⏰ *This invitation expires in 7 days*
+
+Once registered, you'll start receiving load offers directly through Telegram with instant booking capabilities.
+
+Questions? Reply to this message or contact dispatch.`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '📋 Complete Registration', url: onboardingUrl },
+            { text: '📞 Contact Support', callback_data: 'contact_support' }
+          ]
+        ]
+      };
+
+      // Try to send to the phone number directly
+      // Telegram allows sending messages to phone numbers if they have started a chat with the bot
+      const result = await this.bot.sendMessage(phoneNumber, message, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+        disable_web_page_preview: true
+      });
+
+      console.log(`📱 Telegram onboarding sent to ${phoneNumber}: ${result.message_id}`);
+      return { success: true };
+
+    } catch (error: any) {
+      console.error('Telegram onboarding error:', error);
+      
+      // If direct phone messaging fails, provide alternative instructions
+      if (error.response?.description?.includes('chat not found')) {
+        const botUsername = await this.getBotUsername();
+        return { 
+          success: false, 
+          error: `Could not send to ${phoneNumber}. User needs to start a chat with the bot first. Share this link: https://t.me/${botUsername}` 
+        };
+      }
+      
+      return { success: false, error: error.message || 'Failed to send Telegram message' };
+    }
+  }
+
+  // Get bot username for sharing
+  async getBotUsername(): Promise<string> {
+    try {
+      if (!this.bot) {
+        throw new Error('Telegram bot not initialized');
+      }
+      
+      const botInfo = await this.bot.getMe();
+      return botInfo.username || '';
+    } catch (error) {
+      console.error('Failed to get bot info:', error);
+      return '';
+    }
+  }
 }
 
 // Singleton instance

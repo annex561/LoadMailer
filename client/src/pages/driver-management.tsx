@@ -30,9 +30,18 @@ type SMSDriverForm = z.infer<typeof smsDriverSchema>;
 export default function DriverManagement() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSMSModal, setShowSMSModal] = useState(false);
+  const [showTelegramModal, setShowTelegramModal] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string>("");
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
   const { toast } = useToast();
+
+  const telegramForm = useForm<SMSDriverForm>({
+    resolver: zodResolver(smsDriverSchema),
+    defaultValues: {
+      email: "",
+      phone: ""
+    }
+  });
   const queryClient = useQueryClient();
 
   const form = useForm<InviteDriverForm>({
@@ -126,6 +135,33 @@ export default function DriverManagement() {
           variant: "destructive",
         });
       }
+    },
+  });
+
+  const createTelegramInviteMutation = useMutation({
+    mutationFn: async (data: SMSDriverForm) => {
+      const response = await apiRequest("POST", "/api/create-telegram-onboarding-invite", data);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/onboarding-tokens"] });
+      
+      toast({
+        title: "Telegram Invitation Sent",
+        description: `Onboarding invitation sent via Telegram to ${data.phone}`,
+      });
+      
+      telegramForm.reset();
+      setShowTelegramModal(false);
+    },
+    onError: (error: any) => {
+      console.error("Telegram error:", error);
+      
+      toast({
+        title: "Telegram Delivery Failed",
+        description: error.response?.data?.details || "Failed to send Telegram invitation. User needs to start a chat with your bot first.",
+        variant: "destructive",
+      });
     },
   });
 

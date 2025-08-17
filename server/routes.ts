@@ -1317,6 +1317,67 @@ Safe travels! 🚛`;
     }
   });
 
+  // Telegram Onboarding Invitation Endpoint
+  app.post("/api/create-telegram-onboarding-invite", async (req, res) => {
+    try {
+      const { email, phone } = req.body;
+      
+      if (!email || !phone) {
+        return res.status(400).json({ error: "Email and phone are required" });
+      }
+      
+      const token = randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+      
+      const tokenData = {
+        token,
+        email,
+        expiresAt,
+        isUsed: false,
+      };
+      
+      const validatedData = insertOnboardingTokenSchema.parse(tokenData);
+      const onboardingToken = await storage.createOnboardingToken(validatedData);
+      
+      // Send Telegram onboarding message
+      console.log(`📱 Attempting to send Telegram onboarding to ${phone}`);
+      
+      const telegramResult = await telegramLoadService.sendDriverOnboarding(phone, token);
+      console.log(`📱 Telegram Result:`, JSON.stringify(telegramResult, null, 2));
+      
+      if (!telegramResult.success) {
+        console.error(`❌ Failed to send Telegram to ${phone}:`, telegramResult.error);
+        
+        return res.status(500).json({ 
+          error: "Failed to send Telegram invitation", 
+          details: telegramResult.error,
+          suggestion: "User needs to start a chat with your bot first. Share the bot link with them."
+        });
+      }
+      
+      console.log(`Telegram onboarding sent successfully to ${phone}`);
+      
+      // Log the Telegram attempt
+      await storage.createEmailLog({
+        recipientEmail: email,
+        subject: "Telegram Driver Onboarding",
+        status: "sent",
+        sentAt: new Date(),
+      });
+      
+      res.status(201).json({ 
+        ...onboardingToken, 
+        phone,
+        message: "Telegram onboarding invitation sent successfully",
+        method: "telegram"
+      });
+    } catch (error) {
+      console.error("Telegram onboarding error:", error);
+      res.status(400).json({ error: "Failed to send Telegram onboarding invitation" });
+    }
+  });
+
   // SMS Status Endpoint
   app.get('/api/sms-status/:messageId', async (req, res) => {
     const { messageId } = req.params;
