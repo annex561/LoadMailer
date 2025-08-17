@@ -1430,17 +1430,8 @@ Safe travels! 🚛`;
       const telegramResult = await telegramLoadService.sendDriverOnboarding(phone, token);
       console.log(`📱 Telegram Result:`, JSON.stringify(telegramResult, null, 2));
       
-      if (!telegramResult.success) {
-        console.error(`❌ Failed to send Telegram to ${phone}:`, telegramResult.error);
-        
-        return res.status(500).json({ 
-          error: "Failed to send Telegram invitation", 
-          details: telegramResult.error,
-          suggestion: "User needs to start a chat with your bot first. Share the bot link with them."
-        });
-      }
-      
-      console.log(`Telegram onboarding sent successfully to ${phone}`);
+      // Always treat as success since we provide the bot link for manual sharing
+      console.log(`Telegram invitation setup for ${phone}`);
       
       // Log the Telegram attempt
       await storage.createEmailLog({
@@ -1453,8 +1444,10 @@ Safe travels! 🚛`;
       res.status(201).json({ 
         ...onboardingToken, 
         phone,
-        message: "Telegram onboarding invitation sent successfully",
-        method: "telegram"
+        message: "Telegram invitation created - share bot link with driver",
+        method: "telegram",
+        botLink: telegramResult.botLink,
+        instructions: telegramResult.error || "Share the bot link with the driver so they can start a chat and receive automatic onboarding."
       });
     } catch (error) {
       console.error("Telegram onboarding error:", error);

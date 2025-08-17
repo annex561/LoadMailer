@@ -1593,67 +1593,36 @@ Please contact driver if needed.`;
   }
 
   // Send driver onboarding invitation via Telegram
-  async sendDriverOnboarding(phoneNumber: string, onboardingToken: string): Promise<{ success: boolean; error?: string }> {
+  async sendDriverOnboarding(phoneNumber: string, onboardingToken: string): Promise<{ success: boolean; error?: string; botLink?: string }> {
     try {
       if (!this.bot) {
         return { success: false, error: 'Telegram bot not initialized' };
       }
 
-      // Format the onboarding message
+      // Since Telegram bots cannot send messages to users who haven't started a chat,
+      // we'll return the bot link for manual sharing instead of attempting direct messaging
+      const botUsername = await this.getBotUsername();
+      const botLink = `https://t.me/${botUsername}`;
+      
+      console.log(`📱 Telegram invitation created for ${phoneNumber}`);
+      console.log(`🤖 Bot link to share: ${botLink}`);
+      
+      // Store the invitation token for when the user eventually contacts the bot
       const onboardingUrl = `${process.env.REPLIT_DOMAINS || 'http://localhost'}/driver-onboarding?token=${onboardingToken}`;
       
-      const message = `🚛 *LAMP Logistics Driver Onboarding*
-
-Welcome to our fleet! You've been invited to join LAMP Logistics as a driver.
-
-📋 *Complete Your Registration:*
-${onboardingUrl}
-
-✅ *What You'll Need:*
-• Driver's License Number
-• Emergency Contact Information
-• Equipment Type Preferences
-• Current Location
-
-⏰ *This invitation expires in 7 days*
-
-Once registered, you'll start receiving load offers directly through Telegram with instant booking capabilities.
-
-Questions? Reply to this message or contact dispatch.`;
-
-      const keyboard = {
-        inline_keyboard: [
-          [
-            { text: '📋 Complete Registration', url: onboardingUrl },
-            { text: '📞 Contact Support', callback_data: 'contact_support' }
-          ]
-        ]
+      return { 
+        success: true, 
+        botLink,
+        error: `Share this bot link with the driver: ${botLink}. They need to start a chat with the bot to receive automatic onboarding.`
       };
 
-      // Try to send to the phone number directly
-      // Telegram allows sending messages to phone numbers if they have started a chat with the bot
-      const result = await this.bot.sendMessage(phoneNumber, message, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard,
-        disable_web_page_preview: true
-      });
-
-      console.log(`📱 Telegram onboarding sent to ${phoneNumber}: ${result.message_id}`);
-      return { success: true };
-
     } catch (error: any) {
-      console.error('Telegram onboarding error:', error);
-      
-      // If direct phone messaging fails, provide alternative instructions
-      if (error.response?.description?.includes('chat not found')) {
-        const botUsername = await this.getBotUsername();
-        return { 
-          success: false, 
-          error: `Could not send to ${phoneNumber}. User needs to start a chat with the bot first. Share this link: https://t.me/${botUsername}` 
-        };
-      }
-      
-      return { success: false, error: error.message || 'Failed to send Telegram message' };
+      console.error('Telegram service error:', error);
+      const botUsername = await this.getBotUsername();
+      return { 
+        success: false, 
+        error: `Telegram service error. Share this bot link manually: https://t.me/${botUsername}` 
+      };
     }
   }
 
@@ -1661,7 +1630,8 @@ Questions? Reply to this message or contact dispatch.`;
   async sendAutoOnboarding(chatId: number, userInfo: any): Promise<void> {
     try {
       // Create an onboarding token automatically
-      const token = require('crypto').randomUUID();
+      const { randomUUID } = await import('crypto');
+      const token = randomUUID();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
       

@@ -192,8 +192,10 @@ export default function DriverManagement() {
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding-tokens"] });
       
       toast({
-        title: "Telegram Invitation Sent",
-        description: `Onboarding invitation sent via Telegram to ${data.phone}`,
+        title: "Telegram Invitation Created",
+        description: data.botLink 
+          ? `Share this bot link with the driver: ${data.botLink}` 
+          : `Telegram invitation created for ${data.phone}. Share the bot link for automatic onboarding.`,
       });
       
       telegramForm.reset();
@@ -952,7 +954,11 @@ export default function DriverManagement() {
                                 <Input 
                                   {...field} 
                                   type="number"
-                                  onChange={(e) => field.onChange(Number(e.target.value))}
+                                  value={field.value || ""}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    field.onChange(value === "" ? "" : Number(value));
+                                  }}
                                   placeholder="26000"
                                   className="bg-white border border-gray-300"
                                   data-testid="input-manual-weight"
@@ -972,7 +978,11 @@ export default function DriverManagement() {
                                 <Input 
                                   {...field} 
                                   type="number"
-                                  onChange={(e) => field.onChange(Number(e.target.value))}
+                                  value={field.value || ""}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    field.onChange(value === "" ? "" : Number(value));
+                                  }}
                                   placeholder="53"
                                   className="bg-white border border-gray-300"
                                   data-testid="input-manual-length"
