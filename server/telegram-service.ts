@@ -439,27 +439,9 @@ export class TelegramLoadService {
         timeoutAt: timeoutDate
       });
 
-      // Set timeout for no response
+      // Set timeout for automatic retry logic
       setTimeout(async () => {
-        try {
-          const offer = await storage.getLoadOfferByLoadAndDriver(load.id, driver.id);
-          if (offer && offer.status === 'pending') {
-            // Update offer status to timeout
-            await storage.updateLoadOfferByLoadAndDriver(load.id, driver.id, {
-              status: 'timeout'
-            });
-
-            // Notify dispatcher
-            if (this.bot && this.config) {
-              this.bot.sendMessage(
-                this.config.dispatcherId,
-                `⏰ No response from ${driver.name} for Load ${load.loadNumber} in ${this.config.responseTimeoutMinutes} minutes.`
-              );
-            }
-          }
-        } catch (error) {
-          console.error('Error handling timeout:', error);
-        }
+        await this.handleLoadOfferTimeout(load, driver);
       }, this.config.responseTimeoutMinutes * 60 * 1000);
 
       console.log(`Sent load ${load.loadNumber} to driver ${driver.name} via Telegram`);
@@ -795,6 +777,104 @@ ${onboardingUrl}
     } catch (error) {
       console.error('Error handling decline load:', error);
       this.bot?.sendMessage(chatId, '❌ Error processing decline request.');
+    }
+  }
+
+  private async handleLoadOfferTimeout(load: LoadWithRelations, originalDriver: Driver): Promise<void> {
+    try {
+      const offer = await storage.getLoadOfferByLoadAndDriver(load.id, originalDriver.id);
+      if (!offer || offer.status !== 'pending') {
+        return; // Already responded or handled
+      }
+
+      // Check if this is the first timeout (no retry count or retryCount = 0)
+      const retryCount = (offer as any).retryCount || 0;
+      
+      if (retryCount === 0) {
+        // First timeout - resend to same driver
+        console.log(`No response from ${originalDriver.name} for Load ${load.loadNumber} - resending (retry 1)`);
+        
+        // Update offer with retry count
+        await storage.updateLoadOfferByLoadAndDriver(load.id, originalDriver.id, {
+          retryCount: 1,
+          lastSentAt: new Date()
+        } as any);
+
+        // Resend the load to the same driver
+        if (this.bot && originalDriver.telegramId) {
+          const message = `🔄 *LOAD REMINDER* - No response received\n\n${this.formatLoadMessage(load)}\n\n⚠️ *Please respond within 3 minutes or this load will be offered to other drivers.*`;
+          
+          const options = {
+            parse_mode: 'Markdown' as const,
+            disable_web_page_preview: true,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '📦 BOOK NOW', callback_data: `book_${load.id}` },
+                  { text: '❌ DECLINE', callback_data: `decline_${load.id}` }
+                ]
+              ]
+            }
+          };
+
+          await this.bot.sendMessage(originalDriver.telegramId, message, options);
+          
+          // Schedule second timeout for sending to other drivers
+          setTimeout(async () => {
+            await this.handleSecondTimeout(load, originalDriver);
+          }, this.config!.responseTimeoutMinutes * 60 * 1000);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling load offer timeout:', error);
+    }
+  }
+
+  private async handleSecondTimeout(load: LoadWithRelations, originalDriver: Driver): Promise<void> {
+    try {
+      const offer = await storage.getLoadOfferByLoadAndDriver(load.id, originalDriver.id);
+      if (!offer || offer.status !== 'pending') {
+        return; // Driver finally responded
+      }
+
+      console.log(`Second timeout for ${originalDriver.name} on Load ${load.loadNumber} - sending to other drivers`);
+      
+      // Mark original offer as timeout
+      await storage.updateLoadOfferByLoadAndDriver(load.id, originalDriver.id, {
+        status: 'timeout'
+      });
+
+      // Find other eligible drivers in the vicinity
+      const eligibleDrivers = await this.findEligibleDriversByLocation(load);
+      const otherDrivers = eligibleDrivers.filter(driverMatch => driverMatch.driver.id !== originalDriver.id);
+
+      if (otherDrivers.length > 0) {
+        // Send to the next best driver
+        const nextDriver = otherDrivers[0];
+        console.log(`Sending load ${load.loadNumber} to next available driver: ${nextDriver.driver.name}`);
+        
+        await this.sendLoadToDriver(load, nextDriver.driver, nextDriver.matchScore, nextDriver.distance);
+        
+        // Notify dispatcher about the driver change
+        if (this.bot && this.config) {
+          this.bot.sendMessage(
+            this.config.dispatcherId,
+            `🔄 *LOAD REASSIGNED*\n\nLoad ${load.loadNumber} reassigned from ${originalDriver.name} (no response) to ${nextDriver.driver.name}\n\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${load.rate}`,
+            { parse_mode: 'Markdown' }
+          );
+        }
+      } else {
+        // No other drivers available - notify dispatcher
+        if (this.bot && this.config) {
+          this.bot.sendMessage(
+            this.config.dispatcherId,
+            `⚠️ *NO DRIVERS AVAILABLE*\n\nLoad ${load.loadNumber} - no response from ${originalDriver.name} and no other drivers in vicinity.\n\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${load.rate}\n\nManual assignment required.`,
+            { parse_mode: 'Markdown' }
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error handling second timeout:', error);
     }
   }
 }

@@ -289,6 +289,8 @@ export const loadOffers = pgTable("load_offers", {
   sentAt: timestamp("sent_at").notNull(),
   respondedAt: timestamp("responded_at"),
   timeoutAt: timestamp("timeout_at").notNull(),
+  retryCount: integer("retry_count").default(0), // Track number of retries sent to same driver
+  lastSentAt: timestamp("last_sent_at"), // When the last retry was sent
   createdAt: timestamp("created_at").defaultNow(),
 });
 

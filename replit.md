@@ -12,15 +12,15 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-**Load Booking Messaging System (Aug 17, 2025)**
-- Implemented comprehensive messaging functionality for load booking interactions
-- Added Book Now button functionality with real-time status checking and loading states
-- Driver booking confirmations sent via Telegram with load details and dispatch timeline
-- Dispatcher notifications include driver contact info, load details, and direct call links
-- Enhanced form submit button visibility with explicit blue styling and hover effects
-- Fixed form background transparency issues across all modal forms (contact, load, email template)
-- Added weight capacity field to driver equipment specifications
-- Implemented automatic load matching refresh when driver equipment details are updated
+**Automatic Load Retry System (Aug 17, 2025)**
+- Implemented intelligent load retry system for non-responsive drivers
+- First timeout (3 minutes): Resends same load to original driver with reminder message
+- Second timeout (3 minutes): Automatically forwards load to next eligible driver in vicinity
+- Enhanced callback query handling for Telegram inline keyboard buttons (Book/Decline)
+- Fixed critical issue where booking buttons weren't responding due to text vs callback handler mismatch
+- Added comprehensive dispatcher notifications for load reassignments and driver availability status
+- Schema updated with retry tracking fields (retryCount, lastSentAt) for load offers
+- System ensures continuous load coverage with automatic fallback to nearby drivers
 
 # System Architecture
 
