@@ -143,6 +143,32 @@ export class TelegramLoadService {
           // This is a simple load decline
           const loadId = data.substring(8); // Remove 'decline_' prefix
           await this.handleDeclineLoad(loadId, telegramId, chatId);
+        } else if (data.startsWith('onsite_')) {
+          const parts = data.substring(7).split('_');
+          if (parts.length === 2) {
+            const [shortLoadId, shortDriverId] = parts;
+            await this.handleOnSiteConfirmation(shortLoadId, shortDriverId, telegramId, chatId, messageId);
+          } else {
+            console.error('Invalid onsite callback data format:', data);
+          }
+        } else if (data.startsWith('delay_') && !data.startsWith('delay_reason_')) {
+          const parts = data.substring(6).split('_');
+          if (parts.length === 2) {
+            const [shortLoadId, shortDriverId] = parts;
+            await this.handleDelayConfirmation(shortLoadId, shortDriverId, telegramId, chatId, messageId);
+          } else {
+            console.error('Invalid delay callback data format:', data);
+          }
+        } else if (data.startsWith('delay_reason_')) {
+          const parts = data.substring(13).split('_');
+          if (parts.length >= 3) {
+            const reason = parts[0];
+            const shortLoadId = parts[1];
+            const shortDriverId = parts[2];
+            await this.handleDelayReason(reason, shortLoadId, shortDriverId, telegramId, chatId, messageId);
+          } else {
+            console.error('Invalid delay reason callback data format:', data);
+          }
         }
       } catch (error) {
         console.error('Error handling callback query:', error);
@@ -732,6 +758,147 @@ ${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n
     }
   }
 
+  async sendPickupConfirmation(load: LoadWithRelations): Promise<boolean> {
+    if (!this.bot || !this.isRunning || !load.driver?.telegramId) {
+      console.error('Telegram service not initialized or driver has no Telegram ID');
+      return false;
+    }
+
+    try {
+      const pickupTime = load.pickupTime || '12:00 PM';
+      
+      const confirmationMessage = `📍 *PICKUP CONFIRMATION REQUIRED*
+
+📋 Load: ${load.loadNumber}
+🏢 Pickup Location: ${load.pickupAddress}
+⏰ Pickup Time: ${load.pickupDate.toLocaleDateString()} at ${pickupTime}
+
+*Are you at the pickup location?*`;
+
+      // Create shorter callback data using the first 8 characters of IDs
+      const shortLoadId = load.id.substring(0, 8);
+      const shortDriverId = load.driver.id.substring(0, 8);
+      
+      const options = {
+        parse_mode: 'Markdown' as const,
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ ON SITE', callback_data: `onsite_${shortLoadId}_${shortDriverId}` },
+              { text: '⏰ DELAY', callback_data: `delay_${shortLoadId}_${shortDriverId}` }
+            ]
+          ]
+        }
+      };
+
+      await this.bot.sendMessage(load.driver.telegramId, confirmationMessage, options);
+      console.log(`Pickup confirmation sent to driver ${load.driver.name} for load ${load.loadNumber}`);
+      return true;
+    } catch (error) {
+      console.error(`Error sending pickup confirmation to driver:`, error);
+      return false;
+    }
+  }
+
+  async sendPickupInstructions(load: LoadWithRelations, driverId: string): Promise<boolean> {
+    if (!this.bot || !this.isRunning) {
+      console.error('Telegram service not initialized');
+      return false;
+    }
+
+    try {
+      const driver = await storage.getDriver(driverId);
+      if (!driver || !driver.telegramId) {
+        console.error('Driver not found or no Telegram ID');
+        return false;
+      }
+
+      const instructionsMessage = `✅ *PICKUP INSTRUCTIONS*
+
+📋 Load: ${load.loadNumber}
+
+*Please follow instructions below:*
+
+1) Please make sure the cargo isn't damaged.
+2) Please secure the load with the straps and provide me with the photos of the load inside your truck.
+3) Please mention your IN and OUT time (should be confirmed and signed by the shipper)
+4) Please email me a scan of the BOL with the signature of the shipper (should be straight, clear, and in high quality). My email is: dispatch@lampslogistics.com
+
+*IMPORTANT: Don't leave the shipper without my good to go.*`;
+
+      await this.bot.sendMessage(driver.telegramId, instructionsMessage, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+      
+      console.log(`Pickup instructions sent to driver ${driver.name} for load ${load.loadNumber}`);
+      return true;
+    } catch (error) {
+      console.error(`Error sending pickup instructions to driver:`, error);
+      return false;
+    }
+  }
+
+  async sendDelayReasons(load: LoadWithRelations, driverId: string): Promise<boolean> {
+    if (!this.bot || !this.isRunning) {
+      console.error('Telegram service not initialized');
+      return false;
+    }
+
+    try {
+      const driver = await storage.getDriver(driverId);
+      if (!driver || !driver.telegramId) {
+        console.error('Driver not found or no Telegram ID');
+        return false;
+      }
+
+      const delayMessage = `⏰ *DELAY REASON*
+
+📋 Load: ${load.loadNumber}
+
+*Please select the reason for delay:*`;
+
+      // Create shorter callback data using the first 8 characters of IDs
+      const shortLoadId = load.id.substring(0, 8);
+      const shortDriverId = driverId.substring(0, 8);
+      
+      const options = {
+        parse_mode: 'Markdown' as const,
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🚴 Bike Issue', callback_data: `delay_reason_bike_${shortLoadId}_${shortDriverId}` }
+            ],
+            [
+              { text: '🚗 Traffic', callback_data: `delay_reason_traffic_${shortLoadId}_${shortDriverId}` }
+            ],
+            [
+              { text: '🌧️ Weather', callback_data: `delay_reason_weather_${shortLoadId}_${shortDriverId}` }
+            ],
+            [
+              { text: '🔧 Vehicle Issue', callback_data: `delay_reason_vehicle_${shortLoadId}_${shortDriverId}` }
+            ],
+            [
+              { text: '📋 Documentation', callback_data: `delay_reason_docs_${shortLoadId}_${shortDriverId}` }
+            ],
+            [
+              { text: '📞 Other', callback_data: `delay_reason_other_${shortLoadId}_${shortDriverId}` }
+            ]
+          ]
+        }
+      };
+
+      await this.bot.sendMessage(driver.telegramId, delayMessage, options);
+      console.log(`Delay reasons sent to driver ${driver.name} for load ${load.loadNumber}`);
+      return true;
+    } catch (error) {
+      console.error(`Error sending delay reasons to driver:`, error);
+      return false;
+    }
+  }
+
   // Handle driver confirmation of load offer
   private async handleConfirmLoad(loadId: string, driverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
@@ -1175,6 +1342,161 @@ Safe travels! 🛣️`;
     } catch (error) {
       console.error('Error handling decline with short IDs:', error);
       await this.bot?.sendMessage(chatId, '❌ Error processing decline. Please contact dispatch.');
+    }
+  }
+
+  // Pickup confirmation handlers
+  private async handleOnSiteConfirmation(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
+    try {
+      // Find the full load and driver IDs by matching the first 8 characters
+      const loads = await storage.getAllLoads();
+      const drivers = await storage.getAllDrivers();
+      
+      const load = loads.find(l => l.id.startsWith(shortLoadId));
+      const driver = drivers.find(d => d.id.startsWith(shortDriverId));
+      
+      if (!load || !driver) {
+        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
+        return;
+      }
+
+      // Remove the buttons from the original message
+      if (messageId && this.bot) {
+        try {
+          await this.bot.editMessageReplyMarkup(
+            { inline_keyboard: [] },
+            { chat_id: chatId, message_id: messageId }
+          );
+        } catch (editError) {
+          console.log('Could not remove buttons from message:', editError);
+        }
+      }
+
+      // Send pickup instructions
+      await this.sendPickupInstructions(load, driver.id);
+      
+      // Update load status to in_transit
+      await storage.updateLoad(load.id, {
+        status: 'in_transit'
+      });
+
+      console.log(`Driver ${driver.name} confirmed on-site for load ${load.loadNumber}`);
+    } catch (error) {
+      console.error('Error handling on-site confirmation:', error);
+      await this.bot?.sendMessage(chatId, '❌ Error processing on-site confirmation. Please contact dispatch.');
+    }
+  }
+
+  private async handleDelayConfirmation(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
+    try {
+      // Find the full load and driver IDs by matching the first 8 characters
+      const loads = await storage.getAllLoads();
+      const drivers = await storage.getAllDrivers();
+      
+      const load = loads.find(l => l.id.startsWith(shortLoadId));
+      const driver = drivers.find(d => d.id.startsWith(shortDriverId));
+      
+      if (!load || !driver) {
+        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
+        return;
+      }
+
+      // Remove the buttons from the original message
+      if (messageId && this.bot) {
+        try {
+          await this.bot.editMessageReplyMarkup(
+            { inline_keyboard: [] },
+            { chat_id: chatId, message_id: messageId }
+          );
+        } catch (editError) {
+          console.log('Could not remove buttons from message:', editError);
+        }
+      }
+
+      // Send delay reason options
+      await this.sendDelayReasons(load, driver.id);
+      
+      console.log(`Driver ${driver.name} reported delay for load ${load.loadNumber}`);
+    } catch (error) {
+      console.error('Error handling delay confirmation:', error);
+      await this.bot?.sendMessage(chatId, '❌ Error processing delay. Please contact dispatch.');
+    }
+  }
+
+  private async handleDelayReason(reason: string, shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
+    try {
+      // Find the full load and driver IDs by matching the first 8 characters
+      const loads = await storage.getAllLoads();
+      const drivers = await storage.getAllDrivers();
+      
+      const load = loads.find(l => l.id.startsWith(shortLoadId));
+      const driver = drivers.find(d => d.id.startsWith(shortDriverId));
+      
+      if (!load || !driver) {
+        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
+        return;
+      }
+
+      // Remove the buttons from the original message
+      if (messageId && this.bot) {
+        try {
+          await this.bot.editMessageReplyMarkup(
+            { inline_keyboard: [] },
+            { chat_id: chatId, message_id: messageId }
+          );
+        } catch (editError) {
+          console.log('Could not remove buttons from message:', editError);
+        }
+      }
+
+      // Map reason codes to readable text
+      const reasonMap: { [key: string]: string } = {
+        'bike': 'Bike Issue',
+        'traffic': 'Traffic',
+        'weather': 'Weather',
+        'vehicle': 'Vehicle Issue',
+        'docs': 'Documentation',
+        'other': 'Other'
+      };
+
+      const reasonText = reasonMap[reason] || reason;
+
+      // Send confirmation message to driver
+      const confirmationMessage = `⏰ *DELAY RECORDED*
+
+📋 Load: ${load.loadNumber}
+📝 Reason: ${reasonText}
+
+Your delay has been recorded and dispatch has been notified. Please proceed to pickup when ready.`;
+
+      await this.bot?.sendMessage(chatId, confirmationMessage, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+
+      // Notify dispatcher about the delay
+      if (this.config) {
+        const dispatchMessage = `⏰ *PICKUP DELAY REPORTED*
+
+📦 **Load:** ${load.loadNumber}
+🚛 **Driver:** ${driver.name}
+📞 **Phone:** ${driver.phone}
+📝 **Reason:** ${reasonText}
+📍 **Pickup:** ${load.pickupAddress}
+⏰ **Pickup Time:** ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime || '12:00 PM'}
+
+Please contact driver if needed.`;
+
+        await this.bot?.sendMessage(this.config.dispatcherId, dispatchMessage, {
+          parse_mode: 'Markdown',
+          disable_web_page_preview: true
+        });
+      }
+
+      console.log(`Driver ${driver.name} reported delay reason: ${reasonText} for load ${load.loadNumber}`);
+    } catch (error) {
+      console.error('Error handling delay reason:', error);
+      await this.bot?.sendMessage(chatId, '❌ Error processing delay reason. Please contact dispatch.');
     }
   }
 }

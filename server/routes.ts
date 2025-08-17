@@ -263,6 +263,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.error('Failed to initialize Bidding Service:', error);
   }
 
+  // Initialize Pickup Confirmation Service
+  try {
+    const { pickupConfirmationService } = await import('./pickup-confirmation-service.js');
+    await pickupConfirmationService.initialize();
+    console.log('Pickup Confirmation Service initialized');
+  } catch (error) {
+    console.error('Failed to initialize Pickup Confirmation Service:', error);
+  }
+
   // Driver routes
   app.get("/api/drivers", async (req, res) => {
     try {
