@@ -826,14 +826,17 @@ export default function DispatcherDashboard() {
                                   >
                                     {offer.status}
                                   </Badge>
-                                  {offer.status === 'pending' && offer.driverId && (
+                                  {offer.status === 'pending' && (
                                     <Button
                                       size="sm"
                                       className="bg-green-600 hover:bg-green-700 text-white"
-                                      onClick={() => bookLoadMutation.mutate({
-                                        loadId: selectedLoad.id,
-                                        driverId: offer.driverId
-                                      })}
+                                      onClick={() => {
+                                        console.log('Booking load:', selectedLoad.id, 'for driver:', offer.driverId);
+                                        bookLoadMutation.mutate({
+                                          loadId: selectedLoad.id,
+                                          driverId: offer.driverId
+                                        });
+                                      }}
                                       disabled={bookLoadMutation.isPending}
                                       data-testid={`button-book-load-${offer.id}`}
                                     >
