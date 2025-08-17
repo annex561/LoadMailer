@@ -293,6 +293,7 @@ export default function EmailTemplateFormModal({
               <Button 
                 type="submit" 
                 disabled={isPending}
+                className="bg-blue-600 text-white hover:bg-blue-700 form-button-improved"
                 data-testid="button-save-template"
               >
                 {isPending ? "Saving..." : isEdit ? "Update Template" : "Create Template"}

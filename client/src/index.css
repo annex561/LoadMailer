@@ -206,3 +206,28 @@
     border-right-width: 3px;
   }
 }
+
+/* Form button improvements for better visibility */
+.form-button-improved {
+  background: #2563eb !important;
+  color: white !important;
+  border: none !important;
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 40px !important;
+  min-width: 80px !important;
+}
+
+.form-button-improved:hover {
+  background: #1d4ed8 !important;
+}
+
+.form-button-improved:disabled {
+  background: #9ca3af !important;
+  cursor: not-allowed !important;
+}

@@ -333,7 +333,7 @@ export default function ContactFormModal({
               <Button 
                 type="submit" 
                 disabled={isPending}
-                className="bg-primary text-white hover:bg-blue-700"
+                className="bg-blue-600 text-white hover:bg-blue-700 form-button-improved"
                 data-testid={`button-save-${type}`}
               >
                 {isPending 

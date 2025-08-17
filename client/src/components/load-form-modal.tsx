@@ -378,6 +378,7 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
               <Button 
                 type="submit" 
                 disabled={isPending}
+                className="bg-blue-600 text-white hover:bg-blue-700 form-button-improved"
                 data-testid="button-save-load"
               >
                 {isPending ? "Creating..." : isEdit ? "Update Load" : "Create Load"}
