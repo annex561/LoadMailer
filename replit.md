@@ -10,6 +10,12 @@ LoadMaster is a comprehensive fleet management system designed for truck load tr
 
 Preferred communication style: Simple, everyday language.
 
+## UI/UX Preferences
+- **Select Dropdowns**: Always use solid white backgrounds with proper borders and shadows, never transparent backgrounds
+- **Form Elements**: Consistent styling with `bg-white border border-gray-300` for select triggers
+- **Dropdown Menus**: Use `bg-white border border-gray-300 shadow-lg` for select content areas
+- **Visibility**: Ensure all form elements are clearly visible and have proper contrast
+
 # Recent Changes
 
 **Automatic Load Retry System & Driver Rate Structure (Aug 17, 2025)**

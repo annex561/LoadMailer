@@ -218,10 +218,10 @@ export default function DispatcherDashboard() {
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48" data-testid="select-status-filter">
+          <SelectTrigger className="w-48 bg-white border border-gray-300" data-testid="select-status-filter">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-white border border-gray-300 shadow-lg">
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="available">Available</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
@@ -428,10 +428,10 @@ export default function DispatcherDashboard() {
                           })
                         }
                       >
-                        <SelectTrigger className="w-48" data-testid="select-update-status">
+                        <SelectTrigger className="w-48 bg-white border border-gray-300" data-testid="select-update-status">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-white border border-gray-300 shadow-lg">
                           <SelectItem value="available">Available</SelectItem>
                           <SelectItem value="pending">Pending</SelectItem>
                           <SelectItem value="assigned">Assigned</SelectItem>
@@ -451,6 +451,7 @@ export default function DispatcherDashboard() {
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Add Notes to Load {selectedLoad.loadNumber}</DialogTitle>
+                            <p className="text-sm text-muted-foreground">Add dispatcher notes and comments for this load.</p>
                           </DialogHeader>
                           <div className="space-y-4">
                             <Textarea
@@ -537,10 +538,10 @@ export default function DispatcherDashboard() {
                               })
                             }
                           >
-                            <SelectTrigger data-testid="select-assign-driver">
+                            <SelectTrigger className="bg-white border border-gray-300" data-testid="select-assign-driver">
                               <SelectValue placeholder="Select a driver" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-white border border-gray-300 shadow-lg">
                               {drivers
                                 .filter((driver: any) => driver.status === 'available')
                                 .map((driver: any) => (
