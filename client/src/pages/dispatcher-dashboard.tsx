@@ -344,7 +344,7 @@ export default function DispatcherDashboard() {
                           </h4>
                           <p className="text-sm">{selectedLoad.pickupAddress}</p>
                           <p className="text-sm text-muted-foreground">
-                            {selectedLoad.pickupDate.toLocaleDateString()} at {selectedLoad.pickupTime}
+                            {selectedLoad.pickupDate ? new Date(selectedLoad.pickupDate).toLocaleDateString() : 'N/A'} at {selectedLoad.pickupTime || 'N/A'}
                           </p>
                           {selectedLoad.contactPhone && (
                             <Button 
@@ -380,7 +380,7 @@ export default function DispatcherDashboard() {
                           </h4>
                           <p className="text-sm">{selectedLoad.deliveryAddress}</p>
                           <p className="text-sm text-muted-foreground">
-                            {selectedLoad.deliveryDate.toLocaleDateString()} at {selectedLoad.deliveryTime}
+                            {selectedLoad.deliveryDate ? new Date(selectedLoad.deliveryDate).toLocaleDateString() : 'N/A'} at {selectedLoad.deliveryTime || 'N/A'}
                           </p>
                           {selectedLoad.contactPhone && (
                             <Button 
