@@ -786,7 +786,7 @@ export class LoadBoardService {
   private async generateSampleDATLoads(config: ScraperConfig): Promise<{ loadsScraped: number; loadsCreated: number }> {
     const sampleOrigins = ['Atlanta, GA', 'Atlanta, GA', 'Dallas, TX', 'Los Angeles, CA', 'Chicago, IL', 'Miami, FL', 'Phoenix, AZ'];
     const sampleDestinations = ['Charlotte, NC', 'Jacksonville, FL', 'New York, NY', 'Houston, TX', 'Denver, CO', 'Seattle, WA', 'Boston, MA', 'Las Vegas, NV'];
-    const equipmentTypes = ['dry_van', 'refrigerated', 'flatbed'];
+    const equipmentTypes = ['sprinter_van', 'van_lift_gate', 'van_hotshot', 'straight_box_truck', 'moving_van', 'flatbed_hotshot', 'van'];
     const companies = ['ABC Logistics', 'Fast Freight Co', 'Prime Shipping', 'Elite Transport', 'Direct Haul'];
     
     const numLoads = Math.floor(Math.random() * 3) + 1; // 1-3 loads per run

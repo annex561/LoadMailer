@@ -41,7 +41,7 @@ export default function ContactFormModal({
           email: (contact as Driver)?.email || "",
           phone: (contact as Driver)?.phone || "",
           status: (contact as Driver)?.status || "available",
-          equipmentType: (contact as Driver)?.equipmentType || "dry_van",
+          equipmentType: (contact as Driver)?.equipmentType || "sprinter_van",
         }
       : {
           name: (contact as Customer)?.name || "",
@@ -235,10 +235,13 @@ export default function ContactFormModal({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="dry_van">Dry Van</SelectItem>
-                        <SelectItem value="refrigerated">Refrigerated</SelectItem>
-                        <SelectItem value="flatbed">Flatbed</SelectItem>
-                        <SelectItem value="step_deck">Step Deck</SelectItem>
+                        <SelectItem value="sprinter_van">Sprinter Van (SV)</SelectItem>
+                        <SelectItem value="van_lift_gate">Van Lift-Gate (VG)</SelectItem>
+                        <SelectItem value="van_hotshot">Van Hotshot (VH)</SelectItem>
+                        <SelectItem value="straight_box_truck">Straight Box Truck (SB)</SelectItem>
+                        <SelectItem value="moving_van">Moving Van (MV)</SelectItem>
+                        <SelectItem value="flatbed_hotshot">Flatbed Hotshot (FH)</SelectItem>
+                        <SelectItem value="van">Van (V)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
