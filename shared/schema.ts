@@ -18,9 +18,7 @@ export const drivers = pgTable("drivers", {
   // Load preferences for matching
   preferredLoadTypes: text("preferred_load_types").default("full_partial"), // full, partial, full_partial
   maxLength: integer("max_length"), // Maximum length in feet
-  maxWeight: integer("max_weight"), // Maximum weight in pounds
-  // Equipment weight capacity (different from max load weight)
-  weightCapacity: integer("weight_capacity").default(26000), // in pounds
+
   // Telegram bot integration
   telegramId: text("telegram_id").unique(),
   telegramUsername: text("telegram_username"),

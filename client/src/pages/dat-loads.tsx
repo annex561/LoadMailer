@@ -456,12 +456,7 @@ export default function DATLoads() {
 
                 {/* Load Details */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Weight className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">
-                      Weight: <span className="font-medium">{load.weight.toLocaleString()} lbs</span>
-                    </span>
-                  </div>
+
                   
                   {load.company && (
                     <div className="flex items-center gap-2">

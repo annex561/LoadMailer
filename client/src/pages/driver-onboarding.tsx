@@ -191,7 +191,7 @@ export default function DriverOnboarding() {
         return formData.licenseNumber && formData.licenseState && formData.licenseExpiry;
       case 2: // Equipment
         return formData.equipmentType && formData.vehicleYear && formData.vehicleMake && 
-               formData.preferredLoadTypes && formData.maxLength > 0 && formData.maxWeight > 0;
+               formData.preferredLoadTypes && formData.maxLength > 0;
       case 3: // Insurance & Banking
         return formData.insuranceProvider && formData.bankName && formData.routingNumber;
       case 4: // Preferences
@@ -349,23 +349,13 @@ export default function DriverOnboarding() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="weightCapacity">Weight Capacity (lbs)</Label>
-                <Input
-                  id="weightCapacity"
-                  type="number"
-                  value={formData.weightCapacity}
-                  onChange={(e) => updateFormData('weightCapacity', parseInt(e.target.value) || 0)}
-                  placeholder="26000"
-                  data-testid="input-weight-capacity"
-                />
-              </div>
+
             </div>
 
             {/* Load Preferences Section */}
             <div className="border-t pt-4 mt-4">
               <h4 className="font-medium mb-3 text-gray-800">Load Preferences</h4>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="preferredLoadTypes">Load Type Preference *</Label>
                   <Select value={formData.preferredLoadTypes} onValueChange={(value) => updateFormData('preferredLoadTypes', value)}>
@@ -392,22 +382,9 @@ export default function DriverOnboarding() {
                     data-testid="input-max-length"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="maxWeight">Maximum Weight (lbs) *</Label>
-                  <Input
-                    id="maxWeight"
-                    type="number"
-                    value={formData.maxWeight}
-                    onChange={(e) => updateFormData('maxWeight', parseInt(e.target.value) || 0)}
-                    placeholder="48000"
-                    min="5000"
-                    max="80000"
-                    data-testid="input-max-weight"
-                  />
-                </div>
               </div>
               <p className="text-sm text-gray-500 mt-2">
-                These preferences help us match you with suitable loads. You'll only receive offers for loads that match your equipment and capacity limits.
+                These preferences help us match you with suitable loads. You'll only receive offers for loads that match your equipment and length requirements.
               </p>
             </div>
 
