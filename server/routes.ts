@@ -1265,13 +1265,19 @@ Safe travels! 🚛`;
       const onboardingLink = `${req.protocol}://${req.hostname}/driver-onboarding?token=${token}`;
       
       // Send SMS using Twilio service
-      console.log(`Attempting to send SMS to ${phone} with link: ${onboardingLink}`);
-      console.log(`SMS Service configured: ${smsService.isServiceConfigured()}`);
+      console.log(`📱 Attempting to send SMS to ${phone} with link: ${onboardingLink}`);
+      console.log(`📱 SMS Service configured: ${smsService.isServiceConfigured()}`);
+      console.log(`📱 Twilio credentials check:`, {
+        hasSid: !!process.env.TWILIO_ACCOUNT_SID,
+        hasToken: !!process.env.TWILIO_AUTH_TOKEN,
+        hasPhone: !!process.env.TWILIO_PHONE_NUMBER
+      });
+      
       const smsResult = await smsService.sendOnboardingLink(phone, onboardingLink);
-      console.log(`SMS Result:`, smsResult);
+      console.log(`📱 SMS Result:`, JSON.stringify(smsResult, null, 2));
       
       if (!smsResult.success) {
-        console.error(`Failed to send SMS to ${phone}:`, smsResult.error);
+        console.error(`❌ Failed to send SMS to ${phone}:`, smsResult.error);
         
         // Handle trial account limitation specifically
         if (smsResult.isTrialAccount) {
