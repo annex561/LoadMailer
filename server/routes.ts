@@ -8,7 +8,9 @@ import { telegramLoadService } from "./telegram-service";
 import { gpsTrackingService } from "./gps-tracking-service";
 import { loadBoardService } from "./load-board-service";
 import { biddingService } from "./bidding-service";
-import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema } from "@shared/schema";
+import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
+import { DocumentUploadService } from "./document-upload-service";
+import { ObjectStorageService } from "./objectStorage";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
 
@@ -1620,6 +1622,133 @@ Safe travels! 🚛`;
       res.json(device);
     } catch (error) {
       res.status(400).json({ error: "Invalid GPS device data" });
+    }
+  });
+
+  // Document Upload System Routes
+  const objectStorageService = new ObjectStorageService();
+  const documentUploadService = new DocumentUploadService(storage, telegramLoadService, objectStorageService);
+
+  // Get upload URL for documents
+  app.post("/api/documents/upload-url", async (req, res) => {
+    try {
+      const uploadUrl = await documentUploadService.generateUploadUrl();
+      res.json({ uploadUrl });
+    } catch (error) {
+      console.error('Error generating upload URL:', error);
+      res.status(500).json({ error: "Failed to generate upload URL" });
+    }
+  });
+
+  // Process completed document upload
+  app.post("/api/documents", async (req, res) => {
+    try {
+      const validatedData = insertLoadDocumentSchema.parse(req.body);
+      const document = await documentUploadService.processDocumentUpload(validatedData);
+      res.status(201).json(document);
+    } catch (error) {
+      console.error('Error processing document upload:', error);
+      res.status(400).json({ error: "Invalid document data" });
+    }
+  });
+
+  // Get documents for a specific load
+  app.get("/api/loads/:id/documents", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const documents = await documentUploadService.getLoadDocuments(id);
+      res.json(documents);
+    } catch (error) {
+      console.error('Error fetching load documents:', error);
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // Get documents by type for a load
+  app.get("/api/loads/:id/documents/:type", async (req, res) => {
+    try {
+      const { id, type } = req.params;
+      const documents = await documentUploadService.getDocumentsByType(id, type);
+      res.json(documents);
+    } catch (error) {
+      console.error('Error fetching documents by type:', error);
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // Get all documents for a driver
+  app.get("/api/drivers/:id/documents", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const documents = await documentUploadService.getDriverDocuments(id);
+      res.json(documents);
+    } catch (error) {
+      console.error('Error fetching driver documents:', error);
+      res.status(500).json({ error: "Failed to fetch documents" });
+    }
+  });
+
+  // Trigger pickup document request
+  app.post("/api/loads/:id/request-pickup-documents", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { driverId } = req.body;
+      
+      if (!driverId) {
+        return res.status(400).json({ error: "Driver ID is required" });
+      }
+
+      await documentUploadService.requestPickupDocuments(id, driverId);
+      res.json({ message: "Pickup document request sent to driver" });
+    } catch (error) {
+      console.error('Error requesting pickup documents:', error);
+      res.status(500).json({ error: "Failed to request pickup documents" });
+    }
+  });
+
+  // Trigger delivery document request
+  app.post("/api/loads/:id/request-delivery-documents", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { driverId } = req.body;
+      
+      if (!driverId) {
+        return res.status(400).json({ error: "Driver ID is required" });
+      }
+
+      await documentUploadService.requestDeliveryDocuments(id, driverId);
+      res.json({ message: "Delivery document request sent to driver" });
+    } catch (error) {
+      console.error('Error requesting delivery documents:', error);
+      res.status(500).json({ error: "Failed to request delivery documents" });
+    }
+  });
+
+  // Delete a document
+  app.delete("/api/documents/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteLoadDocument(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      res.status(500).json({ error: "Failed to delete document" });
+    }
+  });
+
+  // Serve private documents with access control
+  app.get("/objects/:objectPath(*)", async (req, res) => {
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error accessing document:", error);
+      res.status(404).json({ error: "Document not found" });
     }
   });
 

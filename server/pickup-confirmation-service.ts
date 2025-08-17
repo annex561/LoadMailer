@@ -1,6 +1,8 @@
 import * as cron from 'node-cron';
 import { storage } from './storage.js';
 import { telegramLoadService } from './telegram-service.js';
+import { DocumentUploadService } from './document-upload-service';
+import { ObjectStorageService } from './objectStorage';
 
 class PickupConfirmationService {
   private isRunning = false;

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile } from "lucide-react";
+import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -11,6 +11,7 @@ const navigation = [
   { name: "Contacts", href: "/contacts", icon: Users, section: "main" },
   { name: "Driver Management", href: "/driver-management", icon: UserPlus, section: "main" },
   { name: "Mood Tracker", href: "/mood-tracker", icon: Smile, section: "main" },
+  { name: "Document Management", href: "/documents", icon: Upload, section: "main" },
   { name: "Payment Workflow", href: "/payments", icon: DollarSign, section: "main" },
   { name: "DAT Scrapers", href: "/scrapers", icon: Bot, section: "main" },
   { name: "Email Templates", href: "/templates", icon: Mail, section: "main" },

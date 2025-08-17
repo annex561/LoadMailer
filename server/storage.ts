@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration, type LoadBid, type InsertLoadBid, type BidResponse, type InsertBidResponse, type EmailCampaign, type InsertEmailCampaign, type EmailFollowUp, type InsertEmailFollowUp, type DispatcherNotification, type InsertDispatcherNotification, type LoadBidWithRelations, type EmailCampaignWithFollowUps } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type LoadDocument, type InsertLoadDocument, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration, type LoadBid, type InsertLoadBid, type BidResponse, type InsertBidResponse, type EmailCampaign, type InsertEmailCampaign, type EmailFollowUp, type InsertEmailFollowUp, type DispatcherNotification, type InsertDispatcherNotification, type LoadBidWithRelations, type EmailCampaignWithFollowUps } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -223,6 +223,25 @@ export interface IStorage {
   createDispatcherNotification(notification: InsertDispatcherNotification): Promise<DispatcherNotification>;
   updateDispatcherNotification(id: string, notification: Partial<InsertDispatcherNotification>): Promise<DispatcherNotification | undefined>;
   getDispatcherNotificationsByBid(bidId: string): Promise<DispatcherNotification[]>;
+
+  // Load Document operations
+  createLoadDocument(data: InsertLoadDocument): Promise<LoadDocument>;
+  getLoadDocument(id: string): Promise<LoadDocument | null>;
+  getLoadDocumentsByLoad(loadId: string): Promise<LoadDocument[]>;
+  getLoadDocumentsByDriver(driverId: string): Promise<LoadDocument[]>;
+  getLoadDocumentsByType(loadId: string, documentType: string): Promise<LoadDocument[]>;
+  updateLoadDocument(id: string, data: Partial<InsertLoadDocument>): Promise<LoadDocument | null>;
+  deleteLoadDocument(id: string): Promise<boolean>;
+
+  // Load Document operations
+  getLoadDocument(id: string): Promise<LoadDocument | undefined>;
+  getAllLoadDocuments(): Promise<LoadDocument[]>;
+  getLoadDocumentsByLoad(loadId: string): Promise<LoadDocument[]>;
+  getLoadDocumentsByDriver(driverId: string): Promise<LoadDocument[]>;
+  getLoadDocumentsByType(loadId: string, documentType: string): Promise<LoadDocument[]>;
+  createLoadDocument(document: InsertLoadDocument): Promise<LoadDocument>;
+  updateLoadDocument(id: string, document: Partial<InsertLoadDocument>): Promise<LoadDocument | undefined>;
+  deleteLoadDocument(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -252,6 +271,7 @@ export class MemStorage implements IStorage {
   private emailCampaigns: Map<string, EmailCampaign> = new Map();
   private emailFollowUps: Map<string, EmailFollowUp> = new Map();
   private dispatcherNotifications: Map<string, DispatcherNotification> = new Map();
+  private loadDocuments: Map<string, LoadDocument> = new Map();
   private loadCounter = 1;
 
   constructor() {
@@ -1876,6 +1896,64 @@ export class MemStorage implements IStorage {
   async getDispatcherNotificationsByBid(bidId: string): Promise<DispatcherNotification[]> {
     return Array.from(this.dispatcherNotifications.values())
       .filter(notification => notification.bidId === bidId);
+  }
+
+  // Load Document operations
+  async createLoadDocument(data: InsertLoadDocument): Promise<LoadDocument> {
+    const id = randomUUID();
+    const newDocument: LoadDocument = {
+      ...data,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.loadDocuments.set(id, newDocument);
+    return newDocument;
+  }
+
+  async getLoadDocument(id: string): Promise<LoadDocument | null> {
+    return this.loadDocuments.get(id) || null;
+  }
+
+  async getLoadDocumentsByLoad(loadId: string): Promise<LoadDocument[]> {
+    return Array.from(this.loadDocuments.values())
+      .filter(doc => doc.loadId === loadId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getLoadDocumentsByDriver(driverId: string): Promise<LoadDocument[]> {
+    return Array.from(this.loadDocuments.values())
+      .filter(doc => doc.driverId === driverId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getLoadDocumentsByType(loadId: string, documentType: string): Promise<LoadDocument[]> {
+    return Array.from(this.loadDocuments.values())
+      .filter(doc => doc.loadId === loadId && doc.documentType === documentType)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async updateLoadDocument(id: string, data: Partial<InsertLoadDocument>): Promise<LoadDocument | null> {
+    const existing = this.loadDocuments.get(id);
+    if (!existing) return null;
+
+    const updated: LoadDocument = {
+      ...existing,
+      ...data,
+      updatedAt: new Date(),
+    };
+    this.loadDocuments.set(id, updated);
+    return updated;
+  }
+
+  async deleteLoadDocument(id: string): Promise<boolean> {
+    return this.loadDocuments.delete(id);
+  }
+
+  // Duplicate methods for compatibility
+  async getAllLoadDocuments(): Promise<LoadDocument[]> {
+    return Array.from(this.loadDocuments.values())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 }
 

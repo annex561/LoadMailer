@@ -305,6 +305,22 @@ export const loadOffers = pgTable("load_offers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Load Documents Table for BOL and freight photos
+export const loadDocuments = pgTable("load_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  documentType: text("document_type").notNull(), // 'bol', 'freight_photo', 'signature', 'delivery_receipt'
+  fileName: text("file_name").notNull(),
+  fileUrl: text("file_url").notNull(), // URL to object storage
+  fileSize: integer("file_size"), // File size in bytes
+  mimeType: text("mime_type"),
+  signerName: text("signer_name"), // Name of person who signed BOL
+  notes: text("notes"), // Additional notes about the document
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // DAT Scraper Tables
 export const scraperConfigs = pgTable("scraper_configs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -458,6 +474,12 @@ export const insertLoadOfferSchema = createInsertSchema(loadOffers).omit({
   createdAt: true,
 });
 
+export const insertLoadDocumentSchema = createInsertSchema(loadDocuments).omit({
+  id: true,
+  createdAt: true,
+  uploadedAt: true,
+});
+
 export const driverOnboardingSchema = createInsertSchema(drivers).omit({
   id: true,
   createdAt: true,
@@ -522,6 +544,9 @@ export type InsertTelegramBotConfig = z.infer<typeof insertTelegramBotConfigSche
 
 export type LoadOffer = typeof loadOffers.$inferSelect;
 export type InsertLoadOffer = z.infer<typeof insertLoadOfferSchema>;
+
+export type LoadDocument = typeof loadDocuments.$inferSelect;
+export type InsertLoadDocument = z.infer<typeof insertLoadDocumentSchema>;
 
 export type DriverOnboarding = z.infer<typeof driverOnboardingSchema>;
 
