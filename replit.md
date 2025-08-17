@@ -2,6 +2,8 @@
 
 LoadMaster is a comprehensive fleet management system designed for truck load tracking and logistics coordination. The application enables users to manage drivers, customers, loads, and automated email communications through a modern web interface. It provides real-time tracking of load statuses, automated email notifications for load lifecycle events, and comprehensive contact management for fleet operations.
 
+**Critical Feature**: The system includes a robust load board scraper that pulls freight data from multiple load boards (DAT, Truckstop, etc.) every 10 seconds, ensuring continuous availability of fresh freight opportunities. The professional dashboard interface matches DAT One design with real-time load listings, search filters, and company sections.
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -22,6 +24,8 @@ Preferred communication style: Simple, everyday language.
 - **Data Layer**: Drizzle ORM with PostgreSQL database
 - **Database Adapter**: Neon Database serverless adapter
 - **Storage Interface**: Abstract storage interface with in-memory implementation for development
+- **Load Board Service**: Critical 10-second interval scraper service for continuous freight data acquisition
+- **Scheduler**: Node-cron based job scheduling with fallback interval timers for reliability
 
 ## Database Design
 - **ORM**: Drizzle ORM with PostgreSQL dialect
