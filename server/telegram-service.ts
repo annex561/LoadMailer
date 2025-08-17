@@ -377,12 +377,12 @@ export class TelegramLoadService {
     let score = 0;
     let maxScore = 0;
 
-    // Distance score (40% weight) - closer is better
-    maxScore += 40;
-    if (distance <= 25) score += 40;
-    else if (distance <= 50) score += 30;
-    else if (distance <= 100) score += 20;
-    else if (distance <= 150) score += 10;
+    // Distance score (30% weight) - closer is better
+    maxScore += 30;
+    if (distance <= 25) score += 30;
+    else if (distance <= 50) score += 25;
+    else if (distance <= 100) score += 15;
+    else if (distance <= 150) score += 8;
 
     // Equipment type match (25% weight)
     maxScore += 25;
@@ -390,17 +390,42 @@ export class TelegramLoadService {
       score += 25;
     }
 
-    // Rate attractiveness (20% weight)
-    maxScore += 20;
-    const rpm = load.rate && load.miles ? load.rate / load.miles : 0;
-    if (rpm >= 2.50) score += 20;
-    else if (rpm >= 2.00) score += 15;
-    else if (rpm >= 1.50) score += 10;
-
-    // Driver availability (15% weight)
+    // Load type preference match (15% weight)
     maxScore += 15;
-    if (driver.status === 'available') score += 15;
-    else if (driver.status === 'on_route') score += 5;
+    const driverLoadPrefs = (driver as any).preferredLoadTypes || 'full_partial';
+    const loadType = (load as any).loadType || 'full';
+    if (driverLoadPrefs === 'full_partial' || driverLoadPrefs === loadType) {
+      score += 15;
+    }
+
+    // Weight capacity match (10% weight)
+    maxScore += 10;
+    const driverMaxWeight = (driver as any).maxWeight || driver.weightCapacity || 48000;
+    if (load.weight <= driverMaxWeight) {
+      score += 10;
+    } else if (load.weight <= driverMaxWeight * 1.1) {
+      score += 5; // Allow 10% over capacity with reduced score
+    }
+
+    // Length capacity match (5% weight)
+    maxScore += 5;
+    const driverMaxLength = (driver as any).maxLength || 53;
+    const loadLength = (load as any).length;
+    if (!loadLength || loadLength <= driverMaxLength) {
+      score += 5;
+    }
+
+    // Rate attractiveness (10% weight)
+    maxScore += 10;
+    const rpm = load.rate && load.miles ? load.rate / load.miles : 0;
+    if (rpm >= 2.50) score += 10;
+    else if (rpm >= 2.00) score += 8;
+    else if (rpm >= 1.50) score += 5;
+
+    // Driver availability (5% weight)
+    maxScore += 5;
+    if (driver.status === 'available') score += 5;
+    else if (driver.status === 'on_route') score += 2;
 
     return Math.round((score / maxScore) * 100);
   }

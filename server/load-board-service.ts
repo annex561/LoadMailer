@@ -823,13 +823,18 @@ export class LoadBoardService {
         const deliveryDate = new Date(pickupDate);
         deliveryDate.setDate(deliveryDate.getDate() + Math.floor(Math.random() * 3) + 1); // 1-4 days from pickup
 
+        const loadType = Math.random() > 0.7 ? 'partial' : 'full'; // 30% partial, 70% full
+        const length = Math.floor(Math.random() * 30) + 24; // 24-53 feet
+        
         const load = await storage.createLoad({
           customerId: defaultCustomer.id,
-          description: `${equipment} load - ${weight} lbs from ${origin} to ${destination}`,
+          description: `${equipment} ${loadType} load - ${weight} lbs, ${length}ft from ${origin} to ${destination}`,
           weight: weight,
           priority: Math.random() > 0.8 ? 'urgent' : 'standard',
           pickupAddress: origin,
           pickupDate: pickupDate.toISOString().split('T')[0],
+          loadType: loadType,
+          length: length,
           pickupTime: ['06:00', '08:00', '10:00', '12:00'][Math.floor(Math.random() * 4)],
           deliveryAddress: destination,
           deliveryDate: deliveryDate.toISOString().split('T')[0],

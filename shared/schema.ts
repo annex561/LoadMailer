@@ -15,7 +15,11 @@ export const drivers = pgTable("drivers", {
   isOnboarded: boolean("is_onboarded").notNull().default(false),
   // Equipment type for load matching
   equipmentType: text("equipment_type").notNull().default("sprinter_van"), // sprinter_van, van_lift_gate, van_hotshot, straight_box_truck, moving_van, flatbed_hotshot, van
-  // Equipment weight capacity
+  // Load preferences for matching
+  preferredLoadTypes: text("preferred_load_types").default("full_partial"), // full, partial, full_partial
+  maxLength: integer("max_length"), // Maximum length in feet
+  maxWeight: integer("max_weight"), // Maximum weight in pounds
+  // Equipment weight capacity (different from max load weight)
   weightCapacity: integer("weight_capacity").default(26000), // in pounds
   // Telegram bot integration
   telegramId: text("telegram_id").unique(),
@@ -56,6 +60,9 @@ export const loads = pgTable("loads", {
   deliveryTime: text("delivery_time").notNull(),
   specialInstructions: text("special_instructions"),
   status: text("status").notNull().default("scheduled"), // scheduled, assigned, in_transit, delivered, cancelled, expired
+  // Load characteristics
+  loadType: text("load_type").default("full"), // full, partial
+  length: integer("length"), // Length in feet
   // Temperature/Cooling fields
   equipmentType: text("equipment_type").notNull().default("sprinter_van"), // sprinter_van, van_lift_gate, van_hotshot, straight_box_truck, moving_van, flatbed_hotshot, van
   temperatureRequired: boolean("temperature_required").notNull().default(false),
