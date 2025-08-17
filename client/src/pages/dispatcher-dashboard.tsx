@@ -367,17 +367,21 @@ export default function DispatcherDashboard() {
                                     </div>
                                     {/* Driver Communication Shortcuts */}
                                     {driver && (
-                                      <div className="flex gap-1">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-6 px-2 text-xs"
+                                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                          className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 gap-1"
                                           onClick={(e) => {
+                                            e.preventDefault();
                                             e.stopPropagation();
                                             console.log('Call button clicked, driver:', driver);
                                             if (driver?.phone) {
                                               console.log('Opening tel link:', `tel:${driver.phone}`);
-                                              window.location.href = `tel:${driver.phone}`;
+                                              try {
+                                                window.location.href = `tel:${driver.phone}`;
+                                              } catch (error) {
+                                                console.error('Error opening tel link:', error);
+                                                alert(`Call ${driver.phone}`);
+                                              }
                                             } else {
                                               console.log('No phone number available for driver:', driver);
                                               toast({ title: 'No phone number available for this driver', variant: 'destructive' });
@@ -385,19 +389,23 @@ export default function DispatcherDashboard() {
                                           }}
                                           data-testid={`button-call-driver-${driver.id}`}
                                         >
-                                          <Phone className="h-3 w-3 mr-1" />
+                                          <Phone className="h-3 w-3" />
                                           Call
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-6 px-2 text-xs"
+                                        </button>
+                                        <button
+                                          className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 gap-1"
                                           onClick={(e) => {
+                                            e.preventDefault();
                                             e.stopPropagation();
                                             console.log('Text button clicked, driver:', driver);
                                             if (driver?.phone) {
                                               console.log('Opening SMS link:', `sms:${driver.phone}`);
-                                              window.location.href = `sms:${driver.phone}`;
+                                              try {
+                                                window.location.href = `sms:${driver.phone}`;
+                                              } catch (error) {
+                                                console.error('Error opening SMS link:', error);
+                                                alert(`Text ${driver.phone}`);
+                                              }
                                             } else {
                                               console.log('No phone number available for driver:', driver);
                                               toast({ title: 'No phone number available for this driver', variant: 'destructive' });
@@ -405,19 +413,23 @@ export default function DispatcherDashboard() {
                                           }}
                                           data-testid={`button-text-driver-${driver.id}`}
                                         >
-                                          <MessageCircle className="h-3 w-3 mr-1" />
+                                          <MessageCircle className="h-3 w-3" />
                                           Text
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-6 px-2 text-xs"
+                                        </button>
+                                        <button
+                                          className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-6 px-2 gap-1"
                                           onClick={(e) => {
+                                            e.preventDefault();
                                             e.stopPropagation();
                                             console.log('Email button clicked, driver:', driver);
                                             if (driver?.email) {
                                               console.log('Opening mailto link:', `mailto:${driver.email}?subject=Load ${load.loadNumber}`);
-                                              window.location.href = `mailto:${driver.email}?subject=Load ${load.loadNumber}`;
+                                              try {
+                                                window.location.href = `mailto:${driver.email}?subject=Load ${load.loadNumber}`;
+                                              } catch (error) {
+                                                console.error('Error opening mailto link:', error);
+                                                alert(`Email ${driver.email}`);
+                                              }
                                             } else {
                                               console.log('No email address available for driver:', driver);
                                               toast({ title: 'No email address available for this driver', variant: 'destructive' });
@@ -425,9 +437,9 @@ export default function DispatcherDashboard() {
                                           }}
                                           data-testid={`button-email-driver-${driver.id}`}
                                         >
-                                          <Mail className="h-3 w-3 mr-1" />
+                                          <Mail className="h-3 w-3" />
                                           Email
-                                        </Button>
+                                        </button>
                                       </div>
                                     )}
                                   </div>
