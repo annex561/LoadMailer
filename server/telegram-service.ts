@@ -516,7 +516,7 @@ export class TelegramLoadService {
     const matchText = matchScore ? `\n📊 *Match Score:* ${matchScore}%` : '';
     const deadheadText = deadheadDistance ? `\n🛣️ *Deadhead:* ${Math.round(deadheadDistance)} mi` : '';
     
-    return `🚛 *New Load Offer*${distanceText}
+    return `🚛 *LAMP Logistics New Load Offer*${distanceText}
 Origin: *${load.pickupAddress}*
 Destination: *${load.deliveryAddress}*
 Pick-Up Date: *${load.pickupDate.toLocaleDateString()}*
@@ -1141,7 +1141,7 @@ Safe travels! 🛣️`;
   private async handleConfirmLoadShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
       // Find the full load and driver IDs by matching the first 8 characters
-      const loads = await storage.getLoads();
+      const loads = await storage.getAllLoads();
       const drivers = await storage.getDrivers();
       
       const load = loads.find(l => l.id.startsWith(shortLoadId));
@@ -1162,7 +1162,7 @@ Safe travels! 🛣️`;
   private async handleDeclineConfirmationShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
       // Find the full load and driver IDs by matching the first 8 characters
-      const loads = await storage.getLoads();
+      const loads = await storage.getAllLoads();
       const drivers = await storage.getDrivers();
       
       const load = loads.find(l => l.id.startsWith(shortLoadId));

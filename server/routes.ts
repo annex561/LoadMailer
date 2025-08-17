@@ -549,19 +549,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Send final confirmation via Telegram
         try {
           if (telegramLoadService && telegramLoadService.isServiceRunning() && driver.telegramId) {
-            const confirmationMessage = `
-✅ *LOAD CONFIRMED & BOOKED*
+            const confirmationMessage = `✅ *LOAD CONFIRMED & BOOKED*
+
+Your load has been booked. Please start planning your trip and heading to your pick up location.
 
 📋 Load: ${load.loadNumber}
 💰 Your Rate: $${existingOffer.dispatcherRate}
-📱 You are now assigned to this load
 
-Please head to pickup location:
-📍 ${load.pickupAddress}
+📍 Pickup: ${load.pickupAddress}
 📅 ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}
 
-Safe travels! 🚛
-            `;
+Safe travels! 🚛`;
             
             await telegramLoadService.sendMessageToDriver(driver.telegramId, confirmationMessage);
           }

@@ -103,6 +103,7 @@ export default function Loads() {
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="assigned">Assigned</SelectItem>
                   <SelectItem value="in_transit">In Transit</SelectItem>
                   <SelectItem value="delivered">Delivered</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>

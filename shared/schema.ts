@@ -51,7 +51,7 @@ export const loads = pgTable("loads", {
   deliveryDate: timestamp("delivery_date").notNull(),
   deliveryTime: text("delivery_time").notNull(),
   specialInstructions: text("special_instructions"),
-  status: text("status").notNull().default("scheduled"), // scheduled, in_transit, delivered, cancelled, expired
+  status: text("status").notNull().default("scheduled"), // scheduled, assigned, in_transit, delivered, cancelled, expired
   // Temperature/Cooling fields
   equipmentType: text("equipment_type").notNull().default("sprinter_van"), // sprinter_van, van_lift_gate, van_hotshot, straight_box_truck, moving_van, flatbed_hotshot, van
   temperatureRequired: boolean("temperature_required").notNull().default(false),

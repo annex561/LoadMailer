@@ -18,6 +18,13 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+**LAMP Logistics Branding and Load Management Enhancement (Aug 17, 2025)**
+- Updated all Telegram load offers to include company header: "LAMP Logistics New Load Offer"
+- Added "assigned" status to load schema and load management filter options
+- Confirmed loads now move to load management section with "assigned" status for proper tracking
+- Fixed storage method calls in Telegram service (getLoads → getAllLoads)
+- Enhanced post-confirmation messaging with specific user requirements
+
 **Post-Confirmation Messaging and Button Management (Aug 17, 2025)**
 - Enhanced driver confirmation workflow with proper post-booking messaging
 - Added automatic button removal from Telegram messages after driver confirmation/decline
