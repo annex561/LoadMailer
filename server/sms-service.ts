@@ -7,8 +7,9 @@ interface SMSMessage {
 
 class SMSService {
   private client: twilio.Twilio | null = null;
-  private fromPhone: string | null = null;
+  private fromPhones: string[] = [];
   private isConfigured = false;
+  private currentPhoneIndex = 0;
 
   constructor() {
     this.initialize();
@@ -17,16 +18,26 @@ class SMSService {
   private initialize() {
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const fromPhone = process.env.TWILIO_PHONE_NUMBER;
+    const fromPhone1 = process.env.TWILIO_PHONE_NUMBER;
+    const fromPhone2 = process.env.TWILIO_PHONE_NUMBER_2;
 
-    if (!accountSid || !authToken || !fromPhone) {
+    if (!accountSid || !authToken || !fromPhone1) {
       console.log('Twilio credentials not configured - SMS functionality disabled');
       return;
     }
 
     try {
       this.client = twilio(accountSid, authToken);
-      this.fromPhone = fromPhone;
+      this.fromPhones = [fromPhone1];
+      
+      // Add second phone number if available
+      if (fromPhone2) {
+        this.fromPhones.push(fromPhone2);
+        console.log(`📱 SMS Service initialized with ${this.fromPhones.length} phone numbers: ${this.fromPhones.join(', ')}`);
+      } else {
+        console.log(`📱 SMS Service initialized with 1 phone number: ${fromPhone1}`);
+      }
+      
       this.isConfigured = true;
       console.log('SMS Service initialized successfully with Twilio');
     } catch (error) {
@@ -35,18 +46,31 @@ class SMSService {
     }
   }
 
+  private getNextPhoneNumber(): string {
+    if (this.fromPhones.length === 0) {
+      throw new Error('No phone numbers configured');
+    }
+    
+    const phone = this.fromPhones[this.currentPhoneIndex];
+    this.currentPhoneIndex = (this.currentPhoneIndex + 1) % this.fromPhones.length;
+    console.log(`📱 Using phone number: ${phone} (${this.currentPhoneIndex}/${this.fromPhones.length})`);
+    return phone;
+  }
+
   async sendSMS(message: SMSMessage): Promise<{ success: boolean; messageId?: string; error?: string; isTrialAccount?: boolean }> {
-    if (!this.isConfigured || !this.client || !this.fromPhone) {
+    if (!this.isConfigured || !this.client || this.fromPhones.length === 0) {
       return {
         success: false,
         error: 'SMS service not properly configured'
       };
     }
 
+    const fromPhone = this.getNextPhoneNumber();
+    
     try {
       const result = await this.client.messages.create({
         body: message.body,
-        from: this.fromPhone,
+        from: fromPhone,
         to: message.to
       });
 
