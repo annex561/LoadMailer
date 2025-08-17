@@ -403,10 +403,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       if (duplicates.length > 0) {
+        const duplicateFields = [];
+        duplicates.forEach(dup => {
+          if (dup.name === manualDriverData.name) duplicateFields.push("name");
+          if (dup.email === manualDriverData.email) duplicateFields.push("email");
+          if (dup.phone === manualDriverData.phone) duplicateFields.push("phone");
+        });
+        
         return res.status(409).json({ 
-          error: "Duplicate contact found", 
+          error: `Driver already exists with the same ${duplicateFields.join(", ")}. Please use different contact details.`,
           duplicates,
-          message: "A driver with this name, email, or phone already exists." 
+          duplicateFields,
+          message: `A driver with this ${duplicateFields.join(", ")} already exists in your fleet.` 
         });
       }
 
