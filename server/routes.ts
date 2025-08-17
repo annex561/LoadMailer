@@ -319,6 +319,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Book load endpoint
+  // New dispatcher book load endpoint with confirmation message
+  app.post("/api/loads/:loadId/book-for-driver/:driverId", async (req, res) => {
+    try {
+      const { loadId, driverId } = req.params;
+      const load = await storage.getLoad(loadId);
+      const driver = await storage.getDriver(driverId);
+      
+      if (!load) {
+        return res.status(404).json({ error: "Load not found" });
+      }
+      
+      if (!driver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+
+      // Update load status to assigned and assign driver
+      await storage.updateLoad(loadId, {
+        status: 'assigned',
+        driverId: driverId
+      });
+
+      // Update driver status to on_route
+      await storage.updateDriver(driverId, {
+        status: 'on_route'
+      });
+
+      // Update any existing load offer to accepted
+      const existingOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driverId);
+      if (existingOffer) {
+        await storage.updateLoadOfferByLoadAndDriver(loadId, driverId, {
+          status: 'accepted',
+          respondedAt: new Date()
+        });
+      }
+
+      // Send load confirmation via Telegram
+      try {
+        if (telegramLoadService && telegramLoadService.isServiceRunning() && driver.telegramId) {
+          await telegramLoadService.sendLoadConfirmation(load, driver);
+          console.log(`✅ Load confirmation sent to driver ${driver.name} for load ${load.loadNumber}`);
+        } else {
+          console.log(`📱 Load confirmation would be sent to ${driver.name} for load ${load.loadNumber}`);
+        }
+      } catch (error) {
+        console.error("Error sending load confirmation:", error);
+      }
+
+      console.log(`Load ${load.loadNumber} booked by dispatcher for driver ${driver.name}`);
+      
+      res.json({ 
+        message: "Load booked successfully and confirmation sent to driver", 
+        loadNumber: load.loadNumber,
+        driverName: driver.name 
+      });
+    } catch (error) {
+      console.error("Error booking load for driver:", error);
+      res.status(500).json({ error: "Failed to book load" });
+    }
+  });
+
   app.post("/api/loads/:id/book", async (req, res) => {
     try {
       const loadId = req.params.id;

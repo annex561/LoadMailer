@@ -149,6 +149,25 @@ export default function DispatcherDashboard() {
     }
   });
 
+  // Book load for driver mutation
+  const bookLoadMutation = useMutation({
+    mutationFn: async ({ loadId, driverId }: { loadId: string; driverId: string }) => {
+      const response = await apiRequest('POST', `/api/loads/${loadId}/book-for-driver/${driverId}`, {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/loads'] });
+      toast({ 
+        title: 'Load Booked Successfully', 
+        description: `Load ${data.loadNumber} booked for ${data.driverName}. Confirmation sent via Telegram.` 
+      });
+      refetchLoads();
+    },
+    onError: () => {
+      toast({ title: 'Failed to book load', variant: 'destructive' });
+    }
+  });
+
   // Filter loads based on status and search - ONLY show loads that were sent to drivers
   const filteredLoads = loads.filter(load => {
     // Only include loads that have offers (were sent to drivers)
@@ -781,14 +800,30 @@ export default function DispatcherDashboard() {
                                     </p>
                                   )}
                                 </div>
-                                <Badge 
-                                  variant={
-                                    offer.status === 'accepted' ? 'default' :
-                                    offer.status === 'declined' ? 'destructive' : 'secondary'
-                                  }
-                                >
-                                  {offer.status}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge 
+                                    variant={
+                                      offer.status === 'accepted' ? 'default' :
+                                      offer.status === 'declined' ? 'destructive' : 'secondary'
+                                    }
+                                  >
+                                    {offer.status}
+                                  </Badge>
+                                  {offer.status === 'pending' && offer.driver && (
+                                    <Button
+                                      size="sm"
+                                      className="bg-green-600 hover:bg-green-700 text-white"
+                                      onClick={() => bookLoadMutation.mutate({
+                                        loadId: selectedLoad.id,
+                                        driverId: offer.driverId
+                                      })}
+                                      disabled={bookLoadMutation.isPending}
+                                      data-testid={`button-book-load-${offer.id}`}
+                                    >
+                                      {bookLoadMutation.isPending ? 'Booking...' : 'Book Load'}
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </CardContent>
                           </Card>

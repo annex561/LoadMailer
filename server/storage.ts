@@ -1120,8 +1120,9 @@ export class MemStorage implements IStorage {
       const { db } = await import('./db');
       const { drivers } = await import('@shared/schema');
       
+      const { isNotNull } = await import('drizzle-orm');
       const dbDrivers = await db.select().from(drivers)
-        .where(drivers.telegramId.isNotNull());
+        .where(isNotNull(drivers.telegramId));
       
       // Update memory cache with fresh data
       for (const driver of dbDrivers) {

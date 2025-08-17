@@ -519,6 +519,70 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
     }
   }
 
+  async sendLoadConfirmation(load: LoadWithRelations, driver: any): Promise<boolean> {
+    if (!this.bot || !this.isRunning || !driver.telegramId) {
+      console.log('Telegram service not running or driver has no Telegram ID');
+      return false;
+    }
+
+    try {
+      // Calculate driver rate (10% less than posted rate)
+      const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
+      
+      // Format pickup and delivery times
+      const pickupTime = load.pickupTime || '12:30 PM';
+      const deliveryTime = load.deliveryTime || '08:00 AM';
+      
+      // Format confirmation message based on LAMP Logistics template
+      const confirmationMessage = `🚛 **LOAD CONFIRMATION**
+
+Please check in as **LoadMaster Logistics**
+You are working for **LoadMaster Logistics**:
+
+======================
+📍 **Pick Up:** ${load.pickupDate.toLocaleDateString()} until ${pickupTime}
+**Address:** ${load.customerCompany || 'Customer'}
+${load.pickupAddress}
+======================
+
+📝 **Notes:**
+${load.specialInstructions || 'No special instructions'}
+
+======================
+🏁 **Deliver:** ${load.deliveryDate.toLocaleDateString()} ${deliveryTime}
+**Customer:** ${load.customerCompany || 'Delivery Location'}
+${load.deliveryAddress}
+======================
+
+📞 **24/7 Support:** (203) 951-1991
+Stay safe on the road and have a good trip!
+
+================================
+📍 **For tracking purposes, please accept MacroPoint.**
+This is a strict requirement.
+If your phone number for tracking has been changed, please text us back the correct one!
+
+======================
+💰 **Rate:** $${driverRate.toLocaleString()}
+======================
+
+✅ **Please confirm and provide ETA for the pick-up**
+
+**Load #:** ${load.loadNumber}`;
+
+      await this.bot.sendMessage(driver.telegramId, confirmationMessage, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+
+      console.log(`Load confirmation sent to driver ${driver.name} for load ${load.loadNumber}`);
+      return true;
+    } catch (error) {
+      console.error(`Error sending load confirmation to driver ${driver.name}:`, error);
+      return false;
+    }
+  }
+
   async sendOnboardingInvitation(telegramId: string, onboardingToken: string, email: string): Promise<boolean> {
     if (!this.bot || !this.isRunning) {
       console.error('Telegram service not initialized');
