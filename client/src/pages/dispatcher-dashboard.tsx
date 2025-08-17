@@ -295,7 +295,7 @@ export default function DispatcherDashboard() {
                             <div className="bg-blue-50 border border-blue-200 rounded p-2 mt-2">
                               <div className="text-xs font-medium text-blue-800 mb-1">Driver Offers:</div>
                               {load.offers.map((offer: any, index: number) => {
-                                const driver = drivers.find(d => d.id === offer.driverId);
+                                const driver = drivers.find((d: any) => d.id === offer.driverId);
                                 const statusColor = offer.status === 'accepted' ? 'text-green-600' : 
                                                   offer.status === 'declined' ? 'text-red-600' : 'text-yellow-600';
                                 const statusText = offer.status === 'pending' ? 'Awaiting Response' : 
@@ -309,6 +309,16 @@ export default function DispatcherDashboard() {
                                   </div>
                                 );
                               })}
+                            </div>
+                          )}
+
+                          {/* Display Notes */}
+                          {load.specialInstructions && (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded p-2 mt-2">
+                              <div className="text-xs font-medium text-yellow-800 mb-1">Notes:</div>
+                              <div className="text-xs text-yellow-700 whitespace-pre-wrap">
+                                {load.specialInstructions}
+                              </div>
                             </div>
                           )}
                         </div>
