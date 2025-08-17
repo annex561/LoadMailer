@@ -41,6 +41,7 @@ export default function ContactFormModal({
           email: (contact as Driver)?.email || "",
           phone: (contact as Driver)?.phone || "",
           status: (contact as Driver)?.status || "available",
+          equipmentType: (contact as Driver)?.equipmentType || "dry_van",
         }
       : {
           name: (contact as Customer)?.name || "",
@@ -214,6 +215,32 @@ export default function ContactFormModal({
                         data-testid="textarea-customer-address"
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {type === "driver" && (
+              <FormField
+                control={form.control}
+                name="equipmentType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Equipment Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} data-testid="select-driver-equipment-type">
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select equipment type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="dry_van">Dry Van</SelectItem>
+                        <SelectItem value="refrigerated">Refrigerated</SelectItem>
+                        <SelectItem value="flatbed">Flatbed</SelectItem>
+                        <SelectItem value="step_deck">Step Deck</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

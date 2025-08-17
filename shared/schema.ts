@@ -13,6 +13,8 @@ export const drivers = pgTable("drivers", {
   emergencyContact: text("emergency_contact"),
   emergencyPhone: text("emergency_phone"),
   isOnboarded: boolean("is_onboarded").notNull().default(false),
+  // Equipment type for load matching
+  equipmentType: text("equipment_type").notNull().default("dry_van"), // dry_van, refrigerated, flatbed, step_deck
   // Telegram bot integration
   telegramId: text("telegram_id").unique(),
   telegramUsername: text("telegram_username"),

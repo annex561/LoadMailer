@@ -4,6 +4,8 @@ LoadMaster is a comprehensive fleet management system designed for truck load tr
 
 **Critical Feature**: The system includes a robust load board scraper that pulls freight data from multiple load boards (DAT, Truckstop, etc.) every 10 seconds, ensuring continuous availability of fresh freight opportunities. The professional dashboard interface matches DAT One design with real-time load listings, search filters, and company sections.
 
+**Automatic Load Offering**: Advanced location-based driver matching system that automatically evaluates every new load and sends Telegram notifications to eligible drivers based on proximity (150-mile radius), equipment type compatibility, availability status, and rate attractiveness. Equipment type filtering ensures drivers only receive loads for equipment they can handle (dry_van, refrigerated, flatbed, step_deck).
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
