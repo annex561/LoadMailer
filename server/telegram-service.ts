@@ -1,5 +1,6 @@
 import TelegramBot from "node-telegram-bot-api";
 import { storage } from "./storage";
+import { randomUUID } from "crypto";
 import type { LoadWithRelations, Driver, LanePreference, AvoidLocation, TelegramBotConfig, LoadOffer } from "@shared/schema";
 
 // Bot configuration from the script
@@ -104,10 +105,30 @@ export class TelegramLoadService {
   private setupCommandHandlers(): void {
     if (!this.bot) return;
 
-    // Welcome message
-    this.bot.onText(/\/start/, (msg: any) => {
+    // Welcome message with automatic onboarding
+    this.bot.onText(/\/start/, async (msg: any) => {
       if (!this.bot) return;
-      this.bot.sendMessage(msg.chat.id, 'Welcome to LAMP Load Dispatcher 🚛');
+      
+      const chatId = msg.chat.id;
+      const userInfo = msg.from;
+      
+      console.log(`📱 New user started chat: ${userInfo?.first_name || 'Unknown'} ${userInfo?.last_name || ''} (${chatId})`);
+      
+      // Send welcome message
+      await this.bot.sendMessage(chatId, 
+        `🚛 *Welcome to LAMP Logistics!*\n\n` +
+        `Hi ${userInfo?.first_name || 'Driver'}! I'm your personal load dispatcher bot.\n\n` +
+        `I'll help you:\n` +
+        `• Receive instant load offers\n` +
+        `• Book loads with one click\n` +
+        `• Track your assignments\n` +
+        `• Communicate with dispatch\n\n` +
+        `Let me get you set up...`,
+        { parse_mode: 'Markdown' }
+      );
+
+      // Automatically send onboarding invitation
+      await this.sendAutoOnboarding(chatId, userInfo);
     });
 
     // Handle callback queries from inline keyboard buttons
@@ -169,6 +190,36 @@ export class TelegramLoadService {
           } else {
             console.error('Invalid delay reason callback data format:', data);
           }
+        } else if (data === 'contact_support') {
+          await this.bot.sendMessage(chatId, 
+            `📞 *LAMP Logistics Support*\n\n` +
+            `Need help? Contact our dispatch team:\n\n` +
+            `📧 Email: dispatch@lamplogistics.com\n` +
+            `📱 Phone: (855) 599-9983\n` +
+            `⏰ Available: 24/7\n\n` +
+            `Or just reply to this message and we'll assist you!`,
+            { parse_mode: 'Markdown' }
+          );
+        } else if (data === 'how_it_works') {
+          await this.bot.sendMessage(chatId,
+            `ℹ️ *How LAMP Logistics Works*\n\n` +
+            `1️⃣ *Complete Registration*\n` +
+            `• Provide your driver details\n` +
+            `• Set equipment preferences\n` +
+            `• Add emergency contacts\n\n` +
+            `2️⃣ *Receive Load Offers*\n` +
+            `• Get matched loads instantly\n` +
+            `• See rate, miles, and details\n` +
+            `• Book with one click\n\n` +
+            `3️⃣ *Start Earning*\n` +
+            `• Track your assignments\n` +
+            `• Update pickup/delivery status\n` +
+            `• Get paid fast\n\n` +
+            `Ready to get started? Click the registration link above!`,
+            { parse_mode: 'Markdown' }
+          );
+        } else {
+          console.log('Unknown callback query:', data);
         }
       } catch (error) {
         console.error('Error handling callback query:', error);
@@ -1624,6 +1675,81 @@ Questions? Reply to this message or contact dispatch.`;
       }
       
       return { success: false, error: error.message || 'Failed to send Telegram message' };
+    }
+  }
+
+  // Send automatic onboarding when user starts chat
+  async sendAutoOnboarding(chatId: number, userInfo: any): Promise<void> {
+    try {
+      // Create an onboarding token automatically
+      const token = require('crypto').randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+      
+      // Create a temporary email based on user info
+      const tempEmail = `${userInfo?.username || chatId}@telegram-onboarding.local`;
+      
+      const tokenData = {
+        token,
+        email: tempEmail,
+        expiresAt,
+        isUsed: false,
+      };
+      
+      await storage.createOnboardingToken(tokenData);
+      
+      // Format the onboarding message
+      const onboardingUrl = `${process.env.REPLIT_DOMAINS || 'http://localhost'}/driver-onboarding?token=${token}`;
+      
+      const message = `🚛 *LAMP Logistics Driver Onboarding*
+
+Hi ${userInfo?.first_name || 'Driver'}! Ready to join our fleet and start earning?
+
+📋 *Complete Your Registration:*
+${onboardingUrl}
+
+✅ *What You'll Need:*
+• Driver's License Number
+• Emergency Contact Information  
+• Equipment Type & Capacity
+• Current Location
+
+⏰ *This invitation expires in 7 days*
+
+Once registered, you'll receive instant load offers with one-click booking!
+
+Need help? Just reply to this message.`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: '📋 Start Registration', url: onboardingUrl }
+          ],
+          [
+            { text: '📞 Contact Support', callback_data: 'contact_support' },
+            { text: 'ℹ️ How It Works', callback_data: 'how_it_works' }
+          ]
+        ]
+      };
+
+      await this.bot?.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+        disable_web_page_preview: true
+      });
+
+      console.log(`📱 Auto-onboarding sent to new user: ${userInfo?.first_name} (${chatId})`);
+      
+      // Log this automatic onboarding
+      await storage.createEmailLog({
+        recipientEmail: tempEmail,
+        subject: "Telegram Auto-Onboarding",
+        status: "sent",
+        sentAt: new Date(),
+      });
+
+    } catch (error) {
+      console.error('Error sending auto-onboarding:', error);
     }
   }
 
