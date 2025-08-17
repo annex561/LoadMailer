@@ -1,6 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import { storage } from "./storage";
 import { randomUUID } from "crypto";
+import { canHandleEquipmentType } from "@shared/equipment-types";
 import type { LoadWithRelations, Driver, LanePreference, AvoidLocation, TelegramBotConfig, LoadOffer } from "@shared/schema";
 
 // Bot configuration from the script
@@ -443,12 +444,8 @@ export class TelegramLoadService {
     maxScore += 25;
     if (driver.equipmentType === load.equipmentType || !load.equipmentType) {
       score += 25;
-    } else {
-      // Partial matches for compatible equipment types
-      const compatibleEquipment = this.getCompatibleEquipmentTypes(driver.equipmentType);
-      if (compatibleEquipment.includes(load.equipmentType)) {
-        score += 15; // Partial credit for compatible equipment
-      }
+    } else if (canHandleEquipmentType(driver.equipmentType, load.equipmentType)) {
+      score += 15; // Partial credit for compatible equipment using comprehensive system
     }
 
     // Load type preference match (15% weight)
@@ -521,25 +518,7 @@ export class TelegramLoadService {
   }
 
   // Calculate distance between two coordinates in miles
-  // Get compatible equipment types for better matching
-  private getCompatibleEquipmentTypes(driverEquipment: string): string[] {
-    const compatibilityMap: Record<string, string[]> = {
-      'vans_standard': ['dry_van', 'refrigerated'],
-      'dry_van': ['vans_standard', 'refrigerated', 'straight_box_truck', 'sprinter_van'],
-      'refrigerated': ['dry_van', 'vans_standard'],
-      'van_hotshot': ['sprinter_van', 'straight_box_truck', 'dry_van'],
-      'sprinter_van': ['van_hotshot', 'dry_van', 'straight_box_truck'],
-      'straight_box_truck': ['dry_van', 'van_hotshot', 'sprinter_van'],
-      'flatbed': ['step_deck', 'flatbed_hotshot'],
-      'flatbed_hotshot': ['flatbed', 'step_deck'],
-      'step_deck': ['flatbed', 'lowboy', 'flatbed_hotshot'],
-      'lowboy': ['step_deck', 'flatbed'],
-      'power_only': ['container'],
-      'container': ['power_only']
-    };
-    
-    return compatibilityMap[driverEquipment] || [];
-  }
+
 
   private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 3959; // Earth's radius in miles

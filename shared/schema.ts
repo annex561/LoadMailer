@@ -13,8 +13,8 @@ export const drivers = pgTable("drivers", {
   emergencyContact: text("emergency_contact"),
   emergencyPhone: text("emergency_phone"),
   isOnboarded: boolean("is_onboarded").notNull().default(false),
-  // Equipment type for load matching - matching load board specifications
-  equipmentType: text("equipment_type").notNull().default("vans_standard"), // vans_standard, dry_van, refrigerated, flatbed, step_deck (matching load board terms)
+  // Equipment type for load matching - comprehensive industry standard types
+  equipmentType: text("equipment_type").notNull().default("dry_van"), // dry_van, refrigerated, flatbed, step_deck, lowboy, power_only, container, car_carrier, tanker, dump_truck, conestoga, removable_gooseneck, vans_standard, van_lift_gate, van_hotshot, straight_box_truck, moving_van, flatbed_hotshot
   // Load preferences for matching - matching "Full & Partial" from load boards
   loadType: text("load_type").default("full_partial"), // full, partial, full_partial
   maxLength: integer("max_length").default(53), // Length ft - matching load board spec
@@ -61,8 +61,8 @@ export const loads = pgTable("loads", {
   // Load characteristics
   loadType: text("load_type").default("full"), // full, partial
   length: integer("length"), // Length in feet
-  // Temperature/Cooling fields
-  equipmentType: text("equipment_type").notNull().default("sprinter_van"), // sprinter_van, van_lift_gate, van_hotshot, straight_box_truck, moving_van, flatbed_hotshot, van
+  // Equipment type - matching driver equipment types for consistency
+  equipmentType: text("equipment_type").notNull().default("dry_van"), // dry_van, refrigerated, flatbed, step_deck, lowboy, power_only, container, car_carrier, tanker, dump_truck, conestoga, removable_gooseneck, vans_standard, van_lift_gate, van_hotshot, straight_box_truck, moving_van, flatbed_hotshot
   temperatureRequired: boolean("temperature_required").notNull().default(false),
   minTemperature: integer("min_temperature"), // in Fahrenheit
   maxTemperature: integer("max_temperature"), // in Fahrenheit

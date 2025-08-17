@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
+import { EQUIPMENT_TYPES, EQUIPMENT_CATEGORIES } from '@shared/equipment-types';
 
 import { apiRequest } from '@/lib/queryClient';
 import { Truck, User, Phone, Mail, MapPin, Shield, CreditCard, CheckCircle } from 'lucide-react';
@@ -56,22 +57,6 @@ interface OnboardingData {
   // Authentication
   confirmPassword: string;
 }
-
-const EQUIPMENT_TYPES = [
-  { value: 'vans_standard', label: 'Vans (Standard)' },
-  { value: 'dry_van', label: 'Dry Van' },
-  { value: 'refrigerated', label: 'Refrigerated' },
-  { value: 'flatbed', label: 'Flatbed' },
-  { value: 'step_deck', label: 'Step Deck' },
-  { value: 'lowboy', label: 'Lowboy' },
-  { value: 'power_only', label: 'Power Only' },
-  { value: 'container', label: 'Container' },
-  { value: 'car_carrier', label: 'Car Carrier' },
-  { value: 'tanker', label: 'Tanker' },
-  { value: 'dump_truck', label: 'Dump Truck' },
-  { value: 'conestoga', label: 'Conestoga' },
-  { value: 'removable_gooseneck', label: 'Removable Gooseneck (RGN)' }
-];
 
 const US_STATES = [
   'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
