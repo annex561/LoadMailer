@@ -15,15 +15,22 @@ import { Phone, Mail, MapPin, Clock, DollarSign, Truck, User, FileText, RefreshC
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { LoadWithRelations, Driver, Customer } from '@shared/schema';
+import { RateSettingModal } from '@/components/rate-setting-modal';
 
 interface LoadOffer {
   id: string;
   loadId: string;
   driverId: string;
-  status: 'pending' | 'accepted' | 'declined';
+  status: 'pending' | 'accepted' | 'declined' | 'awaiting_confirmation';
   sentAt: Date;
   respondedAt?: Date;
   retryCount: number;
+  driver?: Driver;
+  dispatcherRate?: number;
+  awaitingDriverConfirmation?: boolean;
+}
+
+interface OfferWithDriver extends LoadOffer {
   driver?: Driver;
 }
 
@@ -38,6 +45,8 @@ export default function DispatcherDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [notes, setNotes] = useState('');
   const [isNotesDialogOpen, setIsNotesDialogOpen] = useState(false);
+  const [isRateModalOpen, setIsRateModalOpen] = useState(false);
+  const [selectedOffer, setSelectedOffer] = useState<{ load: DispatcherLoad; driverId: string; driverName: string } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -829,19 +838,30 @@ export default function DispatcherDashboard() {
                                   {offer.status === 'pending' && (
                                     <Button
                                       size="sm"
-                                      className="bg-green-600 hover:bg-green-700 text-white"
+                                      className="bg-blue-600 hover:bg-blue-700 text-white"
                                       onClick={() => {
-                                        console.log('Booking load:', selectedLoad.id, 'for driver:', offer.driverId);
-                                        bookLoadMutation.mutate({
-                                          loadId: selectedLoad.id,
-                                          driverId: offer.driverId
+                                        console.log('Setting rate for driver:', offer.driver?.name, 'on load:', selectedLoad.loadNumber);
+                                        setSelectedOffer({
+                                          load: selectedLoad,
+                                          driverId: offer.driverId,
+                                          driverName: offer.driver?.name || 'Unknown Driver'
                                         });
+                                        setIsRateModalOpen(true);
                                       }}
-                                      disabled={bookLoadMutation.isPending}
-                                      data-testid={`button-book-load-${offer.id}`}
+                                      data-testid={`button-set-rate-${offer.id}`}
                                     >
-                                      {bookLoadMutation.isPending ? 'Booking...' : 'Book Load'}
+                                      Set Rate
                                     </Button>
+                                  )}
+                                  {offer.status === 'awaiting_confirmation' && (
+                                    <div className="flex flex-col gap-1">
+                                      <Badge variant="outline" className="bg-yellow-50 text-yellow-800 border-yellow-300">
+                                        Awaiting Driver Confirmation
+                                      </Badge>
+                                      <p className="text-xs text-muted-foreground">
+                                        Rate: ${offer.dispatcherRate || 'N/A'}
+                                      </p>
+                                    </div>
                                   )}
                                 </div>
                               </div>
@@ -951,6 +971,19 @@ export default function DispatcherDashboard() {
           )}
         </div>
       </div>
+
+      {/* Rate Setting Modal */}
+      <RateSettingModal
+        isOpen={isRateModalOpen}
+        onClose={() => {
+          setIsRateModalOpen(false);
+          setSelectedOffer(null);
+        }}
+        load={selectedOffer?.load || null}
+        driverId={selectedOffer?.driverId || ''}
+        driverName={selectedOffer?.driverName || ''}
+        originalRate={selectedOffer?.load?.rate || 0}
+      />
     </div>
   );
 }

@@ -291,6 +291,13 @@ export const loadOffers = pgTable("load_offers", {
   timeoutAt: timestamp("timeout_at").notNull(),
   retryCount: integer("retry_count").default(0), // Track number of retries sent to same driver
   lastSentAt: timestamp("last_sent_at"), // When the last retry was sent
+  
+  // Two-step booking workflow fields
+  dispatcherRate: real("dispatcher_rate"), // Rate set by dispatcher
+  deadheadDistance: real("deadhead_distance"), // Distance to pickup
+  awaitingDriverConfirmation: boolean("awaiting_driver_confirmation").default(false),
+  driverConfirmedAt: timestamp("driver_confirmed_at"),
+  
   createdAt: timestamp("created_at").defaultNow(),
 });
 

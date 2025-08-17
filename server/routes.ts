@@ -320,6 +320,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Book load endpoint
   // New dispatcher book load endpoint with confirmation message
+  // Two-step booking: Dispatcher sets rate for driver offer
+  app.post("/api/loads/:loadId/set-dispatcher-rate", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const { driverId, dispatcherRate, deadheadDistance } = req.body;
+      
+      console.log(`📋 Dispatcher setting rate for load ${loadId}, driver ${driverId}: $${dispatcherRate}`);
+      
+      // Get the load and driver details
+      const [load, driver] = await Promise.all([
+        storage.getLoad(loadId),
+        storage.getDriver(driverId)
+      ]);
+      
+      if (!load || !driver) {
+        return res.status(404).json({ error: "Load or driver not found" });
+      }
+      
+      // Find the driver's offer
+      const existingOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driverId);
+      
+      if (!existingOffer || existingOffer.status !== 'pending') {
+        return res.status(404).json({ error: "No pending offer found for this driver" });
+      }
+      
+      // Update the offer with dispatcher rate and mark as awaiting driver confirmation
+      await storage.updateLoadOfferByLoadAndDriver(loadId, driverId, {
+        dispatcherRate: dispatcherRate,
+        deadheadDistance: deadheadDistance || 0,
+        awaitingDriverConfirmation: true,
+        status: "awaiting_confirmation"
+      });
+      
+      // Send detailed load information to driver for confirmation
+      try {
+        if (telegramLoadService && telegramLoadService.isServiceRunning() && driver.telegramId) {
+          await telegramLoadService.sendDispatcherRateConfirmation(
+            driverId, 
+            load, 
+            dispatcherRate, 
+            deadheadDistance
+          );
+          console.log(`✅ Load confirmation request sent to driver ${driver.name}`);
+        } else {
+          console.log(`📱 Load confirmation request would be sent to ${driver.name}`);
+        }
+        
+      } catch (error) {
+        console.error("Error sending load confirmation request:", error);
+      }
+      
+      console.log(`✅ Rate set and confirmation sent to driver ${driver.name}`);
+      
+      res.json({
+        success: true,
+        message: "Rate set and confirmation request sent to driver",
+        loadNumber: load.loadNumber,
+        driverName: driver.name,
+        dispatcherRate: dispatcherRate
+      });
+      
+    } catch (error) {
+      console.error("Error setting dispatcher rate:", error);
+      res.status(500).json({ error: "Failed to set rate" });
+    }
+  });
+
   app.post("/api/loads/:loadId/book-for-driver/:driverId", async (req, res) => {
     try {
       const { loadId, driverId } = req.params;
@@ -376,6 +443,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error booking load for driver:", error);
       res.status(500).json({ error: "Failed to book load" });
+    }
+  });
+
+  // Handle driver load confirmation from Telegram
+  app.post("/api/loads/:loadId/confirm-driver/:driverId", async (req, res) => {
+    try {
+      const { loadId, driverId } = req.params;
+      const { confirmed } = req.body;
+      
+      console.log(`📋 Driver ${driverId} ${confirmed ? 'confirmed' : 'declined'} load ${loadId}`);
+      
+      // Get the load and driver details
+      const [load, driver] = await Promise.all([
+        storage.getLoad(loadId),
+        storage.getDriver(driverId)
+      ]);
+      
+      if (!load || !driver) {
+        return res.status(404).json({ error: "Load or driver not found" });
+      }
+      
+      // Find the driver's offer
+      const existingOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driverId);
+      
+      if (!existingOffer || existingOffer.status !== 'awaiting_confirmation') {
+        return res.status(404).json({ error: "No pending confirmation found for this driver" });
+      }
+      
+      if (confirmed) {
+        // Driver confirmed - proceed with booking
+        await Promise.all([
+          // Update load status and assign driver
+          storage.updateLoad(loadId, {
+            status: 'assigned',
+            driverId: driverId
+          }),
+          // Update driver status to on_route
+          storage.updateDriver(driverId, {
+            status: 'on_route'
+          }),
+          // Update the offer status to accepted
+          storage.updateLoadOfferByLoadAndDriver(loadId, driverId, {
+            status: 'accepted',
+            respondedAt: new Date(),
+            driverConfirmedAt: new Date(),
+            awaitingDriverConfirmation: false
+          })
+        ]);
+        
+        console.log(`✅ Load ${load.loadNumber} confirmed and booked for driver ${driver.name}`);
+        
+        // Send final confirmation via Telegram
+        try {
+          if (telegramLoadService && telegramLoadService.isServiceRunning() && driver.telegramId) {
+            const confirmationMessage = `
+✅ *LOAD CONFIRMED & BOOKED*
+
+📋 Load: ${load.loadNumber}
+💰 Your Rate: $${existingOffer.dispatcherRate}
+📱 You are now assigned to this load
+
+Please head to pickup location:
+📍 ${load.pickupAddress}
+📅 ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}
+
+Safe travels! 🚛
+            `;
+            
+            await telegramLoadService.sendMessageToDriver(driver.telegramId, confirmationMessage);
+          }
+        } catch (error) {
+          console.error("Error sending final confirmation:", error);
+        }
+        
+        res.json({
+          success: true,
+          message: "Load confirmed and booked successfully",
+          loadNumber: load.loadNumber,
+          driverName: driver.name
+        });
+        
+      } else {
+        // Driver declined - mark offer as declined
+        await storage.updateLoadOfferByLoadAndDriver(loadId, driverId, {
+          status: 'declined',
+          respondedAt: new Date(),
+          awaitingDriverConfirmation: false
+        });
+        
+        console.log(`❌ Load ${load.loadNumber} declined by driver ${driver.name}`);
+        
+        res.json({
+          success: true,
+          message: "Load declined by driver",
+          loadNumber: load.loadNumber,
+          driverName: driver.name
+        });
+      }
+      
+    } catch (error) {
+      console.error("Error handling driver confirmation:", error);
+      res.status(500).json({ error: "Failed to handle confirmation" });
     }
   });
 

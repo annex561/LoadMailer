@@ -130,6 +130,16 @@ export class TelegramLoadService {
         } else if (data.startsWith('decline_')) {
           const loadId = data.substring(8); // Remove 'decline_' prefix
           await this.handleDeclineLoad(loadId, telegramId, chatId);
+        } else if (data.startsWith('confirm_load_')) {
+          const parts = data.substring(13).split('_'); // Remove 'confirm_load_' prefix
+          const loadId = parts[0];
+          const driverId = parts[1];
+          await this.handleConfirmLoad(loadId, driverId, telegramId, chatId);
+        } else if (data.startsWith('decline_load_')) {
+          const parts = data.substring(13).split('_'); // Remove 'decline_load_' prefix
+          const loadId = parts[0];
+          const driverId = parts[1];
+          await this.handleDeclineConfirmation(loadId, driverId, telegramId, chatId);
         }
       } catch (error) {
         console.error('Error handling callback query:', error);
@@ -617,6 +627,112 @@ ${onboardingUrl}
     } catch (error) {
       console.error('Error sending onboarding invitation via Telegram:', error);
       return false;
+    }
+  }
+
+  // Send dispatcher-set rate confirmation message to driver
+  async sendDispatcherRateConfirmation(driverId: string, load: LoadWithRelations, dispatcherRate: number, deadheadDistance?: number): Promise<boolean> {
+    if (!this.bot || !this.isRunning) {
+      console.error('Telegram service not initialized');
+      return false;
+    }
+
+    try {
+      const driver = await storage.getDriver(driverId);
+      if (!driver || !driver.telegramId) {
+        console.error('Driver not found or no Telegram ID');
+        return false;
+      }
+
+      const deadheadText = deadheadDistance ? `\n🛣️ **Deadhead:** ${deadheadDistance} miles` : '';
+      
+      const confirmationMessage = `🚛 **LOAD BOOKING CONFIRMATION**
+
+📋 **Load:** ${load.loadNumber}
+💰 **Your Rate:** $${dispatcherRate}
+📍 **Route:** ${load.pickupAddress} → ${load.deliveryAddress}
+📦 **Weight:** ${load.weight.toLocaleString()} lbs
+📅 **Pickup:** ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime || '12:00 PM'}
+📅 **Delivery:** ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime || '08:00 AM'}${deadheadText}
+
+${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}\n\n` : ''}**Please confirm this load assignment:**
+
+✅ Accept this rate and book the load
+❌ Decline this offer
+
+⏰ *You have 10 minutes to respond*`;
+
+      const options = {
+        parse_mode: 'Markdown' as const,
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ CONFIRM & BOOK', callback_data: `confirm_load_${load.id}_${driverId}` },
+              { text: '❌ DECLINE', callback_data: `decline_load_${load.id}_${driverId}` }
+            ]
+          ]
+        }
+      };
+
+      await this.bot.sendMessage(driver.telegramId, confirmationMessage, options);
+      console.log(`Dispatcher rate confirmation sent to driver ${driver.name} for load ${load.loadNumber}`);
+      return true;
+    } catch (error) {
+      console.error(`Error sending dispatcher rate confirmation to driver:`, error);
+      return false;
+    }
+  }
+
+  // Handle driver confirmation of load offer
+  private async handleConfirmLoad(loadId: string, driverId: string, telegramId: string, chatId: number): Promise<void> {
+    try {
+      // Call the confirmation API endpoint
+      const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/loads/${loadId}/confirm-driver/${driverId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ confirmed: true })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        await this.bot.sendMessage(chatId, `✅ *Load Confirmed!*\n\nLoad ${result.loadNumber} has been successfully booked. You are now assigned to this load. Safe travels! 🚛`, {
+          parse_mode: 'Markdown'
+        });
+      } else {
+        await this.bot.sendMessage(chatId, '❌ Error confirming load. Please contact dispatch.');
+      }
+    } catch (error) {
+      console.error('Error confirming load:', error);
+      await this.bot.sendMessage(chatId, '❌ Error confirming load. Please contact dispatch.');
+    }
+  }
+
+  // Handle driver declining load confirmation
+  private async handleDeclineConfirmation(loadId: string, driverId: string, telegramId: string, chatId: number): Promise<void> {
+    try {
+      // Call the confirmation API endpoint
+      const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/loads/${loadId}/confirm-driver/${driverId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ confirmed: false })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        await this.bot.sendMessage(chatId, `❌ *Load Declined*\n\nLoad ${result.loadNumber} has been declined. The load will be offered to other drivers.`, {
+          parse_mode: 'Markdown'
+        });
+      } else {
+        await this.bot.sendMessage(chatId, '❌ Error declining load. Please contact dispatch.');
+      }
+    } catch (error) {
+      console.error('Error declining load confirmation:', error);
+      await this.bot.sendMessage(chatId, '❌ Error declining load. Please contact dispatch.');
     }
   }
 
