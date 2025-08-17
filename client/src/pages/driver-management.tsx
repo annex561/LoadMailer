@@ -486,7 +486,7 @@ export default function DriverManagement() {
                         <div className="flex items-start space-x-3">
                           <AlertTriangle className="text-red-600 w-5 h-5 mt-0.5" />
                           <div>
-                            <h4 className="font-medium text-red-800">IMPORTANT: SMS Not Delivering?</h4>
+                            <h4 className="font-medium text-red-800">🚨 ERROR 30034: CARRIER REJECTION</h4>
                             <p className="text-sm text-red-700 mt-1">
                               <strong>Your Twilio trial account can only send SMS to verified numbers.</strong><br/>
                               1. Go to <a href="https://console.twilio.com/us1/develop/phone-numbers/manage/verified" target="_blank" className="underline font-medium">Twilio Console → Verified Numbers</a><br/>
