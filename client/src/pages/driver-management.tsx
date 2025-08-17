@@ -774,7 +774,20 @@ export default function DriverManagement() {
                     </DialogDescription>
                   </DialogHeader>
                   <Form {...manualForm}>
-                    <form onSubmit={manualForm.handleSubmit((data) => createManualDriverMutation.mutate(data))} className="space-y-6">
+                    <form onSubmit={manualForm.handleSubmit(
+                      (data) => {
+                        console.log('Form submission data:', data);
+                        createManualDriverMutation.mutate(data);
+                      },
+                      (errors) => {
+                        console.log('Form validation errors:', errors);
+                        toast({
+                          title: "Form Validation Error",
+                          description: "Please check all required fields are filled correctly",
+                          variant: "destructive",
+                        });
+                      }
+                    )} className="space-y-6">
                       {/* Personal Information */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
