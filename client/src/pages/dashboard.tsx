@@ -56,10 +56,38 @@ export default function Dashboard() {
   const [equipmentFilter, setEquipmentFilter] = useState("all");
   const [dateRange, setDateRange] = useState("today");
 
-  // Fetch scraped loads from all load boards
-  const { data: scrapedLoads = [], isLoading, refetch } = useQuery<ScrapedLoad[]>({
-    queryKey: ["/api/scraped-loads"],
+  // Fetch loads from load boards (stored as regular loads with sourceBoard field)
+  const { data: allLoads = [], isLoading: loadsLoading } = useQuery({
+    queryKey: ["/api/loads"],
   });
+
+  // Filter to only show loads from load boards
+  const scrapedLoads = allLoads.filter((load: any) => 
+    load.sourceBoard && load.sourceBoard !== 'manual'
+  ).map((load: any) => ({
+    id: load.id,
+    loadNumber: load.loadNumber,
+    status: load.status,
+    sourceId: load.sourceBoard || 'dat',
+    configId: load.customerId,
+    externalId: load.loadNumber,
+    pickupAddress: load.pickupAddress,
+    pickupDate: load.pickupDate,
+    deliveryAddress: load.deliveryAddress,
+    deliveryDate: load.deliveryDate,
+    weight: load.weight || 0,
+    rate: load.rate || 0,
+    equipmentType: load.equipmentType || 'van',
+    distance: load.miles || 0,
+    company: load.company || 'Unknown',
+    contactPhone: load.contactPhone || '',
+    contactEmail: '',
+    priority: load.priority,
+    temperatureRequired: load.temperatureRequired || false,
+    scrapedAt: load.createdAt,
+  }));
+
+  const isLoading = loadsLoading;
 
   // Fetch dashboard stats
   const { data: stats } = useQuery<{
@@ -85,11 +113,11 @@ export default function Dashboard() {
 
   // Group loads by source/load board
   const loadsBySource = filteredLoads.reduce((acc, load) => {
-    const source = load.sourceId || 'Unknown';
+    const source = load.sourceId || 'dat';
     if (!acc[source]) acc[source] = [];
     acc[source].push(load);
     return acc;
-  }, {} as Record<string, ScrapedLoad[]>);
+  }, {} as Record<string, any[]>);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -159,7 +187,7 @@ export default function Dashboard() {
             <Button 
               variant="outline"
               size="sm"
-              onClick={() => refetch()}
+              onClick={() => window.location.reload()}
               data-testid="button-refresh"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
