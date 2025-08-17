@@ -392,11 +392,35 @@ export class MemStorage implements IStorage {
   }
 
   async updateDriver(id: string, updates: Partial<InsertDriver>): Promise<Driver | undefined> {
+    try {
+      // First try to update in database
+      const { db } = await import('./db');
+      const { drivers } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      
+      const result = await db.update(drivers)
+        .set(updates)
+        .where(eq(drivers.id, id))
+        .returning();
+      
+      if (result.length > 0) {
+        const updated = result[0];
+        // Update memory cache
+        this.drivers.set(id, updated);
+        console.log(`Driver ${updated.name} status updated to: ${updated.status}`);
+        return updated;
+      }
+    } catch (error) {
+      console.error('Error updating driver in database:', error);
+    }
+    
+    // Fallback to memory-only update
     const driver = this.drivers.get(id);
     if (!driver) return undefined;
 
     const updatedDriver = { ...driver, ...updates };
     this.drivers.set(id, updatedDriver);
+    console.log(`Driver ${updatedDriver.name} status updated in memory to: ${updatedDriver.status}`);
     return updatedDriver;
   }
 
@@ -1091,8 +1115,26 @@ export class MemStorage implements IStorage {
   }
 
   async getDriversWithTelegramEnabled(): Promise<Driver[]> {
-    return Array.from(this.drivers.values())
-      .filter(driver => driver.telegramId && driver.enableTelegramNotifications);
+    try {
+      // Try to get fresh data from database first
+      const { db } = await import('./db');
+      const { drivers } = await import('@shared/schema');
+      
+      const dbDrivers = await db.select().from(drivers)
+        .where(drivers.telegramId.isNotNull());
+      
+      // Update memory cache with fresh data
+      for (const driver of dbDrivers) {
+        this.drivers.set(driver.id, driver);
+      }
+      
+      return dbDrivers.filter(driver => driver.telegramId && driver.enableTelegramNotifications);
+    } catch (error) {
+      console.error('Error getting drivers from database, using memory cache:', error);
+      // Fallback to memory cache
+      return Array.from(this.drivers.values())
+        .filter(driver => driver.telegramId && driver.enableTelegramNotifications);
+    }
   }
   
   // Load offer statistics
