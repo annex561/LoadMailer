@@ -17,8 +17,13 @@ import {
   Fuel,
   Shield,
   Calendar,
-  MapPin
+  MapPin,
+  Plus
 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 interface MaintenanceAlert {
@@ -115,7 +120,11 @@ function getMaintenanceTypeIcon(type: string) {
 
 export default function PredictiveMaintenance() {
   const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
+  const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
+  const [showUpdateMileageModal, setShowUpdateMileageModal] = useState(false);
+  const [selectedVehicleForMileage, setSelectedVehicleForMileage] = useState<Vehicle | null>(null);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: alerts = [], isLoading: alertsLoading } = useQuery<MaintenanceAlert[]>({
     queryKey: ['/api/maintenance/alerts'],
@@ -131,26 +140,102 @@ export default function PredictiveMaintenance() {
   });
 
   const acknowledgeMutation = useMutation({
-    mutationFn: (alertId: string) => 
-      apiRequest(`/api/maintenance/alerts/${alertId}/acknowledge`, {
+    mutationFn: async (alertId: string) => {
+      const response = await fetch(`/api/maintenance/alerts/${alertId}/acknowledge`, {
         method: 'POST',
-        body: { acknowledgedBy: 'dispatcher' }
-      }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acknowledgedBy: 'dispatcher' })
+      });
+      if (!response.ok) throw new Error('Failed to acknowledge alert');
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/maintenance/alerts'] });
     },
   });
 
   const resolveMutation = useMutation({
-    mutationFn: ({ alertId, notes }: { alertId: string; notes?: string }) => 
-      apiRequest(`/api/maintenance/alerts/${alertId}/resolve`, {
+    mutationFn: async ({ alertId, notes }: { alertId: string; notes?: string }) => {
+      const response = await fetch(`/api/maintenance/alerts/${alertId}/resolve`, {
         method: 'POST',
-        body: { resolvedBy: 'dispatcher', notes }
-      }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolvedBy: 'dispatcher', notes })
+      });
+      if (!response.ok) throw new Error('Failed to resolve alert');
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/maintenance/alerts'] });
     },
   });
+
+  // Vehicle Management Mutations
+  const addVehicleMutation = useMutation({
+    mutationFn: async (vehicleData: any) => {
+      const response = await fetch('/api/maintenance/vehicles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vehicleData)
+      });
+      if (!response.ok) throw new Error('Failed to add vehicle');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/maintenance/vehicles'] });
+      toast({ title: "Success", description: "Vehicle added successfully" });
+      setShowAddVehicleModal(false);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to add vehicle" });
+    }
+  });
+
+  const updateMileageMutation = useMutation({
+    mutationFn: async ({ vehicleId, mileage }: { vehicleId: string; mileage: number }) => {
+      const response = await fetch(`/api/maintenance/vehicles/${vehicleId}/mileage`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentMileage: mileage })
+      });
+      if (!response.ok) throw new Error('Failed to update mileage');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/maintenance/vehicles'] });
+      toast({ title: "Success", description: "Mileage updated successfully" });
+      setShowUpdateMileageModal(false);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update mileage" });
+    }
+  });
+
+  // Form handlers
+  const handleAddVehicle = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const vehicleData = {
+      vehicleNumber: formData.get('vehicleNumber'),
+      make: formData.get('make'),
+      model: formData.get('model'),
+      year: parseInt(formData.get('year') as string),
+      currentMileage: parseInt(formData.get('currentMileage') as string),
+      equipmentType: 'straight_box_truck',
+      status: 'active'
+    };
+    addVehicleMutation.mutate(vehicleData);
+  };
+
+  const handleUpdateMileage = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedVehicleForMileage) return;
+    const formData = new FormData(event.currentTarget);
+    const newMileage = parseInt(formData.get('newMileage') as string);
+    updateMileageMutation.mutate({ 
+      vehicleId: selectedVehicleForMileage.id, 
+      mileage: newMileage 
+    });
+  };
 
   const criticalAlerts = alerts.filter(alert => alert.severity === 'critical');
   const highAlerts = alerts.filter(alert => alert.severity === 'high');
@@ -234,9 +319,10 @@ export default function PredictiveMaintenance() {
         </div>
 
         <Tabs defaultValue="alerts" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="alerts">Maintenance Alerts</TabsTrigger>
             <TabsTrigger value="vehicles">Fleet Overview</TabsTrigger>
+            <TabsTrigger value="manage">Vehicle Management</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
 
@@ -440,6 +526,80 @@ export default function PredictiveMaintenance() {
             </div>
           </TabsContent>
 
+          <TabsContent value="manage" className="space-y-4">
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Vehicle Management</h2>
+                  <p className="text-sm text-gray-600">Add and manage vehicles in your fleet</p>
+                </div>
+                <Button onClick={() => setShowAddVehicleModal(true)} data-testid="button-add-vehicle">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Vehicle
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {vehicles.map((vehicle) => (
+                  <div key={vehicle.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow bg-white">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-medium text-gray-900" data-testid={`text-vehicle-number-${vehicle.id}`}>
+                        {vehicle.vehicleNumber}
+                      </h3>
+                      <Badge variant="outline" data-testid={`badge-vehicle-status-${vehicle.id}`}>
+                        {vehicle.status}
+                      </Badge>
+                    </div>
+                    
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <div className="flex justify-between">
+                        <span>Make/Model:</span>
+                        <span data-testid={`text-vehicle-make-model-${vehicle.id}`}>
+                          {vehicle.make} {vehicle.model}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Year:</span>
+                        <span data-testid={`text-vehicle-year-${vehicle.id}`}>{vehicle.year}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Mileage:</span>
+                        <span data-testid={`text-vehicle-mileage-${vehicle.id}`}>
+                          {vehicle.currentMileage?.toLocaleString()} mi
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Health:</span>
+                        <span className="font-medium">{Math.round(vehicle.healthScore)}%</span>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full mt-3"
+                      onClick={() => {
+                        setSelectedVehicleForMileage(vehicle);
+                        setShowUpdateMileageModal(true);
+                      }}
+                      data-testid={`button-update-mileage-${vehicle.id}`}
+                    >
+                      Update Mileage
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              
+              {vehicles.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  <Car className="mx-auto h-8 w-8 mb-2" />
+                  <p>No vehicles added yet</p>
+                  <p className="text-sm">Click "Add Vehicle" to get started</p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
           <TabsContent value="analytics" className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
@@ -486,6 +646,131 @@ export default function PredictiveMaintenance() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Add Vehicle Modal */}
+      <Dialog open={showAddVehicleModal} onOpenChange={setShowAddVehicleModal}>
+        <DialogContent className="bg-white">
+          <DialogHeader>
+            <DialogTitle>Add New Vehicle</DialogTitle>
+            <DialogDescription>
+              Enter the vehicle information to add it to the maintenance system.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddVehicle} className="space-y-4">
+            <div>
+              <Label htmlFor="vehicleNumber">Vehicle Number</Label>
+              <Input
+                id="vehicleNumber"
+                name="vehicleNumber"
+                placeholder="e.g., TRUCK-002"
+                required
+                className="bg-white border border-gray-300"
+                data-testid="input-vehicle-number"
+              />
+            </div>
+            <div>
+              <Label htmlFor="make">Make</Label>
+              <Input
+                id="make"
+                name="make"
+                placeholder="e.g., Freightliner"
+                required
+                className="bg-white border border-gray-300"
+                data-testid="input-vehicle-make"
+              />
+            </div>
+            <div>
+              <Label htmlFor="model">Model</Label>
+              <Input
+                id="model"
+                name="model"
+                placeholder="e.g., Cascadia"
+                required
+                className="bg-white border border-gray-300"
+                data-testid="input-vehicle-model"
+              />
+            </div>
+            <div>
+              <Label htmlFor="year">Year</Label>
+              <Input
+                id="year"
+                name="year"
+                type="number"
+                placeholder="e.g., 2020"
+                min="1990"
+                max="2025"
+                required
+                className="bg-white border border-gray-300"
+                data-testid="input-vehicle-year"
+              />
+            </div>
+            <div>
+              <Label htmlFor="currentMileage">Current Mileage</Label>
+              <Input
+                id="currentMileage"
+                name="currentMileage"
+                type="number"
+                placeholder="e.g., 125000"
+                min="0"
+                required
+                className="bg-white border border-gray-300"
+                data-testid="input-vehicle-mileage"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowAddVehicleModal(false)}>
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                data-testid="button-save-vehicle"
+                disabled={addVehicleMutation.isPending}
+              >
+                {addVehicleMutation.isPending ? 'Adding...' : 'Add Vehicle'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Mileage Modal */}
+      <Dialog open={showUpdateMileageModal} onOpenChange={setShowUpdateMileageModal}>
+        <DialogContent className="bg-white">
+          <DialogHeader>
+            <DialogTitle>Update Vehicle Mileage</DialogTitle>
+            <DialogDescription>
+              Update the current mileage for {selectedVehicleForMileage?.vehicleNumber}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdateMileage} className="space-y-4">
+            <div>
+              <Label htmlFor="newMileage">New Mileage</Label>
+              <Input
+                id="newMileage"
+                name="newMileage"
+                type="number"
+                placeholder={selectedVehicleForMileage?.currentMileage?.toString()}
+                min={selectedVehicleForMileage?.currentMileage || 0}
+                required
+                className="bg-white border border-gray-300"
+                data-testid="input-new-mileage"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowUpdateMileageModal(false)}>
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                data-testid="button-save-mileage"
+                disabled={updateMileageMutation.isPending}
+              >
+                {updateMileageMutation.isPending ? 'Updating...' : 'Update Mileage'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

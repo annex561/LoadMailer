@@ -674,6 +674,50 @@ export class PredictiveMaintenanceService {
     return Array.from(this.vehicles.values());
   }
 
+  // Add new vehicle
+  public async addVehicle(vehicleData: any): Promise<Vehicle> {
+    const vehicleId = `vh-${Date.now()}`;
+    
+    const newVehicle: Vehicle = {
+      id: vehicleId,
+      vehicleNumber: vehicleData.vehicleNumber,
+      make: vehicleData.make,
+      model: vehicleData.model,
+      year: vehicleData.year,
+      currentMileage: vehicleData.currentMileage,
+      equipmentType: vehicleData.equipmentType,
+      status: vehicleData.status || 'active',
+      healthScore: 100, // New vehicle starts with perfect health
+      fuelEfficiency: 7.0, // Default fuel efficiency
+      lastMaintenanceDate: new Date().toISOString(),
+      nextMaintenanceDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days from now
+    };
+
+    this.vehicles.set(vehicleId, newVehicle);
+    console.log(`Added new vehicle: ${newVehicle.vehicleNumber} (${newVehicle.make} ${newVehicle.model})`);
+    return newVehicle;
+  }
+
+  // Update vehicle mileage
+  public async updateVehicleMileage(vehicleId: string, newMileage: number): Promise<Vehicle | null> {
+    const vehicle = this.vehicles.get(vehicleId);
+    
+    if (!vehicle) {
+      return null;
+    }
+
+    // Update mileage and recalculate health score
+    const updatedVehicle: Vehicle = {
+      ...vehicle,
+      currentMileage: newMileage,
+      healthScore: Math.max(50, vehicle.healthScore - (newMileage > vehicle.currentMileage ? Math.floor((newMileage - vehicle.currentMileage) / 5000) : 0))
+    };
+
+    this.vehicles.set(vehicleId, updatedVehicle);
+    console.log(`Updated vehicle ${vehicleId} mileage to ${newMileage}`);
+    return updatedVehicle;
+  }
+
   // Get vehicle by ID
   public async getVehicle(id: string): Promise<Vehicle | undefined> {
     return this.vehicles.get(id);

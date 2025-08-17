@@ -2747,6 +2747,38 @@ Safe travels! 🚛`;
     }
   });
 
+  app.post("/api/maintenance/vehicles", async (req, res) => {
+    try {
+      const vehicleData = req.body;
+      const vehicle = await predictiveMaintenanceService.addVehicle(vehicleData);
+      res.status(201).json(vehicle);
+    } catch (error) {
+      console.error("Error adding vehicle:", error);
+      res.status(500).json({ error: "Failed to add vehicle" });
+    }
+  });
+
+  app.put("/api/maintenance/vehicles/:vehicleId/mileage", async (req, res) => {
+    try {
+      const { vehicleId } = req.params;
+      const { currentMileage } = req.body;
+      
+      if (!currentMileage || isNaN(currentMileage)) {
+        return res.status(400).json({ error: "Valid currentMileage is required" });
+      }
+
+      const updatedVehicle = await predictiveMaintenanceService.updateVehicleMileage(vehicleId, parseInt(currentMileage));
+      if (!updatedVehicle) {
+        return res.status(404).json({ error: "Vehicle not found" });
+      }
+      
+      res.json(updatedVehicle);
+    } catch (error) {
+      console.error("Error updating vehicle mileage:", error);
+      res.status(500).json({ error: "Failed to update vehicle mileage" });
+    }
+  });
+
   app.get("/api/maintenance/vehicles/:id", async (req, res) => {
     try {
       const { id } = req.params;
