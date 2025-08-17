@@ -690,21 +690,20 @@ ${onboardingUrl}
         return false;
       }
 
-      const deadheadText = deadheadDistance ? `\n🛣️ **Deadhead:** ${deadheadDistance} miles` : '';
+      const deadheadText = deadheadDistance ? `\n🛣️ Deadhead: ${deadheadDistance} miles` : '';
       
-      const confirmationMessage = `🚛 **LOAD BOOKING CONFIRMATION**
+      const confirmationMessage = `🚛 *LOAD BOOKING CONFIRMATION*
 
-📋 **Load:** ${load.loadNumber}
-💰 **Your Rate:** $${dispatcherRate}
-📍 **Route:** ${load.pickupAddress} → ${load.deliveryAddress}
-📦 **Weight:** ${load.weight.toLocaleString()} lbs
-📅 **Pickup:** ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime || '12:00 PM'}
-📅 **Delivery:** ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime || '08:00 AM'}${deadheadText}
+📋 Load: ${load.loadNumber}
+💰 Your Rate: $${dispatcherRate}
+📍 Route: ${load.pickupAddress} → ${load.deliveryAddress}
+📦 Weight: ${load.weight.toLocaleString()} lbs
+📅 Pickup: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime || '12:00 PM'}
+📅 Delivery: ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime || '08:00 AM'}${deadheadText}
 
-${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}\n\n` : ''}**Please confirm this load assignment:**
+${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n` : ''}*Please confirm this load assignment:*
 
-✅ Accept this rate and book the load
-❌ Decline this offer
+✅ Click to confirm and book the load
 
 ⏰ *You have 10 minutes to respond*`;
 
@@ -718,8 +717,7 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '✅ CONFIRM & BOOK', callback_data: `confirm_${shortLoadId}_${shortDriverId}` },
-              { text: '❌ DECLINE', callback_data: `decline_${shortLoadId}_${shortDriverId}` }
+              { text: '✅ CONFIRM & BOOK', callback_data: `confirm_${shortLoadId}_${shortDriverId}` }
             ]
           ]
         }
@@ -1142,7 +1140,7 @@ Safe travels! 🛣️`;
     try {
       // Find the full load and driver IDs by matching the first 8 characters
       const loads = await storage.getAllLoads();
-      const drivers = await storage.getDrivers();
+      const drivers = await storage.getAllDrivers();
       
       const load = loads.find(l => l.id.startsWith(shortLoadId));
       const driver = drivers.find(d => d.id.startsWith(shortDriverId));
@@ -1163,7 +1161,7 @@ Safe travels! 🛣️`;
     try {
       // Find the full load and driver IDs by matching the first 8 characters
       const loads = await storage.getAllLoads();
-      const drivers = await storage.getDrivers();
+      const drivers = await storage.getAllDrivers();
       
       const load = loads.find(l => l.id.startsWith(shortLoadId));
       const driver = drivers.find(d => d.id.startsWith(shortDriverId));
