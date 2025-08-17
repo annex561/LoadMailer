@@ -451,7 +451,9 @@ export class TelegramLoadService {
   }
 
   private formatLoadMessage(load: LoadWithRelations, matchScore?: number, distance?: number): string {
-    const rpm = load.rate && load.miles ? (load.rate / load.miles).toFixed(2) : 'N/A';
+    // Calculate driver rate (10% less than posted rate)
+    const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
+    const rpm = driverRate && load.miles ? (driverRate / load.miles).toFixed(2) : 'N/A';
     const distanceText = distance ? ` (${Math.round(distance)} mi away)` : '';
     const matchText = matchScore ? `\n📊 *Match Score:* ${matchScore}%` : '';
     
@@ -460,7 +462,7 @@ Origin: *${load.pickupAddress}*
 Destination: *${load.deliveryAddress}*
 Pick-Up Date: *${load.pickupDate.toLocaleDateString()}*
 Weight: *${load.weight.toLocaleString()} lbs*
-Rate: *$${load.rate?.toLocaleString() || 'TBD'}*
+Rate: *$${driverRate.toLocaleString() || 'TBD'}*
 Miles: *${load.miles || 'N/A'} mi*
 Rate/Mile: *$${rpm}*${matchText}
 
@@ -696,15 +698,17 @@ ${onboardingUrl}
         status: 'assigned'
       });
 
-      // Send confirmation to driver
+      // Send confirmation to driver (show driver rate - 10% less)
+      const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
       this.bot?.sendMessage(
         chatId,
-        `✅ *BOOKING CONFIRMED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${load.rate}\n\nDispatcher is processing your booking. You will receive confirmation within 15 minutes.`,
+        `✅ *BOOKING CONFIRMED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${driverRate.toLocaleString()}\n\nDispatcher is processing your booking. You will receive confirmation within 15 minutes.`,
         { parse_mode: 'Markdown' }
       );
 
-      // Notify dispatcher with complete information
+      // Notify dispatcher with complete information (showing full rate and driver rate)
       if (this.config) {
+        const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
         const dispatchMessage = `📞 *LOAD BOOKING CONFIRMATION*\n\n` +
           `🚛 *DRIVER INFO:*\n` +
           `• Name: ${driver.name}\n` +
@@ -715,7 +719,8 @@ ${onboardingUrl}
           `📦 *LOAD DETAILS:*\n` +
           `• Load #: ${load.loadNumber}\n` +
           `• Route: ${load.pickupAddress} → ${load.deliveryAddress}\n` +
-          `• Rate: $${load.rate} (${load.miles} miles)\n` +
+          `• Full Rate: $${load.rate?.toLocaleString()} (${load.miles} miles)\n` +
+          `• Driver Rate: $${driverRate.toLocaleString()} (90% of full rate)\n` +
           `• Weight: ${load.weight.toLocaleString()} lbs\n` +
           `• Equipment: ${load.equipmentType}\n` +
           `• Pickup: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}\n` +
@@ -757,18 +762,19 @@ ${onboardingUrl}
         respondedAt: new Date()
       });
 
-      // Send confirmation to driver
+      // Send confirmation to driver (show driver rate - 10% less)
+      const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
       this.bot?.sendMessage(
         chatId,
-        `❌ *LOAD DECLINED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\n\nThank you for your response. You will continue to receive new load offers.`,
+        `❌ *LOAD DECLINED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${driverRate.toLocaleString()}\n\nThank you for your response. You will continue to receive new load offers.`,
         { parse_mode: 'Markdown' }
       );
 
-      // Notify dispatcher
+      // Notify dispatcher (show full rate for dispatcher)
       if (this.config) {
         this.bot?.sendMessage(
           this.config.dispatcherId,
-          `❌ *LOAD DECLINED*\n\nDriver *${driver.name}* declined Load ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${load.rate}\n\nLoad is still available for other drivers.`,
+          `❌ *LOAD DECLINED*\n\nDriver *${driver.name}* declined Load ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nFull Rate: $${load.rate?.toLocaleString()}\n\nLoad is still available for other drivers.`,
           { parse_mode: 'Markdown' }
         );
       }
@@ -855,20 +861,20 @@ ${onboardingUrl}
         
         await this.sendLoadToDriver(load, nextDriver.driver, nextDriver.matchScore, nextDriver.distance);
         
-        // Notify dispatcher about the driver change
+        // Notify dispatcher about the driver change (show full rate)
         if (this.bot && this.config) {
           this.bot.sendMessage(
             this.config.dispatcherId,
-            `🔄 *LOAD REASSIGNED*\n\nLoad ${load.loadNumber} reassigned from ${originalDriver.name} (no response) to ${nextDriver.driver.name}\n\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${load.rate}`,
+            `🔄 *LOAD REASSIGNED*\n\nLoad ${load.loadNumber} reassigned from ${originalDriver.name} (no response) to ${nextDriver.driver.name}\n\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nFull Rate: $${load.rate?.toLocaleString()}`,
             { parse_mode: 'Markdown' }
           );
         }
       } else {
-        // No other drivers available - notify dispatcher
+        // No other drivers available - notify dispatcher (show full rate)
         if (this.bot && this.config) {
           this.bot.sendMessage(
             this.config.dispatcherId,
-            `⚠️ *NO DRIVERS AVAILABLE*\n\nLoad ${load.loadNumber} - no response from ${originalDriver.name} and no other drivers in vicinity.\n\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${load.rate}\n\nManual assignment required.`,
+            `⚠️ *NO DRIVERS AVAILABLE*\n\nLoad ${load.loadNumber} - no response from ${originalDriver.name} and no other drivers in vicinity.\n\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nFull Rate: $${load.rate?.toLocaleString()}\n\nManual assignment required.`,
             { parse_mode: 'Markdown' }
           );
         }

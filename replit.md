@@ -12,7 +12,7 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-**Automatic Load Retry System (Aug 17, 2025)**
+**Automatic Load Retry System & Driver Rate Structure (Aug 17, 2025)**
 - Implemented intelligent load retry system for non-responsive drivers
 - First timeout (3 minutes): Resends same load to original driver with reminder message
 - Second timeout (3 minutes): Automatically forwards load to next eligible driver in vicinity
@@ -21,6 +21,7 @@ Preferred communication style: Simple, everyday language.
 - Added comprehensive dispatcher notifications for load reassignments and driver availability status
 - Schema updated with retry tracking fields (retryCount, lastSentAt) for load offers
 - System ensures continuous load coverage with automatic fallback to nearby drivers
+- Implemented driver rate system: drivers see 90% of load board rate, dispatchers see both full and driver rates
 
 # System Architecture
 
