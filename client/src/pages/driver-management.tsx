@@ -482,14 +482,20 @@ export default function DriverManagement() {
                           </div>
                         </div>
                       </div>
-                      <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                      <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
                         <div className="flex items-start space-x-3">
-                          <AlertTriangle className="text-amber-600 w-5 h-5 mt-0.5" />
+                          <AlertTriangle className="text-red-600 w-5 h-5 mt-0.5" />
                           <div>
-                            <h4 className="font-medium text-amber-800">Trial Account Notice</h4>
-                            <p className="text-sm text-amber-700 mt-1">
-                              For Twilio trial accounts, you must verify phone numbers before sending SMS. Visit <a href="https://console.twilio.com/us1/develop/phone-numbers/manage/verified" target="_blank" className="underline">Twilio Console</a> to verify your number.
+                            <h4 className="font-medium text-red-800">IMPORTANT: SMS Not Delivering?</h4>
+                            <p className="text-sm text-red-700 mt-1">
+                              <strong>Your Twilio trial account can only send SMS to verified numbers.</strong><br/>
+                              1. Go to <a href="https://console.twilio.com/us1/develop/phone-numbers/manage/verified" target="_blank" className="underline font-medium">Twilio Console → Verified Numbers</a><br/>
+                              2. Click "Add a new number" and verify YOUR actual phone number<br/>
+                              3. Then test SMS with your verified number
                             </p>
+                            <div className="mt-2 p-2 bg-red-100 rounded text-xs text-red-800">
+                              <strong>Why SMS shows "Success" but doesn't arrive:</strong> Twilio accepts the message but silently drops it for unverified numbers on trial accounts.
+                            </div>
                           </div>
                         </div>
                       </div>
