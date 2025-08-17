@@ -288,9 +288,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Check for duplicate contacts before creation
+  app.post("/api/check-duplicates", async (req, res) => {
+    try {
+      const { name, email, phone, type } = req.body;
+      
+      if (!name || !email || !phone || !type) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      if (type === "driver") {
+        const duplicates = await storage.findDuplicateDrivers(name, email, phone);
+        res.json({ duplicates, hasDuplicates: duplicates.length > 0 });
+      } else if (type === "customer") {
+        const duplicates = await storage.findDuplicateCustomers(name, email, phone);
+        res.json({ duplicates, hasDuplicates: duplicates.length > 0 });
+      } else {
+        res.status(400).json({ error: "Invalid type. Must be 'driver' or 'customer'" });
+      }
+    } catch (error) {
+      console.error("Error checking duplicates:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.post("/api/drivers", async (req, res) => {
     try {
       const validatedData = insertDriverSchema.parse(req.body);
+      
+      // Check for duplicates before creating
+      const duplicates = await storage.findDuplicateDrivers(
+        validatedData.name, 
+        validatedData.email, 
+        validatedData.phone
+      );
+      
+      if (duplicates.length > 0) {
+        return res.status(409).json({ 
+          error: "Duplicate contact found", 
+          duplicates,
+          message: "A driver with this name, email, or phone already exists." 
+        });
+      }
+      
       const driver = await storage.createDriver(validatedData);
       res.status(201).json(driver);
     } catch (error) {
@@ -786,6 +826,22 @@ Safe travels! 🚛`;
   app.post("/api/customers", async (req, res) => {
     try {
       const validatedData = insertCustomerSchema.parse(req.body);
+      
+      // Check for duplicates before creating
+      const duplicates = await storage.findDuplicateCustomers(
+        validatedData.name, 
+        validatedData.email, 
+        validatedData.phone
+      );
+      
+      if (duplicates.length > 0) {
+        return res.status(409).json({ 
+          error: "Duplicate contact found", 
+          duplicates,
+          message: "A customer with this name, email, or phone already exists." 
+        });
+      }
+      
       const customer = await storage.createCustomer(validatedData);
       res.status(201).json(customer);
     } catch (error) {

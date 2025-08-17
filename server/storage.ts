@@ -8,6 +8,7 @@ export interface IStorage {
   createDriver(driver: InsertDriver): Promise<Driver>;
   updateDriver(id: string, driver: Partial<InsertDriver>): Promise<Driver | undefined>;
   deleteDriver(id: string): Promise<boolean>;
+  findDuplicateDrivers(name: string, email: string, phone: string): Promise<Driver[]>;
   
   // Driver mood tracking
   updateDriverMood(driverId: string, mood: string, note?: string): Promise<Driver | undefined>;
@@ -18,6 +19,7 @@ export interface IStorage {
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   updateCustomer(id: string, customer: Partial<InsertCustomer>): Promise<Customer | undefined>;
   deleteCustomer(id: string): Promise<boolean>;
+  findDuplicateCustomers(name: string, email: string, phone: string): Promise<Customer[]>;
 
   // Load operations
   getLoad(id: string): Promise<LoadWithRelations | undefined>;
@@ -493,6 +495,40 @@ export class MemStorage implements IStorage {
     return this.drivers.delete(id);
   }
 
+  async findDuplicateDrivers(name: string, email: string, phone: string): Promise<Driver[]> {
+    try {
+      // First check database
+      const { db } = await import('./db');
+      const { drivers } = await import('@shared/schema');
+      const { or, ilike, eq } = await import('drizzle-orm');
+      
+      const dbDrivers = await db.select().from(drivers).where(
+        or(
+          ilike(drivers.name, name),
+          eq(drivers.email, email),
+          eq(drivers.phone, phone)
+        )
+      );
+      
+      if (dbDrivers.length > 0) {
+        return dbDrivers;
+      }
+    } catch (error) {
+      console.log('Database not available, checking in-memory storage');
+    }
+    
+    // Fallback to in-memory check
+    const duplicates: Driver[] = [];
+    for (const driver of this.drivers.values()) {
+      if (driver.name.toLowerCase() === name.toLowerCase() || 
+          driver.email.toLowerCase() === email.toLowerCase() || 
+          driver.phone === phone) {
+        duplicates.push(driver);
+      }
+    }
+    return duplicates;
+  }
+
   // Customer operations
   async getCustomer(id: string): Promise<Customer | undefined> {
     return this.customers.get(id);
@@ -525,6 +561,40 @@ export class MemStorage implements IStorage {
 
   async deleteCustomer(id: string): Promise<boolean> {
     return this.customers.delete(id);
+  }
+
+  async findDuplicateCustomers(name: string, email: string, phone: string): Promise<Customer[]> {
+    try {
+      // First check database
+      const { db } = await import('./db');
+      const { customers } = await import('@shared/schema');
+      const { or, ilike, eq } = await import('drizzle-orm');
+      
+      const dbCustomers = await db.select().from(customers).where(
+        or(
+          ilike(customers.name, name),
+          eq(customers.email, email),
+          eq(customers.phone, phone)
+        )
+      );
+      
+      if (dbCustomers.length > 0) {
+        return dbCustomers;
+      }
+    } catch (error) {
+      console.log('Database not available, checking in-memory storage');
+    }
+    
+    // Fallback to in-memory check
+    const duplicates: Customer[] = [];
+    for (const customer of this.customers.values()) {
+      if (customer.name.toLowerCase() === name.toLowerCase() || 
+          customer.email.toLowerCase() === email.toLowerCase() || 
+          customer.phone === phone) {
+        duplicates.push(customer);
+      }
+    }
+    return duplicates;
   }
 
   // Load operations

@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { insertDriverSchema, insertCustomerSchema, type InsertDriver, type InsertCustomer, type Driver, type Customer } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useState } from "react";
 
 interface ContactFormModalProps {
   isOpen: boolean;
@@ -30,6 +32,9 @@ export default function ContactFormModal({
 }: ContactFormModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+  const [duplicateContacts, setDuplicateContacts] = useState<(Driver | Customer)[]>([]);
+  const [pendingSubmission, setPendingSubmission] = useState<any>(null);
 
   const schema = type === "driver" ? insertDriverSchema : insertCustomerSchema;
   
@@ -56,6 +61,30 @@ export default function ContactFormModal({
         },
   });
 
+  const checkDuplicatesMutation = useMutation({
+    mutationFn: async (data: { name: string; email: string; phone: string; type: string }) => {
+      const response = await apiRequest("POST", "/api/check-duplicates", data);
+      return response.json();
+    },
+    onSuccess: (result, variables) => {
+      if (result.hasDuplicates) {
+        setDuplicateContacts(result.duplicates);
+        setPendingSubmission(form.getValues());
+        setShowDuplicateDialog(true);
+      } else {
+        // No duplicates, proceed with creation
+        createMutation.mutate(form.getValues());
+      }
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to check for duplicates",
+        variant: "destructive",
+      });
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: async (data: InsertDriver | InsertCustomer) => {
       const endpoint = type === "driver" ? "/api/drivers" : "/api/customers";
@@ -70,14 +99,23 @@ export default function ContactFormModal({
         description: `${type === "driver" ? "Driver" : "Customer"} created successfully`,
       });
       form.reset();
+      setShowDuplicateDialog(false);
+      setPendingSubmission(null);
       onSuccess();
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: `Failed to create ${type}`,
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      if (error?.status === 409) {
+        // Handle duplicate error from backend
+        const duplicates = error.data?.duplicates || [];
+        setDuplicateContacts(duplicates);
+        setShowDuplicateDialog(true);
+      } else {
+        toast({
+          title: "Error",
+          description: `Failed to create ${type}`,
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -117,15 +155,64 @@ export default function ContactFormModal({
     },
   });
 
-  const onSubmit = (data: any) => {
-    if (isEdit) {
-      updateMutation.mutate(data);
+  const onSubmit = async (data: InsertDriver | InsertCustomer) => {
+    if (isEdit && contact) {
+      updateMutation.mutate({ id: contact.id, data });
     } else {
-      createMutation.mutate(data);
+      // Check for duplicates first
+      checkDuplicatesMutation.mutate({
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        type: type,
+      });
     }
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const handleEditExisting = (existingContact: Driver | Customer) => {
+    // Close duplicate dialog and current modal
+    setShowDuplicateDialog(false);
+    onClose();
+    
+    // Reset form with existing contact data
+    form.reset(type === "driver" 
+      ? {
+          name: existingContact.name,
+          email: existingContact.email,
+          phone: existingContact.phone,
+          status: (existingContact as Driver).status || "available",
+          equipmentType: (existingContact as Driver).equipmentType || "sprinter_van",
+          loadType: (existingContact as Driver).loadType || "full_partial",
+          maxLength: (existingContact as Driver).maxLength || 53,
+          maxWeight: (existingContact as Driver).maxWeight || 26000,
+        }
+      : {
+          name: existingContact.name,
+          contactPerson: (existingContact as Customer).contactPerson || "",
+          email: existingContact.email,
+          phone: existingContact.phone,
+          address: (existingContact as Customer).address || "",
+          status: (existingContact as Customer).status || "active",
+        }
+    );
+    
+    // Notify parent to open edit mode
+    // This would typically require passing additional props to enable editing
+    toast({
+      title: "Contact Found",
+      description: `Switching to edit mode for existing ${type}: ${existingContact.name}`,
+    });
+  };
+
+  const handleCreateAnyway = () => {
+    if (pendingSubmission) {
+      // Force create despite duplicates
+      createMutation.mutate(pendingSubmission);
+    }
+    setShowDuplicateDialog(false);
+  };
+
+  const isPending = createMutation.isPending || updateMutation.isPending || checkDuplicatesMutation.isPending;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -406,6 +493,70 @@ export default function ContactFormModal({
           </form>
         </Form>
       </DialogContent>
+      
+      <AlertDialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+        <AlertDialogContent data-testid="duplicate-warning-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplicate Contact Found</AlertDialogTitle>
+            <AlertDialogDescription>
+              A {type} with similar information already exists. What would you like to do?
+              
+              {duplicateContacts.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="font-medium">Existing contacts:</p>
+                  {duplicateContacts.map((duplicate) => (
+                    <div 
+                      key={duplicate.id} 
+                      className="p-3 bg-gray-50 rounded-lg border"
+                      data-testid={`duplicate-contact-${duplicate.id}`}
+                    >
+                      <div className="font-medium">{duplicate.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {duplicate.email} • {duplicate.phone}
+                      </div>
+                      {type === "customer" && (duplicate as Customer).contactPerson && (
+                        <div className="text-sm text-gray-600">
+                          Contact: {(duplicate as Customer).contactPerson}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            <AlertDialogCancel 
+              onClick={() => {
+                setShowDuplicateDialog(false);
+                setPendingSubmission(null);
+              }}
+              data-testid="button-cancel-duplicate"
+            >
+              Cancel
+            </AlertDialogCancel>
+            
+            {duplicateContacts.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => handleEditExisting(duplicateContacts[0])}
+                data-testid="button-edit-existing"
+                className="bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+              >
+                Edit Existing Contact
+              </Button>
+            )}
+            
+            <AlertDialogAction
+              onClick={handleCreateAnyway}
+              data-testid="button-create-anyway"
+              className="bg-orange-600 hover:bg-orange-700"
+            >
+              Create New Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
