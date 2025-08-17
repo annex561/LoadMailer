@@ -310,6 +310,11 @@ export default function DriverManagement() {
 
   const onboardedDrivers = drivers.filter(driver => driver.isOnboarded);
   const activeDrivers = onboardedDrivers.filter(driver => driver.status === "available" || driver.status === "on_route");
+  
+  // Debug logging
+  console.log("Raw drivers data:", drivers);
+  console.log("Onboarded drivers:", onboardedDrivers);
+  console.log("Active drivers:", activeDrivers);
 
   if (driversLoading || tokensLoading) {
     return (
