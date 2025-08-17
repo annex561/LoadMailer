@@ -157,7 +157,7 @@ export default function ContactFormModal({
 
   const onSubmit = async (data: InsertDriver | InsertCustomer) => {
     if (isEdit && contact) {
-      updateMutation.mutate({ id: contact.id, data });
+      updateMutation.mutate(data);
     } else {
       // Check for duplicates first
       checkDuplicatesMutation.mutate({

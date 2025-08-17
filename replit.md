@@ -18,6 +18,13 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+**DRIVER AVAILABILITY SYSTEM FIXED (Aug 17, 2025)**
+- FIXED: Driver status update mutation in ContactFormModal now properly saves status changes to database
+- FIXED: Corrected TypeScript error in updateMutation that was preventing status updates
+- ENHANCED: Added debug logging to Telegram service to show when drivers are skipped due to unavailable status
+- VERIFIED: Load matching system correctly excludes unavailable drivers from receiving load offers
+- CONFIRMED: Database updates properly persist driver status changes (available/on_route/unavailable)
+
 **SMS ONBOARDING INFRASTRUCTURE SETUP COMPLETED (Aug 17, 2025)**
 - COMPLETED: Twilio SMS service integration with proper API credentials configured
 - IMPLEMENTED: Real SMS onboarding functionality replacing placeholder logging

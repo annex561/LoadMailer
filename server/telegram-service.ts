@@ -304,7 +304,10 @@ export class TelegramLoadService {
         if (!driver.city) continue;
 
         // Skip unavailable drivers immediately
-        if (driver.status === 'unavailable') continue;
+        if (driver.status === 'unavailable') {
+          console.log(`Skipping driver ${driver.name} - status: ${driver.status}`);
+          continue;
+        }
 
         // Calculate proximity score and distance
         const proximity = await this.calculateDriverProximity(driver, load);
