@@ -35,7 +35,7 @@ class SMSService {
     }
   }
 
-  async sendSMS(message: SMSMessage): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendSMS(message: SMSMessage): Promise<{ success: boolean; messageId?: string; error?: string; isTrialAccount?: boolean }> {
     if (!this.isConfigured || !this.client || !this.fromPhone) {
       return {
         success: false,
@@ -56,8 +56,18 @@ class SMSService {
         success: true,
         messageId: result.sid
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send SMS:', error);
+      
+      // Check if this is a trial account verification error
+      if (error.code === 21608) {
+        return {
+          success: false,
+          error: 'Trial account limitation: Phone number must be verified in Twilio console',
+          isTrialAccount: true
+        };
+      }
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown SMS error'
@@ -65,7 +75,7 @@ class SMSService {
     }
   }
 
-  async sendOnboardingLink(phone: string, onboardingLink: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendOnboardingLink(phone: string, onboardingLink: string): Promise<{ success: boolean; messageId?: string; error?: string; isTrialAccount?: boolean }> {
     const message = `🚛 Welcome to LAMP Logistics!
 
 Complete your driver onboarding here: ${onboardingLink}

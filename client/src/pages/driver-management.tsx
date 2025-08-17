@@ -107,12 +107,23 @@ export default function DriverManagement() {
       smsForm.reset();
       setShowSMSModal(false);
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to send SMS invitation",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      console.error("SMS error:", error);
+      
+      // Check if this is a trial account error
+      if (error.response?.data?.isTrialAccount) {
+        toast({
+          title: "Phone Verification Required",
+          description: "Trial accounts can only send SMS to verified numbers. Please verify this number in your Twilio console or upgrade to a paid account.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.response?.data?.details || "Failed to send SMS invitation",
+          variant: "destructive",
+        });
+      }
     },
   });
 
