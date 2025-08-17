@@ -28,7 +28,7 @@ interface LoadOffer {
 }
 
 interface DispatcherLoad extends LoadWithRelations {
-  offers: LoadOffer[];
+  offers: OfferWithDriver[];
   assignedDriver?: Driver;
 }
 
@@ -54,7 +54,24 @@ export default function DispatcherDashboard() {
           try {
             // Get load offers
             const offersResponse = await fetch(`/api/loads/${load.id}/offers`);
-            const offers: LoadOffer[] = offersResponse.ok ? await offersResponse.json() : [];
+            let offers: OfferWithDriver[] = offersResponse.ok ? await offersResponse.json() : [];
+            
+            // Enhance offers with driver data
+            offers = await Promise.all(
+              offers.map(async (offer) => {
+                try {
+                  if (offer.driverId) {
+                    const driverResponse = await fetch(`/api/drivers/${offer.driverId}`);
+                    const driver = driverResponse.ok ? await driverResponse.json() : undefined;
+                    return { ...offer, driver };
+                  }
+                  return offer;
+                } catch (error) {
+                  console.log('Error fetching driver for offer:', error);
+                  return offer;
+                }
+              })
+            );
             
             // Get assigned driver if load is assigned
             let assignedDriver: Driver | undefined;
@@ -809,7 +826,7 @@ export default function DispatcherDashboard() {
                                   >
                                     {offer.status}
                                   </Badge>
-                                  {offer.status === 'pending' && offer.driver && (
+                                  {offer.status === 'pending' && offer.driverId && (
                                     <Button
                                       size="sm"
                                       className="bg-green-600 hover:bg-green-700 text-white"
