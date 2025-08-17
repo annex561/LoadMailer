@@ -19,6 +19,7 @@ import DispatcherDashboard from "@/pages/dispatcher-dashboard";
 import { MoodTracker } from "@/pages/mood-tracker";
 import GPSTracking from "@/pages/gps-tracking";
 import PredictiveMaintenance from "@/pages/predictive-maintenance";
+import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
 
@@ -38,6 +39,7 @@ function Router() {
       <Route path="/mood-tracker" component={MoodTracker} />
       <Route path="/gps-tracking" component={GPSTracking} />
       <Route path="/predictive-maintenance" component={PredictiveMaintenance} />
+      <Route path="/analytics" component={AnalyticsDashboard} />
       <Route component={NotFound} />
     </Switch>
   );
