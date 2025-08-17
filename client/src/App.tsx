@@ -12,6 +12,8 @@ import Contacts from "@/pages/contacts";
 import Templates from "@/pages/templates";
 import DriverManagement from "@/pages/driver-management";
 import DriverOnboarding from "@/pages/driver-onboarding";
+import DriverDashboard from "@/pages/driver-dashboard";
+import PaymentWorkflow from "@/pages/payment-workflow";
 import ScraperManagement from "@/pages/scraper-management";
 import DispatcherDashboard from "@/pages/dispatcher-dashboard";
 import Sidebar from "@/components/sidebar";
@@ -29,6 +31,7 @@ function Router() {
       <Route path="/driver-management" component={DriverManagement} />
       <Route path="/scrapers" component={ScraperManagement} />
       <Route path="/dispatcher" component={DispatcherDashboard} />
+      <Route path="/payments" component={PaymentWorkflow} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -39,8 +42,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Switch>
-          {/* Standalone onboarding page without sidebar/header */}
+          {/* Standalone driver pages without sidebar/header */}
           <Route path="/driver-onboarding" component={DriverOnboarding} />
+          <Route path="/driver-dashboard" component={DriverDashboard} />
           
           {/* Main app with sidebar layout */}
           <Route>

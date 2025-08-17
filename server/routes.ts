@@ -2156,6 +2156,112 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Driver offer response endpoint
+  app.post('/api/load-offers/:offerId/respond', async (req, res) => {
+    try {
+      const { offerId } = req.params;
+      const { response } = req.body;
+
+      // Update offer status
+      const offer = await storage.getLoadOffer(offerId);
+      if (!offer) {
+        return res.status(404).json({ error: 'Load offer not found' });
+      }
+
+      const updatedOffer = await storage.updateLoadOffer(offerId, {
+        status: response,
+        respondedAt: new Date().toISOString()
+      });
+
+      if (response === 'accepted') {
+        // Assign load to driver
+        await storage.updateLoad(offer.loadId, {
+          status: 'assigned',
+          driverId: offer.driverId
+        });
+
+        // Update driver status
+        await storage.updateDriver(offer.driverId, {
+          status: 'on_route'
+        });
+      }
+
+      res.json(updatedOffer);
+    } catch (error) {
+      console.error('Error responding to load offer:', error);
+      res.status(500).json({ error: 'Failed to respond to load offer' });
+    }
+  });
+
+  // Driver-specific endpoints
+  app.get('/api/drivers/:driverId/offers', async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      const offers = await storage.getDriverOffers(driverId);
+      res.json(offers);
+    } catch (error) {
+      console.error('Error fetching driver offers:', error);
+      res.status(500).json({ error: 'Failed to fetch driver offers' });
+    }
+  });
+
+  // Payment processing endpoints
+  app.get('/api/payments', async (req, res) => {
+    try {
+      const { status } = req.query;
+      const statusFilter = status ? status.toString().split(',') : undefined;
+      const payments = await storage.getPayments(statusFilter);
+      res.json(payments);
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      res.status(500).json({ error: 'Failed to fetch payments' });
+    }
+  });
+
+  app.post('/api/payments/:paymentId/process', async (req, res) => {
+    try {
+      const { paymentId } = req.params;
+      const { amount, notes } = req.body;
+
+      const payment = await storage.updatePayment(paymentId, {
+        status: 'completed',
+        processedAt: new Date().toISOString(),
+        notes
+      });
+
+      res.json(payment);
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      res.status(500).json({ error: 'Failed to process payment' });
+    }
+  });
+
+  app.post('/api/loads/:loadId/generate-payment', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const load = await storage.getLoad(loadId);
+      
+      if (!load || !load.driverId) {
+        return res.status(400).json({ error: 'Invalid load or no driver assigned' });
+      }
+
+      const driverRate = (load.rate || 0) * 0.9; // Drivers get 90%
+      
+      const payment = await storage.createPayment({
+        loadId,
+        driverId: load.driverId,
+        amount: driverRate,
+        status: 'pending',
+        documents: []
+      });
+
+      res.json(payment);
+    } catch (error) {
+      console.error('Error generating payment:', error);
+      res.status(500).json({ error: 'Failed to generate payment' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

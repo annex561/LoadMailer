@@ -1,172 +1,556 @@
-import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
-import { useLocation } from "wouter";
-import { driverOnboardingSchema, type DriverOnboarding } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Truck, MapPin, Shield, CheckCircle, MessageSquare, ExternalLink } from "lucide-react";
+import { useState } from 'react';
+import { useLocation } from 'wouter';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useToast } from '@/hooks/use-toast';
+
+import { apiRequest } from '@/lib/queryClient';
+import { Truck, User, Phone, Mail, MapPin, Shield, CreditCard, CheckCircle } from 'lucide-react';
+
+interface OnboardingData {
+  // Personal Information
+  name: string;
+  email: string;
+  phone: string;
+  emergencyContact: string;
+  emergencyPhone: string;
+  city: string;
+  
+  // License & Documentation
+  licenseNumber: string;
+  licenseState: string;
+  licenseExpiry: string;
+  medicalCertExpiry: string;
+  
+  // Equipment Information
+  equipmentType: string;
+  weightCapacity: number;
+  vehicleYear: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vinNumber: string;
+  
+  // Insurance & Banking
+  insuranceProvider: string;
+  insurancePolicyNumber: string;
+  insuranceExpiry: string;
+  bankName: string;
+  routingNumber: string;
+  accountNumber: string;
+  
+  // Preferences
+  enableTelegramNotifications: boolean;
+  telegramUsername: string;
+  preferredLanes: string[];
+  avoidAreas: string[];
+}
+
+const EQUIPMENT_TYPES = [
+  { value: 'sprinter_van', label: 'Sprinter Van' },
+  { value: 'van_lift_gate', label: 'Van with Lift Gate' },
+  { value: 'van_hotshot', label: 'Van Hotshot' },
+  { value: 'straight_box_truck', label: 'Straight Box Truck' },
+  { value: 'moving_van', label: 'Moving Van' },
+  { value: 'flatbed_hotshot', label: 'Flatbed Hotshot' },
+  { value: 'van', label: 'Standard Van' }
+];
+
+const US_STATES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
+];
 
 export default function DriverOnboarding() {
-  const [location] = useLocation();
-  const { toast } = useToast();
-  const [token, setToken] = useState<string>("");
-  const [isTokenValid, setIsTokenValid] = useState<boolean | null>(null);
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [testLoadSent, setTestLoadSent] = useState(false);
-
-  const form = useForm<DriverOnboarding>({
-    resolver: zodResolver(driverOnboardingSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
-      licenseNumber: "",
-      emergencyContact: "",
-      emergencyPhone: "",
-      confirmPassword: "",
-      telegramId: "",
-      telegramUsername: "",
-      city: "",
-      enableTelegramNotifications: false,
-    },
+  const [currentStep, setCurrentStep] = useState(0);
+  const [formData, setFormData] = useState<OnboardingData>({
+    name: '',
+    email: '',
+    phone: '',
+    emergencyContact: '',
+    emergencyPhone: '',
+    city: '',
+    licenseNumber: '',
+    licenseState: '',
+    licenseExpiry: '',
+    medicalCertExpiry: '',
+    equipmentType: '',
+    weightCapacity: 26000,
+    vehicleYear: '',
+    vehicleMake: '',
+    vehicleModel: '',
+    vinNumber: '',
+    insuranceProvider: '',
+    insurancePolicyNumber: '',
+    insuranceExpiry: '',
+    bankName: '',
+    routingNumber: '',
+    accountNumber: '',
+    enableTelegramNotifications: true,
+    telegramUsername: '',
+    preferredLanes: [],
+    avoidAreas: []
   });
 
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tokenFromUrl = urlParams.get('token');
-    if (tokenFromUrl) {
-      setToken(tokenFromUrl);
-      validateToken(tokenFromUrl);
-    }
-  }, [location]);
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const validateToken = async (tokenValue: string) => {
-    try {
-      const response = await apiRequest("POST", "/api/validate-onboarding-token", { token: tokenValue });
-      const data = await response.json();
-      if (data.valid) {
-        setIsTokenValid(true);
-        form.setValue("email", data.email);
-      } else {
-        setIsTokenValid(false);
-      }
-    } catch (error) {
-      setIsTokenValid(false);
-    }
-  };
+  const steps = [
+    { title: 'Personal Info', icon: User },
+    { title: 'License & Docs', icon: Shield },
+    { title: 'Equipment', icon: Truck },
+    { title: 'Insurance & Banking', icon: CreditCard },
+    { title: 'Preferences', icon: MapPin },
+    { title: 'Complete', icon: CheckCircle }
+  ];
 
-  const onboardingMutation = useMutation({
-    mutationFn: async (data: DriverOnboarding) => {
-      const response = await apiRequest("POST", "/api/driver-onboarding", {
-        ...data,
-        token,
+  const onboardDriverMutation = useMutation({
+    mutationFn: async (data: OnboardingData) => {
+      const response = await fetch('/api/drivers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...data,
+          status: 'available',
+          isOnboarded: true
+        })
       });
+      if (!response.ok) throw new Error('Failed to create driver');
       return response.json();
     },
-    onSuccess: async (result) => {
-      setIsSubmitted(true);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/drivers'] });
       toast({
-        title: "Welcome to LoadMaster!",
-        description: "Your driver account has been created successfully",
+        title: 'Driver onboarded successfully!',
+        description: 'Welcome to LoadMaster. You can now receive load offers.'
       });
-      
-      // If Telegram notifications are enabled, send test load
-      if (form.getValues("enableTelegramNotifications") && form.getValues("telegramId")) {
-        try {
-          await apiRequest("POST", "/api/driver-test-load", { driverId: result.driver.id });
-          setTestLoadSent(true);
-        } catch (error) {
-          console.error("Failed to send test load:", error);
-        }
-      }
+      setCurrentStep(5); // Complete step
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
-        title: "Error",
-        description: "Failed to complete onboarding. Please try again.",
-        variant: "destructive",
+        title: 'Onboarding failed',
+        description: error.message || 'Please check your information and try again.',
+        variant: 'destructive'
       });
-    },
+    }
   });
 
-  const onSubmit = (data: DriverOnboarding) => {
-    onboardingMutation.mutate(data);
+  const updateFormData = (field: keyof OnboardingData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  if (isTokenValid === null) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-pulse">
-          <Card className="w-96">
-            <CardContent className="p-6">
-              <div className="h-20 bg-gray-200 rounded"></div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  const nextStep = () => {
+    if (currentStep < steps.length - 1) {
+      setCurrentStep(prev => prev + 1);
+    }
+  };
 
-  if (isTokenValid === false) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="w-96">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-destructive bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Shield className="text-destructive w-8 h-8" />
-            </div>
-            <CardTitle className="text-destructive">Invalid Link</CardTitle>
-            <CardDescription>
-              This onboarding link is invalid or has expired. Please contact your fleet manager for a new link.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
+  const prevStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(prev => prev - 1);
+    }
+  };
 
-  if (isSubmitted) {
+  const handleSubmit = () => {
+    onboardDriverMutation.mutate(formData);
+  };
+
+  const isStepValid = () => {
+    switch (currentStep) {
+      case 0: // Personal Info
+        return formData.name && formData.email && formData.phone && formData.city;
+      case 1: // License & Docs
+        return formData.licenseNumber && formData.licenseState && formData.licenseExpiry;
+      case 2: // Equipment
+        return formData.equipmentType && formData.vehicleYear && formData.vehicleMake;
+      case 3: // Insurance & Banking
+        return formData.insuranceProvider && formData.bankName && formData.routingNumber;
+      case 4: // Preferences
+        return true; // Optional step
+      default:
+        return true;
+    }
+  };
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 0: // Personal Information
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => updateFormData('name', e.target.value)}
+                  placeholder="John Doe"
+                  data-testid="input-driver-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => updateFormData('email', e.target.value)}
+                  placeholder="john@example.com"
+                  data-testid="input-driver-email"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number *</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => updateFormData('phone', e.target.value)}
+                  placeholder="(555) 123-4567"
+                  data-testid="input-driver-phone"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city">Home Base City *</Label>
+                <Input
+                  id="city"
+                  value={formData.city}
+                  onChange={(e) => updateFormData('city', e.target.value)}
+                  placeholder="Atlanta, GA"
+                  data-testid="input-driver-city"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="emergencyContact">Emergency Contact Name</Label>
+                <Input
+                  id="emergencyContact"
+                  value={formData.emergencyContact}
+                  onChange={(e) => updateFormData('emergencyContact', e.target.value)}
+                  placeholder="Jane Doe"
+                  data-testid="input-emergency-contact"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="emergencyPhone">Emergency Contact Phone</Label>
+                <Input
+                  id="emergencyPhone"
+                  value={formData.emergencyPhone}
+                  onChange={(e) => updateFormData('emergencyPhone', e.target.value)}
+                  placeholder="(555) 987-6543"
+                  data-testid="input-emergency-phone"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 1: // License & Documentation
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="licenseNumber">CDL License Number *</Label>
+                <Input
+                  id="licenseNumber"
+                  value={formData.licenseNumber}
+                  onChange={(e) => updateFormData('licenseNumber', e.target.value)}
+                  placeholder="DL12345678"
+                  data-testid="input-license-number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="licenseState">License State *</Label>
+                <Select value={formData.licenseState} onValueChange={(value) => updateFormData('licenseState', value)}>
+                  <SelectTrigger className="bg-white border border-gray-300" data-testid="select-license-state">
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                    {US_STATES.map(state => (
+                      <SelectItem key={state} value={state}>{state}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="licenseExpiry">License Expiry Date *</Label>
+                <Input
+                  id="licenseExpiry"
+                  type="date"
+                  value={formData.licenseExpiry}
+                  onChange={(e) => updateFormData('licenseExpiry', e.target.value)}
+                  data-testid="input-license-expiry"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="medicalCertExpiry">Medical Certificate Expiry</Label>
+                <Input
+                  id="medicalCertExpiry"
+                  type="date"
+                  value={formData.medicalCertExpiry}
+                  onChange={(e) => updateFormData('medicalCertExpiry', e.target.value)}
+                  data-testid="input-medical-cert-expiry"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 2: // Equipment Information
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="equipmentType">Equipment Type *</Label>
+                <Select value={formData.equipmentType} onValueChange={(value) => updateFormData('equipmentType', value)}>
+                  <SelectTrigger className="bg-white border border-gray-300" data-testid="select-equipment-type">
+                    <SelectValue placeholder="Select equipment type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                    {EQUIPMENT_TYPES.map(type => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="weightCapacity">Weight Capacity (lbs)</Label>
+                <Input
+                  id="weightCapacity"
+                  type="number"
+                  value={formData.weightCapacity}
+                  onChange={(e) => updateFormData('weightCapacity', parseInt(e.target.value) || 0)}
+                  placeholder="26000"
+                  data-testid="input-weight-capacity"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="vehicleYear">Vehicle Year *</Label>
+                <Input
+                  id="vehicleYear"
+                  value={formData.vehicleYear}
+                  onChange={(e) => updateFormData('vehicleYear', e.target.value)}
+                  placeholder="2020"
+                  data-testid="input-vehicle-year"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="vehicleMake">Vehicle Make *</Label>
+                <Input
+                  id="vehicleMake"
+                  value={formData.vehicleMake}
+                  onChange={(e) => updateFormData('vehicleMake', e.target.value)}
+                  placeholder="Ford"
+                  data-testid="input-vehicle-make"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="vehicleModel">Vehicle Model</Label>
+                <Input
+                  id="vehicleModel"
+                  value={formData.vehicleModel}
+                  onChange={(e) => updateFormData('vehicleModel', e.target.value)}
+                  placeholder="Transit"
+                  data-testid="input-vehicle-model"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="vinNumber">VIN Number</Label>
+              <Input
+                id="vinNumber"
+                value={formData.vinNumber}
+                onChange={(e) => updateFormData('vinNumber', e.target.value)}
+                placeholder="1FDKF37G1VEB12345"
+                data-testid="input-vin-number"
+              />
+            </div>
+          </div>
+        );
+
+      case 3: // Insurance & Banking
+        return (
+          <div className="space-y-6">
+            <div>
+              <h4 className="font-medium mb-3">Insurance Information</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="insuranceProvider">Insurance Provider *</Label>
+                  <Input
+                    id="insuranceProvider"
+                    value={formData.insuranceProvider}
+                    onChange={(e) => updateFormData('insuranceProvider', e.target.value)}
+                    placeholder="Progressive Commercial"
+                    data-testid="input-insurance-provider"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="insurancePolicyNumber">Policy Number</Label>
+                  <Input
+                    id="insurancePolicyNumber"
+                    value={formData.insurancePolicyNumber}
+                    onChange={(e) => updateFormData('insurancePolicyNumber', e.target.value)}
+                    placeholder="POL-12345678"
+                    data-testid="input-insurance-policy"
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <Label htmlFor="insuranceExpiry">Insurance Expiry Date</Label>
+                <Input
+                  id="insuranceExpiry"
+                  type="date"
+                  value={formData.insuranceExpiry}
+                  onChange={(e) => updateFormData('insuranceExpiry', e.target.value)}
+                  className="w-48"
+                  data-testid="input-insurance-expiry"
+                />
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-3">Banking Information</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bankName">Bank Name *</Label>
+                  <Input
+                    id="bankName"
+                    value={formData.bankName}
+                    onChange={(e) => updateFormData('bankName', e.target.value)}
+                    placeholder="Bank of America"
+                    data-testid="input-bank-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="routingNumber">Routing Number *</Label>
+                  <Input
+                    id="routingNumber"
+                    value={formData.routingNumber}
+                    onChange={(e) => updateFormData('routingNumber', e.target.value)}
+                    placeholder="021000021"
+                    data-testid="input-routing-number"
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <Label htmlFor="accountNumber">Account Number</Label>
+                <Input
+                  id="accountNumber"
+                  value={formData.accountNumber}
+                  onChange={(e) => updateFormData('accountNumber', e.target.value)}
+                  placeholder="1234567890"
+                  data-testid="input-account-number"
+                />
+              </div>
+            </div>
+          </div>
+        );
+
+      case 4: // Preferences
+        return (
+          <div className="space-y-4">
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="telegramNotifications"
+                  checked={formData.enableTelegramNotifications}
+                  onCheckedChange={(checked) => updateFormData('enableTelegramNotifications', checked)}
+                  data-testid="checkbox-telegram-notifications"
+                />
+                <Label htmlFor="telegramNotifications">Enable Telegram notifications for load offers</Label>
+              </div>
+
+              {formData.enableTelegramNotifications && (
+                <div className="space-y-2">
+                  <Label htmlFor="telegramUsername">Telegram Username (optional)</Label>
+                  <Input
+                    id="telegramUsername"
+                    value={formData.telegramUsername}
+                    onChange={(e) => updateFormData('telegramUsername', e.target.value)}
+                    placeholder="@johndoe"
+                    data-testid="input-telegram-username"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="preferredLanes">Preferred Lanes (optional)</Label>
+              <Textarea
+                id="preferredLanes"
+                value={formData.preferredLanes.join('\n')}
+                onChange={(e) => updateFormData('preferredLanes', e.target.value.split('\n').filter(Boolean))}
+                placeholder="Atlanta to Miami&#10;Charlotte to Jacksonville"
+                className="bg-white border border-gray-300"
+                data-testid="textarea-preferred-lanes"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="avoidAreas">Areas to Avoid (optional)</Label>
+              <Textarea
+                id="avoidAreas"
+                value={formData.avoidAreas.join('\n')}
+                onChange={(e) => updateFormData('avoidAreas', e.target.value.split('\n').filter(Boolean))}
+                placeholder="New York City&#10;Downtown LA"
+                className="bg-white border border-gray-300"
+                data-testid="textarea-avoid-areas"
+              />
+            </div>
+          </div>
+        );
+
+      case 5: // Complete
+        return (
+          <div className="text-center space-y-4">
+            <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
+            <h3 className="text-2xl font-bold text-green-600">Onboarding Complete!</h3>
+            <p className="text-muted-foreground">
+              Welcome to LoadMaster! Your driver profile has been created successfully. 
+              You can now start receiving load offers based on your equipment type and location.
+            </p>
+            <div className="flex gap-4 justify-center">
+              <Button onClick={() => setLocation('/driver-dashboard')} data-testid="button-go-to-dashboard">
+                Go to Driver Dashboard
+              </Button>
+              <Button variant="outline" onClick={() => setLocation('/')} data-testid="button-go-home">
+                Back to Home
+              </Button>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  if (currentStep === 5) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="w-96">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 bg-success bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="text-success w-8 h-8" />
-            </div>
-            <CardTitle className="text-success">Welcome Aboard!</CardTitle>
-            <CardDescription>
-              Your driver account has been created successfully. 
-              {testLoadSent ? "A test load has been sent to your Telegram - please respond to activate your account!" : "You'll start receiving load assignments soon."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-medium text-blue-900 mb-2">Next Steps:</h4>
-              <ul className="text-sm text-blue-800 space-y-1">
-                {testLoadSent ? (
-                  <>
-                    <li>• Check your Telegram for a test load notification</li>
-                    <li>• Reply to the test load to activate your account</li>
-                    <li>• Once activated, you'll receive loads near your location</li>
-                    <li>• Keep your phone's location services enabled</li>
-                  </>
-                ) : (
-                  <>
-                    <li>• Check your email for login credentials</li>
-                    <li>• Download the LoadMaster mobile app</li>
-                    <li>• Keep your phone's location services enabled</li>
-                    <li>• Wait for your first load assignment</li>
-                  </>
-                )}
-              </ul>
-            </div>
+      <div className="container max-w-2xl mx-auto p-6">
+        <Card>
+          <CardContent className="p-8">
+            {renderStepContent()}
           </CardContent>
         </Card>
       </div>
@@ -174,316 +558,81 @@ export default function DriverOnboarding() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-2xl mx-auto px-4">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-primary bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Truck className="text-primary w-8 h-8" />
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">Welcome to LoadMaster</h1>
-          <p className="text-gray-600 mt-2">Complete your driver onboarding to start receiving loads</p>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Driver Information</CardTitle>
-            <CardDescription>
-              Please provide your details to complete the onboarding process
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" data-testid="driver-onboarding-form">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Full Name</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="John Doe"
-                            data-testid="input-driver-name"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email Address</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            type="email"
-                            placeholder="john@example.com"
-                            disabled
-                            data-testid="input-driver-email"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone Number</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="(555) 123-4567"
-                            data-testid="input-driver-phone"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="licenseNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>License Number</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            value={field.value || ""}
-                            placeholder="DL123456789"
-                            data-testid="input-license-number"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="emergencyContact"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Emergency Contact Name</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            value={field.value || ""}
-                            placeholder="Jane Doe"
-                            data-testid="input-emergency-contact"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="emergencyPhone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Emergency Contact Phone</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            value={field.value || ""}
-                            placeholder="(555) 987-6543"
-                            data-testid="input-emergency-phone"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="city"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Current City</FormLabel>
-                        <FormControl>
-                          <Input 
-                            {...field} 
-                            placeholder="Atlanta, GA"
-                            data-testid="input-driver-city"
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Used for matching loads near your location
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {/* Telegram Integration Section */}
-                <Card className="border border-blue-200 bg-blue-50">
-                  <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <MessageSquare className="w-5 h-5 text-blue-600" />
-                      Telegram Load Notifications
-                    </CardTitle>
-                    <CardDescription>
-                      Receive instant load offers via Telegram for faster response times
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="enableTelegramNotifications"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-telegram-notifications"
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel>
-                              Enable Telegram notifications for load offers
-                            </FormLabel>
-                            <FormDescription>
-                              Get instant notifications and respond to loads faster via Telegram
-                            </FormDescription>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-
-                    {form.watch("enableTelegramNotifications") && (
-                      <div className="space-y-4 pt-4 border-t border-blue-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="telegramId"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Telegram ID</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    {...field} 
-                                    value={field.value || ""}
-                                    placeholder="123456789"
-                                    data-testid="input-telegram-id"
-                                  />
-                                </FormControl>
-                                <FormDescription>
-                                  Your unique Telegram user ID number
-                                </FormDescription>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name="telegramUsername"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Telegram Username</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    {...field} 
-                                    value={field.value || ""}
-                                    placeholder="@yourusername"
-                                    data-testid="input-telegram-username"
-                                  />
-                                </FormControl>
-                                <FormDescription>
-                                  Your Telegram username (optional)
-                                </FormDescription>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
-                        {(!form.watch("telegramId") || !form.watch("telegramUsername")) && (
-                          <div className="bg-white border border-blue-300 rounded-lg p-4">
-                            <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
-                              <MessageSquare className="w-4 h-4" />
-                              Don't have Telegram yet?
-                            </h4>
-                            <p className="text-sm text-blue-800 mb-3">
-                              Telegram is a free messaging app that allows you to receive instant load notifications. Create your account and come back to complete your setup.
-                            </p>
-                            <div className="flex flex-col sm:flex-row gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-2"
-                                onClick={() => window.open("https://telegram.org/", "_blank")}
-                                data-testid="button-create-telegram"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                                Create Telegram Account
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-2"
-                                onClick={() => window.open("https://t.me/userinfobot", "_blank")}
-                                data-testid="button-get-telegram-id"
-                              >
-                                <MessageSquare className="w-4 h-4" />
-                                Get Your Telegram ID
-                              </Button>
-                            </div>
-                            <p className="text-xs text-blue-700 mt-2">
-                              After creating your account, use @userinfobot to find your Telegram ID, then return here to complete setup.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="flex items-start space-x-3">
-                    <MapPin className="text-yellow-600 w-5 h-5 mt-0.5" />
-                    <div>
-                      <h4 className="font-medium text-yellow-800">Location Tracking</h4>
-                      <p className="text-sm text-yellow-700 mt-1">
-                        By completing this onboarding, you agree to share your location with LoadMaster for load tracking and safety purposes. Location data is only used during active loads and for emergency situations.
-                      </p>
+    <div className="container max-w-4xl mx-auto p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Driver Onboarding</CardTitle>
+          <CardDescription>
+            Complete your driver profile to start receiving load offers
+          </CardDescription>
+          
+          {/* Progress Stepper */}
+          <div className="flex items-center justify-between mt-6">
+            {steps.slice(0, -1).map((step, index) => {
+              const Icon = step.icon;
+              const isActive = index === currentStep;
+              const isCompleted = index < currentStep;
+              
+              return (
+                <div key={index} className="flex items-center">
+                  <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
+                    isCompleted ? 'bg-green-500 border-green-500 text-white' :
+                    isActive ? 'bg-blue-500 border-blue-500 text-white' :
+                    'bg-gray-100 border-gray-300 text-gray-400'
+                  }`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="ml-2 hidden sm:block">
+                    <div className={`text-sm font-medium ${
+                      isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                    }`}>
+                      {step.title}
                     </div>
                   </div>
+                  {index < steps.length - 2 && (
+                    <div className={`w-8 h-0.5 mx-4 ${
+                      isCompleted ? 'bg-green-500' : 'bg-gray-300'
+                    }`} />
+                  )}
                 </div>
+              );
+            })}
+          </div>
+        </CardHeader>
 
-                <div className="flex justify-end pt-6 border-t border-gray-200">
-                  <Button 
-                    type="submit" 
-                    disabled={onboardingMutation.isPending}
-                    className="bg-primary text-white hover:bg-blue-700 px-8"
-                    data-testid="button-complete-onboarding"
-                  >
-                    {onboardingMutation.isPending ? "Completing..." : "Complete Onboarding"}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      </div>
+        <CardContent className="space-y-6">
+          {renderStepContent()}
+
+          <div className="flex justify-between pt-6">
+            <Button
+              variant="outline"
+              onClick={prevStep}
+              disabled={currentStep === 0}
+              data-testid="button-previous-step"
+            >
+              Previous
+            </Button>
+
+            {currentStep < steps.length - 2 ? (
+              <Button
+                onClick={nextStep}
+                disabled={!isStepValid()}
+                data-testid="button-next-step"
+              >
+                Next
+              </Button>
+            ) : (
+              <Button
+                onClick={handleSubmit}
+                disabled={!isStepValid() || onboardDriverMutation.isPending}
+                data-testid="button-complete-onboarding"
+              >
+                {onboardDriverMutation.isPending ? 'Completing...' : 'Complete Onboarding'}
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
