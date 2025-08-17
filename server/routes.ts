@@ -13,9 +13,13 @@ import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmail
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
+import { DatabaseOnboardingTokenService } from "./db-storage";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
 import smsService from "./sms-service";
+
+// Initialize database-backed token service
+const dbTokenService = new DatabaseOnboardingTokenService();
 
 // Email service configuration
 const transporter = nodemailer.createTransport({
@@ -1255,10 +1259,12 @@ Safe travels! 🚛`;
       };
       
       const validatedData = insertOnboardingTokenSchema.parse(tokenData);
-      const onboardingToken = await storage.createOnboardingToken(validatedData);
+      // Use database service instead of in-memory storage
+      const onboardingToken = await dbTokenService.createOnboardingToken(validatedData);
       
       res.status(201).json(onboardingToken);
     } catch (error) {
+      console.error("Error creating onboarding token:", error);
       res.status(400).json({ error: "Failed to create onboarding invitation" });
     }
   });
@@ -1283,7 +1289,8 @@ Safe travels! 🚛`;
       };
       
       const validatedData = insertOnboardingTokenSchema.parse(tokenData);
-      const onboardingToken = await storage.createOnboardingToken(validatedData);
+      // Use database service instead of in-memory storage
+      const onboardingToken = await dbTokenService.createOnboardingToken(validatedData);
       
       // Create the onboarding link
       const onboardingLink = `${req.protocol}://${req.hostname}/driver-onboarding?token=${token}`;
@@ -1498,22 +1505,11 @@ Safe travels! 🚛`;
         return res.status(400).json({ error: "Token is required" });
       }
       
-      const onboardingToken = await storage.getOnboardingToken(token);
-      
-      if (!onboardingToken) {
-        return res.json({ valid: false, error: "Token not found" });
-      }
-      
-      if (onboardingToken.isUsed) {
-        return res.json({ valid: false, error: "Token already used" });
-      }
-      
-      if (new Date(onboardingToken.expiresAt) < new Date()) {
-        return res.json({ valid: false, error: "Token expired" });
-      }
-      
-      res.json({ valid: true, email: onboardingToken.email });
+      // Use database service for validation
+      const validation = await dbTokenService.validateToken(token);
+      res.json(validation);
     } catch (error) {
+      console.error("Error validating token:", error);
       res.status(500).json({ error: "Failed to validate token" });
     }
   });
@@ -1526,11 +1522,27 @@ Safe travels! 🚛`;
         return res.status(400).json({ error: "Token is required" });
       }
       
+      // Validate token using database service
+      const validation = await dbTokenService.validateToken(token);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+      }
+      
       const validatedData = driverOnboardingSchema.parse(driverData);
-      const driver = await storage.completeDriverOnboarding(validatedData, token);
+      
+      // Create driver using database service
+      const driver = await dbTokenService.createDriver({
+        ...validatedData,
+        isOnboarded: true,
+        createdAt: new Date()
+      });
+      
+      // Mark token as used
+      await dbTokenService.markTokenAsUsed(token);
       
       res.status(201).json(driver);
     } catch (error) {
+      console.error("Error completing driver onboarding:", error);
       res.status(400).json({ error: error instanceof Error ? error.message : "Failed to complete onboarding" });
     }
   });
@@ -1565,9 +1577,11 @@ Safe travels! 🚛`;
 
   app.get("/api/onboarding-tokens", async (req, res) => {
     try {
-      const tokens = await storage.getAllOnboardingTokens();
+      // Use database service instead of in-memory storage
+      const tokens = await dbTokenService.getAllOnboardingTokens();
       res.json(tokens);
     } catch (error) {
+      console.error("Error fetching onboarding tokens:", error);
       res.status(500).json({ error: "Failed to fetch onboarding tokens" });
     }
   });
