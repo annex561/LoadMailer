@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle } from "lucide-react";
+import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle, Trash2, AlertTriangle } from "lucide-react";
 import type { Driver, OnboardingToken } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -30,6 +31,7 @@ export default function DriverManagement() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string>("");
+  const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -124,6 +126,28 @@ export default function DriverManagement() {
           variant: "destructive",
         });
       }
+    },
+  });
+
+  const deleteDriverMutation = useMutation({
+    mutationFn: async (driverId: string) => {
+      const response = await apiRequest("DELETE", `/api/drivers/${driverId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/drivers"] });
+      toast({
+        title: "Driver Removed",
+        description: "Driver has been successfully removed from your fleet",
+      });
+      setDriverToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove driver",
+        variant: "destructive",
+      });
     },
   });
 
@@ -239,8 +263,11 @@ export default function DriverManagement() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Current Drivers</CardTitle>
-                <p className="text-sm text-gray-500">Onboarded and active drivers</p>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  Current Drivers
+                </CardTitle>
+                <p className="text-sm text-gray-500">Manage your active driver fleet</p>
               </div>
               <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
                 <DialogTrigger asChild>
@@ -322,6 +349,49 @@ export default function DriverManagement() {
                     <Button variant="ghost" size="sm" title="View Location">
                       <MapPin className="w-4 h-4 text-blue-600" />
                     </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          title="Remove Driver"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          data-testid={`button-delete-driver-${driver.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="bg-white border border-gray-300 shadow-lg">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-red-600" />
+                            Remove Driver
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to remove <strong>{driver.name}</strong> from your fleet? 
+                            This action cannot be undone and will:
+                            <ul className="list-disc list-inside mt-2 space-y-1">
+                              <li>Remove the driver from all future load offers</li>
+                              <li>Delete their profile and contact information</li>
+                              <li>Remove access to the driver portal</li>
+                            </ul>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="bg-white border border-gray-300">
+                            Cancel
+                          </AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteDriverMutation.mutate(driver.id)}
+                            disabled={deleteDriverMutation.isPending}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                            data-testid={`button-confirm-delete-${driver.id}`}
+                          >
+                            {deleteDriverMutation.isPending ? "Removing..." : "Remove Driver"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </div>
               ))}
@@ -335,13 +405,16 @@ export default function DriverManagement() {
           </CardContent>
         </Card>
 
-        {/* Create New Driver via SMS */}
+        {/* Add New Drivers */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Create New Driver</CardTitle>
-                <p className="text-sm text-gray-500">Send SMS onboarding link</p>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-green-600" />
+                  Add New Drivers
+                </CardTitle>
+                <p className="text-sm text-gray-500">Invite drivers via email or SMS</p>
               </div>
               <Dialog open={showSMSModal} onOpenChange={setShowSMSModal}>
                 <DialogTrigger asChild>
@@ -431,22 +504,66 @@ export default function DriverManagement() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-8">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <MessageCircle className="text-green-600 w-8 h-8" />
+            <div className="space-y-4">
+              {/* Email Invitation Option */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Send className="text-blue-600 w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">Email Invitation</h4>
+                    <p className="text-sm text-gray-500 mb-3">
+                      Send a secure onboarding link via email
+                    </p>
+                    <Button 
+                      onClick={() => setShowInviteModal(true)}
+                      className="bg-primary text-white hover:bg-blue-700"
+                      size="sm"
+                      data-testid="button-email-invite"
+                    >
+                      <Send className="mr-2 w-4 h-4" />
+                      Send Email Invite
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Quick Driver Onboarding</h3>
-              <p className="text-gray-500 mb-4 max-w-xs mx-auto">
-                Send a text message with an onboarding link to instantly add new drivers to your fleet.
-              </p>
-              <Button 
-                onClick={() => setShowSMSModal(true)}
-                className="bg-green-600 text-white hover:bg-green-700"
-                data-testid="button-open-sms-modal"
-              >
-                <MessageCircle className="mr-2 w-4 h-4" />
-                Create New Driver
-              </Button>
+
+              {/* SMS Invitation Option */}
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                    <MessageCircle className="text-green-600 w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-900">SMS Invitation</h4>
+                    <p className="text-sm text-gray-500 mb-3">
+                      Send instant text message with onboarding link
+                    </p>
+                    <Button 
+                      onClick={() => setShowSMSModal(true)}
+                      className="bg-green-600 text-white hover:bg-green-700"
+                      size="sm"
+                      data-testid="button-sms-invite"
+                    >
+                      <MessageCircle className="mr-2 w-4 h-4" />
+                      Send SMS Invite
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <AlertTriangle className="text-amber-600 w-5 h-5 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-amber-800">Important</h4>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Both methods create secure onboarding links that expire in 7 days. Drivers complete their profile and start receiving load offers automatically.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -454,8 +571,11 @@ export default function DriverManagement() {
         {/* Pending Invitations */}
         <Card>
           <CardHeader>
-            <CardTitle>Pending Invitations</CardTitle>
-            <p className="text-sm text-gray-500">Sent onboarding invites</p>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-warning" />
+              Pending Invitations
+            </CardTitle>
+            <p className="text-sm text-gray-500">Track sent onboarding invites</p>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
