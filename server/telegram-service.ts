@@ -927,7 +927,9 @@ ${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n
         }
         
         // Send the booking confirmation message
-        const confirmationMessage = `✅ *LOAD BOOKED SUCCESSFULLY*
+        const confirmationMessage = `🎉 🎊 CONGRATULATION 🎉 🎊 YOUR Bid WAS ACCEPTED!!!
+
+✅ *LOAD BOOKED SUCCESSFULLY*
 
 Your load has been booked. Please start planning your trip and heading to your pick up location.
 
