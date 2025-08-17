@@ -603,6 +603,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Dispatcher-specific endpoints
+  // Get load offers for a specific load
+  app.get('/api/loads/:id/offers', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const offers = await storage.getLoadOffers(id);
+      res.json(offers);
+    } catch (error) {
+      console.error('Error fetching load offers:', error);
+      res.status(500).json({ error: 'Failed to fetch load offers' });
+    }
+  });
+
+  // Update load status and details (PATCH for partial updates)
+  app.patch('/api/loads/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const updatedLoad = await storage.updateLoad(id, updates);
+      if (!updatedLoad) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      res.json(updatedLoad);
+    } catch (error) {
+      console.error('Error updating load:', error);
+      res.status(500).json({ error: 'Failed to update load' });
+    }
+  });
+
+  // Assign driver to load
+  app.post('/api/loads/:id/assign', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { driverId } = req.body;
+      
+      const updatedLoad = await storage.updateLoad(id, { 
+        driverId, 
+        status: 'assigned' 
+      });
+      
+      if (!updatedLoad) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      res.json(updatedLoad);
+    } catch (error) {
+      console.error('Error assigning driver:', error);
+      res.status(500).json({ error: 'Failed to assign driver' });
+    }
+  });
+
+  // Add notes to load
+  app.post('/api/loads/:id/notes', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { notes } = req.body;
+      
+      // Add notes to special instructions or create a notes field
+      const load = await storage.getLoad(id);
+      if (!load) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      const timestamp = new Date().toLocaleString();
+      const newNote = `[${timestamp}] Dispatcher Notes: ${notes}`;
+      
+      const updatedInstructions = load.specialInstructions 
+        ? `${load.specialInstructions}\n\n${newNote}`
+        : newNote;
+      
+      const updatedLoad = await storage.updateLoad(id, { 
+        specialInstructions: updatedInstructions 
+      });
+      
+      res.json(updatedLoad);
+    } catch (error) {
+      console.error('Error adding notes:', error);
+      res.status(500).json({ error: 'Failed to add notes' });
+    }
+  });
+
   // Email template routes
   app.get("/api/email-templates", async (req, res) => {
     try {

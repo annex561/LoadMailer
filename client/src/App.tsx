@@ -13,6 +13,7 @@ import Templates from "@/pages/templates";
 import DriverManagement from "@/pages/driver-management";
 import DriverOnboarding from "@/pages/driver-onboarding";
 import ScraperManagement from "@/pages/scraper-management";
+import DispatcherDashboard from "@/pages/dispatcher-dashboard";
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
 
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/templates" component={Templates} />
       <Route path="/driver-management" component={DriverManagement} />
       <Route path="/scrapers" component={ScraperManagement} />
+      <Route path="/dispatcher" component={DispatcherDashboard} />
       <Route component={NotFound} />
     </Switch>
   );

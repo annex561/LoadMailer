@@ -123,6 +123,7 @@ export interface IStorage {
   // Load offer operations
   getLoadOffer(id: string): Promise<LoadOffer | undefined>;
   getAllLoadOffers(): Promise<LoadOffer[]>;
+  getLoadOffers(loadId: string): Promise<LoadOffer[]>;
   createLoadOffer(offer: InsertLoadOffer): Promise<LoadOffer>;
   updateLoadOffer(id: string, offer: Partial<InsertLoadOffer>): Promise<LoadOffer | undefined>;
   getLoadOfferByLoadAndDriver(loadId: string, driverId: string): Promise<LoadOffer | undefined>;
@@ -1032,6 +1033,12 @@ export class MemStorage implements IStorage {
   async getAllLoadOffers(): Promise<LoadOffer[]> {
     return Array.from(this.loadOffers.values())
       .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async getLoadOffers(loadId: string): Promise<LoadOffer[]> {
+    return Array.from(this.loadOffers.values())
+      .filter(offer => offer.loadId === loadId)
+      .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
   }
 
   async createLoadOffer(offer: InsertLoadOffer): Promise<LoadOffer> {

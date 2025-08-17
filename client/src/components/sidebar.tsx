@@ -1,9 +1,10 @@
 import { Link, useLocation } from "wouter";
-import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare } from "lucide-react";
+import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare, Headphones } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard, section: "main" },
+  { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Headphones, section: "main" },
   { name: "Manage Loads", href: "/loads", icon: Package, section: "main" },
   { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "main" },
   { name: "Telegram Dispatching", href: "/telegram-dispatching", icon: MessageSquare, section: "main" },
