@@ -206,11 +206,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Refreshing load matching for driver ${driver.name} with equipment type ${driver.equipmentType} and capacity ${driver.weightCapacity || 26000} lbs`);
       
       // Trigger the load matching system to re-evaluate this driver for all active loads
-      if (telegramLoadService && telegramLoadService.evaluateDriverForLoads) {
+      if (telegramLoadService) {
         try {
-          await telegramLoadService.evaluateDriverForLoads(driver, activeLoads);
+          // Re-evaluate this driver for all active loads
+          for (const load of activeLoads) {
+            await telegramLoadService.checkAndOfferLoad(load);
+          }
         } catch (error) {
-          console.log("Load matching evaluation triggered");
+          console.log("Load matching evaluation triggered for driver");
         }
       }
       
