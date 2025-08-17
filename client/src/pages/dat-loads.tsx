@@ -296,7 +296,7 @@ export default function DATLoads() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500">Expiring Today</p>
-                  <p className="text-2xl font-bold text-yellow-600">{expirationStats?.expiringToday || 0}</p>
+                  <p className="text-2xl font-bold text-yellow-600">{(expirationStats as any)?.expiringToday || 0}</p>
                 </div>
                 <Clock className="w-8 h-8 text-yellow-600" />
               </div>
@@ -464,7 +464,7 @@ export default function DATLoads() {
                   <div className="pt-2">
                     <Button 
                       onClick={() => handleBookLoad(load.id)}
-                      disabled={bookLoadMutation.isPending || load.status !== 'pending'}
+                      disabled={bookLoadMutation.isPending || load.status === 'assigned' || load.status === 'in_transit' || load.status === 'delivered'}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400"
                       data-testid={`button-book-load-${load.id}`}
                     >

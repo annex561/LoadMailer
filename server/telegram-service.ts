@@ -728,6 +728,28 @@ ${onboardingUrl}
       return null;
     }
   }
+
+  /**
+   * Send a direct message via Telegram (for booking confirmations, etc.)
+   */
+  async sendMessage(chatId: string, message: string): Promise<number | null> {
+    if (!this.bot || !this.isRunning) {
+      console.log('Telegram service not running - would send:', message);
+      return null;
+    }
+
+    try {
+      const sentMessage = await this.bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
+      });
+      console.log(`Sent message to chat ${chatId}: ${message.substring(0, 100)}...`);
+      return sentMessage.message_id;
+    } catch (error) {
+      console.error('Error sending message via Telegram:', error);
+      return null;
+    }
+  }
 }
 
 // Singleton instance

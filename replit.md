@@ -12,12 +12,15 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-**Form Visibility Enhancement (Aug 17, 2025)**
-- Fixed critical form visibility issues with transparent backgrounds
-- Applied improved CSS styling with white backgrounds and dark text across all forms
+**Load Booking Messaging System (Aug 17, 2025)**
+- Implemented comprehensive messaging functionality for load booking interactions
+- Added Book Now button functionality with real-time status checking and loading states
+- Driver booking confirmations sent via Telegram with load details and dispatch timeline
+- Dispatcher notifications include driver contact info, load details, and direct call links
+- Enhanced form submit button visibility with explicit blue styling and hover effects
+- Fixed form background transparency issues across all modal forms (contact, load, email template)
 - Added weight capacity field to driver equipment specifications
 - Implemented automatic load matching refresh when driver equipment details are updated
-- Contact form updates now trigger re-evaluation of driver eligibility for available loads
 
 # System Architecture
 
