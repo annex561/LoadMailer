@@ -734,35 +734,104 @@ export class MemStorage implements IStorage {
 
   // Scraper configuration operations
   async getScraperConfig(id: string): Promise<ScraperConfig | undefined> {
-    return this.scraperConfigs.get(id);
+    // First check memory
+    const memoryResult = this.scraperConfigs.get(id);
+    if (memoryResult) return memoryResult;
+
+    // If not in memory, query database
+    try {
+      const { db } = await import('./db');
+      const { scraperConfigs } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const result = await db.select().from(scraperConfigs).where(eq(scraperConfigs.id, id)).limit(1);
+      if (result.length > 0) {
+        // Cache in memory for future requests
+        this.scraperConfigs.set(id, result[0]);
+        return result[0];
+      }
+    } catch (error) {
+      console.error('Error querying scraper config from database:', error);
+    }
+    return undefined;
   }
 
   async getAllScraperConfigs(): Promise<ScraperConfig[]> {
-    return Array.from(this.scraperConfigs.values());
+    // Query database for all configs
+    try {
+      const { db } = await import('./db');
+      const { scraperConfigs } = await import('@shared/schema');
+      const result = await db.select().from(scraperConfigs);
+      
+      // Update memory cache
+      result.forEach(config => {
+        this.scraperConfigs.set(config.id, config);
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('Error querying scraper configs from database:', error);
+      // Fallback to memory
+      return Array.from(this.scraperConfigs.values());
+    }
   }
 
   async createScraperConfig(config: InsertScraperConfig): Promise<ScraperConfig> {
-    const id = randomUUID();
-    const newConfig: ScraperConfig = {
-      ...config,
-      id,
-      type: config.type || "dat",
-      schedule: config.schedule || "*/1 * * * * *",
-      enabled: config.enabled || false,
-      autoCreateLoads: config.autoCreateLoads || true,
-      username: config.username || null,
-      password: config.password || null,
-      searchCriteria: config.searchCriteria || {},
-      defaultCustomerId: config.defaultCustomerId || null,
-      lastRunAt: config.lastRunAt || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.scraperConfigs.set(id, newConfig);
-    return newConfig;
+    try {
+      const { db } = await import('./db');
+      const { scraperConfigs } = await import('@shared/schema');
+      
+      const result = await db.insert(scraperConfigs).values(config).returning();
+      const newConfig = result[0];
+      
+      // Cache in memory
+      this.scraperConfigs.set(newConfig.id, newConfig);
+      return newConfig;
+    } catch (error) {
+      console.error('Error creating scraper config in database:', error);
+      // Fallback to memory implementation
+      const id = randomUUID();
+      const newConfig: ScraperConfig = {
+        ...config,
+        id,
+        type: config.type || "dat",
+        schedule: config.schedule || "*/1 * * * * *",
+        enabled: config.enabled || false,
+        autoCreateLoads: config.autoCreateLoads || true,
+        username: config.username || null,
+        password: config.password || null,
+        searchCriteria: config.searchCriteria || {},
+        defaultCustomerId: config.defaultCustomerId || null,
+        lastRunAt: config.lastRunAt || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      this.scraperConfigs.set(id, newConfig);
+      return newConfig;
+    }
   }
 
   async updateScraperConfig(id: string, config: Partial<InsertScraperConfig>): Promise<ScraperConfig | undefined> {
+    try {
+      const { db } = await import('./db');
+      const { scraperConfigs } = await import('@shared/schema');
+      
+      const { eq } = await import('drizzle-orm');
+      const result = await db.update(scraperConfigs)
+        .set({ ...config, updatedAt: new Date() })
+        .where(eq(scraperConfigs.id, id))
+        .returning();
+        
+      if (result.length > 0) {
+        const updated = result[0];
+        // Update memory cache
+        this.scraperConfigs.set(id, updated);
+        return updated;
+      }
+    } catch (error) {
+      console.error('Error updating scraper config in database:', error);
+    }
+    
+    // Fallback to memory implementation
     const existing = this.scraperConfigs.get(id);
     if (!existing) return undefined;
 
@@ -776,7 +845,20 @@ export class MemStorage implements IStorage {
   }
 
   async deleteScraperConfig(id: string): Promise<boolean> {
-    return this.scraperConfigs.delete(id);
+    try {
+      const { db } = await import('./db');
+      const { scraperConfigs } = await import('@shared/schema');
+      
+      const { eq } = await import('drizzle-orm');
+      await db.delete(scraperConfigs).where(eq(scraperConfigs.id, id));
+      
+      // Remove from memory cache
+      this.scraperConfigs.delete(id);
+      return true;
+    } catch (error) {
+      console.error('Error deleting scraper config from database:', error);
+      return this.scraperConfigs.delete(id);
+    }
   }
 
   // Scraper log operations

@@ -4,12 +4,14 @@ import type {
   LoadBoardConfiguration, 
   ScrapedLoad, 
   ScraperConfiguration,
+  ScraperConfig,
   InsertScrapedLoad,
   Driver
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import cron from "node-cron";
 import puppeteer from "puppeteer";
+import { DATScraper } from "./dat-scraper";
 
 interface LoadBoardResponse {
   loads: any[];
@@ -113,46 +115,35 @@ export class LoadBoardService {
   }
 
   private async startScheduledScrapers(): Promise<void> {
-    const configs = await storage.getEnabledScraperConfigurations();
+    const allConfigs = await storage.getAllScraperConfigs();
+    const enabledConfigs = allConfigs.filter(config => config.enabled);
     
-    for (const config of configs) {
+    for (const config of enabledConfigs) {
       await this.scheduleScraperJob(config);
     }
     
-    console.log(`Started ${configs.length} scheduled scraper jobs`);
+    console.log(`Started ${enabledConfigs.length} scheduled scraper jobs`);
   }
 
-  private async scheduleScraperJob(config: ScraperConfiguration): Promise<void> {
+  private async scheduleScraperJob(config: ScraperConfig): Promise<void> {
     // Clear existing job if it exists
     if (this.activeScrapeJobs.has(config.id)) {
       clearTimeout(this.activeScrapeJobs.get(config.id)!);
     }
 
-    if (!config.isEnabled) return;
+    if (!config.enabled) return;
 
-    if (config.scheduleType === 'interval' && config.intervalMinutes) {
-      // Schedule interval-based scraping
-      const intervalMs = config.intervalMinutes * 60 * 1000;
-      
-      const scheduleNext = () => {
-        const timeout = setTimeout(async () => {
+    // Use cron schedule from config.schedule
+    if (config.schedule) {
+      try {
+        cron.schedule(config.schedule, async () => {
           await this.runScraper(config.id);
-          scheduleNext(); // Schedule next run
-        }, intervalMs);
-        
-        this.activeScrapeJobs.set(config.id, timeout);
-      };
-      
-      scheduleNext();
-      
-    } else if (config.scheduleType === 'cron' && config.cronExpression) {
-      // Schedule cron-based scraping
-      cron.schedule(config.cronExpression, async () => {
-        await this.runScraper(config.id);
-      });
+        });
+        console.log(`Scheduled scraper job for config: ${config.name} with schedule: ${config.schedule}`);
+      } catch (error) {
+        console.error(`Failed to schedule scraper job for ${config.name}:`, error);
+      }
     }
-
-    console.log(`Scheduled scraper job for config: ${config.name}`);
   }
 
   async runScraper(configId: string): Promise<{
@@ -164,39 +155,55 @@ export class LoadBoardService {
     const startTime = Date.now();
     
     try {
-      const config = await storage.getScraperConfiguration(configId);
-      if (!config || !config.isEnabled) {
+      const config = await storage.getScraperConfig(configId);
+      if (!config || !config.enabled) {
         return { success: false, loadsScraped: 0, matchesFound: 0, error: 'Config not found or disabled' };
       }
 
       console.log(`Starting scraper run for: ${config.name}`);
       
-      // Get enabled load board configurations
-      const loadBoardConfigs = await storage.getEnabledLoadBoardConfigurations();
+      // Create scraper log entry
+      const logData = {
+        configId: config.id,
+        status: 'running' as const,
+        loadsScraped: 0,
+        loadsCreated: 0,
+        startedAt: new Date(),
+        metadata: {}
+      };
+      
+      const log = await storage.createScraperLog(logData);
+      
       let totalLoadsScraped = 0;
-      let totalMatchesFound = 0;
+      let totalLoadsCreated = 0;
+      let errorMessage: string | undefined;
 
-      for (const boardConfig of loadBoardConfigs) {
-        try {
-          const result = await this.scrapeLoadBoard(boardConfig, config);
-          totalLoadsScraped += result.loadsScraped;
-          totalMatchesFound += result.matchesFound;
-          
-          // Update board config stats
-          await storage.updateLoadBoardConfiguration(boardConfig.id, {
-            lastScrapedAt: new Date(),
-            successCount: boardConfig.successCount + 1,
-          });
-          
-        } catch (error) {
-          console.error(`Error scraping ${boardConfig.name}:`, error);
-          
-          // Update error stats
-          await storage.updateLoadBoardConfiguration(boardConfig.id, {
-            lastError: error instanceof Error ? error.message : 'Unknown error',
-            errorCount: boardConfig.errorCount + 1,
-          });
-        }
+      try {
+        // Run the DAT scraper
+        const result = await this.scrapeDAT(config);
+        totalLoadsScraped = result.loadsScraped;
+        totalLoadsCreated = result.loadsCreated;
+        
+        // Update log with success
+        await storage.updateScraperLog(log.id, {
+          status: 'success',
+          loadsScraped: totalLoadsScraped,
+          loadsCreated: totalLoadsCreated,
+          completedAt: new Date(),
+          executionTime: Date.now() - startTime,
+        });
+        
+      } catch (error) {
+        errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`Error running scraper ${config.name}:`, error);
+        
+        // Update log with error
+        await storage.updateScraperLog(log.id, {
+          status: 'error',
+          errorMessage,
+          completedAt: new Date(),
+          executionTime: Date.now() - startTime,
+        });
       }
 
       // Update scraper configuration stats
@@ -211,42 +218,103 @@ export class LoadBoardService {
 
       stats.lastRun = new Date();
       stats.totalRuns += 1;
-      stats.successfulRuns += 1;
+      if (!errorMessage) stats.successfulRuns += 1;
       stats.totalLoadsScraped += totalLoadsScraped;
       stats.averageRunTime = Math.round((stats.averageRunTime * (stats.totalRuns - 1) + runTime) / stats.totalRuns);
       
       this.scraperStats.set(configId, stats);
 
-      await storage.updateScraperConfiguration(configId, {
+      await storage.updateScraperConfig(configId, {
         lastRunAt: new Date(),
-        totalLoadsScraped: config.totalLoadsScraped + totalLoadsScraped,
-        totalMatchesFound: config.totalMatchesFound + totalMatchesFound,
-        averageRunTimeMs: stats.averageRunTime,
       });
 
-      console.log(`Scraper run completed: ${totalLoadsScraped} loads scraped, ${totalMatchesFound} matches found`);
+      console.log(`Scraper run completed: ${totalLoadsScraped} loads scraped, ${totalLoadsCreated} loads created`);
       
       return {
-        success: true,
+        success: !errorMessage,
         loadsScraped: totalLoadsScraped,
-        matchesFound: totalMatchesFound,
+        matchesFound: totalLoadsCreated,
       };
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`Scraper run failed for ${configId}:`, error);
       
-      await storage.updateScraperConfiguration(configId, {
-        lastError: errorMessage,
-        errorCount: (await storage.getScraperConfiguration(configId))?.errorCount || 0 + 1,
-      });
-
       return {
         success: false,
         loadsScraped: 0,
         matchesFound: 0,
         error: errorMessage,
       };
+    }
+  }
+
+  private async scrapeDAT(config: ScraperConfig): Promise<{ loadsScraped: number; loadsCreated: number }> {
+    console.log(`Starting DAT scraper with config: ${config.name}`);
+    
+    if (!config.username || !config.password) {
+      throw new Error('DAT scraper requires username and password');
+    }
+
+    const scraperConfig = {
+      enabled: config.enabled,
+      loginUrl: config.loginUrl,
+      searchUrl: config.searchUrl,
+      username: config.username,
+      password: config.password,
+      searchCriteria: config.searchCriteria || {},
+      schedule: config.schedule,
+      autoCreateLoads: config.autoCreateLoads,
+      defaultCustomerId: config.defaultCustomerId,
+    };
+
+    const datScraper = new DATScraper(scraperConfig);
+    
+    try {
+      await datScraper.initialize();
+      const result = await datScraper.scrapeLoads();
+      
+      let loadsCreated = 0;
+      
+      // If auto-create is enabled, create loads in the system
+      if (config.autoCreateLoads && result.length > 0) {
+        for (const loadData of result) {
+          try {
+            // Convert DAT load data to our load format
+            const load = {
+              customerId: config.defaultCustomerId || (await storage.getAllCustomers())[0]?.id,
+              pickupAddress: loadData.origin,
+              pickupDate: loadData.pickupDate,
+              pickupTime: '08:00',
+              deliveryAddress: loadData.destination,
+              deliveryDate: loadData.deliveryDate,
+              deliveryTime: '17:00',
+              weight: loadData.weight || 0,
+              equipmentType: loadData.equipment || 'Van',
+              rate: loadData.rate || 0,
+              miles: loadData.miles || 0,
+              status: 'available',
+              priority: 'normal',
+              description: loadData.description || 'Scraped from DAT',
+            };
+            
+            await storage.createLoad(load);
+            loadsCreated++;
+          } catch (error) {
+            console.error('Error creating load from scraped data:', error);
+          }
+        }
+      }
+      
+      console.log(`DAT scraper completed: ${result.length} loads scraped, ${loadsCreated} loads created`);
+      
+      return {
+        loadsScraped: result.length,
+        loadsCreated,
+      };
+      
+    } finally {
+      await datScraper.close();
     }
   }
 

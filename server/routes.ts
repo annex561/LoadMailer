@@ -1155,28 +1155,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Scraper Configurations
-  app.get("/api/load-boards/scraper-configs", async (req, res) => {
+  app.get("/api/scraper-configs", async (req, res) => {
     try {
-      const configs = await storage.getAllScraperConfigurations();
+      const configs = await storage.getAllScraperConfigs();
       res.json(configs);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch scraper configurations" });
     }
   });
 
-  app.post("/api/load-boards/scraper-configs", async (req, res) => {
+  app.get("/api/load-boards/scraper-configs", async (req, res) => {
     try {
-      const config = await storage.createScraperConfiguration(req.body);
+      const configs = await storage.getAllScraperConfigs();
+      res.json(configs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch scraper configurations" });
+    }
+  });
+
+  app.post("/api/scraper-configs", async (req, res) => {
+    try {
+      const config = await storage.createScraperConfig(req.body);
       res.status(201).json(config);
     } catch (error) {
       res.status(400).json({ error: "Failed to create scraper configuration" });
     }
   });
 
+  app.post("/api/load-boards/scraper-configs", async (req, res) => {
+    try {
+      const config = await storage.createScraperConfig(req.body);
+      res.status(201).json(config);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to create scraper configuration" });
+    }
+  });
+
+  app.put("/api/scraper-configs/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const config = await storage.updateScraperConfig(id, req.body);
+      if (!config) {
+        return res.status(404).json({ error: "Scraper configuration not found" });
+      }
+      res.json(config);
+    } catch (error) {
+      res.status(400).json({ error: "Failed to update scraper configuration" });
+    }
+  });
+
   app.put("/api/load-boards/scraper-configs/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const config = await storage.updateScraperConfiguration(id, req.body);
+      const config = await storage.updateScraperConfig(id, req.body);
       if (!config) {
         return res.status(404).json({ error: "Scraper configuration not found" });
       }
@@ -1213,21 +1244,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/load-boards/test-scraper", async (req, res) => {
     try {
       // Create a test scraper configuration for demonstration
-      const testConfig = await storage.createScraperConfiguration({
+      const testConfig = await storage.createScraperConfig({
         name: 'Test Scraper',
-        isEnabled: true,
-        scheduleType: 'manual',
-        searchCriteria: {},
-        preferredLanes: [
-          { fromStates: ['FL'], toStates: ['GA'] },
-          { fromStates: ['GA'], toStates: ['NC'] }
-        ],
-        avoidLanes: [],
-        minRatePerMile: 2.5,
-        equipmentTypes: ['dry_van', 'flatbed'],
-        autoImportMatches: false,
-        minimumMatchScore: 75,
-        notifyOnNewMatches: true,
+        type: 'dat',
+        enabled: true,
+        loginUrl: 'https://one.dat.com/login',
+        searchUrl: 'https://one.dat.com/tms/v2/board',
+        username: '',
+        password: '',
+        searchCriteria: { equipmentType: 'Van', radius: 250 },
+        schedule: '*/10 * * * *',
+        autoCreateLoads: false,
       });
 
       const result = await loadBoardService.runScraper(testConfig.id);
