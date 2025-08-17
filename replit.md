@@ -26,7 +26,7 @@ Preferred communication style: Simple, everyday language.
 - ACTIVATED: Load matching system now fully operational and sending Telegram notifications to drivers
 - System successfully matching drivers based on equipment type, location, and preferences with 65-90% match scores
 - Enhanced equipment compatibility matching for better load-driver pairing
-- Lowered matching threshold to 30% for improved load coverage while maintaining quality matches
+- Set matching threshold to 65% minimum to ensure only high-quality load matches are sent to drivers
 - Load matching algorithm working with equipment types: sprinter_van, van_hotshot, and compatible variations
 
 **Document Upload Integration into Load Management (Aug 17, 2025)**
