@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Phone, Mail, MapPin, Clock, DollarSign, Truck, User, FileText, RefreshCw } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, DollarSign, Truck, User, FileText, RefreshCw, MessageCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { LoadWithRelations, Driver, Customer } from '@shared/schema';
@@ -285,9 +285,65 @@ export default function DispatcherDashboard() {
                           </div>
 
                           {load.assignedDriver && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <User className="h-4 w-4" />
-                              <span>{load.assignedDriver.name}</span>
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 text-sm">
+                                <User className="h-4 w-4" />
+                                <span className="font-medium">Assigned: {load.assignedDriver.name}</span>
+                              </div>
+                              {/* Assigned Driver Communication Shortcuts */}
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (load.assignedDriver?.phone) {
+                                      window.open(`tel:${load.assignedDriver.phone}`, '_self');
+                                    } else {
+                                      toast({ title: 'No phone number available', variant: 'destructive' });
+                                    }
+                                  }}
+                                  data-testid={`button-call-assigned-${load.assignedDriver.id}`}
+                                >
+                                  <Phone className="h-3 w-3 mr-1" />
+                                  Call
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (load.assignedDriver?.phone) {
+                                      window.open(`sms:${load.assignedDriver.phone}`, '_self');
+                                    } else {
+                                      toast({ title: 'No phone number available', variant: 'destructive' });
+                                    }
+                                  }}
+                                  data-testid={`button-text-assigned-${load.assignedDriver.id}`}
+                                >
+                                  <MessageCircle className="h-3 w-3 mr-1" />
+                                  Text
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (load.assignedDriver?.email) {
+                                      window.open(`mailto:${load.assignedDriver.email}?subject=Load ${load.loadNumber}`, '_self');
+                                    } else {
+                                      toast({ title: 'No email address available', variant: 'destructive' });
+                                    }
+                                  }}
+                                  data-testid={`button-email-assigned-${load.assignedDriver.id}`}
+                                >
+                                  <Mail className="h-3 w-3 mr-1" />
+                                  Email
+                                </Button>
+                              </div>
                             </div>
                           )}
 
@@ -301,11 +357,69 @@ export default function DispatcherDashboard() {
                                 const statusText = offer.status === 'pending' ? 'Awaiting Response' : 
                                                  offer.status === 'accepted' ? 'Accepted' : 'Declined';
                                 return (
-                                  <div key={index} className="flex justify-between items-center text-xs">
-                                    <span className="font-medium">{driver?.name || 'Unknown Driver'}</span>
-                                    <span className={`capitalize ${statusColor}`}>
-                                      {statusText}
-                                    </span>
+                                  <div key={index} className="space-y-1">
+                                    <div className="flex justify-between items-center text-xs">
+                                      <span className="font-medium">{driver?.name || 'Unknown Driver'}</span>
+                                      <span className={`capitalize ${statusColor}`}>
+                                        {statusText}
+                                      </span>
+                                    </div>
+                                    {/* Driver Communication Shortcuts */}
+                                    {driver && (
+                                      <div className="flex gap-1">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 px-2 text-xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (driver.phone) {
+                                              window.open(`tel:${driver.phone}`, '_self');
+                                            } else {
+                                              toast({ title: 'No phone number available', variant: 'destructive' });
+                                            }
+                                          }}
+                                          data-testid={`button-call-driver-${driver.id}`}
+                                        >
+                                          <Phone className="h-3 w-3 mr-1" />
+                                          Call
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 px-2 text-xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (driver.phone) {
+                                              window.open(`sms:${driver.phone}`, '_self');
+                                            } else {
+                                              toast({ title: 'No phone number available', variant: 'destructive' });
+                                            }
+                                          }}
+                                          data-testid={`button-text-driver-${driver.id}`}
+                                        >
+                                          <MessageCircle className="h-3 w-3 mr-1" />
+                                          Text
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 px-2 text-xs"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (driver.email) {
+                                              window.open(`mailto:${driver.email}?subject=Load ${load.loadNumber}`, '_self');
+                                            } else {
+                                              toast({ title: 'No email address available', variant: 'destructive' });
+                                            }
+                                          }}
+                                          data-testid={`button-email-driver-${driver.id}`}
+                                        >
+                                          <Mail className="h-3 w-3 mr-1" />
+                                          Email
+                                        </Button>
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -535,21 +649,48 @@ export default function DispatcherDashboard() {
                               <Button 
                                 variant="outline" 
                                 className="w-full justify-start"
-                                onClick={() => window.open(`tel:${selectedLoad.assignedDriver?.phone}`)}
+                                onClick={() => {
+                                  if (selectedLoad.assignedDriver?.phone) {
+                                    window.open(`tel:${selectedLoad.assignedDriver.phone}`, '_self');
+                                  } else {
+                                    toast({ title: 'No phone number available', variant: 'destructive' });
+                                  }
+                                }}
                                 data-testid={`button-call-driver-${selectedLoad.assignedDriver.id}`}
                               >
                                 <Phone className="h-4 w-4 mr-2" />
-                                {selectedLoad.assignedDriver.phone}
+                                Call: {selectedLoad.assignedDriver.phone}
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                className="w-full justify-start"
+                                onClick={() => {
+                                  if (selectedLoad.assignedDriver?.phone) {
+                                    window.open(`sms:${selectedLoad.assignedDriver.phone}`, '_self');
+                                  } else {
+                                    toast({ title: 'No phone number available', variant: 'destructive' });
+                                  }
+                                }}
+                                data-testid={`button-text-driver-${selectedLoad.assignedDriver.id}`}
+                              >
+                                <MessageCircle className="h-4 w-4 mr-2" />
+                                Text: {selectedLoad.assignedDriver.phone}
                               </Button>
                               {selectedLoad.assignedDriver.email && (
                                 <Button 
                                   variant="outline" 
                                   className="w-full justify-start"
-                                  onClick={() => window.open(`mailto:${selectedLoad.assignedDriver?.email}`)}
+                                  onClick={() => {
+                                    if (selectedLoad.assignedDriver?.email) {
+                                      window.open(`mailto:${selectedLoad.assignedDriver.email}?subject=Load ${selectedLoad.loadNumber}`, '_self');
+                                    } else {
+                                      toast({ title: 'No email address available', variant: 'destructive' });
+                                    }
+                                  }}
                                   data-testid={`button-email-driver-${selectedLoad.assignedDriver.id}`}
                                 >
                                   <Mail className="h-4 w-4 mr-2" />
-                                  {selectedLoad.assignedDriver.email}
+                                  Email: {selectedLoad.assignedDriver.email}
                                 </Button>
                               )}
                             </div>
