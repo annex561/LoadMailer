@@ -134,7 +134,7 @@ export default function DriverOnboarding() {
   }, []);
 
   // Validate the onboarding token
-  const { data: tokenValidation, isLoading: isValidatingToken } = useQuery({
+  const { data: tokenValidation, isLoading: isValidatingToken, error: validationError } = useQuery({
     queryKey: ['validate-token', onboardingToken],
     queryFn: async () => {
       if (!onboardingToken) return null;
@@ -143,15 +143,21 @@ export default function DriverOnboarding() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: onboardingToken })
       });
-      if (!response.ok) throw new Error('Failed to validate token');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to validate token');
+      }
       return response.json();
     },
-    enabled: !!onboardingToken
+    enabled: !!onboardingToken,
+    retry: false // Don't retry failed validation
   });
 
   useEffect(() => {
-    if (tokenValidation && !tokenValidation.valid) {
-      setTokenError(tokenValidation.error || 'Invalid onboarding token');
+    if (validationError) {
+      setTokenError('Token validation failed. Please check your invitation link.');
+    } else if (tokenValidation && !tokenValidation.valid) {
+      setTokenError(tokenValidation.error || 'Token not found');
     } else if (tokenValidation && tokenValidation.valid) {
       setTokenError(null);
       // Pre-fill email if available
@@ -159,7 +165,7 @@ export default function DriverOnboarding() {
         setFormData(prev => ({ ...prev, email: tokenValidation.email }));
       }
     }
-  }, [tokenValidation, formData.email]);
+  }, [tokenValidation, validationError, formData.email]);
 
   const steps = [
     { title: 'Personal Info', icon: User },
