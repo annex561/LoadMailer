@@ -72,9 +72,8 @@ LoadMaster Dispatch Team
     // For now, we'll create an email log entry
     await storage.createEmailLog({
       loadId: load.id,
-      recipient: load.customer?.email || 'unknown@example.com',
+      recipientEmail: load.customer?.email || 'unknown@example.com',
       subject: emailSubject,
-      body: emailBody,
       sentAt: new Date(),
       status: 'pending'
     });

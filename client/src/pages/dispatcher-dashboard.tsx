@@ -315,13 +315,17 @@ export default function DispatcherDashboard() {
                       {selectedLoad.pickupAddress} → {selectedLoad.deliveryAddress}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <Badge className={`${getStatusColor(selectedLoad.status)} text-white`}>
                       {selectedLoad.status}
                     </Badge>
                     <Badge variant="outline" className={getPriorityColor(selectedLoad.priority)}>
                       {selectedLoad.priority}
                     </Badge>
+                    <div className="text-sm text-muted-foreground">
+                      Pickup: {selectedLoad.pickupDate ? new Date(selectedLoad.pickupDate).toLocaleDateString() : 'N/A'} 
+                      {selectedLoad.pickupTime && ` at ${selectedLoad.pickupTime}`}
+                    </div>
                   </div>
                 </div>
               </CardHeader>
@@ -461,14 +465,18 @@ export default function DispatcherDashboard() {
                               data-testid="textarea-notes"
                             />
                             <Button 
-                              onClick={() => addNotesMutation.mutate({ 
-                                loadId: selectedLoad.id, 
-                                notes 
-                              })}
-                              disabled={!notes.trim()}
+                              onClick={() => {
+                                addNotesMutation.mutate({ 
+                                  loadId: selectedLoad.id, 
+                                  notes 
+                                });
+                                setNotes('');
+                                setIsNotesDialogOpen(false);
+                              }}
+                              disabled={!notes.trim() || addNotesMutation.isPending}
                               data-testid="button-save-notes"
                             >
-                              Save Notes
+                              {addNotesMutation.isPending ? 'Saving...' : 'Save Notes'}
                             </Button>
                           </div>
                         </DialogContent>
