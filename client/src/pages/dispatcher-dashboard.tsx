@@ -135,12 +135,13 @@ export default function DispatcherDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notes })
       });
+      if (!response.ok) {
+        throw new Error('Failed to add notes');
+      }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/loads'] });
-      setNotes('');
-      setIsNotesDialogOpen(false);
       toast({ title: 'Notes added successfully' });
     },
     onError: () => {
@@ -433,7 +434,7 @@ export default function DispatcherDashboard() {
                         }
                       >
                         <SelectTrigger className="w-48 bg-white border border-gray-300" data-testid="select-update-status">
-                          <SelectValue />
+                          <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent className="bg-white border border-gray-300 shadow-lg">
                           <SelectItem value="available">Available</SelectItem>
@@ -452,7 +453,7 @@ export default function DispatcherDashboard() {
                             Add Notes
                           </Button>
                         </DialogTrigger>
-                        <DialogContent>
+                        <DialogContent className="bg-white border border-gray-300">
                           <DialogHeader>
                             <DialogTitle>Add Notes to Load {selectedLoad.loadNumber}</DialogTitle>
                             <p className="text-sm text-muted-foreground">Add dispatcher notes and comments for this load.</p>
@@ -462,6 +463,7 @@ export default function DispatcherDashboard() {
                               placeholder="Enter dispatch notes..."
                               value={notes}
                               onChange={(e) => setNotes(e.target.value)}
+                              className="bg-white border border-gray-300"
                               data-testid="textarea-notes"
                             />
                             <Button 
