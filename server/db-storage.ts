@@ -39,20 +39,28 @@ export class DatabaseOnboardingTokenService {
 
   // Validate token and check if it's valid and not used
   async validateToken(tokenValue: string): Promise<{ valid: boolean; email?: string; error?: string }> {
+    console.log("🔍 DB Token validation:", { tokenValue, timestamp: new Date().toISOString() });
+    
     const token = await this.getOnboardingToken(tokenValue);
     
+    console.log("🔍 DB Token lookup result:", { token: token ? { id: token.id, isUsed: token.isUsed, expiresAt: token.expiresAt } : null });
+    
     if (!token) {
+      console.log("❌ Token not found in database");
       return { valid: false, error: "Token not found" };
     }
 
     if (token.isUsed) {
+      console.log("❌ Token already used");
       return { valid: false, error: "Token already used" };
     }
 
     if (new Date() > new Date(token.expiresAt)) {
+      console.log("❌ Token expired");
       return { valid: false, error: "Token expired" };
     }
 
+    console.log("✅ Token validation successful");
     return { valid: true, email: token.email };
   }
 }

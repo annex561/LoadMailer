@@ -1554,15 +1554,21 @@ Safe travels! 🚛`;
     try {
       const { token } = req.body;
       
+      console.log("🔍 Token validation request:", { token, timestamp: new Date().toISOString() });
+      
       if (!token) {
+        console.log("❌ No token provided");
         return res.status(400).json({ error: "Token is required" });
       }
       
       // Use database service for validation
       const validation = await dbTokenService.validateToken(token);
+      
+      console.log("🔍 Token validation result:", { token, validation, timestamp: new Date().toISOString() });
+      
       res.json(validation);
     } catch (error) {
-      console.error("Error validating token:", error);
+      console.error("❌ Error validating token:", error);
       res.status(500).json({ error: "Failed to validate token" });
     }
   });
