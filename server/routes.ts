@@ -392,8 +392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         vehicleMake: req.body.vehicleMake,
         vehicleModel: req.body.vehicleModel || "",
         isOnboarded: true,
-        status: "available",
-        createdAt: new Date()
+        status: "available"
       };
 
       // Check for duplicates before creating

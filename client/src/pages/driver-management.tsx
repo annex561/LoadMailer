@@ -236,19 +236,32 @@ export default function DriverManagement() {
 
   const createManualDriverMutation = useMutation({
     mutationFn: async (data: ManualDriverForm) => {
+      console.log("Sending manual driver data:", data);
       const response = await apiRequest("POST", "/api/drivers/manual-onboard", data);
-      return response.json();
+      console.log("API response status:", response.status);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.log("API error response:", errorData);
+        throw new Error(errorData.error || errorData.message || "Failed to create driver");
+      }
+      
+      const result = await response.json();
+      console.log("API success response:", result);
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Driver creation successful:", data);
       queryClient.invalidateQueries({ queryKey: ["/api/drivers"] });
       toast({
         title: "Driver Created",
-        description: "Driver has been successfully onboarded to your fleet",
+        description: `Driver ${data.name} has been successfully onboarded to your fleet`,
       });
       manualForm.reset();
       setShowManualOnboardingModal(false);
     },
     onError: (error: any) => {
+      console.log("Driver creation error:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to create driver",
