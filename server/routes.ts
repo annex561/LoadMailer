@@ -380,8 +380,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Find the driver's offer
       const existingOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driverId);
       
-      if (!existingOffer || existingOffer.status !== 'accepted') {
-        return res.status(404).json({ error: "No accepted offer found for this driver" });
+      if (!existingOffer || (existingOffer.status !== 'accepted' && existingOffer.status !== 'awaiting_confirmation')) {
+        return res.status(404).json({ error: "No valid offer found for this driver" });
       }
       
       // Calculate deadhead distance automatically (distance from driver to pickup)
@@ -454,12 +454,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'on_route'
       });
 
-      // Update any existing load offer to accepted
+      // Create or update load offer to accepted
       const existingOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driverId);
       if (existingOffer) {
         await storage.updateLoadOfferByLoadAndDriver(loadId, driverId, {
           status: 'accepted',
           respondedAt: new Date()
+        });
+      } else {
+        // Create a new load offer for manual booking
+        await storage.createLoadOffer({
+          loadId,
+          driverId,
+          status: 'accepted',
+          sentAt: new Date(),
+          respondedAt: new Date(),
+          timeoutAt: new Date(Date.now() + 3 * 60 * 1000) // 3 minutes from now
         });
       }
 
