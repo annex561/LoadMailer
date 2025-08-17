@@ -107,44 +107,15 @@ export default function DriverOnboarding() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Get token from URL parameters - handle both direct access and SPA routing
+  // Get token from URL parameters
   useEffect(() => {
-    let token = null;
+    // Direct token extraction from URL
+    const urlString = window.location.href;
+    const tokenMatch = urlString.match(/[?&]token=([^&]+)/);
     
-    // Method 1: Try to get from current URL object
-    try {
-      const urlObj = new URL(window.location.href);
-      token = urlObj.searchParams.get('token');
-    } catch (e) {
-      // Fallback if URL parsing fails
-    }
-    
-    // Method 2: Try to parse from browser location directly
-    if (!token) {
-      const searchParams = new URLSearchParams(window.location.search);
-      token = searchParams.get('token');
-    }
-    
-    // Method 3: Try to parse from the full href string manually
-    if (!token && window.location.href.includes('token=')) {
-      const matches = window.location.href.match(/[?&]token=([^&]+)/);
-      if (matches && matches[1]) {
-        token = decodeURIComponent(matches[1]);
-      }
-    }
-    
-    // Method 4: Check if token was passed via state or other means
-    if (!token) {
-      // Check localStorage for temporary token (in case of redirect)
-      const tempToken = localStorage.getItem('onboarding_token');
-      if (tempToken) {
-        token = tempToken;
-        localStorage.removeItem('onboarding_token'); // Clean up
-      }
-    }
-    
-    if (token && token.trim()) {
-      setOnboardingToken(token.trim());
+    if (tokenMatch && tokenMatch[1]) {
+      const token = decodeURIComponent(tokenMatch[1]);
+      setOnboardingToken(token);
       setTokenError(null);
     } else {
       setTokenError('No onboarding token found. Please use the invitation link.');
