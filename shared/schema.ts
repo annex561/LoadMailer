@@ -15,6 +15,8 @@ export const drivers = pgTable("drivers", {
   isOnboarded: boolean("is_onboarded").notNull().default(false),
   // Equipment type for load matching
   equipmentType: text("equipment_type").notNull().default("sprinter_van"), // sprinter_van, van_lift_gate, van_hotshot, straight_box_truck, moving_van, flatbed_hotshot, van
+  // Equipment weight capacity
+  weightCapacity: integer("weight_capacity").default(26000), // in pounds
   // Telegram bot integration
   telegramId: text("telegram_id").unique(),
   telegramUsername: text("telegram_username"),

@@ -42,6 +42,7 @@ export default function ContactFormModal({
           phone: (contact as Driver)?.phone || "",
           status: (contact as Driver)?.status || "available",
           equipmentType: (contact as Driver)?.equipmentType || "sprinter_van",
+          weightCapacity: (contact as Driver)?.weightCapacity || 26000,
         }
       : {
           name: (contact as Customer)?.name || "",
@@ -249,6 +250,29 @@ export default function ContactFormModal({
                         <SelectItem value="van">Van (V)</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {type === "driver" && (
+              <FormField
+                control={form.control}
+                name="weightCapacity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="form-label-improved">Weight Capacity (lbs)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type="number"
+                        placeholder="26000"
+                        className="form-input-improved"
+                        data-testid="input-weight-capacity"
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
