@@ -11,6 +11,7 @@ import { biddingService } from "./bidding-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
+import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
 
@@ -217,6 +218,9 @@ async function sendAutomatedEmails(load: LoadWithRelations, trigger: string) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize services
+  const predictiveMaintenanceService = new PredictiveMaintenanceService();
+  
   // Initialize scheduler service on startup
   try {
     await schedulerService.initialize();
@@ -2721,6 +2725,104 @@ Safe travels! 🚛`;
     } catch (error) {
       console.error('Error generating payment:', error);
       res.status(500).json({ error: 'Failed to generate payment' });
+    }
+  });
+
+  // Predictive Maintenance Routes
+  app.get("/api/maintenance/alerts", async (req, res) => {
+    try {
+      const alerts = await predictiveMaintenanceService.analyzeMaintenanceNeeds();
+      res.json(alerts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch maintenance alerts" });
+    }
+  });
+
+  app.get("/api/maintenance/vehicles", async (req, res) => {
+    try {
+      const vehicles = await predictiveMaintenanceService.getAllVehicles();
+      res.json(vehicles);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch vehicles" });
+    }
+  });
+
+  app.get("/api/maintenance/vehicles/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const vehicle = await predictiveMaintenanceService.getVehicle(id);
+      if (!vehicle) {
+        return res.status(404).json({ error: "Vehicle not found" });
+      }
+      res.json(vehicle);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch vehicle" });
+    }
+  });
+
+  app.get("/api/maintenance/metrics/:vehicleId", async (req, res) => {
+    try {
+      const { vehicleId } = req.params;
+      const metrics = await predictiveMaintenanceService.getVehicleMetrics(vehicleId);
+      res.json(metrics);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch vehicle metrics" });
+    }
+  });
+
+  app.post("/api/maintenance/alerts/:alertId/acknowledge", async (req, res) => {
+    try {
+      const { alertId } = req.params;
+      const { acknowledgedBy } = req.body;
+      
+      if (!acknowledgedBy) {
+        return res.status(400).json({ error: "acknowledgedBy is required" });
+      }
+
+      const success = await predictiveMaintenanceService.acknowledgeAlert(alertId, acknowledgedBy);
+      if (!success) {
+        return res.status(404).json({ error: "Alert not found" });
+      }
+      
+      res.json({ success: true, message: "Alert acknowledged" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to acknowledge alert" });
+    }
+  });
+
+  app.post("/api/maintenance/alerts/:alertId/resolve", async (req, res) => {
+    try {
+      const { alertId } = req.params;
+      const { resolvedBy, notes } = req.body;
+      
+      if (!resolvedBy) {
+        return res.status(400).json({ error: "resolvedBy is required" });
+      }
+
+      const success = await predictiveMaintenanceService.resolveAlert(alertId, resolvedBy, notes);
+      if (!success) {
+        return res.status(404).json({ error: "Alert not found" });
+      }
+      
+      res.json({ success: true, message: "Alert resolved" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to resolve alert" });
+    }
+  });
+
+  app.put("/api/maintenance/vehicles/:id/mileage", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { mileage } = req.body;
+      
+      if (!mileage || typeof mileage !== 'number') {
+        return res.status(400).json({ error: "Valid mileage number is required" });
+      }
+
+      await predictiveMaintenanceService.updateVehicleMileage(id, mileage);
+      res.json({ success: true, message: "Vehicle mileage updated" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update vehicle mileage" });
     }
   });
 

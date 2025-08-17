@@ -321,6 +321,175 @@ export const loadDocuments = pgTable("load_documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Vehicle Management and Maintenance Tables
+export const vehicles = pgTable("vehicles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vehicleNumber: text("vehicle_number").notNull().unique(),
+  driverId: varchar("driver_id").references(() => drivers.id),
+  
+  // Vehicle identification
+  make: text("make").notNull(),
+  model: text("model").notNull(),
+  year: integer("year").notNull(),
+  vin: text("vin").notNull().unique(),
+  licensePlate: text("license_plate").notNull(),
+  
+  // Vehicle specifications
+  equipmentType: text("equipment_type").notNull(), // same as driver equipmentType
+  engineType: text("engine_type").notNull().default("diesel"), // diesel, gas, electric, hybrid
+  engineModel: text("engine_model"),
+  fuelCapacity: real("fuel_capacity").default(0), // gallons
+  weightCapacity: integer("weight_capacity").default(26000), // pounds
+  
+  // Current metrics
+  currentMileage: integer("current_mileage").notNull().default(0),
+  currentEngineHours: real("current_engine_hours").default(0),
+  lastServiceMileage: integer("last_service_mileage").default(0),
+  nextServiceDue: integer("next_service_due").default(0),
+  
+  // Maintenance history tracking
+  oilChangeInterval: integer("oil_change_interval").default(15000), // miles
+  lastOilChange: timestamp("last_oil_change"),
+  nextOilChangeDue: integer("next_oil_change_due").default(0),
+  
+  tireRotationInterval: integer("tire_rotation_interval").default(12000), // miles
+  lastTireRotation: timestamp("last_tire_rotation"),
+  nextTireRotationDue: integer("next_tire_rotation_due").default(0),
+  
+  brakeInspectionInterval: integer("brake_inspection_interval").default(30000), // miles
+  lastBrakeInspection: timestamp("last_brake_inspection"),
+  nextBrakeInspectionDue: integer("next_brake_inspection_due").default(0),
+  
+  // Vehicle status and health
+  status: text("status").notNull().default("active"), // active, maintenance, out_of_service, retired
+  healthScore: real("health_score").default(100), // 0-100 calculated health score
+  fuelEfficiency: real("fuel_efficiency").default(0), // miles per gallon
+  
+  // Insurance and registration
+  insuranceExpiry: timestamp("insurance_expiry"),
+  registrationExpiry: timestamp("registration_expiry"),
+  inspectionExpiry: timestamp("inspection_expiry"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const maintenanceAlerts = pgTable("maintenance_alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vehicleId: varchar("vehicle_id").references(() => vehicles.id).notNull(),
+  alertType: text("alert_type").notNull(), // 'due_soon', 'overdue', 'critical', 'predictive'
+  maintenanceType: text("maintenance_type").notNull(), // 'oil_change', 'tire_rotation', 'brake_inspection', 'general_service', 'engine_diagnostic'
+  
+  severity: text("severity").notNull().default("medium"), // low, medium, high, critical
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  
+  // Scheduling details
+  currentMileage: integer("current_mileage").notNull(),
+  dueMileage: integer("due_mileage"),
+  mileageOverdue: integer("mileage_overdue").default(0),
+  
+  dueDate: timestamp("due_date"),
+  daysOverdue: integer("days_overdue").default(0),
+  
+  // Predictive factors
+  predictiveFactors: jsonb("predictive_factors").default({}), // ML factors and scores
+  riskScore: real("risk_score").default(0), // 0-100 risk of failure
+  estimatedCost: real("estimated_cost").default(0),
+  
+  // Alert status
+  status: text("status").notNull().default("active"), // active, acknowledged, resolved, ignored
+  priority: integer("priority").notNull().default(3), // 1-5 priority level
+  
+  // Action tracking
+  acknowledgedBy: text("acknowledged_by"),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: timestamp("resolved_at"),
+  notes: text("notes"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const maintenanceRecords = pgTable("maintenance_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vehicleId: varchar("vehicle_id").references(() => vehicles.id).notNull(),
+  alertId: varchar("alert_id").references(() => maintenanceAlerts.id), // linked alert if applicable
+  
+  maintenanceType: text("maintenance_type").notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  
+  // Service details
+  serviceDate: timestamp("service_date").notNull(),
+  mileageAtService: integer("mileage_at_service").notNull(),
+  engineHoursAtService: real("engine_hours_at_service"),
+  
+  // Service provider
+  serviceProvider: text("service_provider"), // shop name or mechanic
+  serviceLocation: text("service_location"),
+  invoiceNumber: text("invoice_number"),
+  
+  // Costs
+  laborCost: real("labor_cost").default(0),
+  partsCost: real("parts_cost").default(0),
+  totalCost: real("total_cost").notNull(),
+  
+  // Parts and work performed
+  partsReplaced: jsonb("parts_replaced").default([]), // array of parts
+  workPerformed: jsonb("work_performed").default([]), // array of work items
+  
+  // Quality tracking
+  serviceRating: integer("service_rating"), // 1-5 rating
+  warrantyPeriod: integer("warranty_period"), // warranty in days
+  warrantyExpiry: timestamp("warranty_expiry"),
+  
+  // Documentation
+  receipts: jsonb("receipts").default([]), // array of receipt URLs
+  photos: jsonb("photos").default([]), // array of photo URLs
+  
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const vehicleMetrics = pgTable("vehicle_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  vehicleId: varchar("vehicle_id").references(() => vehicles.id).notNull(),
+  
+  // Time period
+  recordDate: timestamp("record_date").notNull(),
+  mileage: integer("mileage").notNull(),
+  engineHours: real("engine_hours"),
+  
+  // Performance metrics
+  fuelUsed: real("fuel_used").default(0), // gallons
+  fuelEfficiency: real("fuel_efficiency").default(0), // mpg
+  idleTime: real("idle_time").default(0), // hours
+  averageSpeed: real("average_speed").default(0), // mph
+  maxSpeed: real("max_speed").default(0), // mph
+  
+  // Engine diagnostics
+  engineLoad: real("engine_load").default(0), // percentage
+  coolantTemp: real("coolant_temp").default(0), // fahrenheit
+  oilPressure: real("oil_pressure").default(0), // psi
+  batteryVoltage: real("battery_voltage").default(0), // volts
+  
+  // Driving behavior
+  harshBraking: integer("harsh_braking").default(0), // count
+  harshAcceleration: integer("harsh_acceleration").default(0), // count
+  sharpTurns: integer("sharp_turns").default(0), // count
+  
+  // Calculated health indicators
+  engineHealthScore: real("engine_health_score").default(100),
+  brakeHealthScore: real("brake_health_score").default(100),
+  transmissionHealthScore: real("transmission_health_score").default(100),
+  overallHealthScore: real("overall_health_score").default(100),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // DAT Scraper Tables
 export const scraperConfigs = pgTable("scraper_configs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -480,6 +649,29 @@ export const insertLoadDocumentSchema = createInsertSchema(loadDocuments).omit({
   uploadedAt: true,
 });
 
+export const insertVehicleSchema = createInsertSchema(vehicles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMaintenanceAlertSchema = createInsertSchema(maintenanceAlerts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMaintenanceRecordSchema = createInsertSchema(maintenanceRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertVehicleMetricsSchema = createInsertSchema(vehicleMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const driverOnboardingSchema = createInsertSchema(drivers).omit({
   id: true,
   createdAt: true,
@@ -547,6 +739,18 @@ export type InsertLoadOffer = z.infer<typeof insertLoadOfferSchema>;
 
 export type LoadDocument = typeof loadDocuments.$inferSelect;
 export type InsertLoadDocument = z.infer<typeof insertLoadDocumentSchema>;
+
+export type Vehicle = typeof vehicles.$inferSelect;
+export type InsertVehicle = z.infer<typeof insertVehicleSchema>;
+
+export type MaintenanceAlert = typeof maintenanceAlerts.$inferSelect;
+export type InsertMaintenanceAlert = z.infer<typeof insertMaintenanceAlertSchema>;
+
+export type MaintenanceRecord = typeof maintenanceRecords.$inferSelect;
+export type InsertMaintenanceRecord = z.infer<typeof insertMaintenanceRecordSchema>;
+
+export type VehicleMetrics = typeof vehicleMetrics.$inferSelect;
+export type InsertVehicleMetrics = z.infer<typeof insertVehicleMetricsSchema>;
 
 export type DriverOnboarding = z.infer<typeof driverOnboardingSchema>;
 
