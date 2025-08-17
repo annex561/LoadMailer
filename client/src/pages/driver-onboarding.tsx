@@ -31,6 +31,9 @@ interface OnboardingData {
   // Equipment Information
   equipmentType: string;
   weightCapacity: number;
+  preferredLoadTypes: string;
+  maxLength: number;
+  maxWeight: number;
   vehicleYear: string;
   vehicleMake: string;
   vehicleModel: string;
@@ -84,6 +87,9 @@ export default function DriverOnboarding() {
     medicalCertExpiry: '',
     equipmentType: '',
     weightCapacity: 26000,
+    preferredLoadTypes: 'full_partial',
+    maxLength: 53,
+    maxWeight: 48000,
     vehicleYear: '',
     vehicleMake: '',
     vehicleModel: '',
@@ -171,7 +177,8 @@ export default function DriverOnboarding() {
       case 1: // License & Docs
         return formData.licenseNumber && formData.licenseState && formData.licenseExpiry;
       case 2: // Equipment
-        return formData.equipmentType && formData.vehicleYear && formData.vehicleMake;
+        return formData.equipmentType && formData.vehicleYear && formData.vehicleMake && 
+               formData.preferredLoadTypes && formData.maxLength > 0 && formData.maxWeight > 0;
       case 3: // Insurance & Banking
         return formData.insuranceProvider && formData.bankName && formData.routingNumber;
       case 4: // Preferences
@@ -340,6 +347,55 @@ export default function DriverOnboarding() {
                   data-testid="input-weight-capacity"
                 />
               </div>
+            </div>
+
+            {/* Load Preferences Section */}
+            <div className="border-t pt-4 mt-4">
+              <h4 className="font-medium mb-3 text-gray-800">Load Preferences</h4>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="preferredLoadTypes">Load Type Preference *</Label>
+                  <Select value={formData.preferredLoadTypes} onValueChange={(value) => updateFormData('preferredLoadTypes', value)}>
+                    <SelectTrigger className="bg-white border border-gray-300" data-testid="select-load-type">
+                      <SelectValue placeholder="Select load type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                      <SelectItem value="full">Full Loads Only</SelectItem>
+                      <SelectItem value="partial">Partial Loads Only</SelectItem>
+                      <SelectItem value="full_partial">Both Full & Partial</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxLength">Maximum Length (ft) *</Label>
+                  <Input
+                    id="maxLength"
+                    type="number"
+                    value={formData.maxLength}
+                    onChange={(e) => updateFormData('maxLength', parseInt(e.target.value) || 0)}
+                    placeholder="53"
+                    min="10"
+                    max="100"
+                    data-testid="input-max-length"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxWeight">Maximum Weight (lbs) *</Label>
+                  <Input
+                    id="maxWeight"
+                    type="number"
+                    value={formData.maxWeight}
+                    onChange={(e) => updateFormData('maxWeight', parseInt(e.target.value) || 0)}
+                    placeholder="48000"
+                    min="5000"
+                    max="80000"
+                    data-testid="input-max-weight"
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mt-2">
+                These preferences help us match you with suitable loads. You'll only receive offers for loads that match your equipment and capacity limits.
+              </p>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
