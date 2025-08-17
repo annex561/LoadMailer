@@ -127,19 +127,21 @@ export class TelegramLoadService {
         if (data.startsWith('book_')) {
           const loadId = data.substring(5); // Remove 'book_' prefix
           await this.handleBookLoad(loadId, telegramId, chatId);
+        } else if (data.startsWith('confirm_')) {
+          const parts = data.substring(8).split('_'); // Remove 'confirm_' prefix
+          const shortLoadId = parts[0];
+          const shortDriverId = parts[1];
+          await this.handleConfirmLoadShort(shortLoadId, shortDriverId, telegramId, chatId);
+        } else if (data.startsWith('decline_') && data.includes('_')) {
+          // This is a confirmation decline with driver ID
+          const parts = data.substring(8).split('_'); // Remove 'decline_' prefix
+          const shortLoadId = parts[0];
+          const shortDriverId = parts[1];
+          await this.handleDeclineConfirmationShort(shortLoadId, shortDriverId, telegramId, chatId);
         } else if (data.startsWith('decline_')) {
+          // This is a simple load decline
           const loadId = data.substring(8); // Remove 'decline_' prefix
           await this.handleDeclineLoad(loadId, telegramId, chatId);
-        } else if (data.startsWith('confirm_load_')) {
-          const parts = data.substring(13).split('_'); // Remove 'confirm_load_' prefix
-          const loadId = parts[0];
-          const driverId = parts[1];
-          await this.handleConfirmLoad(loadId, driverId, telegramId, chatId);
-        } else if (data.startsWith('decline_load_')) {
-          const parts = data.substring(13).split('_'); // Remove 'decline_load_' prefix
-          const loadId = parts[0];
-          const driverId = parts[1];
-          await this.handleDeclineConfirmation(loadId, driverId, telegramId, chatId);
         }
       } catch (error) {
         console.error('Error handling callback query:', error);
@@ -705,14 +707,18 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
 
 ⏰ *You have 10 minutes to respond*`;
 
+      // Create shorter callback data using the first 8 characters of IDs
+      const shortLoadId = load.id.substring(0, 8);
+      const shortDriverId = driverId.substring(0, 8);
+      
       const options = {
         parse_mode: 'Markdown' as const,
         disable_web_page_preview: true,
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '✅ CONFIRM & BOOK', callback_data: `confirm_load_${load.id}_${driverId}` },
-              { text: '❌ DECLINE', callback_data: `decline_load_${load.id}_${driverId}` }
+              { text: '✅ CONFIRM & BOOK', callback_data: `confirm_${shortLoadId}_${shortDriverId}` },
+              { text: '❌ DECLINE', callback_data: `decline_${shortLoadId}_${shortDriverId}` }
             ]
           ]
         }
@@ -1091,6 +1097,49 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
       }
     } catch (error) {
       console.error('Error handling second timeout:', error);
+    }
+  }
+
+  // Handler methods for shortened ID callbacks
+  private async handleConfirmLoadShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number): Promise<void> {
+    try {
+      // Find the full load and driver IDs by matching the first 8 characters
+      const loads = await storage.getLoads();
+      const drivers = await storage.getDrivers();
+      
+      const load = loads.find(l => l.id.startsWith(shortLoadId));
+      const driver = drivers.find(d => d.id.startsWith(shortDriverId));
+      
+      if (!load || !driver) {
+        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
+        return;
+      }
+      
+      await this.handleConfirmLoad(load.id, driver.id, telegramId, chatId);
+    } catch (error) {
+      console.error('Error handling confirmation with short IDs:', error);
+      await this.bot?.sendMessage(chatId, '❌ Error processing confirmation. Please contact dispatch.');
+    }
+  }
+
+  private async handleDeclineConfirmationShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number): Promise<void> {
+    try {
+      // Find the full load and driver IDs by matching the first 8 characters
+      const loads = await storage.getLoads();
+      const drivers = await storage.getDrivers();
+      
+      const load = loads.find(l => l.id.startsWith(shortLoadId));
+      const driver = drivers.find(d => d.id.startsWith(shortDriverId));
+      
+      if (!load || !driver) {
+        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
+        return;
+      }
+      
+      await this.handleDeclineConfirmation(load.id, driver.id, telegramId, chatId);
+    } catch (error) {
+      console.error('Error handling decline with short IDs:', error);
+      await this.bot?.sendMessage(chatId, '❌ Error processing decline. Please contact dispatch.');
     }
   }
 }
