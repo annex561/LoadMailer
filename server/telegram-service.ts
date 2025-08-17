@@ -869,47 +869,31 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
         return;
       }
 
-      // Update load offer status
+      // Update load offer status to pending (waiting for dispatcher rate setting)
       await storage.updateLoadOfferByLoadAndDriver(loadId, driver.id, {
-        status: 'accepted',
+        status: 'pending',
         respondedAt: new Date()
       });
 
-      // Assign driver to load
-      await storage.updateLoad(loadId, {
-        driverId: driver.id,
-        status: 'assigned'
-      });
-
-      // Send confirmation to driver (show driver rate - 10% less)
-      const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
+      // Send initial confirmation to driver
       this.bot?.sendMessage(
         chatId,
-        `✅ *BOOKING CONFIRMED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${driverRate.toLocaleString()}\n\nDispatcher is processing your booking. You will receive confirmation within 15 minutes.`,
+        `✅ *INTEREST CONFIRMED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\n\nYour interest has been sent to dispatch. You will receive a rate confirmation within 15 minutes.`,
         { parse_mode: 'Markdown' }
       );
 
-      // Notify dispatcher with complete information (showing full rate and driver rate)
+      // Notify dispatcher that driver is interested and needs rate setting
       if (this.config) {
-        const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
-        const dispatchMessage = `📞 *LOAD BOOKING CONFIRMATION*\n\n` +
-          `🚛 *DRIVER INFO:*\n` +
-          `• Name: ${driver.name}\n` +
-          `• Phone: ${driver.phone}\n` +
-          `• Location: ${driver.city || 'Not specified'}\n` +
-          `• Equipment: ${driver.equipmentType}\n` +
-          `• Capacity: ${driver.weightCapacity || 26000} lbs\n\n` +
-          `📦 *LOAD DETAILS:*\n` +
-          `• Load #: ${load.loadNumber}\n` +
-          `• Route: ${load.pickupAddress} → ${load.deliveryAddress}\n` +
-          `• Full Rate: $${load.rate?.toLocaleString()} (${load.miles} miles)\n` +
-          `• Driver Rate: $${driverRate.toLocaleString()} (90% of full rate)\n` +
-          `• Weight: ${load.weight.toLocaleString()} lbs\n` +
-          `• Equipment: ${load.equipmentType}\n` +
-          `• Pickup: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}\n` +
-          `• Delivery: ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime}\n` +
-          `• Company: ${load.company || 'Not specified'}\n\n` +
-          `[📞 Call Driver](tel:${driver.phone})`;
+        const dispatchMessage = `🚛 *DRIVER INTERESTED IN LOAD*\n\n` +
+          `📦 **Load:** ${load.loadNumber}\n` +
+          `🚛 **Driver:** ${driver.name}\n` +
+          `📞 **Phone:** ${driver.phone}\n` +
+          `📍 **Location:** ${driver.city || 'Not specified'}\n` +
+          `🚚 **Equipment:** ${driver.equipmentType}\n\n` +
+          `**Route:** ${load.pickupAddress} → ${load.deliveryAddress}\n` +
+          `**Original Rate:** $${load.rate?.toLocaleString()}\n` +
+          `**Distance:** ${load.miles} miles\n\n` +
+          `⚡ **ACTION REQUIRED:** Set dispatcher rate in dashboard to proceed with booking.`;
 
         this.bot?.sendMessage(
           this.config.dispatcherId,
