@@ -136,12 +136,13 @@ export default function EmailTemplateFormModal({
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description</FormLabel>
+                      <FormLabel className="form-label-improved">Description</FormLabel>
                       <FormControl>
                         <Textarea 
                           {...field} 
                           rows={3}
                           placeholder="Brief description of when this template is used"
+                          className="form-textarea-improved"
                           data-testid="textarea-template-description"
                         />
                       </FormControl>
@@ -156,10 +157,10 @@ export default function EmailTemplateFormModal({
                     name="trigger"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Trigger Event</FormLabel>
+                        <FormLabel className="form-label-improved">Trigger Event</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value} data-testid="select-trigger">
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="form-select-improved">
                               <SelectValue placeholder="Select trigger" />
                             </SelectTrigger>
                           </FormControl>
@@ -179,10 +180,10 @@ export default function EmailTemplateFormModal({
                     name="recipients"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Recipients</FormLabel>
+                        <FormLabel className="form-label-improved">Recipients</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value} data-testid="select-recipients">
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="form-select-improved">
                               <SelectValue placeholder="Select recipients" />
                             </SelectTrigger>
                           </FormControl>
@@ -211,7 +212,7 @@ export default function EmailTemplateFormModal({
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
-                        <FormLabel>Active Template</FormLabel>
+                        <FormLabel className="form-label-improved">Active Template</FormLabel>
                         <p className="text-sm text-gray-500">
                           When enabled, this template will be used for automated emails
                         </p>
@@ -223,18 +224,19 @@ export default function EmailTemplateFormModal({
               
               {/* Email Content */}
               <div className="space-y-4">
-                <h4 className="text-lg font-medium text-gray-900">Email Content</h4>
+                <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">Email Content</h4>
                 
                 <FormField
                   control={form.control}
                   name="subject"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email Subject</FormLabel>
+                      <FormLabel className="form-label-improved">Email Subject</FormLabel>
                       <FormControl>
                         <Input 
                           {...field} 
                           placeholder="e.g., New Load Assignment - {{loadNumber}}"
+                          className="form-input-improved"
                           data-testid="input-template-subject"
                         />
                       </FormControl>
@@ -248,12 +250,13 @@ export default function EmailTemplateFormModal({
                   name="body"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email Body</FormLabel>
+                      <FormLabel className="form-label-improved">Email Body</FormLabel>
                       <FormControl>
                         <Textarea 
                           {...field} 
                           rows={12}
                           placeholder="Email content with variables like {{driverName}}, {{customerName}}, {{loadNumber}}, etc."
+                          className="form-textarea-improved"
                           data-testid="textarea-template-body"
                         />
                       </FormControl>

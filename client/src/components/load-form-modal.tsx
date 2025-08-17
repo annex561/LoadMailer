@@ -149,11 +149,12 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                     name="weight"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Weight (lbs)</FormLabel>
+                        <FormLabel className="form-label-improved">Weight (lbs)</FormLabel>
                         <FormControl>
                           <Input 
                             {...field} 
-                            type="number" 
+                            type="number"
+                            className="form-input-improved" 
                             placeholder="4500"
                             onChange={(e) => field.onChange(Number(e.target.value))}
                             data-testid="input-weight"
@@ -168,10 +169,10 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                     name="priority"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Priority</FormLabel>
+                        <FormLabel className="form-label-improved">Priority</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value} data-testid="select-priority">
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="form-select-improved">
                               <SelectValue placeholder="Select priority" />
                             </SelectTrigger>
                           </FormControl>
@@ -192,10 +193,10 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                   name="customerId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Customer</FormLabel>
+                      <FormLabel className="form-label-improved">Customer</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value} data-testid="select-customer">
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="form-select-improved">
                             <SelectValue placeholder="Select customer" />
                           </SelectTrigger>
                         </FormControl>
@@ -215,18 +216,19 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
               
               {/* Route Information */}
               <div className="space-y-4">
-                <h4 className="text-lg font-medium text-gray-900">Pickup Details</h4>
+                <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">Pickup Details</h4>
                 <FormField
                   control={form.control}
                   name="pickupAddress"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Pickup Address</FormLabel>
+                      <FormLabel className="form-label-improved">Pickup Address</FormLabel>
                       <FormControl>
                         <Textarea 
                           {...field} 
                           rows={3} 
                           placeholder="1234 Industrial Blvd, Chicago, IL 60601"
+                          className="form-textarea-improved"
                           data-testid="textarea-pickup-address"
                         />
                       </FormControl>
@@ -240,9 +242,9 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                     name="pickupDate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Pickup Date</FormLabel>
+                        <FormLabel className="form-label-improved">Pickup Date</FormLabel>
                         <FormControl>
-                          <Input {...field} type="date" data-testid="input-pickup-date" />
+                          <Input {...field} type="date" className="form-input-improved" data-testid="input-pickup-date" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -253,9 +255,9 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                     name="pickupTime"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Pickup Time</FormLabel>
+                        <FormLabel className="form-label-improved">Pickup Time</FormLabel>
                         <FormControl>
-                          <Input {...field} type="time" data-testid="input-pickup-time" />
+                          <Input {...field} type="time" className="form-input-improved" data-testid="input-pickup-time" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -263,18 +265,19 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                   />
                 </div>
                 
-                <h4 className="text-lg font-medium text-gray-900 pt-4">Delivery Details</h4>
+                <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 pt-4">Delivery Details</h4>
                 <FormField
                   control={form.control}
                   name="deliveryAddress"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Delivery Address</FormLabel>
+                      <FormLabel className="form-label-improved">Delivery Address</FormLabel>
                       <FormControl>
                         <Textarea 
                           {...field} 
                           rows={3} 
                           placeholder="5678 Commerce St, Detroit, MI 48201"
+                          className="form-textarea-improved"
                           data-testid="textarea-delivery-address"
                         />
                       </FormControl>
@@ -288,9 +291,9 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                     name="deliveryDate"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Delivery Date</FormLabel>
+                        <FormLabel className="form-label-improved">Delivery Date</FormLabel>
                         <FormControl>
-                          <Input {...field} type="date" data-testid="input-delivery-date" />
+                          <Input {...field} type="date" className="form-input-improved" data-testid="input-delivery-date" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -301,9 +304,9 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                     name="deliveryTime"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Delivery Time</FormLabel>
+                        <FormLabel className="form-label-improved">Delivery Time</FormLabel>
                         <FormControl>
-                          <Input {...field} type="time" data-testid="input-delivery-time" />
+                          <Input {...field} type="time" className="form-input-improved" data-testid="input-delivery-time" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
