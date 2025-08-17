@@ -50,7 +50,6 @@ export const loads = pgTable("loads", {
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   driverId: varchar("driver_id").references(() => drivers.id),
   description: text("description").notNull(),
-  weight: integer("weight").notNull(),
   priority: text("priority").notNull().default("standard"), // standard, high, urgent
   pickupAddress: text("pickup_address").notNull(),
   pickupDate: timestamp("pickup_date").notNull(),

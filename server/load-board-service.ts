@@ -304,7 +304,7 @@ export class LoadBoardService {
               deliveryAddress: loadData.destination,
               deliveryDate: loadData.deliveryDate,
               deliveryTime: '17:00',
-              weight: loadData.weight || 0,
+
               equipmentType: loadData.equipment || 'Van',
               rate: loadData.rate || 0,
               miles: loadData.miles || 0,
@@ -815,7 +815,7 @@ export class LoadBoardService {
         const company = companies[Math.floor(Math.random() * companies.length)];
         const rate = Math.floor(Math.random() * 2000) + 1500; // $1500-$3500
         const miles = Math.floor(Math.random() * 1500) + 500; // 500-2000 miles
-        const weight = Math.floor(Math.random() * 40000) + 10000; // 10k-50k lbs
+
         
         const pickupDate = new Date();
         pickupDate.setDate(pickupDate.getDate() + Math.floor(Math.random() * 3)); // 0-2 days from now
@@ -828,8 +828,8 @@ export class LoadBoardService {
         
         const load = await storage.createLoad({
           customerId: defaultCustomer.id,
-          description: `${equipment} ${loadType} load - ${weight} lbs, ${length}ft from ${origin} to ${destination}`,
-          weight: weight,
+          description: `${equipment} ${loadType} load - ${length}ft from ${origin} to ${destination}`,
+
           priority: Math.random() > 0.8 ? 'urgent' : 'standard',
           pickupAddress: origin,
           pickupDate: pickupDate.toISOString().split('T')[0],

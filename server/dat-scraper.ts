@@ -457,7 +457,7 @@ export class DATScraper {
                   destination: destination,
                   pickupDate: new Date().toISOString().split('T')[0],
                   deliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                  weight: parseInt(weight?.replace(/\D/g, '') || '0') || Math.floor(Math.random() * 40000) + 10000,
+
                   equipment: equipment || 'Dry Van',
                   rate: parseFloat(rate?.replace(/[$,]/g, '') || '0') || Math.floor(Math.random() * 3000) + 1000,
                   miles: Math.floor(Math.random() * 800) + 100,
@@ -664,7 +664,7 @@ export class DATScraper {
         const newLoad = await storage.createLoad({
           customerId,
           description: loadData.description || `${loadData.equipment} load from ${loadData.origin} to ${loadData.destination}`,
-          weight: loadData.weight,
+
           priority: Math.random() > 0.7 ? 'urgent' : 'standard', // 30% chance of urgent
           pickupAddress: loadData.origin,
           pickupDate: loadData.pickupDate,

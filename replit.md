@@ -18,6 +18,14 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+**Complete Weight Field Removal (Aug 17, 2025)**
+- Removed "Weight lbs" field entirely from loads database schema per user requirements
+- System now uses only "Weight capacity" field from driver preferences for load matching
+- Updated all load creation forms, scrapers, and Telegram messages to exclude weight information
+- Load matching algorithm simplified to use driver weight capacity without specific load weight constraints
+- Database schema migration completed successfully - loads table no longer contains weight column
+- All load offers and descriptions now omit weight specifications entirely
+
 **Document Upload Integration into Load Management (Aug 17, 2025)**
 - Removed standalone Document Management page per user feedback that drivers upload via mobile devices
 - Integrated document viewing directly into load management table with new "Documents" column

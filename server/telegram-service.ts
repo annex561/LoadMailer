@@ -399,16 +399,9 @@ export class TelegramLoadService {
       score += 15;
     }
 
-    // Weight capacity match (10% weight)
+    // Weight capacity consideration (10% weight) - give full score since no weight constraint
     maxScore += 10;
-    const driverMaxWeight = driver.maxWeight || driver.weightCapacity || 48000;
-    if (load.weight && load.weight <= driverMaxWeight) {
-      score += 10;
-    } else if (load.weight && load.weight <= driverMaxWeight * 1.1) {
-      score += 5; // Allow 10% over capacity with reduced score
-    } else if (!load.weight) {
-      score += 8; // Default score if weight not specified
-    }
+    score += 10; // Full score since we only use weight capacity for driver, not load weight
 
     // Length capacity match (5% weight)
     maxScore += 5;
@@ -576,7 +569,6 @@ export class TelegramLoadService {
 Origin: *${load.pickupAddress}*
 Destination: *${load.deliveryAddress}*
 Pick-Up Date: *${load.pickupDate.toLocaleDateString()}*
-Weight: *${load.weight.toLocaleString()} lbs*
 Rate: *$${driverRate.toLocaleString() || 'TBD'}*
 Miles: *${load.miles || 'N/A'} mi*
 Rate/Mile: *$${rpm}*${deadheadText}${matchText}
