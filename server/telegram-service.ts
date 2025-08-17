@@ -762,12 +762,12 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
         }
         
         // Send the booking confirmation message
-        const confirmationMessage = `✅ **LOAD BOOKED SUCCESSFULLY**
+        const confirmationMessage = `✅ *LOAD BOOKED SUCCESSFULLY*
 
 Your load has been booked. Please start planning your trip and heading to your pick up location.
 
-📋 **Load:** ${result.loadNumber}
-🚛 **Status:** Assigned to you
+📋 Load: ${result.loadNumber}
+🚛 Status: Assigned to you
 
 Safe travels! 🛣️`;
 
