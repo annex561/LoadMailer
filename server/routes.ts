@@ -2200,6 +2200,28 @@ Safe travels! 🚛
     }
   });
 
+  // Test route to simulate driver accepting a load
+  app.post("/api/test/accept-load", async (req, res) => {
+    try {
+      const { loadId, driverId } = req.body;
+      
+      if (!loadId || !driverId) {
+        return res.status(400).json({ error: "loadId and driverId are required" });
+      }
+
+      // Update the load offer status to accepted
+      await storage.updateLoadOfferByLoadAndDriver(loadId, driverId, {
+        status: 'accepted',
+        respondedAt: new Date()
+      });
+
+      res.json({ success: true, message: "Load offer status updated to accepted" });
+    } catch (error) {
+      console.error('Error in test accept load:', error);
+      res.status(500).json({ error: "Failed to update load offer" });
+    }
+  });
+
   app.get("/api/telegram/driver-stats", async (req, res) => {
     try {
       const stats = await storage.getAllDriverLoadOfferStats();

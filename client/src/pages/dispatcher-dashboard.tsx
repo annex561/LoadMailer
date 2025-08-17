@@ -835,7 +835,7 @@ export default function DispatcherDashboard() {
                                   >
                                     {offer.status}
                                   </Badge>
-                                  {offer.status === 'pending' && (
+                                  {offer.status === 'accepted' && (
                                     <Button
                                       size="sm"
                                       className="bg-blue-600 hover:bg-blue-700 text-white"

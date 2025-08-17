@@ -869,9 +869,9 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
         return;
       }
 
-      // Update load offer status to pending (waiting for dispatcher rate setting)
+      // Update load offer status to accepted (driver has shown interest)
       await storage.updateLoadOfferByLoadAndDriver(loadId, driver.id, {
-        status: 'pending',
+        status: 'accepted',
         respondedAt: new Date()
       });
 
