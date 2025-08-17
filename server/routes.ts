@@ -370,6 +370,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual driver onboarding endpoint
+  app.post("/api/drivers/manual-onboard", async (req, res) => {
+    try {
+      // Create a comprehensive driver data object for manual onboarding
+      const manualDriverData = {
+        name: req.body.name,
+        email: req.body.email,
+        phone: req.body.phone,
+        licenseNumber: req.body.licenseNumber,
+        licenseState: req.body.licenseState,
+        licenseExpiry: req.body.licenseExpiry,
+        equipmentType: req.body.equipmentType,
+        maxWeight: req.body.maxWeight,
+        maxLength: req.body.maxLength,
+        loadType: req.body.loadType,
+        city: req.body.city,
+        state: req.body.state,
+        zipCode: req.body.zipCode,
+        vehicleYear: req.body.vehicleYear,
+        vehicleMake: req.body.vehicleMake,
+        vehicleModel: req.body.vehicleModel || "",
+        isOnboarded: true,
+        status: "available",
+        createdAt: new Date()
+      };
+
+      // Check for duplicates before creating
+      const duplicates = await storage.findDuplicateDrivers(
+        manualDriverData.name, 
+        manualDriverData.email, 
+        manualDriverData.phone
+      );
+      
+      if (duplicates.length > 0) {
+        return res.status(409).json({ 
+          error: "Duplicate contact found", 
+          duplicates,
+          message: "A driver with this name, email, or phone already exists." 
+        });
+      }
+
+      // Create driver using database service for full onboarding
+      const driver = await dbTokenService.createDriver(manualDriverData);
+      
+      res.status(201).json(driver);
+    } catch (error) {
+      console.error("Error creating manual driver:", error);
+      res.status(400).json({ 
+        error: error instanceof Error ? error.message : "Failed to create driver manually" 
+      });
+    }
+  });
+
   app.put("/api/drivers/:id", async (req, res) => {
     try {
       const { id } = req.params;

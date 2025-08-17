@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle, Trash2, AlertTriangle, UserPlus } from "lucide-react";
 import type { Driver, OnboardingToken } from "@shared/schema";
+import { EQUIPMENT_TYPES } from "@shared/equipment-types";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,13 +26,34 @@ const smsDriverSchema = z.object({
   phone: z.string().min(10, "Please enter a valid phone number"),
 });
 
+const manualDriverSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Please enter a valid email address"),
+  phone: z.string().min(10, "Please enter a valid phone number"),
+  licenseNumber: z.string().min(5, "License number is required"),
+  licenseState: z.string().min(2, "License state is required"),
+  licenseExpiry: z.string().min(1, "License expiry date is required"),
+  equipmentType: z.string().min(1, "Equipment type is required"),
+  maxWeight: z.number().min(1000, "Maximum weight must be at least 1000 lbs"),
+  maxLength: z.number().min(10, "Maximum length must be at least 10 ft"),
+  loadType: z.enum(["full", "partial", "full_partial"]),
+  city: z.string().min(2, "City is required"),
+  state: z.string().min(2, "State is required"),
+  zipCode: z.string().min(5, "ZIP code is required"),
+  vehicleYear: z.string().min(4, "Vehicle year is required"),
+  vehicleMake: z.string().min(2, "Vehicle make is required"),
+  vehicleModel: z.string().optional(),
+});
+
 type InviteDriverForm = z.infer<typeof inviteDriverSchema>;
 type SMSDriverForm = z.infer<typeof smsDriverSchema>;
+type ManualDriverForm = z.infer<typeof manualDriverSchema>;
 
 export default function DriverManagement() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [showTelegramModal, setShowTelegramModal] = useState(false);
+  const [showManualOnboardingModal, setShowManualOnboardingModal] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string>("");
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
   const { toast } = useToast();
@@ -56,6 +79,28 @@ export default function DriverManagement() {
     defaultValues: {
       email: "",
       phone: "",
+    },
+  });
+
+  const manualForm = useForm<ManualDriverForm>({
+    resolver: zodResolver(manualDriverSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      licenseNumber: "",
+      licenseState: "",
+      licenseExpiry: "",
+      equipmentType: "",
+      maxWeight: 26000,
+      maxLength: 53,
+      loadType: "full_partial",
+      city: "",
+      state: "",
+      zipCode: "",
+      vehicleYear: "",
+      vehicleMake: "",
+      vehicleModel: "",
     },
   });
 
@@ -187,6 +232,29 @@ export default function DriverManagement() {
     },
   });
 
+  const createManualDriverMutation = useMutation({
+    mutationFn: async (data: ManualDriverForm) => {
+      const response = await apiRequest("POST", "/api/drivers/manual-onboard", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/drivers"] });
+      toast({
+        title: "Driver Created",
+        description: "Driver has been successfully onboarded to your fleet",
+      });
+      manualForm.reset();
+      setShowManualOnboardingModal(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create driver",
+        variant: "destructive",
+      });
+    },
+  });
+
   const getDriverStatusBadge = (driver: Driver) => {
     const statusConfig = {
       available: { label: "Available", className: "bg-success bg-opacity-10 text-success" },
@@ -293,7 +361,7 @@ export default function DriverManagement() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* Current Drivers */}
         <Card>
           <CardHeader>
@@ -674,6 +742,399 @@ export default function DriverManagement() {
                   No pending invitations. Click "Invite Driver" to send your first invite.
                 </div>
               )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Manual Driver Onboarding */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-blue-600" />
+                  Manual Onboarding
+                </CardTitle>
+                <p className="text-sm text-gray-500">Add drivers directly without sending invitations</p>
+              </div>
+              <Dialog open={showManualOnboardingModal} onOpenChange={setShowManualOnboardingModal}>
+                <DialogTrigger asChild>
+                  <Button className="bg-blue-600 text-white hover:bg-blue-700" data-testid="button-manual-onboard">
+                    <UserPlus className="mr-2 w-4 h-4" />
+                    Add Driver
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-white border border-gray-300 shadow-lg max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="manual-onboard-modal">
+                  <DialogHeader>
+                    <DialogTitle>Manual Driver Onboarding</DialogTitle>
+                    <DialogDescription>
+                      Create a driver profile directly without sending an invitation. The driver will be immediately available for load assignments.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Form {...manualForm}>
+                    <form onSubmit={manualForm.handleSubmit((data) => createManualDriverMutation.mutate(data))} className="space-y-6">
+                      {/* Personal Information */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={manualForm.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Full Name</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="John Doe"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-name"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={manualForm.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Email Address</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="email"
+                                  placeholder="john@example.com"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-email"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <FormField
+                        control={manualForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Phone Number</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                placeholder="(555) 123-4567"
+                                className="bg-white border border-gray-300"
+                                data-testid="input-manual-phone"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* License Information */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={manualForm.control}
+                          name="licenseNumber"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>License Number</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="ABC123456"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-license"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={manualForm.control}
+                          name="licenseState"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>License State</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="CA"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-state"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={manualForm.control}
+                          name="licenseExpiry"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>License Expiry</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="date"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-expiry"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* Equipment & Capacity */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={manualForm.control}
+                          name="equipmentType"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Equipment Type</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="bg-white border border-gray-300" data-testid="select-equipment-type">
+                                    <SelectValue placeholder="Select equipment type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                                  {EQUIPMENT_TYPES.map((equipment) => (
+                                    <SelectItem key={equipment.value} value={equipment.value}>
+                                      {equipment.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={manualForm.control}
+                          name="loadType"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Load Type Preference</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="bg-white border border-gray-300" data-testid="select-load-type">
+                                    <SelectValue placeholder="Select load type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                                  <SelectItem value="full">Full Loads Only</SelectItem>
+                                  <SelectItem value="partial">Partial Loads Only</SelectItem>
+                                  <SelectItem value="full_partial">Both Full & Partial</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={manualForm.control}
+                          name="maxWeight"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Max Weight (lbs)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="number"
+                                  onChange={(e) => field.onChange(Number(e.target.value))}
+                                  placeholder="26000"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-weight"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={manualForm.control}
+                          name="maxLength"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Max Length (ft)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="number"
+                                  onChange={(e) => field.onChange(Number(e.target.value))}
+                                  placeholder="53"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-length"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* Location */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={manualForm.control}
+                          name="city"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>City</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="Atlanta"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-city"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={manualForm.control}
+                          name="state"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>State</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="GA"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-location-state"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={manualForm.control}
+                          name="zipCode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>ZIP Code</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="30309"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-zip"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* Vehicle Information */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={manualForm.control}
+                          name="vehicleYear"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Vehicle Year</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="2023"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-vehicle-year"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={manualForm.control}
+                          name="vehicleMake"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Vehicle Make</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="Freightliner"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-vehicle-make"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={manualForm.control}
+                          name="vehicleModel"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Vehicle Model (Optional)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="Cascadia"
+                                  className="bg-white border border-gray-300"
+                                  data-testid="input-manual-vehicle-model"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="flex justify-end space-x-4 pt-4">
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          className="bg-white border border-gray-300"
+                          onClick={() => setShowManualOnboardingModal(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          type="submit" 
+                          disabled={createManualDriverMutation.isPending}
+                          className="bg-blue-600 text-white hover:bg-blue-700"
+                          data-testid="button-create-manual-driver"
+                        >
+                          {createManualDriverMutation.isPending ? "Creating Driver..." : "Create Driver"}
+                        </Button>
+                      </div>
+                    </form>
+                  </Form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8 text-gray-600">
+              <UserPlus className="w-12 h-12 mx-auto text-blue-600 mb-4" />
+              <h3 className="text-lg font-medium mb-2">Quick Driver Addition</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Manually create driver profiles when you have all the necessary information ready. 
+                This skips the invitation process and immediately adds the driver to your fleet.
+              </p>
+              <p className="text-xs text-gray-400">
+                Best for drivers you've already verified and want to add quickly to the system.
+              </p>
             </div>
           </CardContent>
         </Card>
