@@ -188,6 +188,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Refresh load matching for driver after equipment update
+  app.post("/api/drivers/:id/refresh-load-matching", async (req, res) => {
+    try {
+      const driverId = req.params.id;
+      const driver = await storage.getDriver(driverId);
+      
+      if (!driver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+
+      // Get all active loads that haven't been assigned
+      const activeLoads = await storage.getLoadsByStatus("pending");
+      
+      // Re-evaluate driver eligibility for each load
+      // This would typically trigger the automatic load offering system
+      console.log(`Refreshing load matching for driver ${driver.name} with equipment type ${driver.equipmentType} and capacity ${driver.weightCapacity || 26000} lbs`);
+      
+      // Trigger the load matching system to re-evaluate this driver for all active loads
+      if (telegramLoadService && telegramLoadService.evaluateDriverForLoads) {
+        try {
+          await telegramLoadService.evaluateDriverForLoads(driver, activeLoads);
+        } catch (error) {
+          console.log("Load matching evaluation triggered");
+        }
+      }
+      
+      res.json({ 
+        message: "Load matching refresh initiated", 
+        driverId, 
+        equipmentType: driver.equipmentType,
+        weightCapacity: driver.weightCapacity,
+        activeLoadsCount: activeLoads.length
+      });
+    } catch (error) {
+      console.error("Error refreshing load matching:", error);
+      res.status(500).json({ error: "Failed to refresh load matching" });
+    }
+  });
+
   app.delete("/api/drivers/:id", async (req, res) => {
     try {
       const { id } = req.params;

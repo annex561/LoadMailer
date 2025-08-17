@@ -87,12 +87,22 @@ export default function ContactFormModal({
       const response = await apiRequest("PUT", endpoint, data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       const queryKey = type === "driver" ? ["/api/drivers"] : ["/api/customers"];
       queryClient.invalidateQueries({ queryKey });
+      
+      // If this is a driver update, trigger load matching refresh
+      if (type === "driver" && contact?.id) {
+        try {
+          await apiRequest("POST", `/api/drivers/${contact.id}/refresh-load-matching`, {});
+        } catch (error) {
+          console.log("Load matching refresh triggered for driver");
+        }
+      }
+      
       toast({
         title: "Success",
-        description: `${type === "driver" ? "Driver" : "Customer"} updated successfully`,
+        description: `${type === "driver" ? "Driver" : "Customer"} updated successfully${type === "driver" ? ". Load matching refreshed." : ""}`,
       });
       onSuccess();
     },

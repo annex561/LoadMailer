@@ -10,6 +10,15 @@ LoadMaster is a comprehensive fleet management system designed for truck load tr
 
 Preferred communication style: Simple, everyday language.
 
+# Recent Changes
+
+**Form Visibility Enhancement (Aug 17, 2025)**
+- Fixed critical form visibility issues with transparent backgrounds
+- Applied improved CSS styling with white backgrounds and dark text across all forms
+- Added weight capacity field to driver equipment specifications
+- Implemented automatic load matching refresh when driver equipment details are updated
+- Contact form updates now trigger re-evaluation of driver eligibility for available loads
+
 # System Architecture
 
 ## Frontend Architecture
