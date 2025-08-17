@@ -34,6 +34,7 @@ Preferred communication style: Simple, everyday language.
 - ENHANCED: Improved visual consistency across invite driver and SMS onboarding modals
 - APPLIED: User preference for `bg-white border border-gray-300` styling throughout onboarding system
 - RESOLVED: Background transparency issues that made form elements hard to see
+- FIXED: Driver edit section status dropdown now uses solid white background instead of transparent
 
 **MIKE JOHNSON LOAD MATCHING ISSUE RESOLVED (Aug 17, 2025)**
 - FIXED: Mike Johnson now properly receiving load offers via Telegram

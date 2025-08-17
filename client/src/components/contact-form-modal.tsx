@@ -444,11 +444,11 @@ export default function ContactFormModal({
                   <FormLabel className="form-label-improved">Status</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value} data-testid={`select-${type}-status`}>
                     <FormControl>
-                      <SelectTrigger className="form-select-improved">
+                      <SelectTrigger className="bg-white border border-gray-300">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent className="bg-white border border-gray-300 shadow-lg">
                       {type === "driver" ? (
                         <>
                           <SelectItem value="available">Available</SelectItem>
