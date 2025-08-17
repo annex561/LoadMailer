@@ -1102,6 +1102,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Dashboard alias for scraped loads
+  app.get("/api/scraped-loads", async (req, res) => {
+    try {
+      const loads = await storage.getAllScrapedLoads();
+      res.json(loads);
+    } catch (error) {
+      console.error('Get scraped loads error:', error);
+      res.status(500).json({ error: "Failed to get scraped loads" });
+    }
+  });
+
   app.post("/api/load-boards/scraped-loads/:id/import", async (req, res) => {
     try {
       const { id } = req.params;
