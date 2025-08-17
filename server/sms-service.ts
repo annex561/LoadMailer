@@ -78,11 +78,26 @@ class SMSService {
       console.log(`📱 SMS sent successfully to ${message.to} with SID: ${result.sid}`);
       console.log(`📱 Message status: ${result.status}`);
       console.log(`📱 Message direction: ${result.direction}`);
+      console.log(`📱 From number: ${fromPhone}`);
+      console.log(`📱 To number: ${message.to}`);
       
       // Check if we have additional info about delivery status
       if (result.errorCode) {
         console.log(`⚠️  SMS Error Code: ${result.errorCode} - ${result.errorMessage}`);
       }
+      
+      // Add delay to check delivery status
+      setTimeout(async () => {
+        try {
+          const messageStatus = await this.client!.messages(result.sid).fetch();
+          console.log(`📱 Message ${result.sid} status update: ${messageStatus.status}`);
+          if (messageStatus.errorCode) {
+            console.log(`⚠️  Delivery Error: ${messageStatus.errorCode} - ${messageStatus.errorMessage}`);
+          }
+        } catch (error) {
+          console.log(`⚠️  Could not fetch message status: ${error}`);
+        }
+      }, 5000);
       
       return {
         success: true,

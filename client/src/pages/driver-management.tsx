@@ -496,6 +496,11 @@ export default function DriverManagement() {
                             <div className="mt-2 p-2 bg-red-100 rounded text-xs text-red-800">
                               <strong>Why SMS shows "Success" but doesn't arrive:</strong> Twilio accepts the message but silently drops it for unverified numbers on trial accounts.
                             </div>
+                            <div className="mt-2">
+                              <a href="/sms-status" target="_blank" className="text-blue-600 underline text-sm">
+                                📱 Check SMS Delivery Status
+                              </a>
+                            </div>
                           </div>
                         </div>
                       </div>

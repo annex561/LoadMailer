@@ -1317,6 +1317,46 @@ Safe travels! 🚛`;
     }
   });
 
+  // SMS Status Endpoint
+  app.get('/api/sms-status/:messageId', async (req, res) => {
+    const { messageId } = req.params;
+    
+    if (!messageId || !messageId.startsWith('SM')) {
+      return res.status(400).json({ error: 'Invalid message ID format' });
+    }
+
+    try {
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+      
+      if (!accountSid || !authToken) {
+        return res.status(500).json({ error: 'Twilio credentials not configured' });
+      }
+
+      const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages/${messageId}.json`,
+        {
+          headers: {
+            'Authorization': `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return res.status(404).json({ error: 'Message not found' });
+        }
+        throw new Error(`Twilio API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Error fetching SMS status:', error);
+      res.status(500).json({ error: 'Failed to fetch SMS status' });
+    }
+  });
+
   app.post("/api/create-telegram-onboarding-invite", async (req, res) => {
     try {
       const { email, telegramId } = req.body;

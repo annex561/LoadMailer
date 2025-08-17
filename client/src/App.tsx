@@ -20,6 +20,7 @@ import { MoodTracker } from "@/pages/mood-tracker";
 import GPSTracking from "@/pages/gps-tracking";
 import PredictiveMaintenance from "@/pages/predictive-maintenance";
 import AnalyticsDashboard from "@/pages/analytics-dashboard";
+import SMSStatus from "@/pages/sms-status";
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
 
@@ -53,6 +54,7 @@ function App() {
           {/* Standalone driver pages without sidebar/header */}
           <Route path="/driver-onboarding" component={DriverOnboarding} />
           <Route path="/driver-dashboard" component={DriverDashboard} />
+          <Route path="/sms-status" component={SMSStatus} />
           
           {/* Main app with sidebar layout */}
           <Route>
