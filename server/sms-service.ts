@@ -50,20 +50,29 @@ class SMSService {
         to: message.to
       });
 
-      console.log(`SMS sent successfully to ${message.to} with SID: ${result.sid}`);
+      console.log(`📱 SMS sent successfully to ${message.to} with SID: ${result.sid}`);
+      console.log(`📱 Message status: ${result.status}`);
+      console.log(`📱 Message direction: ${result.direction}`);
+      
+      // Check if we have additional info about delivery status
+      if (result.errorCode) {
+        console.log(`⚠️  SMS Error Code: ${result.errorCode} - ${result.errorMessage}`);
+      }
       
       return {
         success: true,
         messageId: result.sid
       };
     } catch (error: any) {
-      console.error('Failed to send SMS:', error);
+      console.error('❌ Failed to send SMS:', error);
+      console.error('❌ Error code:', error.code);
+      console.error('❌ Error message:', error.message);
       
       // Check for various Twilio error codes
       if (error.code === 21608) {
         return {
           success: false,
-          error: 'Trial account limitation: Phone number must be verified in Twilio console',
+          error: 'Trial account limitation: Phone number must be verified in Twilio console first. Visit https://console.twilio.com/us1/develop/phone-numbers/manage/verified to verify your number.',
           isTrialAccount: true
         };
       }
@@ -74,6 +83,15 @@ class SMSService {
           success: false,
           error: 'Invalid phone number format. Please use a valid phone number (e.g., +1234567890)',
           isTrialAccount: false
+        };
+      }
+      
+      // Unverified phone number on trial account
+      if (error.code === 21614) {
+        return {
+          success: false,
+          error: 'Phone number is not verified. For trial accounts, verify this number at https://console.twilio.com/us1/develop/phone-numbers/manage/verified',
+          isTrialAccount: true
         };
       }
       

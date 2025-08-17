@@ -116,13 +116,13 @@ export default function DriverManagement() {
       if (error.response?.data?.isTrialAccount) {
         toast({
           title: "Phone Verification Required",
-          description: "Trial accounts can only send SMS to verified numbers. Please verify this number in your Twilio console or upgrade to a paid account.",
+          description: "Trial accounts can only send SMS to verified numbers. Visit Twilio Console → Phone Numbers → Manage → Verified to add your number.",
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Error",
-          description: error.response?.data?.details || "Failed to send SMS invitation",
+          title: "SMS Delivery Failed",
+          description: error.response?.data?.details || "Failed to send SMS invitation. Please check the phone number format.",
           variant: "destructive",
         });
       }
@@ -440,11 +440,14 @@ export default function DriverManagement() {
                               <Input 
                                 {...field} 
                                 type="tel"
-                                placeholder="(555) 123-4567"
+                                placeholder="+1 (555) 123-4567"
                                 className="bg-white border border-gray-300"
                                 data-testid="input-driver-phone"
                               />
                             </FormControl>
+                            <p className="text-xs text-amber-600 mt-1">
+                              📱 For trial accounts, this number must be verified in your Twilio console first
+                            </p>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -475,6 +478,17 @@ export default function DriverManagement() {
                             <h4 className="font-medium text-blue-800">SMS Invitation</h4>
                             <p className="text-sm text-blue-700 mt-1">
                               The driver will receive a text message with a secure onboarding link. Once they complete registration, they'll be automatically added to your fleet.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                        <div className="flex items-start space-x-3">
+                          <AlertTriangle className="text-amber-600 w-5 h-5 mt-0.5" />
+                          <div>
+                            <h4 className="font-medium text-amber-800">Trial Account Notice</h4>
+                            <p className="text-sm text-amber-700 mt-1">
+                              For Twilio trial accounts, you must verify phone numbers before sending SMS. Visit <a href="https://console.twilio.com/us1/develop/phone-numbers/manage/verified" target="_blank" className="underline">Twilio Console</a> to verify your number.
                             </p>
                           </div>
                         </div>

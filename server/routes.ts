@@ -1283,8 +1283,9 @@ Safe travels! 🚛`;
         if (smsResult.isTrialAccount) {
           return res.status(400).json({ 
             error: "Phone number verification required", 
-            details: "Trial accounts can only send SMS to verified phone numbers. Please verify this number in your Twilio console at twilio.com/console/phone-numbers/verified, or upgrade to a paid account to send to any number.",
-            isTrialAccount: true
+            details: "IMPORTANT: Your Twilio trial account can only send SMS to verified phone numbers. Steps to fix:\n\n1. Go to https://console.twilio.com/us1/develop/phone-numbers/manage/verified\n2. Click 'Add a new number'\n3. Enter your phone number\n4. Complete the verification process\n5. Then try sending the SMS again\n\nAlternatively, upgrade to a paid Twilio account to send to any number.",
+            isTrialAccount: true,
+            verificationUrl: "https://console.twilio.com/us1/develop/phone-numbers/manage/verified"
           });
         }
         
