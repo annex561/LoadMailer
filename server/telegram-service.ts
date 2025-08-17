@@ -313,7 +313,7 @@ export class TelegramLoadService {
         // Calculate overall match score
         const matchScore = await this.calculateDriverMatchScore(driver, load, proximity.distance);
         console.log(`Driver ${driver.name} match score for load ${load.loadNumber}: ${matchScore}% (distance: ${proximity.distance}mi, equipment: ${driver.equipmentType}/${load.equipmentType})`);
-        if (matchScore < 40) continue; // Lowered threshold to 40% for better matching
+        if (matchScore < 30) continue; // Lowered threshold to 30% for better matching
 
         eligibleDrivers.push({
           driver,
@@ -389,6 +389,12 @@ export class TelegramLoadService {
     maxScore += 25;
     if (driver.equipmentType === load.equipmentType || !load.equipmentType) {
       score += 25;
+    } else {
+      // Partial matches for compatible equipment types
+      const compatibleEquipment = this.getCompatibleEquipmentTypes(driver.equipmentType);
+      if (compatibleEquipment.includes(load.equipmentType)) {
+        score += 15; // Partial credit for compatible equipment
+      }
     }
 
     // Load type preference match (15% weight)
@@ -452,6 +458,26 @@ export class TelegramLoadService {
   }
 
   // Calculate distance between two coordinates in miles
+  // Get compatible equipment types for better matching
+  private getCompatibleEquipmentTypes(driverEquipment: string): string[] {
+    const compatibilityMap: Record<string, string[]> = {
+      'van': ['sprinter_van', 'van_lift_gate', 'van_hotshot'],
+      'sprinter_van': ['van', 'van_lift_gate', 'van_hotshot'],
+      'van_hotshot': ['van', 'sprinter_van', 'flatbed_hotshot'],
+      'van_lift_gate': ['van', 'sprinter_van'],
+      'box_truck': ['straight_box_truck', 'moving_van'],
+      'straight_box_truck': ['box_truck', 'moving_van'],
+      'moving_van': ['box_truck', 'straight_box_truck'],
+      'flatbed': ['flatbed_hotshot', 'step_deck'],
+      'flatbed_hotshot': ['flatbed', 'van_hotshot'],
+      'step_deck': ['flatbed', 'lowboy'],
+      'dry_van': ['refrigerated'],
+      'refrigerated': ['dry_van']
+    };
+    
+    return compatibilityMap[driverEquipment] || [];
+  }
+
   private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 3959; // Earth's radius in miles
     const dLat = this.toRadians(lat2 - lat1);
@@ -645,7 +671,7 @@ You are working for **LoadMaster Logistics**:
 
 ======================
 📍 **Pick Up:** ${load.pickupDate.toLocaleDateString()} until ${pickupTime}
-**Address:** ${load.customerCompany || 'Customer'}
+**Address:** ${load.customer?.name || 'Customer'}
 ${load.pickupAddress}
 ======================
 
@@ -654,7 +680,7 @@ ${load.specialInstructions || 'No special instructions'}
 
 ======================
 🏁 **Deliver:** ${load.deliveryDate.toLocaleDateString()} ${deliveryTime}
-**Customer:** ${load.customerCompany || 'Delivery Location'}
+**Customer:** ${load.customer?.name || 'Delivery Location'}
 ${load.deliveryAddress}
 ======================
 
@@ -745,7 +771,7 @@ ${onboardingUrl}
 📋 Load: ${load.loadNumber}
 💰 Your Rate: $${dispatcherRate}
 📍 Route: ${load.pickupAddress} → ${load.deliveryAddress}
-📦 Weight: ${load.weight.toLocaleString()} lbs
+📦 Equipment: ${load.equipmentType || 'Any'}
 📅 Pickup: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime || '12:00 PM'}
 📅 Delivery: ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime || '08:00 AM'}${deadheadText}
 
