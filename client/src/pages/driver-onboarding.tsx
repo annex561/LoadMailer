@@ -52,6 +52,9 @@ interface OnboardingData {
   telegramUsername: string;
   preferredLanes: string[];
   avoidAreas: string[];
+  
+  // Authentication
+  confirmPassword: string;
 }
 
 const EQUIPMENT_TYPES = [
@@ -111,7 +114,8 @@ export default function DriverOnboarding() {
     enableTelegramNotifications: true,
     telegramUsername: '',
     preferredLanes: [],
-    avoidAreas: []
+    avoidAreas: [],
+    confirmPassword: 'password123'
   });
 
   const [, setLocation] = useLocation();
