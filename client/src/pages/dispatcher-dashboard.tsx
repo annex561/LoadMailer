@@ -352,6 +352,7 @@ export default function DispatcherDashboard() {
                               <div className="text-xs font-medium text-blue-800 mb-1">Driver Offers:</div>
                               {load.offers.map((offer: any, index: number) => {
                                 const driver = drivers.find((d: any) => d.id === offer.driverId);
+                                console.log('Rendering offer for driver:', driver, 'from offer:', offer);
                                 const statusColor = offer.status === 'accepted' ? 'text-green-600' : 
                                                   offer.status === 'declined' ? 'text-red-600' : 'text-yellow-600';
                                 const statusText = offer.status === 'pending' ? 'Awaiting Response' : 
@@ -373,10 +374,13 @@ export default function DispatcherDashboard() {
                                           className="h-6 px-2 text-xs"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            if (driver.phone) {
-                                              window.open(`tel:${driver.phone}`, '_self');
+                                            console.log('Call button clicked, driver:', driver);
+                                            if (driver?.phone) {
+                                              console.log('Opening tel link:', `tel:${driver.phone}`);
+                                              window.location.href = `tel:${driver.phone}`;
                                             } else {
-                                              toast({ title: 'No phone number available', variant: 'destructive' });
+                                              console.log('No phone number available for driver:', driver);
+                                              toast({ title: 'No phone number available for this driver', variant: 'destructive' });
                                             }
                                           }}
                                           data-testid={`button-call-driver-${driver.id}`}
@@ -390,10 +394,13 @@ export default function DispatcherDashboard() {
                                           className="h-6 px-2 text-xs"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            if (driver.phone) {
-                                              window.open(`sms:${driver.phone}`, '_self');
+                                            console.log('Text button clicked, driver:', driver);
+                                            if (driver?.phone) {
+                                              console.log('Opening SMS link:', `sms:${driver.phone}`);
+                                              window.location.href = `sms:${driver.phone}`;
                                             } else {
-                                              toast({ title: 'No phone number available', variant: 'destructive' });
+                                              console.log('No phone number available for driver:', driver);
+                                              toast({ title: 'No phone number available for this driver', variant: 'destructive' });
                                             }
                                           }}
                                           data-testid={`button-text-driver-${driver.id}`}
@@ -407,10 +414,13 @@ export default function DispatcherDashboard() {
                                           className="h-6 px-2 text-xs"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            if (driver.email) {
-                                              window.open(`mailto:${driver.email}?subject=Load ${load.loadNumber}`, '_self');
+                                            console.log('Email button clicked, driver:', driver);
+                                            if (driver?.email) {
+                                              console.log('Opening mailto link:', `mailto:${driver.email}?subject=Load ${load.loadNumber}`);
+                                              window.location.href = `mailto:${driver.email}?subject=Load ${load.loadNumber}`;
                                             } else {
-                                              toast({ title: 'No email address available', variant: 'destructive' });
+                                              console.log('No email address available for driver:', driver);
+                                              toast({ title: 'No email address available for this driver', variant: 'destructive' });
                                             }
                                           }}
                                           data-testid={`button-email-driver-${driver.id}`}
