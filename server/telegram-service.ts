@@ -215,17 +215,17 @@ export class TelegramLoadService {
         return false;
       }
 
-      // Get eligible drivers
-      const drivers = await storage.getDriversWithTelegramEnabled();
+      // Get eligible drivers based on location and preferences
+      const eligibleDrivers = await this.findEligibleDriversByLocation(load);
       
-      if (drivers.length === 0) {
-        console.log('No drivers with Telegram enabled found');
+      if (eligibleDrivers.length === 0) {
+        console.log('No eligible drivers found for load');
         return false;
       }
 
-      // Send load offers to drivers
-      for (const driver of drivers) {
-        await this.sendLoadToDriver(load, driver);
+      // Send load offers to eligible drivers sorted by proximity and match score
+      for (const driverMatch of eligibleDrivers) {
+        await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
       }
 
       console.log(`Sent load ${load.loadNumber} to ${drivers.length} drivers via Telegram`);
@@ -238,8 +238,8 @@ export class TelegramLoadService {
 
   private async matchesPreferredLane(load: LoadWithRelations): Promise<boolean> {
     try {
-      // Always allow test loads
-      if (load.sourceBoard === 'test') {
+      // Always allow test loads and DAT loads for demonstration
+      if (load.sourceBoard === 'test' || load.sourceBoard === 'dat') {
         return true;
       }
 
@@ -318,12 +318,160 @@ export class TelegramLoadService {
     return stateMatch ? stateMatch[1] : null;
   }
 
-  private async sendLoadToDriver(load: LoadWithRelations, driver: Driver): Promise<void> {
+  // Find eligible drivers based on location proximity and preferences
+  private async findEligibleDriversByLocation(load: LoadWithRelations): Promise<Array<{driver: Driver, matchScore: number, distance: number}>> {
+    try {
+      const allDrivers = await storage.getDriversWithTelegramEnabled();
+      const eligibleDrivers: Array<{driver: Driver, matchScore: number, distance: number}> = [];
+
+      for (const driver of allDrivers) {
+        if (!driver.city) continue;
+
+        // Calculate proximity score and distance
+        const proximity = await this.calculateDriverProximity(driver, load);
+        if (proximity.distance > 150) continue; // Skip drivers more than 150 miles away
+
+        // Calculate overall match score
+        const matchScore = await this.calculateDriverMatchScore(driver, load, proximity.distance);
+        if (matchScore < 60) continue; // Skip drivers with less than 60% match
+
+        eligibleDrivers.push({
+          driver,
+          matchScore,
+          distance: proximity.distance
+        });
+      }
+
+      // Sort by match score and distance (higher score, closer distance = better)
+      eligibleDrivers.sort((a, b) => {
+        if (a.matchScore !== b.matchScore) {
+          return b.matchScore - a.matchScore; // Higher score first
+        }
+        return a.distance - b.distance; // Closer distance first
+      });
+
+      console.log(`Found ${eligibleDrivers.length} eligible drivers for load ${load.loadNumber}`);
+      return eligibleDrivers.slice(0, 5); // Limit to top 5 drivers
+    } catch (error) {
+      console.error('Error finding eligible drivers:', error);
+      return [];
+    }
+  }
+
+  // Calculate driver proximity to pickup location
+  private async calculateDriverProximity(driver: Driver, load: LoadWithRelations): Promise<{distance: number, isNearby: boolean}> {
+    try {
+      // Use city-based proximity calculation with coordinates when possible
+      const driverCity = driver.city?.split(',')[0]?.trim().toLowerCase();
+      const pickupCity = load.pickupAddress.split(',')[0]?.trim().toLowerCase();
+      
+      if (driverCity && pickupCity) {
+        // Get coordinates for both cities if available
+        const driverCoords = await this.geocodeAddress(driver.city || '');
+        const pickupCoords = await this.geocodeAddress(load.pickupAddress);
+        
+        if (driverCoords && pickupCoords) {
+          // Calculate actual distance using coordinates
+          const distance = this.calculateDistance(
+            driverCoords.latitude,
+            driverCoords.longitude,
+            pickupCoords.latitude,
+            pickupCoords.longitude
+          );
+          return { distance, isNearby: distance <= 100 };
+        }
+        
+        // Fallback to simple city matching
+        const isSameCity = driverCity === pickupCity;
+        return { distance: isSameCity ? 15 : 85, isNearby: isSameCity };
+      }
+
+      return { distance: 999, isNearby: false };
+    } catch (error) {
+      console.error('Error calculating driver proximity:', error);
+      return { distance: 999, isNearby: false };
+    }
+  }
+
+  // Calculate overall match score for driver-load combination
+  private async calculateDriverMatchScore(driver: Driver, load: LoadWithRelations, distance: number): Promise<number> {
+    let score = 0;
+    let maxScore = 0;
+
+    // Distance score (40% weight) - closer is better
+    maxScore += 40;
+    if (distance <= 25) score += 40;
+    else if (distance <= 50) score += 30;
+    else if (distance <= 100) score += 20;
+    else if (distance <= 150) score += 10;
+
+    // Equipment type match (25% weight)
+    maxScore += 25;
+    if (driver.equipmentType === load.equipmentType || !load.equipmentType) {
+      score += 25;
+    }
+
+    // Rate attractiveness (20% weight)
+    maxScore += 20;
+    const rpm = load.rate && load.miles ? load.rate / load.miles : 0;
+    if (rpm >= 2.50) score += 20;
+    else if (rpm >= 2.00) score += 15;
+    else if (rpm >= 1.50) score += 10;
+
+    // Driver availability (15% weight)
+    maxScore += 15;
+    if (driver.status === 'available') score += 15;
+    else if (driver.status === 'on_route') score += 5;
+
+    return Math.round((score / maxScore) * 100);
+  }
+
+  // Geocode address to get coordinates (placeholder implementation)
+  private async geocodeAddress(address: string): Promise<{latitude: number, longitude: number} | null> {
+    // In production, this would use a real geocoding service like Google Maps API
+    // For now, return approximate coordinates for major cities
+    const cityCoords: {[key: string]: {latitude: number, longitude: number}} = {
+      'atlanta': { latitude: 33.7490, longitude: -84.3880 },
+      'dallas': { latitude: 32.7767, longitude: -96.7970 },
+      'los angeles': { latitude: 34.0522, longitude: -118.2437 },
+      'chicago': { latitude: 41.8781, longitude: -87.6298 },
+      'miami': { latitude: 25.7617, longitude: -80.1918 },
+      'phoenix': { latitude: 33.4484, longitude: -112.0740 },
+      'new york': { latitude: 40.7128, longitude: -74.0060 },
+      'houston': { latitude: 29.7604, longitude: -95.3698 },
+      'denver': { latitude: 39.7392, longitude: -104.9903 },
+      'seattle': { latitude: 47.6062, longitude: -122.3321 },
+      'boston': { latitude: 42.3601, longitude: -71.0589 },
+      'las vegas': { latitude: 36.1699, longitude: -115.1398 }
+    };
+
+    const city = address.split(',')[0]?.trim().toLowerCase();
+    return cityCoords[city] || null;
+  }
+
+  // Calculate distance between two coordinates in miles
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 3959; // Earth's radius in miles
+    const dLat = this.toRadians(lat2 - lat1);
+    const dLon = this.toRadians(lon2 - lon1);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
+  private toRadians(degrees: number): number {
+    return degrees * (Math.PI / 180);
+  }
+
+  private async sendLoadToDriver(load: LoadWithRelations, driver: Driver, matchScore?: number, distance?: number): Promise<void> {
     if (!this.bot || !this.config || !driver.telegramId) return;
 
     try {
       // Format load message (from script)
-      const message = this.formatLoadMessage(load);
+      const message = this.formatLoadMessage(load, matchScore, distance);
       
       // Send message with inline keyboard
       const options = {
@@ -383,17 +531,19 @@ export class TelegramLoadService {
     }
   }
 
-  private formatLoadMessage(load: LoadWithRelations): string {
+  private formatLoadMessage(load: LoadWithRelations, matchScore?: number, distance?: number): string {
     const rpm = load.rate && load.miles ? (load.rate / load.miles).toFixed(2) : 'N/A';
+    const distanceText = distance ? ` (${Math.round(distance)} mi away)` : '';
+    const matchText = matchScore ? `\n📊 *Match Score:* ${matchScore}%` : '';
     
-    return `🚛 *New Load Offer*
+    return `🚛 *New Load Offer*${distanceText}
 Origin: *${load.pickupAddress}*
 Destination: *${load.deliveryAddress}*
 Pick-Up Date: *${load.pickupDate.toLocaleDateString()}*
 Weight: *${load.weight.toLocaleString()} lbs*
 Rate: *$${load.rate?.toLocaleString() || 'TBD'}*
 Miles: *${load.miles || 'N/A'} mi*
-Rate/Mile: *$${rpm}*
+Rate/Mile: *$${rpm}*${matchText}
 
 ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.specialInstructions ? `📝 *Instructions:* ${load.specialInstructions}\n` : ''}
 *Load #:* ${load.loadNumber}`;

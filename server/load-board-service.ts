@@ -784,8 +784,8 @@ export class LoadBoardService {
 
   // Generate sample DAT loads for continuous operation when credentials aren't available
   private async generateSampleDATLoads(config: ScraperConfig): Promise<{ loadsScraped: number; loadsCreated: number }> {
-    const sampleOrigins = ['Atlanta, GA', 'Dallas, TX', 'Los Angeles, CA', 'Chicago, IL', 'Miami, FL', 'Phoenix, AZ'];
-    const sampleDestinations = ['New York, NY', 'Houston, TX', 'Denver, CO', 'Seattle, WA', 'Boston, MA', 'Las Vegas, NV'];
+    const sampleOrigins = ['Atlanta, GA', 'Atlanta, GA', 'Dallas, TX', 'Los Angeles, CA', 'Chicago, IL', 'Miami, FL', 'Phoenix, AZ'];
+    const sampleDestinations = ['Charlotte, NC', 'Jacksonville, FL', 'New York, NY', 'Houston, TX', 'Denver, CO', 'Seattle, WA', 'Boston, MA', 'Las Vegas, NV'];
     const equipmentTypes = ['dry_van', 'refrigerated', 'flatbed'];
     const companies = ['ABC Logistics', 'Fast Freight Co', 'Prime Shipping', 'Elite Transport', 'Direct Haul'];
     
@@ -845,12 +845,40 @@ export class LoadBoardService {
 
         console.log(`Created sample DAT load: ${load.loadNumber} - ${origin} to ${destination} ($${rate})`);
         loadsCreated++;
+
+        // Automatically offer load to drivers based on location
+        this.offerLoadToEligibleDrivers(load);
       } catch (error) {
         console.error('Error creating sample DAT load:', error);
       }
     }
 
     return { loadsScraped: numLoads, loadsCreated };
+  }
+
+  // Automatically offer loads to eligible drivers based on location
+  private async offerLoadToEligibleDrivers(load: any): Promise<void> {
+    try {
+      // Import dynamically to avoid circular dependency
+      const { telegramLoadService } = await import('./telegram-service');
+      
+      // Get load with relations for telegram service
+      const loadWithRelations = await storage.getLoad(load.id);
+      if (!loadWithRelations) {
+        console.log(`Load ${load.loadNumber} not found for driver offering`);
+        return;
+      }
+
+      // Process load for automatic telegram offering
+      const offered = await telegramLoadService.processNewLoad(loadWithRelations);
+      if (offered) {
+        console.log(`✓ Automatically offered load ${load.loadNumber} to eligible drivers via Telegram`);
+      } else {
+        console.log(`ℹ No eligible drivers found for load ${load.loadNumber}`);
+      }
+    } catch (error) {
+      console.error(`Error offering load ${load.loadNumber} to drivers:`, error);
+    }
   }
 }
 
