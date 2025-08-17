@@ -222,6 +222,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize services
   const predictiveMaintenanceService = new PredictiveMaintenanceService();
   
+  // Check SMS service configuration on startup
+  console.log(`SMS Service status: ${smsService.isServiceConfigured() ? 'CONFIGURED ✓' : 'NOT CONFIGURED ✗'}`);
+  
   // Initialize scheduler service on startup
   try {
     await schedulerService.initialize();
@@ -1262,7 +1265,10 @@ Safe travels! 🚛`;
       const onboardingLink = `${req.protocol}://${req.hostname}/driver-onboarding?token=${token}`;
       
       // Send SMS using Twilio service
+      console.log(`Attempting to send SMS to ${phone} with link: ${onboardingLink}`);
+      console.log(`SMS Service configured: ${smsService.isServiceConfigured()}`);
       const smsResult = await smsService.sendOnboardingLink(phone, onboardingLink);
+      console.log(`SMS Result:`, smsResult);
       
       if (!smsResult.success) {
         console.error(`Failed to send SMS to ${phone}:`, smsResult.error);
