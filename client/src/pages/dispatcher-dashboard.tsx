@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Phone, Mail, MapPin, Clock, DollarSign, Truck, User, FileText, RefreshCw, MessageCircle } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, DollarSign, Truck, User, FileText, RefreshCw, MessageCircle, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { LoadWithRelations, Driver, Customer } from '@shared/schema';
@@ -194,6 +194,11 @@ export default function DispatcherDashboard() {
     }
   });
 
+  // Filter loads with accepted offers (ready for rate setting)
+  const acceptedLoads = loads.filter(load => {
+    return load.offers && load.offers.some(offer => offer.status === 'accepted');
+  });
+
   // Filter loads based on status and search - ONLY show loads that were sent to drivers
   const filteredLoads = loads.filter(load => {
     // Only include loads that have offers (were sent to drivers)
@@ -256,6 +261,62 @@ export default function DispatcherDashboard() {
           Refresh
         </Button>
       </div>
+
+      {/* Accepted Loads Section */}
+      {acceptedLoads.length > 0 && (
+        <Card className="border-green-200 bg-green-50">
+          <CardHeader>
+            <CardTitle className="text-green-800 flex items-center gap-2">
+              <CheckCircle className="h-5 w-5" />
+              Driver Accepted Loads - Ready for Rate Setting ({acceptedLoads.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {acceptedLoads.map((load) => (
+                <Card key={load.id} className="border-green-300 bg-white cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedLoad(load)}>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-semibold text-green-800">{load.loadNumber}</h4>
+                      <Badge className="bg-green-600 text-white">Ready</Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      {load.pickupAddress} → {load.deliveryAddress}
+                    </p>
+                    <p className="text-sm font-medium text-green-700 mb-2">
+                      Rate: ${load.rate || 'N/A'}
+                    </p>
+                    <div className="space-y-2">
+                      {load.offers?.filter(offer => offer.status === 'accepted').map((offer) => (
+                        <div key={offer.id} className="flex justify-between items-center bg-gray-50 p-2 rounded">
+                          <span className="text-sm font-medium">{offer.driver?.name || 'Unknown Driver'}</span>
+                          <Button
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log('Setting rate for driver:', offer.driver?.name, 'on load:', load.loadNumber);
+                              setSelectedOffer({
+                                load,
+                                driverId: offer.driverId,
+                                driverName: offer.driver?.name || 'Unknown Driver'
+                              });
+                              setIsRateModalOpen(true);
+                            }}
+                            data-testid={`button-set-rate-quick-${offer.id}`}
+                          >
+                            Set Rate
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters and Search */}
       <div className="flex gap-4 items-center">
