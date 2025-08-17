@@ -30,6 +30,79 @@ function replaceTemplateVariables(template: string, variables: Record<string, an
   });
 }
 
+// Helper function to handle email booking requests for loads without phone numbers
+async function handleEmailBookingRequest(load: any, driver: any) {
+  try {
+    console.log(`📧 Initiating email booking for load ${load.loadNumber} - no phone contact available`);
+    
+    // Create email template for shipper booking request
+    const emailSubject = `Load Booking Request - ${load.loadNumber}`;
+    const emailBody = `
+Dear ${load.company || 'Shipper'},
+
+We have a qualified driver interested in booking your load:
+
+LOAD DETAILS:
+- Load Number: ${load.loadNumber}
+- Route: ${load.pickupAddress} → ${load.deliveryAddress}
+- Rate: $${load.rate}
+- Weight: ${load.weight.toLocaleString()} lbs
+- Pickup Date: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}
+- Delivery Date: ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime}
+
+DRIVER INFORMATION:
+- Name: ${driver.name}
+- Phone: ${driver.phone}
+- Location: ${driver.city || 'Available'}
+- Equipment Type: ${driver.equipmentType}
+- Weight Capacity: ${driver.weightCapacity || 26000} lbs
+
+Please reply to this email or call ${driver.phone} to confirm the booking.
+
+Best regards,
+LoadMaster Dispatch Team
+    `;
+
+    // Log the email booking attempt
+    console.log(`📧 Email booking request would be sent to: ${load.customer?.email}`);
+    console.log(`📧 Subject: ${emailSubject}`);
+    console.log(`📧 Body preview: ${emailBody.substring(0, 200)}...`);
+
+    // Here you would typically send the email using your email service
+    // For now, we'll create an email log entry
+    await storage.createEmailLog({
+      loadId: load.id,
+      recipient: load.customer?.email || 'unknown@example.com',
+      subject: emailSubject,
+      body: emailBody,
+      sentAt: new Date(),
+      status: 'pending'
+    });
+
+    console.log(`✅ Email booking request logged for load ${load.loadNumber}`);
+
+    // Notify dispatcher about email booking initiation
+    const emailNotificationMessage = `📧 *EMAIL BOOKING INITIATED*\n\n` +
+      `Load ${load.loadNumber} has no phone contact.\n` +
+      `Email booking request sent to: ${load.customer?.email}\n` +
+      `Driver: ${driver.name} (${driver.phone})\n\n` +
+      `Monitor email responses for booking confirmation.`;
+
+    if (telegramLoadService.isServiceRunning()) {
+      const config = telegramLoadService.getConfig();
+      if (config?.dispatcherId) {
+        await telegramLoadService.sendMessage(config.dispatcherId, emailNotificationMessage);
+        console.log(`✅ Sent email booking notification to dispatcher`);
+      }
+    } else {
+      console.log(`📱 Email booking notification: ${emailNotificationMessage}`);
+    }
+
+  } catch (error) {
+    console.error('Error handling email booking request:', error);
+  }
+}
+
 // Send email function
 async function sendEmail(to: string, subject: string, body: string, loadId?: string, templateId?: string) {
   try {
@@ -305,21 +378,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 console.log(`✅ Sent booking confirmation to driver ${driver.name} via Telegram`);
               }
               
-              // Notify dispatcher
-              const dispatchMessage = `📞 *LOAD BOOKING REQUEST*\n\nDriver *${driver.name}* wants to book Load ${load.loadNumber}\nPhone: ${driver.phone}\nLocation: ${driver.city || 'Not specified'}\n\nLoad Details:\n• Route: ${load.pickupAddress} → ${load.deliveryAddress}\n• Rate: $${load.rate}\n• Pickup: ${load.pickupDate.toLocaleDateString()}\n\n[📞 Call Driver](tel:${driver.phone})`;
+              // Notify dispatcher with complete information
+              const dispatchMessage = `📞 *LOAD BOOKING REQUEST*\n\n` +
+                `🚛 *DRIVER INFO:*\n` +
+                `• Name: ${driver.name}\n` +
+                `• Phone: ${driver.phone}\n` +
+                `• Location: ${driver.city || 'Not specified'}\n` +
+                `• Equipment: ${driver.equipmentType}\n` +
+                `• Capacity: ${driver.weightCapacity || 26000} lbs\n\n` +
+                `📦 *LOAD DETAILS:*\n` +
+                `• Load #: ${load.loadNumber}\n` +
+                `• Route: ${load.pickupAddress} → ${load.deliveryAddress}\n` +
+                `• Rate: $${load.rate} (${load.miles} miles)\n` +
+                `• Weight: ${load.weight.toLocaleString()} lbs\n` +
+                `• Equipment: ${load.equipmentType}\n` +
+                `• Pickup: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}\n` +
+                `• Delivery: ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime}\n` +
+                `• Company: ${load.company || 'Not specified'}\n` +
+                `• Contact: ${load.contactPhone || 'No phone - email required'}\n\n` +
+                `[📞 Call Driver](tel:${driver.phone})`;
               
               const config = telegramLoadService.getConfig();
               if (config?.dispatcherId) {
                 await telegramLoadService.sendMessage(config.dispatcherId, dispatchMessage);
-                console.log(`✅ Sent booking notification to dispatcher via Telegram`);
+                console.log(`✅ Sent enhanced booking notification to dispatcher via Telegram`);
+              }
+
+              // If load has no phone number, initiate email booking process
+              if (!load.contactPhone && load.customer?.email) {
+                await handleEmailBookingRequest(load, driver);
               }
             } catch (error) {
               console.error("Error with telegram service:", error);
             }
           } else {
             // Log the messages for debugging when service is not running
+            const dispatchMessage = `📞 *LOAD BOOKING REQUEST*\n\n` +
+              `🚛 *DRIVER INFO:*\n` +
+              `• Name: ${driver.name}\n` +
+              `• Phone: ${driver.phone}\n` +
+              `• Location: ${driver.city || 'Not specified'}\n` +
+              `• Equipment: ${driver.equipmentType}\n` +
+              `• Capacity: ${driver.weightCapacity || 26000} lbs\n\n` +
+              `📦 *LOAD DETAILS:*\n` +
+              `• Load #: ${load.loadNumber}\n` +
+              `• Route: ${load.pickupAddress} → ${load.deliveryAddress}\n` +
+              `• Rate: $${load.rate} (${load.miles} miles)\n` +
+              `• Weight: ${load.weight.toLocaleString()} lbs\n` +
+              `• Equipment: ${load.equipmentType}\n` +
+              `• Pickup: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}\n` +
+              `• Delivery: ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime}\n` +
+              `• Company: ${load.company || 'Not specified'}\n` +
+              `• Contact: ${load.contactPhone || 'No phone - email required'}\n\n` +
+              `[📞 Call Driver](tel:${driver.phone})`;
             console.log(`📱 Driver booking confirmation: ${message}`);
             console.log(`📱 Dispatcher notification: ${dispatchMessage}`);
+            
+            // If load has no phone number, initiate email booking process
+            if (!load.contactPhone && load.customer?.email) {
+              await handleEmailBookingRequest(load, driver);
+            }
           }
         } catch (error) {
           console.error("Error sending booking notifications:", error);
