@@ -59,12 +59,21 @@ class SMSService {
     } catch (error: any) {
       console.error('Failed to send SMS:', error);
       
-      // Check if this is a trial account verification error
+      // Check for various Twilio error codes
       if (error.code === 21608) {
         return {
           success: false,
           error: 'Trial account limitation: Phone number must be verified in Twilio console',
           isTrialAccount: true
+        };
+      }
+      
+      // Invalid phone number format
+      if (error.code === 21211 || error.message?.includes("Invalid 'To' Phone Number")) {
+        return {
+          success: false,
+          error: 'Invalid phone number format. Please use a valid phone number (e.g., +1234567890)',
+          isTrialAccount: false
         };
       }
       

@@ -171,11 +171,11 @@ export default function DriverManagement() {
     const isExpired = new Date(token.expiresAt) < new Date();
     
     if (token.isUsed) {
-      return <Badge className="bg-success bg-opacity-10 text-success border-0">Used</Badge>;
+      return <Badge className="bg-success bg-opacity-10 text-success border-0">Completed</Badge>;
     } else if (isExpired) {
       return <Badge className="bg-destructive bg-opacity-10 text-destructive border-0">Expired</Badge>;
     } else {
-      return <Badge className="bg-warning bg-opacity-10 text-warning border-0">Pending</Badge>;
+      return <Badge className="bg-blue-500 bg-opacity-10 text-blue-600 border-0">Sent</Badge>;
     }
   };
 
