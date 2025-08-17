@@ -228,7 +228,7 @@ export class TelegramLoadService {
         await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
       }
 
-      console.log(`Sent load ${load.loadNumber} to ${drivers.length} drivers via Telegram`);
+      console.log(`Sent load ${load.loadNumber} to ${eligibleDrivers.length} drivers via Telegram`);
       return true;
     } catch (error) {
       console.error('Error processing new load for Telegram:', error);
