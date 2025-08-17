@@ -795,7 +795,7 @@ export default function DriverManagement() {
                           name="name"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Full Name</FormLabel>
+                              <FormLabel>Full Name *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -813,7 +813,7 @@ export default function DriverManagement() {
                           name="email"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Email Address</FormLabel>
+                              <FormLabel>Email Address *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -834,7 +834,7 @@ export default function DriverManagement() {
                         name="phone"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Phone Number</FormLabel>
+                            <FormLabel>Phone Number *</FormLabel>
                             <FormControl>
                               <Input 
                                 {...field} 
@@ -855,7 +855,7 @@ export default function DriverManagement() {
                           name="licenseNumber"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>License Number</FormLabel>
+                              <FormLabel>License Number *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -873,7 +873,7 @@ export default function DriverManagement() {
                           name="licenseState"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>License State</FormLabel>
+                              <FormLabel>License State *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -891,7 +891,7 @@ export default function DriverManagement() {
                           name="licenseExpiry"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>License Expiry</FormLabel>
+                              <FormLabel>License Expiry *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -913,7 +913,7 @@ export default function DriverManagement() {
                           name="equipmentType"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Equipment Type</FormLabel>
+                              <FormLabel>Equipment Type *</FormLabel>
                               <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
                                   <SelectTrigger className="bg-white border border-gray-300" data-testid="select-equipment-type">
@@ -1014,7 +1014,7 @@ export default function DriverManagement() {
                           name="city"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>City</FormLabel>
+                              <FormLabel>City *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -1032,7 +1032,7 @@ export default function DriverManagement() {
                           name="state"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>State</FormLabel>
+                              <FormLabel>State *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -1050,7 +1050,7 @@ export default function DriverManagement() {
                           name="zipCode"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>ZIP Code</FormLabel>
+                              <FormLabel>ZIP Code *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -1072,7 +1072,7 @@ export default function DriverManagement() {
                           name="vehicleYear"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Vehicle Year</FormLabel>
+                              <FormLabel>Vehicle Year *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -1090,7 +1090,7 @@ export default function DriverManagement() {
                           name="vehicleMake"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Vehicle Make</FormLabel>
+                              <FormLabel>Vehicle Make *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
