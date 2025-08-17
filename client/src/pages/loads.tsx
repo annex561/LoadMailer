@@ -1,14 +1,40 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Filter, Download, Plus, Eye, Edit, Mail, Copy, Trash2 } from "lucide-react";
+import { Search, Filter, Download, Plus, Eye, Edit, Mail, Copy, Trash2, FileText, Camera } from "lucide-react";
 import { format } from "date-fns";
-import type { LoadWithRelations } from "@shared/schema";
+import type { LoadWithRelations, LoadDocument } from "@shared/schema";
 import LoadFormModal from "@/components/load-form-modal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+
+// Component to display document counts for a load
+function DocumentCount({ loadId }: { loadId: string }) {
+  const { data: documents = [] } = useQuery<LoadDocument[]>({
+    queryKey: ["/api/loads", loadId, "documents"],
+    enabled: !!loadId,
+  });
+
+  const bolCount = documents.filter(doc => doc.documentType === "bol").length;
+  const photoCount = documents.filter(doc => 
+    doc.documentType === "freight_photo" || doc.documentType === "delivery_photo"
+  ).length;
+
+  return (
+    <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1">
+        <FileText className="w-4 h-4 text-blue-500" />
+        <span className="text-xs text-gray-600">BOL: {bolCount}</span>
+      </div>
+      <div className="flex items-center space-x-1">
+        <Camera className="w-4 h-4 text-green-500" />
+        <span className="text-xs text-gray-600">Photos: {photoCount}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function Loads() {
   const [showLoadModal, setShowLoadModal] = useState(false);
@@ -155,6 +181,7 @@ export default function Loads() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documents</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -203,6 +230,9 @@ export default function Loads() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getStatusBadge(load.status)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <DocumentCount loadId={load.id} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">

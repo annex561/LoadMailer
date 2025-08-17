@@ -17,7 +17,6 @@ import PaymentWorkflow from "@/pages/payment-workflow";
 import ScraperManagement from "@/pages/scraper-management";
 import DispatcherDashboard from "@/pages/dispatcher-dashboard";
 import { MoodTracker } from "@/pages/mood-tracker";
-import DocumentManagement from "@/pages/DocumentManagement";
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
 
@@ -35,7 +34,6 @@ function Router() {
       <Route path="/dispatcher" component={DispatcherDashboard} />
       <Route path="/payments" component={PaymentWorkflow} />
       <Route path="/mood-tracker" component={MoodTracker} />
-      <Route path="/documents" component={DocumentManagement} />
       <Route component={NotFound} />
     </Switch>
   );

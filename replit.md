@@ -18,6 +18,14 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+**Document Upload Integration into Load Management (Aug 17, 2025)**
+- Removed standalone Document Management page per user feedback that drivers upload via mobile devices
+- Integrated document viewing directly into load management table with new "Documents" column
+- Added DocumentCount component showing real-time BOL and photo counts for each load
+- Documents are displayed as visual indicators with file type icons and counts
+- Backend document upload service remains active for mobile driver uploads
+- Document workflow: drivers upload via mobile when "On Site", viewable in load management interface
+
 **Driver Mood Tracking System Implementation (Aug 17, 2025)**
 - Implemented comprehensive emoji-based mood tracking for team management
 - Added 6 mood options: happy, neutral, stressed, frustrated, tired, sick with color-coded badges
