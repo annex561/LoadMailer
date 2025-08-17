@@ -111,9 +111,18 @@ export default function DriverOnboarding() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
+    console.log('🔍 Frontend Token extraction:', { 
+      url: window.location.href, 
+      search: window.location.search, 
+      token,
+      timestamp: new Date().toISOString() 
+    });
+    
     if (token) {
+      console.log('✅ Token found, setting onboarding token:', token);
       setOnboardingToken(token);
     } else {
+      console.log('❌ No token found in URL');
       setTokenError('No onboarding token found. Please use the invitation link.');
     }
   }, []);
