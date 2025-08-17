@@ -117,6 +117,7 @@ export class TelegramLoadService {
       const data = callbackQuery.data;
       const telegramId = callbackQuery.from?.id.toString();
       const chatId = callbackQuery.message?.chat?.id;
+      const messageId = callbackQuery.message?.message_id;
       
       if (!telegramId || !chatId) return;
 
@@ -131,13 +132,13 @@ export class TelegramLoadService {
           const parts = data.substring(8).split('_'); // Remove 'confirm_' prefix
           const shortLoadId = parts[0];
           const shortDriverId = parts[1];
-          await this.handleConfirmLoadShort(shortLoadId, shortDriverId, telegramId, chatId);
+          await this.handleConfirmLoadShort(shortLoadId, shortDriverId, telegramId, chatId, messageId);
         } else if (data.startsWith('decline_') && data.includes('_')) {
           // This is a confirmation decline with driver ID
           const parts = data.substring(8).split('_'); // Remove 'decline_' prefix
           const shortLoadId = parts[0];
           const shortDriverId = parts[1];
-          await this.handleDeclineConfirmationShort(shortLoadId, shortDriverId, telegramId, chatId);
+          await this.handleDeclineConfirmationShort(shortLoadId, shortDriverId, telegramId, chatId, messageId);
         } else if (data.startsWith('decline_')) {
           // This is a simple load decline
           const loadId = data.substring(8); // Remove 'decline_' prefix
@@ -734,7 +735,7 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
   }
 
   // Handle driver confirmation of load offer
-  private async handleConfirmLoad(loadId: string, driverId: string, telegramId: string, chatId: number): Promise<void> {
+  private async handleConfirmLoad(loadId: string, driverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
       // Call the confirmation API endpoint
       const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/loads/${loadId}/confirm-driver/${driverId}`, {
@@ -747,7 +748,30 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
 
       if (response.ok) {
         const result = await response.json();
-        await this.bot.sendMessage(chatId, `✅ *Load Confirmed!*\n\nLoad ${result.loadNumber} has been successfully booked. You are now assigned to this load. Safe travels! 🚛`, {
+        
+        // Remove the buttons from the original message by editing it
+        if (messageId) {
+          try {
+            await this.bot.editMessageReplyMarkup(
+              { inline_keyboard: [] }, // Remove all buttons
+              { chat_id: chatId, message_id: messageId }
+            );
+          } catch (editError) {
+            console.log('Could not edit message buttons:', editError);
+          }
+        }
+        
+        // Send the booking confirmation message
+        const confirmationMessage = `✅ **LOAD BOOKED SUCCESSFULLY**
+
+Your load has been booked. Please start planning your trip and heading to your pick up location.
+
+📋 **Load:** ${result.loadNumber}
+🚛 **Status:** Assigned to you
+
+Safe travels! 🛣️`;
+
+        await this.bot.sendMessage(chatId, confirmationMessage, {
           parse_mode: 'Markdown'
         });
       } else {
@@ -760,7 +784,7 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
   }
 
   // Handle driver declining load confirmation
-  private async handleDeclineConfirmation(loadId: string, driverId: string, telegramId: string, chatId: number): Promise<void> {
+  private async handleDeclineConfirmation(loadId: string, driverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
       // Call the confirmation API endpoint
       const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/loads/${loadId}/confirm-driver/${driverId}`, {
@@ -773,6 +797,19 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
 
       if (response.ok) {
         const result = await response.json();
+        
+        // Remove the buttons from the original message by editing it
+        if (messageId) {
+          try {
+            await this.bot.editMessageReplyMarkup(
+              { inline_keyboard: [] }, // Remove all buttons
+              { chat_id: chatId, message_id: messageId }
+            );
+          } catch (editError) {
+            console.log('Could not edit message buttons:', editError);
+          }
+        }
+        
         await this.bot.sendMessage(chatId, `❌ *Load Declined*\n\nLoad ${result.loadNumber} has been declined. The load will be offered to other drivers.`, {
           parse_mode: 'Markdown'
         });
@@ -1101,7 +1138,7 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
   }
 
   // Handler methods for shortened ID callbacks
-  private async handleConfirmLoadShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number): Promise<void> {
+  private async handleConfirmLoadShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
       // Find the full load and driver IDs by matching the first 8 characters
       const loads = await storage.getLoads();
@@ -1115,14 +1152,14 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
         return;
       }
       
-      await this.handleConfirmLoad(load.id, driver.id, telegramId, chatId);
+      await this.handleConfirmLoad(load.id, driver.id, telegramId, chatId, messageId);
     } catch (error) {
       console.error('Error handling confirmation with short IDs:', error);
       await this.bot?.sendMessage(chatId, '❌ Error processing confirmation. Please contact dispatch.');
     }
   }
 
-  private async handleDeclineConfirmationShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number): Promise<void> {
+  private async handleDeclineConfirmationShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
       // Find the full load and driver IDs by matching the first 8 characters
       const loads = await storage.getLoads();
@@ -1136,7 +1173,7 @@ ${load.specialInstructions ? `📝 **Instructions:** ${load.specialInstructions}
         return;
       }
       
-      await this.handleDeclineConfirmation(load.id, driver.id, telegramId, chatId);
+      await this.handleDeclineConfirmation(load.id, driver.id, telegramId, chatId, messageId);
     } catch (error) {
       console.error('Error handling decline with short IDs:', error);
       await this.bot?.sendMessage(chatId, '❌ Error processing decline. Please contact dispatch.');

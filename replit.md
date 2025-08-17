@@ -18,6 +18,13 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+**Post-Confirmation Messaging and Button Management (Aug 17, 2025)**
+- Enhanced driver confirmation workflow with proper post-booking messaging
+- Added automatic button removal from Telegram messages after driver confirmation/decline
+- Implemented custom booking confirmation: "Your load has been booked. Please start planning your trip and heading to your pick up location"
+- Fixed button interaction by passing message IDs through callback handlers
+- Updated both confirmation and decline handlers to clean up message UI after action
+
 **Enhanced Rate Setting and Telegram Integration (Aug 17, 2025)**
 - Fixed driver rate input field: changed from number input to text input (removed up/down arrows)
 - Enhanced backend to automatically calculate deadhead distance based on driver location and pickup address
