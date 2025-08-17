@@ -238,9 +238,10 @@ export default function DriverManagement() {
                     Invite Driver
                   </Button>
                 </DialogTrigger>
-                <DialogContent data-testid="invite-driver-modal">
+                <DialogContent data-testid="invite-driver-modal" className="bg-white border border-gray-300 shadow-lg">
                   <DialogHeader>
                     <DialogTitle>Invite New Driver</DialogTitle>
+                    <p className="text-sm text-gray-500">Send an onboarding link via email</p>
                   </DialogHeader>
                   <Form {...form}>
                     <form onSubmit={form.handleSubmit((data) => createInviteMutation.mutate(data))} className="space-y-4">
@@ -255,6 +256,7 @@ export default function DriverManagement() {
                                 {...field} 
                                 type="email"
                                 placeholder="driver@example.com"
+                                className="bg-white border border-gray-300"
                                 data-testid="input-invite-email"
                               />
                             </FormControl>
@@ -266,6 +268,7 @@ export default function DriverManagement() {
                         <Button 
                           type="button" 
                           variant="outline" 
+                          className="bg-white border border-gray-300"
                           onClick={() => setShowInviteModal(false)}
                         >
                           Cancel
@@ -273,6 +276,7 @@ export default function DriverManagement() {
                         <Button 
                           type="submit" 
                           disabled={createInviteMutation.isPending}
+                          className="bg-primary text-white hover:bg-blue-700"
                           data-testid="button-send-invite"
                         >
                           {createInviteMutation.isPending ? "Creating..." : "Create Invite"}
@@ -335,7 +339,7 @@ export default function DriverManagement() {
                     Send SMS Link
                   </Button>
                 </DialogTrigger>
-                <DialogContent data-testid="create-driver-sms-modal">
+                <DialogContent data-testid="create-driver-sms-modal" className="bg-white border border-gray-300 shadow-lg">
                   <DialogHeader>
                     <DialogTitle>Create Driver via SMS</DialogTitle>
                     <p className="text-sm text-gray-500">Send an onboarding link via text message</p>
@@ -353,6 +357,7 @@ export default function DriverManagement() {
                                 {...field} 
                                 type="tel"
                                 placeholder="(555) 123-4567"
+                                className="bg-white border border-gray-300"
                                 data-testid="input-driver-phone"
                               />
                             </FormControl>
@@ -371,6 +376,7 @@ export default function DriverManagement() {
                                 {...field} 
                                 type="email"
                                 placeholder="driver@example.com"
+                                className="bg-white border border-gray-300"
                                 data-testid="input-driver-email-sms"
                               />
                             </FormControl>
@@ -393,6 +399,7 @@ export default function DriverManagement() {
                         <Button 
                           type="button" 
                           variant="outline" 
+                          className="bg-white border border-gray-300"
                           onClick={() => setShowSMSModal(false)}
                         >
                           Cancel
@@ -400,7 +407,7 @@ export default function DriverManagement() {
                         <Button 
                           type="submit" 
                           disabled={createSMSInviteMutation.isPending}
-                          className="bg-green-600 hover:bg-green-700"
+                          className="bg-green-600 text-white hover:bg-green-700"
                           data-testid="button-send-sms-invite"
                         >
                           {createSMSInviteMutation.isPending ? "Sending..." : "Send SMS Invite"}
