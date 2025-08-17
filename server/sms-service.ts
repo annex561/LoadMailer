@@ -30,9 +30,10 @@ class SMSService {
       this.client = twilio(accountSid, authToken);
       this.fromPhones = [fromPhone1];
       
-      // Add second phone number if available
+      // Add second phone number if available (ensure proper formatting)
       if (fromPhone2) {
-        this.fromPhones.push(fromPhone2);
+        const formattedPhone2 = fromPhone2.startsWith('+') ? fromPhone2 : `+${fromPhone2}`;
+        this.fromPhones.push(formattedPhone2);
         console.log(`📱 SMS Service initialized with ${this.fromPhones.length} phone numbers: ${this.fromPhones.join(', ')}`);
       } else {
         console.log(`📱 SMS Service initialized with 1 phone number: ${fromPhone1}`);
