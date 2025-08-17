@@ -8,6 +8,9 @@ export interface IStorage {
   createDriver(driver: InsertDriver): Promise<Driver>;
   updateDriver(id: string, driver: Partial<InsertDriver>): Promise<Driver | undefined>;
   deleteDriver(id: string): Promise<boolean>;
+  
+  // Driver mood tracking
+  updateDriverMood(driverId: string, mood: string, note?: string): Promise<Driver | undefined>;
 
   // Customer operations
   getCustomer(id: string): Promise<Customer | undefined>;
@@ -421,6 +424,48 @@ export class MemStorage implements IStorage {
     const updatedDriver = { ...driver, ...updates };
     this.drivers.set(id, updatedDriver);
     console.log(`Driver ${updatedDriver.name} status updated in memory to: ${updatedDriver.status}`);
+    return updatedDriver;
+  }
+
+  async updateDriverMood(driverId: string, mood: string, note?: string): Promise<Driver | undefined> {
+    try {
+      // First try to update in database
+      const { db } = await import('./db');
+      const { drivers } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      
+      const result = await db.update(drivers)
+        .set({
+          currentMood: mood,
+          moodUpdatedAt: new Date(),
+          moodNote: note || null,
+        })
+        .where(eq(drivers.id, driverId))
+        .returning();
+      
+      if (result.length > 0) {
+        const updated = result[0];
+        // Update memory cache
+        this.drivers.set(driverId, updated);
+        console.log(`Driver ${updated.name} mood updated to: ${mood}`);
+        return updated;
+      }
+    } catch (error) {
+      console.error('Error updating driver mood in database:', error);
+    }
+    
+    // Fallback to memory-only update
+    const driver = this.drivers.get(driverId);
+    if (!driver) return undefined;
+
+    const updatedDriver = { 
+      ...driver, 
+      currentMood: mood,
+      moodUpdatedAt: new Date(),
+      moodNote: note || null,
+    };
+    this.drivers.set(driverId, updatedDriver);
+    console.log(`Driver ${updatedDriver.name} mood updated in memory to: ${mood}`);
     return updatedDriver;
   }
 

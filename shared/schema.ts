@@ -22,6 +22,10 @@ export const drivers = pgTable("drivers", {
   telegramUsername: text("telegram_username"),
   city: text("city"),
   enableTelegramNotifications: boolean("enable_telegram_notifications").notNull().default(false),
+  // Mood tracking
+  currentMood: text("current_mood").default("😐"), // emoji representing current mood
+  moodUpdatedAt: timestamp("mood_updated_at"),
+  moodNote: text("mood_note"), // optional note about mood
   createdAt: timestamp("created_at").defaultNow(),
 });
 

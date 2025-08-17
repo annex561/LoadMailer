@@ -366,6 +366,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Driver mood tracking endpoint
+  app.post("/api/drivers/:id/mood", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { mood, note } = req.body;
+      
+      if (!mood) {
+        return res.status(400).json({ error: "Mood is required" });
+      }
+      
+      const driver = await storage.updateDriverMood(id, mood, note);
+      
+      if (!driver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+      
+      res.json(driver);
+    } catch (error) {
+      console.error("Error updating driver mood:", error);
+      res.status(500).json({ error: "Failed to update driver mood" });
+    }
+  });
+
   // Book load endpoint
   // New dispatcher book load endpoint with confirmation message
   // Two-step booking: Dispatcher sets rate for driver offer
