@@ -399,15 +399,24 @@ export class TelegramLoadService {
 
     // Load type preference match (15% weight)
     maxScore += 15;
-    const driverLoadPrefs = driver.preferredLoadTypes || 'full_partial';
+    const driverLoadPrefs = driver.loadType || 'full_partial';
     const loadType = load.loadType || 'full';
     if (driverLoadPrefs === 'full_partial' || driverLoadPrefs === loadType) {
       score += 15;
     }
 
-    // Weight capacity consideration (10% weight) - give full score since no weight constraint
+    // Weight capacity consideration (10% weight) - critical safety check
     maxScore += 10;
-    score += 10; // Full score since we only use weight capacity for driver, not load weight
+    const driverMaxWeight = driver.maxWeight || 26000;
+    const loadWeight = load.weight;
+    if (!loadWeight || loadWeight <= driverMaxWeight) {
+      score += 10; // Full score if load weight is within driver's capacity
+    } else if (loadWeight <= driverMaxWeight * 1.05) {
+      score += 5; // Reduced score for slight overweight (5% tolerance)
+    } else {
+      // No score for significantly overweight loads - this should prevent offers
+      score += 0;
+    }
 
     // Length capacity match (5% weight)
     maxScore += 5;

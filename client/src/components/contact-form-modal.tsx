@@ -44,6 +44,7 @@ export default function ContactFormModal({
           equipmentType: (contact as Driver)?.equipmentType || "sprinter_van",
           loadType: (contact as Driver)?.loadType || "full_partial",
           maxLength: (contact as Driver)?.maxLength || 53,
+          maxWeight: (contact as Driver)?.maxWeight || 26000,
         }
       : {
           name: (contact as Customer)?.name || "",
@@ -278,7 +279,7 @@ export default function ContactFormModal({
             {type === "driver" && (
               <FormField
                 control={form.control}
-                name="preferredLoadTypes"
+                name="loadType"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="form-label-improved">Load Type</FormLabel>
@@ -300,28 +301,53 @@ export default function ContactFormModal({
               />
             )}
 
-            {type === "driver" && (
-              <FormField
-                control={form.control}
-                name="maxLength"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="form-label-improved">Length ft</FormLabel>
-                    <FormControl>
-                      <Input 
-                        {...field} 
-                        type="number"
-                        placeholder="53"
-                        className="form-input-improved"
-                        data-testid="input-max-length"
-                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+            <div className="grid grid-cols-2 gap-4">
+              {type === "driver" && (
+                <FormField
+                  control={form.control}
+                  name="maxLength"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="form-label-improved">Length ft</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          type="number"
+                          placeholder="53"
+                          className="form-input-improved"
+                          data-testid="input-max-length"
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {type === "driver" && (
+                <FormField
+                  control={form.control}
+                  name="maxWeight"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="form-label-improved">Weight lbs</FormLabel>
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          type="number"
+                          placeholder="26000"
+                          className="form-input-improved"
+                          data-testid="input-max-weight"
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
 
             <FormField
               control={form.control}
