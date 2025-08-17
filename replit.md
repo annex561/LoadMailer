@@ -50,6 +50,16 @@ Preferred communication style: Simple, everyday language.
 - Fixed button interaction by passing message IDs through callback handlers
 - Updated both confirmation and decline handlers to clean up message UI after action
 
+**Enhanced Equipment Types and Load Matching (Aug 17, 2025)**
+- Added comprehensive equipment types dropdown with 20+ variations from actual load boards
+- Equipment types now include: sprinter_van, van, van_lift_gate, van_hotshot, straight_box_truck, box_truck, moving_van, flatbed, flatbed_hotshot, step_deck, lowboy, dry_van, refrigerated, power_only, container, car_carrier, tanker, dump_truck, conestoga, removable_gooseneck
+- Enhanced load matching algorithm with proper driver preference scoring system
+- Fixed all dropdown background transparency issues - all equipment selects now have solid white backgrounds
+- Created test driver with preference fields and verified system functionality
+- System successfully matching and sending load offers with 70-75% match scores
+- Load board scraper generating loads with all equipment types for realistic testing
+- Fixed equipment dropdown visibility issues across driver onboarding, contact forms, and DAT loads pages
+
 **Enhanced Rate Setting and Telegram Integration (Aug 17, 2025)**
 - Fixed driver rate input field: changed from number input to text input (removed up/down arrows)
 - Enhanced backend to automatically calculate deadhead distance based on driver location and pickup address

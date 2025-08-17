@@ -339,10 +339,10 @@ export default function DriverOnboarding() {
               <div className="space-y-2">
                 <Label htmlFor="equipmentType">Equipment Type *</Label>
                 <Select value={formData.equipmentType} onValueChange={(value) => updateFormData('equipmentType', value)}>
-                  <SelectTrigger className="bg-white border border-gray-300" data-testid="select-equipment-type">
+                  <SelectTrigger className="bg-white border border-gray-300 shadow-sm" data-testid="select-equipment-type">
                     <SelectValue placeholder="Select equipment type" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                  <SelectContent className="bg-white border border-gray-300 shadow-lg z-50">
                     {EQUIPMENT_TYPES.map(type => (
                       <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                     ))}
@@ -369,10 +369,10 @@ export default function DriverOnboarding() {
                 <div className="space-y-2">
                   <Label htmlFor="preferredLoadTypes">Load Type Preference *</Label>
                   <Select value={formData.preferredLoadTypes} onValueChange={(value) => updateFormData('preferredLoadTypes', value)}>
-                    <SelectTrigger className="bg-white border border-gray-300" data-testid="select-load-type">
+                    <SelectTrigger className="bg-white border border-gray-300 shadow-sm" data-testid="select-load-type">
                       <SelectValue placeholder="Select load type" />
                     </SelectTrigger>
-                    <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                    <SelectContent className="bg-white border border-gray-300 shadow-lg z-50">
                       <SelectItem value="full">Full Loads Only</SelectItem>
                       <SelectItem value="partial">Partial Loads Only</SelectItem>
                       <SelectItem value="full_partial">Both Full & Partial</SelectItem>

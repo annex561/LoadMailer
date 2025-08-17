@@ -249,18 +249,31 @@ export default function ContactFormModal({
                     <FormLabel className="form-label-improved">Equipment Type</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value} data-testid="select-driver-equipment-type">
                       <FormControl>
-                        <SelectTrigger className="form-select-improved">
+                        <SelectTrigger className="bg-white border border-gray-300">
                           <SelectValue placeholder="Select equipment type" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="sprinter_van">Sprinter Van (SV)</SelectItem>
-                        <SelectItem value="van_lift_gate">Van Lift-Gate (VG)</SelectItem>
-                        <SelectItem value="van_hotshot">Van Hotshot (VH)</SelectItem>
-                        <SelectItem value="straight_box_truck">Straight Box Truck (SB)</SelectItem>
-                        <SelectItem value="moving_van">Moving Van (MV)</SelectItem>
-                        <SelectItem value="flatbed_hotshot">Flatbed Hotshot (FH)</SelectItem>
-                        <SelectItem value="van">Van (V)</SelectItem>
+                      <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                        <SelectItem value="sprinter_van">Sprinter Van</SelectItem>
+                        <SelectItem value="van">Standard Van</SelectItem>
+                        <SelectItem value="van_lift_gate">Van with Lift Gate</SelectItem>
+                        <SelectItem value="van_hotshot">Van Hotshot</SelectItem>
+                        <SelectItem value="straight_box_truck">Straight Box Truck</SelectItem>
+                        <SelectItem value="box_truck">Box Truck</SelectItem>
+                        <SelectItem value="moving_van">Moving Van</SelectItem>
+                        <SelectItem value="flatbed">Flatbed</SelectItem>
+                        <SelectItem value="flatbed_hotshot">Flatbed Hotshot</SelectItem>
+                        <SelectItem value="step_deck">Step Deck</SelectItem>
+                        <SelectItem value="lowboy">Lowboy</SelectItem>
+                        <SelectItem value="dry_van">Dry Van</SelectItem>
+                        <SelectItem value="refrigerated">Refrigerated (Reefer)</SelectItem>
+                        <SelectItem value="power_only">Power Only</SelectItem>
+                        <SelectItem value="container">Container</SelectItem>
+                        <SelectItem value="car_carrier">Car Carrier</SelectItem>
+                        <SelectItem value="tanker">Tanker</SelectItem>
+                        <SelectItem value="dump_truck">Dump Truck</SelectItem>
+                        <SelectItem value="conestoga">Conestoga</SelectItem>
+                        <SelectItem value="removable_gooseneck">Removable Gooseneck (RGN)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

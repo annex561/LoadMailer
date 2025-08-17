@@ -339,15 +339,31 @@ export default function DATLoads() {
             
             <div className="flex items-center space-x-4">
               <Select value={equipmentFilter} onValueChange={setEquipmentFilter}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-40 bg-white border border-gray-300 shadow-sm">
                   <SelectValue placeholder="Equipment" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white border border-gray-300 shadow-lg z-50">
                   <SelectItem value="all">All Equipment</SelectItem>
+                  <SelectItem value="sprinter_van">Sprinter Van</SelectItem>
+                  <SelectItem value="van">Standard Van</SelectItem>
+                  <SelectItem value="van_lift_gate">Van with Lift Gate</SelectItem>
+                  <SelectItem value="van_hotshot">Van Hotshot</SelectItem>
+                  <SelectItem value="straight_box_truck">Straight Box Truck</SelectItem>
+                  <SelectItem value="box_truck">Box Truck</SelectItem>
+                  <SelectItem value="moving_van">Moving Van</SelectItem>
+                  <SelectItem value="flatbed">Flatbed</SelectItem>
+                  <SelectItem value="flatbed_hotshot">Flatbed Hotshot</SelectItem>
+                  <SelectItem value="step_deck">Step Deck</SelectItem>
+                  <SelectItem value="lowboy">Lowboy</SelectItem>
                   <SelectItem value="dry_van">Dry Van</SelectItem>
                   <SelectItem value="refrigerated">Refrigerated</SelectItem>
-                  <SelectItem value="flatbed">Flatbed</SelectItem>
-                  <SelectItem value="step_deck">Step Deck</SelectItem>
+                  <SelectItem value="power_only">Power Only</SelectItem>
+                  <SelectItem value="container">Container</SelectItem>
+                  <SelectItem value="car_carrier">Car Carrier</SelectItem>
+                  <SelectItem value="tanker">Tanker</SelectItem>
+                  <SelectItem value="dump_truck">Dump Truck</SelectItem>
+                  <SelectItem value="conestoga">Conestoga</SelectItem>
+                  <SelectItem value="removable_gooseneck">Removable Gooseneck (RGN)</SelectItem>
                 </SelectContent>
               </Select>
               
