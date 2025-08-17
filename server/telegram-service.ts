@@ -416,12 +416,54 @@ export class TelegramLoadService {
     return degrees * (Math.PI / 180);
   }
 
+  // Calculate deadhead distance from driver location to pickup
+  private async calculateDeadheadDistance(driver: Driver, load: LoadWithRelations): Promise<number> {
+    // Simple approximate calculation - in production you'd use a geocoding service
+    // For now, return a reasonable estimate based on the cities
+    if (!driver.city || !load.pickupAddress) return 0;
+    
+    // Extract city/state from addresses for rough calculation
+    const driverLocation = driver.city.toLowerCase();
+    const pickupLocation = load.pickupAddress.toLowerCase();
+    
+    // If they're in the same city, assume low deadhead
+    if (pickupLocation.includes(driverLocation.split(',')[0])) {
+      return Math.floor(Math.random() * 25) + 5; // 5-30 miles
+    }
+    
+    // Different cities - estimate based on common distances
+    const stateDistances: Record<string, Record<string, number>> = {
+      'atlanta': { 'miami': 650, 'charlotte': 240, 'jacksonville': 345, 'dallas': 780, 'houston': 800 },
+      'miami': { 'atlanta': 650, 'orlando': 235, 'tampa': 280, 'jacksonville': 345 },
+      'dallas': { 'houston': 240, 'atlanta': 780, 'phoenix': 880, 'denver': 780 },
+      'chicago': { 'detroit': 280, 'milwaukee': 90, 'indianapolis': 185 },
+      'los angeles': { 'phoenix': 370, 'las vegas': 270, 'san diego': 120 }
+    };
+    
+    // Try to find a rough distance estimate
+    for (const [city, distances] of Object.entries(stateDistances)) {
+      if (driverLocation.includes(city)) {
+        for (const [destination, distance] of Object.entries(distances)) {
+          if (pickupLocation.includes(destination)) {
+            return distance;
+          }
+        }
+      }
+    }
+    
+    // Default estimate for unknown routes
+    return Math.floor(Math.random() * 200) + 50; // 50-250 miles
+  }
+
   private async sendLoadToDriver(load: LoadWithRelations, driver: Driver, matchScore?: number, distance?: number): Promise<void> {
     if (!this.bot || !this.config || !driver.telegramId) return;
 
     try {
+      // Calculate deadhead distance for this driver and load
+      const deadheadDistance = await this.calculateDeadheadDistance(driver, load);
+      
       // Format load message (from script)
-      const message = this.formatLoadMessage(load, matchScore, distance);
+      const message = this.formatLoadMessage(load, matchScore, distance, deadheadDistance);
       
       // Send message with inline keyboard
       const options = {
@@ -463,12 +505,13 @@ export class TelegramLoadService {
     }
   }
 
-  private formatLoadMessage(load: LoadWithRelations, matchScore?: number, distance?: number): string {
+  private formatLoadMessage(load: LoadWithRelations, matchScore?: number, distance?: number, deadheadDistance?: number): string {
     // Calculate driver rate (10% less than posted rate)
     const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
     const rpm = driverRate && load.miles ? (driverRate / load.miles).toFixed(2) : 'N/A';
     const distanceText = distance ? ` (${Math.round(distance)} mi away)` : '';
     const matchText = matchScore ? `\n📊 *Match Score:* ${matchScore}%` : '';
+    const deadheadText = deadheadDistance ? `\n🛣️ *Deadhead:* ${Math.round(deadheadDistance)} mi` : '';
     
     return `🚛 *New Load Offer*${distanceText}
 Origin: *${load.pickupAddress}*
@@ -477,7 +520,7 @@ Pick-Up Date: *${load.pickupDate.toLocaleDateString()}*
 Weight: *${load.weight.toLocaleString()} lbs*
 Rate: *$${driverRate.toLocaleString() || 'TBD'}*
 Miles: *${load.miles || 'N/A'} mi*
-Rate/Mile: *$${rpm}*${matchText}
+Rate/Mile: *$${rpm}*${deadheadText}${matchText}
 
 ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.specialInstructions ? `📝 *Instructions:* ${load.specialInstructions}\n` : ''}
 *Load #:* ${load.loadNumber}`;

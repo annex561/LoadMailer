@@ -32,7 +32,6 @@ export function RateSettingModal({
   originalRate 
 }: RateSettingModalProps) {
   const [dispatcherRate, setDispatcherRate] = useState(Math.round(originalRate * 0.9));
-  const [deadheadDistance, setDeadheadDistance] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -42,13 +41,9 @@ export function RateSettingModal({
 
     setIsSubmitting(true);
     try {
-      const result = await apiRequest(`/api/loads/${load.id}/set-dispatcher-rate`, {
-        method: 'POST',
-        body: JSON.stringify({
-          driverId,
-          dispatcherRate,
-          deadheadDistance
-        })
+      const result = await apiRequest('POST', `/api/loads/${load.id}/set-dispatcher-rate`, {
+        driverId,
+        dispatcherRate
       });
 
       toast({
@@ -109,45 +104,24 @@ export function RateSettingModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="dispatcherRate" className="text-sm font-medium">
-                  Driver Rate ($)
-                </Label>
-                <Input
-                  id="dispatcherRate"
-                  type="number"
-                  value={dispatcherRate}
-                  onChange={(e) => setDispatcherRate(Number(e.target.value))}
-                  min={0}
-                  step={1}
-                  required
-                  className="bg-white border border-gray-300"
-                  data-testid="input-dispatcher-rate"
-                />
-                <p className="text-xs text-gray-500">
-                  Default: 90% of board rate (${Math.round(originalRate * 0.9)})
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="deadheadDistance" className="text-sm font-medium">
-                  Deadhead Distance (miles)
-                </Label>
-                <Input
-                  id="deadheadDistance"
-                  type="number"
-                  value={deadheadDistance}
-                  onChange={(e) => setDeadheadDistance(Number(e.target.value))}
-                  min={0}
-                  step={1}
-                  className="bg-white border border-gray-300"
-                  data-testid="input-deadhead-distance"
-                />
-                <p className="text-xs text-gray-500">
-                  Miles to pickup location
-                </p>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="dispatcherRate" className="text-sm font-medium">
+                Driver Rate ($)
+              </Label>
+              <Input
+                id="dispatcherRate"
+                type="number"
+                value={dispatcherRate}
+                onChange={(e) => setDispatcherRate(Number(e.target.value))}
+                min={0}
+                step={1}
+                required
+                className="bg-white border border-gray-300"
+                data-testid="input-dispatcher-rate"
+              />
+              <p className="text-xs text-gray-500">
+                Default: 90% of board rate (${Math.round(originalRate * 0.9)})
+              </p>
             </div>
 
             <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">

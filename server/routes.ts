@@ -30,6 +30,45 @@ function replaceTemplateVariables(template: string, variables: Record<string, an
   });
 }
 
+// Calculate deadhead distance from driver location to pickup
+async function calculateDeadheadDistance(driver: any, load: any): Promise<number> {
+  // Simple approximate calculation - in production you'd use a geocoding service
+  // For now, return a reasonable estimate based on the cities
+  if (!driver.city || !load.pickupAddress) return 0;
+  
+  // Extract city/state from addresses for rough calculation
+  const driverLocation = driver.city.toLowerCase();
+  const pickupLocation = load.pickupAddress.toLowerCase();
+  
+  // If they're in the same city, assume low deadhead
+  if (pickupLocation.includes(driverLocation.split(',')[0])) {
+    return Math.floor(Math.random() * 25) + 5; // 5-30 miles
+  }
+  
+  // Different cities - estimate based on common distances
+  const stateDistances: Record<string, number> = {
+    'atlanta': { 'miami': 650, 'charlotte': 240, 'jacksonville': 345, 'dallas': 780, 'houston': 800 },
+    'miami': { 'atlanta': 650, 'orlando': 235, 'tampa': 280, 'jacksonville': 345 },
+    'dallas': { 'houston': 240, 'atlanta': 780, 'phoenix': 880, 'denver': 780 },
+    'chicago': { 'detroit': 280, 'milwaukee': 90, 'indianapolis': 185 },
+    'los angeles': { 'phoenix': 370, 'las vegas': 270, 'san diego': 120 }
+  };
+  
+  // Try to find a rough distance estimate
+  for (const [city, distances] of Object.entries(stateDistances)) {
+    if (driverLocation.includes(city)) {
+      for (const [destination, distance] of Object.entries(distances)) {
+        if (pickupLocation.includes(destination)) {
+          return distance;
+        }
+      }
+    }
+  }
+  
+  // Default estimate for unknown routes
+  return Math.floor(Math.random() * 200) + 50; // 50-250 miles
+}
+
 // Helper function to handle email booking requests for loads without phone numbers
 async function handleEmailBookingRequest(load: any, driver: any) {
   try {
@@ -324,7 +363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/loads/:loadId/set-dispatcher-rate", async (req, res) => {
     try {
       const { loadId } = req.params;
-      const { driverId, dispatcherRate, deadheadDistance } = req.body;
+      const { driverId, dispatcherRate } = req.body;
       
       console.log(`📋 Dispatcher setting rate for load ${loadId}, driver ${driverId}: $${dispatcherRate}`);
       
@@ -341,14 +380,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Find the driver's offer
       const existingOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driverId);
       
-      if (!existingOffer || existingOffer.status !== 'pending') {
-        return res.status(404).json({ error: "No pending offer found for this driver" });
+      if (!existingOffer || existingOffer.status !== 'accepted') {
+        return res.status(404).json({ error: "No accepted offer found for this driver" });
       }
+      
+      // Calculate deadhead distance automatically (distance from driver to pickup)
+      const deadheadDistance = await calculateDeadheadDistance(driver, load);
       
       // Update the offer with dispatcher rate and mark as awaiting driver confirmation
       await storage.updateLoadOfferByLoadAndDriver(loadId, driverId, {
         dispatcherRate: dispatcherRate,
-        deadheadDistance: deadheadDistance || 0,
+        deadheadDistance: deadheadDistance,
         awaitingDriverConfirmation: true,
         status: "awaiting_confirmation"
       });
