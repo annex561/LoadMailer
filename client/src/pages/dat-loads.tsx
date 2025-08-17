@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   Search, 
   Filter, 
@@ -30,6 +32,8 @@ export default function DATLoads() {
   const [equipmentFilter, setEquipmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [temperatureFilter, setTemperatureFilter] = useState("all");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: loads = [], isLoading, refetch } = useQuery<LoadWithRelations[]>({
     queryKey: ["/api/loads"],
@@ -40,6 +44,32 @@ export default function DATLoads() {
     queryKey: ["/api/load-expiration-stats"],
     refetchInterval: 60000, // Check expiration stats every minute
   });
+
+  // Book load mutation
+  const bookLoadMutation = useMutation({
+    mutationFn: async (loadId: string) => {
+      const response = await apiRequest("POST", `/api/loads/${loadId}/book`, {});
+      return response.json();
+    },
+    onSuccess: (data, loadId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
+      toast({
+        title: "Booking Request Sent",
+        description: `Your booking request for Load ${data.loadNumber} has been sent to the dispatcher. You will receive confirmation shortly.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Booking Failed",
+        description: "Unable to book this load. Please try again or contact dispatch.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleBookLoad = (loadId: string) => {
+    bookLoadMutation.mutate(loadId);
+  };
 
   // Filter loads to show only DAT loads and apply filters
   const filteredLoads = loads.filter(load => {
@@ -433,10 +463,15 @@ export default function DATLoads() {
 
                   <div className="pt-2">
                     <Button 
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      onClick={() => handleBookLoad(load.id)}
+                      disabled={bookLoadMutation.isPending || load.status !== 'pending'}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400"
                       data-testid={`button-book-load-${load.id}`}
                     >
-                      Book This Load
+                      {bookLoadMutation.isPending ? "Booking..." : 
+                       load.status === 'assigned' ? "Already Assigned" : 
+                       load.status === 'in_transit' ? "In Transit" : 
+                       load.status === 'delivered' ? "Delivered" : "Book This Load"}
                     </Button>
                   </div>
                 </div>

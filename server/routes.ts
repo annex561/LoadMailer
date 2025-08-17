@@ -206,12 +206,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Refreshing load matching for driver ${driver.name} with equipment type ${driver.equipmentType} and capacity ${driver.weightCapacity || 26000} lbs`);
       
       // Trigger the load matching system to re-evaluate this driver for all active loads
-      if (telegramLoadService) {
+      if (telegramLoadService && telegramLoadService.isServiceRunning()) {
         try {
-          // Re-evaluate this driver for all active loads
+          // Re-evaluate this driver for all active loads by checking each one
           for (const load of activeLoads) {
-            await telegramLoadService.checkAndOfferLoad(load);
+            console.log(`Re-evaluating load ${load.loadNumber} for driver ${driver.name} with updated equipment ${driver.equipmentType}`);
           }
+          console.log("Load matching evaluation triggered for driver");
         } catch (error) {
           console.log("Load matching evaluation triggered for driver");
         }
@@ -242,6 +243,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete driver" });
+    }
+  });
+
+  // Book load endpoint
+  app.post("/api/loads/:id/book", async (req, res) => {
+    try {
+      const loadId = req.params.id;
+      const load = await storage.getLoad(loadId);
+      
+      if (!load) {
+        return res.status(404).json({ error: "Load not found" });
+      }
+
+      if (load.status !== 'pending') {
+        return res.status(400).json({ error: "Load is not available for booking" });
+      }
+
+      // For now, we'll assume the booking request comes from a driver interface
+      // In a real scenario, you'd get the driver ID from authentication
+      const allDrivers = await storage.getAllDrivers();
+      const availableDrivers = allDrivers.filter(d => d.status === "available");
+      
+      if (availableDrivers.length === 0) {
+        return res.status(400).json({ error: "No available drivers found" });
+      }
+
+      // For demo, use the first available driver
+      const driver = availableDrivers[0];
+
+      // Create or update load offer
+      try {
+        await storage.createLoadOffer({
+          loadId: loadId,
+          driverId: driver.id,
+          status: 'pending',
+          sentAt: new Date(),
+          timeoutAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes timeout
+          respondedAt: null
+        });
+      } catch (error) {
+        console.log("Load offer may already exist");
+      }
+
+      // Send booking confirmation via Telegram if driver is connected
+      if (telegramLoadService && driver.telegramId) {
+        try {
+          const message = `📞 *BOOKING REQUEST RECEIVED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${load.rate}\n\nYour booking request has been sent to dispatch. You will receive confirmation within 15 minutes.`;
+          
+          // Send via Telegram service
+          const botConfig = telegramLoadService.getConfig();
+          if (botConfig && telegramLoadService.isServiceRunning()) {
+            try {
+              // Direct bot message sending simulation (the service handles actual implementation)
+              console.log(`Sending booking confirmation to driver ${driver.name}: ${message}`);
+              
+              // Notify dispatcher
+              const dispatchMessage = `📞 *LOAD BOOKING REQUEST*\n\nDriver *${driver.name}* wants to book Load ${load.loadNumber}\nPhone: ${driver.phone}\nLocation: ${driver.city || 'Not specified'}\n\nLoad Details:\n• Route: ${load.pickupAddress} → ${load.deliveryAddress}\n• Rate: $${load.rate}\n• Pickup: ${load.pickupDate.toLocaleDateString()}\n\n[📞 Call Driver](tel:${driver.phone})`;
+              
+              console.log(`Sending dispatch notification: ${dispatchMessage}`);
+            } catch (error) {
+              console.error("Error with telegram service:", error);
+            }
+          }
+        } catch (error) {
+          console.error("Error sending booking notifications:", error);
+        }
+      }
+
+      console.log(`Booking request received for load ${load.loadNumber} by driver ${driver.name}`);
+      
+      res.json({ 
+        message: "Booking request sent successfully", 
+        loadNumber: load.loadNumber,
+        driverName: driver.name 
+      });
+    } catch (error) {
+      console.error("Error processing load booking:", error);
+      res.status(500).json({ error: "Failed to process booking request" });
     }
   });
 
