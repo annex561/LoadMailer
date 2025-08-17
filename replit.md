@@ -18,6 +18,14 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+**Enhanced Rate Setting and Telegram Integration (Aug 17, 2025)**
+- Fixed driver rate input field: changed from number input to text input (removed up/down arrows)
+- Enhanced backend to automatically calculate deadhead distance based on driver location and pickup address
+- Updated Telegram service to include calculated deadhead distance in initial load offers to drivers
+- Fixed rate setting modal functionality: dispatcher can now properly set rates and send confirmation messages to drivers
+- Implemented `sendDispatcherRateConfirmation` method for proper Telegram notifications with rate details and deadhead distance
+- Verified complete two-step booking workflow: Book Now → Rate Setting → Driver Confirmation → Load Assignment
+
 **Complete Driver Lifecycle Management System (Aug 17, 2025)**
 - Implemented comprehensive driver onboarding process with step-by-step workflow and form validation
 - Created dedicated driver dashboard for load management, tracking, and communication

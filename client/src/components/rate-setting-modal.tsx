@@ -110,11 +110,13 @@ export function RateSettingModal({
               </Label>
               <Input
                 id="dispatcherRate"
-                type="number"
+                type="text"
                 value={dispatcherRate}
-                onChange={(e) => setDispatcherRate(Number(e.target.value))}
-                min={0}
-                step={1}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  setDispatcherRate(Number(value) || 0);
+                }}
+                placeholder="Enter amount"
                 required
                 className="bg-white border border-gray-300"
                 data-testid="input-dispatcher-rate"
