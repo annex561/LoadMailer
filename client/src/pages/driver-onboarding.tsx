@@ -56,12 +56,25 @@ interface OnboardingData {
 
 const EQUIPMENT_TYPES = [
   { value: 'sprinter_van', label: 'Sprinter Van' },
+  { value: 'van', label: 'Standard Van' },
   { value: 'van_lift_gate', label: 'Van with Lift Gate' },
   { value: 'van_hotshot', label: 'Van Hotshot' },
   { value: 'straight_box_truck', label: 'Straight Box Truck' },
+  { value: 'box_truck', label: 'Box Truck' },
   { value: 'moving_van', label: 'Moving Van' },
+  { value: 'flatbed', label: 'Flatbed' },
   { value: 'flatbed_hotshot', label: 'Flatbed Hotshot' },
-  { value: 'van', label: 'Standard Van' }
+  { value: 'step_deck', label: 'Step Deck' },
+  { value: 'lowboy', label: 'Lowboy' },
+  { value: 'dry_van', label: 'Dry Van' },
+  { value: 'refrigerated', label: 'Refrigerated (Reefer)' },
+  { value: 'power_only', label: 'Power Only' },
+  { value: 'container', label: 'Container' },
+  { value: 'car_carrier', label: 'Car Carrier' },
+  { value: 'tanker', label: 'Tanker' },
+  { value: 'dump_truck', label: 'Dump Truck' },
+  { value: 'conestoga', label: 'Conestoga' },
+  { value: 'removable_gooseneck', label: 'Removable Gooseneck (RGN)' }
 ];
 
 const US_STATES = [

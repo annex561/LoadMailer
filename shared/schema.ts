@@ -14,7 +14,7 @@ export const drivers = pgTable("drivers", {
   emergencyPhone: text("emergency_phone"),
   isOnboarded: boolean("is_onboarded").notNull().default(false),
   // Equipment type for load matching
-  equipmentType: text("equipment_type").notNull().default("sprinter_van"), // sprinter_van, van_lift_gate, van_hotshot, straight_box_truck, moving_van, flatbed_hotshot, van
+  equipmentType: text("equipment_type").notNull().default("sprinter_van"), // sprinter_van, van, van_lift_gate, van_hotshot, straight_box_truck, box_truck, moving_van, flatbed, flatbed_hotshot, step_deck, lowboy, dry_van, refrigerated, power_only, container, car_carrier, tanker, dump_truck, conestoga, removable_gooseneck
   // Load preferences for matching
   preferredLoadTypes: text("preferred_load_types").default("full_partial"), // full, partial, full_partial
   maxLength: integer("max_length"), // Maximum length in feet

@@ -517,7 +517,7 @@ export class LoadBoardService {
         mileage: mileage,
         ratePerMile: Math.round((rate / mileage) * 100) / 100,
         weight: Math.floor(Math.random() * 40000) + 5000,
-        equipmentType: ['dry_van', 'flatbed', 'reefer'][Math.floor(Math.random() * 3)],
+        equipmentType: ['sprinter_van', 'van', 'van_lift_gate', 'van_hotshot', 'straight_box_truck', 'box_truck', 'moving_van', 'flatbed', 'flatbed_hotshot', 'step_deck', 'lowboy', 'dry_van', 'refrigerated', 'power_only', 'container', 'car_carrier', 'tanker', 'dump_truck', 'conestoga', 'removable_gooseneck'][Math.floor(Math.random() * 20)],
         commodity: ['Electronics', 'Food Products', 'Machinery', 'Textiles'][Math.floor(Math.random() * 4)],
         brokerName: `Broker ${i + 1}`,
         brokerPhone: `555-${String(Math.floor(Math.random() * 9000) + 1000)}`,

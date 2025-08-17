@@ -312,7 +312,8 @@ export class TelegramLoadService {
 
         // Calculate overall match score
         const matchScore = await this.calculateDriverMatchScore(driver, load, proximity.distance);
-        if (matchScore < 60) continue; // Skip drivers with less than 60% match
+        console.log(`Driver ${driver.name} match score for load ${load.loadNumber}: ${matchScore}% (distance: ${proximity.distance}mi, equipment: ${driver.equipmentType}/${load.equipmentType})`);
+        if (matchScore < 40) continue; // Lowered threshold to 40% for better matching
 
         eligibleDrivers.push({
           driver,
@@ -392,27 +393,31 @@ export class TelegramLoadService {
 
     // Load type preference match (15% weight)
     maxScore += 15;
-    const driverLoadPrefs = (driver as any).preferredLoadTypes || 'full_partial';
-    const loadType = (load as any).loadType || 'full';
+    const driverLoadPrefs = driver.preferredLoadTypes || 'full_partial';
+    const loadType = load.loadType || 'full';
     if (driverLoadPrefs === 'full_partial' || driverLoadPrefs === loadType) {
       score += 15;
     }
 
     // Weight capacity match (10% weight)
     maxScore += 10;
-    const driverMaxWeight = (driver as any).maxWeight || driver.weightCapacity || 48000;
-    if (load.weight <= driverMaxWeight) {
+    const driverMaxWeight = driver.maxWeight || driver.weightCapacity || 48000;
+    if (load.weight && load.weight <= driverMaxWeight) {
       score += 10;
-    } else if (load.weight <= driverMaxWeight * 1.1) {
+    } else if (load.weight && load.weight <= driverMaxWeight * 1.1) {
       score += 5; // Allow 10% over capacity with reduced score
+    } else if (!load.weight) {
+      score += 8; // Default score if weight not specified
     }
 
     // Length capacity match (5% weight)
     maxScore += 5;
-    const driverMaxLength = (driver as any).maxLength || 53;
-    const loadLength = (load as any).length;
+    const driverMaxLength = driver.maxLength || 53;
+    const loadLength = load.length;
     if (!loadLength || loadLength <= driverMaxLength) {
       score += 5;
+    } else if (loadLength <= driverMaxLength * 1.1) {
+      score += 2; // Allow 10% over length with reduced score
     }
 
     // Rate attractiveness (10% weight)
