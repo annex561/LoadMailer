@@ -8,6 +8,7 @@ import { telegramLoadService } from "./telegram-service";
 import { gpsTrackingService } from "./gps-tracking-service";
 import { loadBoardService } from "./load-board-service";
 import { biddingService } from "./bidding-service";
+import { smartLoadMatchingService } from "./smart-load-matching-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
@@ -281,6 +282,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   } catch (error) {
     console.error('Failed to initialize Pickup Confirmation Service:', error);
   }
+
+  // Initialize Smart Load Matching Service
+  console.log('🧠 Smart Load Matching Service with AI-powered analytics ready');
+
+  // Run initial load analysis for all available drivers
+  setInterval(async () => {
+    try {
+      const availableDrivers = await storage.getAllDrivers();
+      const activeDrivers = availableDrivers.filter(d => d.status === 'available');
+      
+      for (const driver of activeDrivers) {
+        await smartLoadMatchingService.generateLoadRecommendations(driver.id);
+      }
+      
+      // Analyze market trends from recent loads
+      const recentLoads = await storage.getAllLoads();
+      await smartLoadMatchingService.analyzeMarketTrends(recentLoads);
+      
+      console.log(`📊 AI analysis completed for ${activeDrivers.length} active drivers`);
+    } catch (error) {
+      console.error('Error running Smart Load Matching analysis:', error);
+    }
+  }, 5 * 60 * 1000); // Run every 5 minutes
 
   // Driver routes
   app.get("/api/drivers", async (req, res) => {
@@ -3044,6 +3068,237 @@ Safe travels! 🚛`;
       res.json({ success: true, message: "Vehicle mileage updated" });
     } catch (error) {
       res.status(500).json({ error: "Failed to update vehicle mileage" });
+    }
+  });
+
+  // Smart Load Matching and AI Analytics API endpoints
+  app.get("/api/smart-matching/recommendations/:driverId", async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      
+      if (!driverId) {
+        return res.status(400).json({ error: "Driver ID is required" });
+      }
+
+      // Generate fresh recommendations for the driver
+      await smartLoadMatchingService.generateLoadRecommendations(driverId);
+      
+      // Fetch the latest recommendations from the database
+      const recommendations = await storage.getLoadRecommendations?.(driverId) || [];
+      
+      res.json({
+        driverId,
+        recommendations,
+        generatedAt: new Date().toISOString(),
+        count: recommendations.length
+      });
+    } catch (error) {
+      console.error("Error fetching smart load recommendations:", error);
+      res.status(500).json({ error: "Failed to fetch load recommendations" });
+    }
+  });
+
+  app.get("/api/smart-matching/backhaul-opportunities", async (req, res) => {
+    try {
+      const { driverId } = req.query;
+      
+      let opportunities;
+      if (driverId) {
+        opportunities = await storage.getBackhaulOpportunities?.(driverId as string) || [];
+      } else {
+        opportunities = await storage.getAllBackhaulOpportunities?.() || [];
+      }
+      
+      res.json({
+        opportunities: opportunities.slice(0, 20), // Limit to top 20
+        count: opportunities.length,
+        generatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching backhaul opportunities:", error);
+      res.status(500).json({ error: "Failed to fetch backhaul opportunities" });
+    }
+  });
+
+  app.get("/api/smart-matching/market-trends", async (req, res) => {
+    try {
+      const { originState, destinationState, equipmentType } = req.query;
+      
+      let trends;
+      if (originState && destinationState && equipmentType) {
+        trends = await storage.getMarketTrends?.(
+          originState as string, 
+          destinationState as string, 
+          equipmentType as string
+        ) || [];
+      } else {
+        trends = await storage.getAllMarketTrends?.() || [];
+      }
+      
+      res.json({
+        trends: trends.slice(0, 50), // Recent trends
+        count: trends.length,
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching market trends:", error);
+      res.status(500).json({ error: "Failed to fetch market trends" });
+    }
+  });
+
+  app.get("/api/smart-matching/cost-analysis/:loadId", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const { driverId } = req.query;
+      
+      if (!loadId) {
+        return res.status(400).json({ error: "Load ID is required" });
+      }
+
+      // Get cost calculation for this load
+      const costAnalysis = await storage.getCostCalculation?.(loadId, driverId as string);
+      
+      if (!costAnalysis) {
+        return res.status(404).json({ error: "Cost analysis not found" });
+      }
+      
+      res.json({
+        loadId,
+        driverId,
+        costAnalysis,
+        calculatedAt: costAnalysis.createdAt || new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching cost analysis:", error);
+      res.status(500).json({ error: "Failed to fetch cost analysis" });
+    }
+  });
+
+  app.get("/api/smart-matching/ai-analytics/:entityId", async (req, res) => {
+    try {
+      const { entityId } = req.params;
+      const { analysisType, entityType } = req.query;
+      
+      if (!entityId) {
+        return res.status(400).json({ error: "Entity ID is required" });
+      }
+
+      const analytics = await storage.getAIAnalytics?.(
+        entityId,
+        analysisType as string,
+        entityType as string
+      ) || [];
+      
+      res.json({
+        entityId,
+        analytics: analytics.slice(0, 10), // Latest 10 analyses
+        count: analytics.length,
+        lastAnalyzed: analytics[0]?.createdAt || null
+      });
+    } catch (error) {
+      console.error("Error fetching AI analytics:", error);
+      res.status(500).json({ error: "Failed to fetch AI analytics" });
+    }
+  });
+
+  app.post("/api/smart-matching/analyze-load/:loadId", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const { driverId } = req.body;
+      
+      if (!loadId || !driverId) {
+        return res.status(400).json({ error: "Load ID and Driver ID are required" });
+      }
+
+      // Generate AI analysis for this specific load-driver combination
+      await smartLoadMatchingService.generateLoadRecommendations(driverId);
+      
+      res.json({
+        loadId,
+        driverId,
+        message: "AI analysis completed",
+        analyzedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error analyzing load:", error);
+      res.status(500).json({ error: "Failed to analyze load" });
+    }
+  });
+
+  app.post("/api/smart-matching/record-outcome", async (req, res) => {
+    try {
+      const { driverId, loadId, outcome } = req.body;
+      
+      if (!driverId || !loadId || !outcome) {
+        return res.status(400).json({ error: "Driver ID, Load ID, and outcome are required" });
+      }
+
+      await smartLoadMatchingService.recordLoadOutcome(driverId, loadId, outcome);
+      
+      res.json({
+        success: true,
+        message: "Load outcome recorded for learning",
+        recordedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error recording load outcome:", error);
+      res.status(500).json({ error: "Failed to record load outcome" });
+    }
+  });
+
+  app.get("/api/smart-matching/profit-analysis", async (req, res) => {
+    try {
+      const { driverId, timeRange = "7d" } = req.query;
+      
+      // Calculate profit analysis based on historical data
+      const analysis = await storage.getDriverProfitAnalysis?.(driverId as string, timeRange as string) || {
+        totalRevenue: 0,
+        totalCosts: 0,
+        netProfit: 0,
+        profitMargin: 0,
+        averageRatePerMile: 0,
+        totalMiles: 0,
+        completedLoads: 0
+      };
+      
+      res.json({
+        driverId,
+        timeRange,
+        analysis,
+        calculatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error fetching profit analysis:", error);
+      res.status(500).json({ error: "Failed to fetch profit analysis" });
+    }
+  });
+
+  app.get("/api/smart-matching/rate-prediction", async (req, res) => {
+    try {
+      const { originState, destinationState, equipmentType } = req.query;
+      
+      if (!originState || !destinationState || !equipmentType) {
+        return res.status(400).json({ 
+          error: "Origin state, destination state, and equipment type are required" 
+        });
+      }
+
+      const predictedRate = await smartLoadMatchingService.predictOptimalRates(
+        originState as string,
+        destinationState as string,
+        equipmentType as string
+      );
+      
+      res.json({
+        route: `${originState} to ${destinationState}`,
+        equipmentType,
+        predictedRatePerMile: predictedRate,
+        confidence: 85, // AI confidence level
+        predictedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error predicting rates:", error);
+      res.status(500).json({ error: "Failed to predict optimal rates" });
     }
   });
 

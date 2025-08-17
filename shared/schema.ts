@@ -1224,3 +1224,261 @@ export type BidResponseWithDriver = BidResponse & {
   driver: Driver;
   bid: LoadBid;
 };
+
+// Smart Load Matching and Predictive Analytics Tables
+export const driverLoadHistory = pgTable("driver_load_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  
+  // Load characteristics
+  originState: text("origin_state").notNull(),
+  destinationState: text("destination_state").notNull(),
+  originCity: text("origin_city").notNull(),
+  destinationCity: text("destination_city").notNull(),
+  equipmentType: text("equipment_type").notNull(),
+  loadType: text("load_type").notNull(),
+  
+  // Financial data
+  acceptedRate: real("accepted_rate").notNull(),
+  actualRate: real("actual_rate"), // Final rate after delivery
+  ratePerMile: real("rate_per_mile").notNull(),
+  totalMiles: integer("total_miles").notNull(),
+  deadheadMiles: integer("deadhead_miles").default(0),
+  
+  // Performance metrics
+  acceptedAt: timestamp("accepted_at").notNull(),
+  pickedUpAt: timestamp("picked_up_at"),
+  deliveredAt: timestamp("delivered_at"),
+  wasOnTime: boolean("was_on_time").default(true),
+  deliveryRating: integer("delivery_rating").default(5), // 1-5 stars
+  
+  // Costs and profitability
+  fuelCost: real("fuel_cost").default(0),
+  tollCost: real("toll_cost").default(0),
+  otherExpenses: real("other_expenses").default(0),
+  totalExpenses: real("total_expenses").default(0),
+  netProfit: real("net_profit").default(0),
+  profitMargin: real("profit_margin").default(0), // percentage
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const marketRateTrends = pgTable("market_rate_trends", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  originState: text("origin_state").notNull(),
+  destinationState: text("destination_state").notNull(),
+  equipmentType: text("equipment_type").notNull(),
+  
+  // Rate analysis
+  averageRate: real("average_rate").notNull(),
+  medianRate: real("median_rate").notNull(),
+  highRate: real("high_rate").notNull(),
+  lowRate: real("low_rate").notNull(),
+  ratePerMile: real("rate_per_mile").notNull(),
+  
+  // Market conditions
+  loadVolume: integer("load_volume").default(0), // Number of loads
+  truckDemand: real("truck_demand").default(0), // Load-to-truck ratio
+  seasonalFactor: real("seasonal_factor").default(1.0), // Seasonal multiplier
+  
+  // Time period
+  weekOf: timestamp("week_of").notNull(),
+  period: text("period").notNull().default("weekly"), // daily, weekly, monthly
+  
+  // Analysis metadata
+  dataSource: text("data_source").notNull().default("scraped"), // scraped, manual, api
+  sampleSize: integer("sample_size").default(0),
+  lastUpdated: timestamp("last_updated").defaultNow(),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const backhaulOpportunities = pgTable("backhaul_opportunities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  primaryLoadId: varchar("primary_load_id").references(() => loads.id).notNull(),
+  backhaulLoadId: varchar("backhaul_load_id").references(() => loads.id).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  
+  // Route optimization
+  deliveryLocation: text("delivery_location").notNull(),
+  backhaulOrigin: text("backhaul_origin").notNull(),
+  deadheadToBackhaul: integer("deadhead_to_backhaul").notNull(), // miles
+  totalRoundTripMiles: integer("total_round_trip_miles").notNull(),
+  
+  // Financial analysis
+  primaryLoadRate: real("primary_load_rate").notNull(),
+  backhaulRate: real("backhaul_rate").notNull(),
+  combinedRate: real("combined_rate").notNull(),
+  deadheadSavings: real("deadhead_savings").notNull(),
+  totalProfit: real("total_profit").notNull(),
+  profitImprovement: real("profit_improvement").notNull(), // vs single load
+  
+  // Timing
+  deliveryTime: timestamp("delivery_time").notNull(),
+  backhaulPickupTime: timestamp("backhaul_pickup_time").notNull(),
+  layoverTime: integer("layover_time").notNull(), // hours between loads
+  
+  // Opportunity scoring
+  matchScore: real("match_score").notNull(), // 0-100 compatibility score
+  timeEfficiency: real("time_efficiency").notNull(), // 0-100 time optimization
+  profitScore: real("profit_score").notNull(), // 0-100 profitability score
+  
+  status: text("status").notNull().default("available"), // available, offered, accepted, expired
+  expiresAt: timestamp("expires_at").notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const loadRecommendations = pgTable("load_recommendations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  
+  // AI-powered scoring
+  aiScore: real("ai_score").notNull(), // 0-100 AI recommendation score
+  historicalPerformanceScore: real("historical_performance_score").notNull(),
+  marketConditionScore: real("market_condition_score").notNull(),
+  profitabilityScore: real("profitability_score").notNull(),
+  routeOptimizationScore: real("route_optimization_score").notNull(),
+  
+  // Detailed analysis
+  predictedProfit: real("predicted_profit").notNull(),
+  predictedMargin: real("predicted_margin").notNull(),
+  riskScore: real("risk_score").notNull(), // 0-100 risk assessment
+  confidenceLevel: real("confidence_level").notNull(), // 0-100 AI confidence
+  
+  // Reasoning factors
+  reasoningFactors: jsonb("reasoning_factors").default({}), // Why this was recommended
+  similarLoadsPerformed: integer("similar_loads_performed").default(0),
+  averagePerformanceOnRoute: real("average_performance_on_route").default(0),
+  
+  // Market intelligence
+  competitiveRatePosition: text("competitive_rate_position"), // below_market, at_market, above_market
+  demandLevel: text("demand_level"), // low, medium, high
+  seasonalAdjustment: real("seasonal_adjustment").default(1.0),
+  
+  // Status tracking
+  status: text("status").notNull().default("pending"), // pending, sent, accepted, declined, expired
+  sentAt: timestamp("sent_at"),
+  respondedAt: timestamp("responded_at"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const aiAnalytics = pgTable("ai_analytics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  analysisType: text("analysis_type").notNull(), // rate_prediction, load_matching, backhaul_optimization, profit_analysis
+  entityId: varchar("entity_id").notNull(), // driver_id, load_id, etc.
+  entityType: text("entity_type").notNull(), // driver, load, route, market
+  
+  // Analysis results
+  analysis: jsonb("analysis").notNull(), // Detailed AI analysis results
+  predictions: jsonb("predictions").default({}), // Future predictions
+  recommendations: jsonb("recommendations").default([]), // Action recommendations
+  
+  // Model information
+  modelVersion: text("model_version").notNull().default("1.0"),
+  inputData: jsonb("input_data").default({}), // Input parameters used
+  confidence: real("confidence").notNull(), // 0-100 confidence in analysis
+  processingTime: integer("processing_time").default(0), // milliseconds
+  
+  // Validation and performance
+  actualOutcome: jsonb("actual_outcome").default({}), // Actual results for validation
+  accuracyScore: real("accuracy_score"), // How accurate the prediction was
+  validatedAt: timestamp("validated_at"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const costCalculations = pgTable("cost_calculations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  
+  // Route details
+  totalMiles: integer("total_miles").notNull(),
+  deadheadMiles: integer("deadhead_miles").default(0),
+  estimatedDrivingTime: integer("estimated_driving_time").notNull(), // minutes
+  
+  // Fuel calculations
+  fuelPrice: real("fuel_price").notNull(), // per gallon
+  vehicleMpg: real("vehicle_mpg").notNull(),
+  estimatedFuelCost: real("estimated_fuel_cost").notNull(),
+  
+  // Toll calculations
+  estimatedTolls: real("estimated_tolls").default(0),
+  tollRoutes: jsonb("toll_routes").default([]), // Specific toll roads
+  
+  // Time-based costs
+  hourlyDriverRate: real("hourly_driver_rate").default(25), // driver compensation per hour
+  estimatedLaborCost: real("estimated_labor_cost").notNull(),
+  
+  // Vehicle costs
+  vehicleOperatingCost: real("vehicle_operating_cost").default(0.58), // per mile
+  maintenanceCost: real("maintenance_cost").default(0),
+  depreciationCost: real("depreciation_cost").default(0),
+  
+  // Total calculations
+  totalEstimatedCosts: real("total_estimated_costs").notNull(),
+  grossRevenue: real("gross_revenue").notNull(),
+  netProfit: real("net_profit").notNull(),
+  profitMargin: real("profit_margin").notNull(),
+  ratePerMile: real("rate_per_mile").notNull(),
+  
+  // Market comparison
+  marketAverageRate: real("market_average_rate").default(0),
+  rateCompetitiveness: text("rate_competitiveness"), // below_market, competitive, above_market
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Insert schemas and types for Smart Load Matching tables
+export const insertDriverLoadHistorySchema = createInsertSchema(driverLoadHistory).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMarketRateTrendsSchema = createInsertSchema(marketRateTrends).omit({
+  id: true,
+  lastUpdated: true,
+  createdAt: true,
+});
+
+export const insertBackhaulOpportunitiesSchema = createInsertSchema(backhaulOpportunities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertLoadRecommendationsSchema = createInsertSchema(loadRecommendations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAiAnalyticsSchema = createInsertSchema(aiAnalytics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCostCalculationsSchema = createInsertSchema(costCalculations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type DriverLoadHistory = typeof driverLoadHistory.$inferSelect;
+export type InsertDriverLoadHistory = z.infer<typeof insertDriverLoadHistorySchema>;
+
+export type MarketRateTrends = typeof marketRateTrends.$inferSelect;
+export type InsertMarketRateTrends = z.infer<typeof insertMarketRateTrendsSchema>;
+
+export type BackhaulOpportunities = typeof backhaulOpportunities.$inferSelect;
+export type InsertBackhaulOpportunities = z.infer<typeof insertBackhaulOpportunitiesSchema>;
+
+export type LoadRecommendations = typeof loadRecommendations.$inferSelect;
+export type InsertLoadRecommendations = z.infer<typeof insertLoadRecommendationsSchema>;
+
+export type AiAnalytics = typeof aiAnalytics.$inferSelect;
+export type InsertAiAnalytics = z.infer<typeof insertAiAnalyticsSchema>;
+
+export type CostCalculations = typeof costCalculations.$inferSelect;
+export type InsertCostCalculations = z.infer<typeof insertCostCalculationsSchema>;
