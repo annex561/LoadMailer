@@ -264,6 +264,9 @@ export class TelegramLoadService {
       for (const driver of allDrivers) {
         if (!driver.city) continue;
 
+        // Skip unavailable drivers immediately
+        if (driver.status === 'unavailable') continue;
+
         // Calculate proximity score and distance
         const proximity = await this.calculateDriverProximity(driver, load);
         if (proximity.distance > 150) continue; // Skip drivers more than 150 miles away
