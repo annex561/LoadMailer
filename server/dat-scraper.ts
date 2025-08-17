@@ -500,7 +500,7 @@ export class DATScraper {
   }
   
   private createSampleLoads(): DATLoadData[] {
-    // Create realistic sample loads that look like real DAT freight
+    // Create realistic sample loads that look like real DAT freight - weighted towards Atlanta for better driver matching
     const routes = [
       { origin: 'Atlanta, GA', destination: 'Jacksonville, FL', miles: 345, rate: 1200 },
       { origin: 'Atlanta, GA', destination: 'Charlotte, NC', miles: 245, rate: 950 },
@@ -510,6 +510,10 @@ export class DATScraper {
       { origin: 'Atlanta, GA', destination: 'Houston, TX', miles: 790, rate: 2100 },
       { origin: 'Atlanta, GA', destination: 'Chicago, IL', miles: 715, rate: 1950 },
       { origin: 'Atlanta, GA', destination: 'Dallas, TX', miles: 925, rate: 2250 },
+      { origin: 'Atlanta, GA', destination: 'Tampa, FL', miles: 460, rate: 1350 },
+      { origin: 'Atlanta, GA', destination: 'Memphis, TN', miles: 340, rate: 1180 },
+      { origin: 'Atlanta, GA', destination: 'Louisville, KY', miles: 300, rate: 1050 },
+      { origin: 'Atlanta, GA', destination: 'Birmingham, AL', miles: 150, rate: 750 },
       { origin: 'Los Angeles, CA', destination: 'Phoenix, AZ', miles: 370, rate: 1850 },
       { origin: 'Chicago, IL', destination: 'Detroit, MI', miles: 280, rate: 950 }
     ];
@@ -517,7 +521,11 @@ export class DATScraper {
     const equipmentTypes = [
       { type: 'vans_standard', needsTemp: false },
       { type: 'dry_van', needsTemp: false },
+      { type: 'dry_van', needsTemp: false }, // More dry_van loads for Mike Johnson
       { type: 'refrigerated', needsTemp: true },
+      { type: 'van_hotshot', needsTemp: false },
+      { type: 'sprinter_van', needsTemp: false },
+      { type: 'straight_box_truck', needsTemp: false },
       { type: 'flatbed', needsTemp: false },
       { type: 'step_deck', needsTemp: false },
       { type: 'lowboy', needsTemp: false },

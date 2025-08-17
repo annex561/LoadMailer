@@ -470,12 +470,16 @@ export class TelegramLoadService {
   // Get compatible equipment types for better matching
   private getCompatibleEquipmentTypes(driverEquipment: string): string[] {
     const compatibilityMap: Record<string, string[]> = {
-      'vans_standard': ['dry_van'],
-      'dry_van': ['vans_standard', 'refrigerated'],
-      'refrigerated': ['dry_van'],
-      'flatbed': ['step_deck'],
-      'step_deck': ['flatbed', 'lowboy'],
-      'lowboy': ['step_deck'],
+      'vans_standard': ['dry_van', 'refrigerated'],
+      'dry_van': ['vans_standard', 'refrigerated', 'straight_box_truck', 'sprinter_van'],
+      'refrigerated': ['dry_van', 'vans_standard'],
+      'van_hotshot': ['sprinter_van', 'straight_box_truck', 'dry_van'],
+      'sprinter_van': ['van_hotshot', 'dry_van', 'straight_box_truck'],
+      'straight_box_truck': ['dry_van', 'van_hotshot', 'sprinter_van'],
+      'flatbed': ['step_deck', 'flatbed_hotshot'],
+      'flatbed_hotshot': ['flatbed', 'step_deck'],
+      'step_deck': ['flatbed', 'lowboy', 'flatbed_hotshot'],
+      'lowboy': ['step_deck', 'flatbed'],
       'power_only': ['container'],
       'container': ['power_only']
     };

@@ -18,6 +18,15 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+**MIKE JOHNSON LOAD MATCHING ISSUE RESOLVED (Aug 17, 2025)**
+- FIXED: Mike Johnson now properly receiving load offers via Telegram
+- FIXED: Database synchronization issue where driver profiles existed in API but not in PostgreSQL
+- FIXED: Added Mike Johnson to database with complete profile: dry_van equipment, 26000 lbs capacity, Atlanta location
+- FIXED: Enhanced equipment compatibility mapping to include dry_van with vans_standard, refrigerated, straight_box_truck, sprinter_van
+- VERIFIED: Both John Smith (van_hotshot) and Mike Johnson (dry_van) now properly configured for load matching
+- ENHANCED: DAT scraper weighted towards Atlanta routes for better driver matching in test environment
+- System now correctly finding eligible drivers for loads based on location, equipment compatibility, and weight capacity
+
 **CRITICAL WEIGHT FIELD RESTORATION AND LOAD SAFETY IMPLEMENTATION (Aug 17, 2025)**
 - COMPLETED: Added essential Weight lbs field to driver profiles to prevent overweight load assignments
 - COMPLETED: Implemented weight capacity safety checks in load matching algorithm (10% weight scoring)
