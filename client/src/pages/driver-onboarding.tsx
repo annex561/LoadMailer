@@ -107,22 +107,31 @@ export default function DriverOnboarding() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Get token from URL parameters
+  // Get token from URL parameters using wouter's useSearch hook
   useEffect(() => {
+    // Extract token from current URL using both approaches
     const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    console.log('🔍 Frontend Token extraction:', { 
-      url: window.location.href, 
-      search: window.location.search, 
-      token,
-      timestamp: new Date().toISOString() 
-    });
+    let token = urlParams.get('token');
+    
+    // Also try to get from hash if not in search params (sometimes happens with SPAs)
+    if (!token && window.location.hash.includes('token=')) {
+      const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      token = hashParams.get('token');
+    }
+    
+    // Also try to parse manually from the full URL
+    if (!token) {
+      const fullUrl = window.location.href;
+      const tokenMatch = fullUrl.match(/[?&]token=([^&]+)/);
+      if (tokenMatch) {
+        token = tokenMatch[1];
+      }
+    }
     
     if (token) {
-      console.log('✅ Token found, setting onboarding token:', token);
       setOnboardingToken(token);
+      setTokenError(null);
     } else {
-      console.log('❌ No token found in URL');
       setTokenError('No onboarding token found. Please use the invitation link.');
     }
   }, []);
