@@ -116,9 +116,9 @@ export default function ContactFormModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md" data-testid={`${type}-form-modal`}>
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent className="max-w-md dialog-improved" data-testid={`${type}-form-modal`}>
+        <DialogHeader className="dialog-header-improved">
+          <DialogTitle className="dialog-title-improved">
             {isEdit ? `Edit ${type === "driver" ? "Driver" : "Customer"}` : `Add New ${type === "driver" ? "Driver" : "Customer"}`}
           </DialogTitle>
         </DialogHeader>
@@ -130,11 +130,12 @@ export default function ContactFormModal({
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{type === "driver" ? "Driver Name" : "Company Name"}</FormLabel>
+                  <FormLabel className="form-label-improved">{type === "driver" ? "Driver Name" : "Company Name"}</FormLabel>
                   <FormControl>
                     <Input 
                       {...field} 
                       placeholder={type === "driver" ? "John Doe" : "ABC Manufacturing"}
+                      className="form-input-improved"
                       data-testid={`input-${type}-name`}
                     />
                   </FormControl>
@@ -149,11 +150,12 @@ export default function ContactFormModal({
                 name="contactPerson"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact Person</FormLabel>
+                    <FormLabel className="form-label-improved">Contact Person</FormLabel>
                     <FormControl>
                       <Input 
                         {...field} 
                         placeholder="John Smith"
+                        className="form-input-improved"
                         data-testid="input-contact-person"
                       />
                     </FormControl>
@@ -168,12 +170,13 @@ export default function ContactFormModal({
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel className="form-label-improved">Email</FormLabel>
                   <FormControl>
                     <Input 
                       {...field} 
                       type="email"
                       placeholder="john@example.com"
+                      className="form-input-improved"
                       data-testid={`input-${type}-email`}
                     />
                   </FormControl>
@@ -187,11 +190,12 @@ export default function ContactFormModal({
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Phone</FormLabel>
+                  <FormLabel className="form-label-improved">Phone</FormLabel>
                   <FormControl>
                     <Input 
                       {...field} 
                       placeholder="(555) 123-4567"
+                      className="form-input-improved"
                       data-testid={`input-${type}-phone`}
                     />
                   </FormControl>
@@ -206,12 +210,13 @@ export default function ContactFormModal({
                 name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address</FormLabel>
+                    <FormLabel className="form-label-improved">Address</FormLabel>
                     <FormControl>
                       <Textarea 
                         {...field} 
                         rows={3}
                         placeholder="1234 Business St, City, State 12345"
+                        className="form-textarea-improved"
                         data-testid="textarea-customer-address"
                       />
                     </FormControl>
@@ -227,10 +232,10 @@ export default function ContactFormModal({
                 name="equipmentType"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Equipment Type</FormLabel>
+                    <FormLabel className="form-label-improved">Equipment Type</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value} data-testid="select-driver-equipment-type">
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="form-select-improved">
                           <SelectValue placeholder="Select equipment type" />
                         </SelectTrigger>
                       </FormControl>
@@ -255,10 +260,10 @@ export default function ContactFormModal({
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status</FormLabel>
+                  <FormLabel className="form-label-improved">Status</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value} data-testid={`select-${type}-status`}>
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="form-select-improved">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>

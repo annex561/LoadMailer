@@ -100,9 +100,9 @@ export default function EmailTemplateFormModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-screen overflow-y-auto" data-testid="email-template-form-modal">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Email Template" : "Create New Email Template"}</DialogTitle>
+      <DialogContent className="max-w-4xl max-h-screen overflow-y-auto dialog-improved" data-testid="email-template-form-modal">
+        <DialogHeader className="dialog-header-improved">
+          <DialogTitle className="dialog-title-improved">{isEdit ? "Edit Email Template" : "Create New Email Template"}</DialogTitle>
         </DialogHeader>
         
         <Form {...form}>
@@ -110,18 +110,19 @@ export default function EmailTemplateFormModal({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Template Information */}
               <div className="space-y-4">
-                <h4 className="text-lg font-medium text-gray-900">Template Information</h4>
+                <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">Template Information</h4>
                 
                 <FormField
                   control={form.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Template Name</FormLabel>
+                      <FormLabel className="form-label-improved">Template Name</FormLabel>
                       <FormControl>
                         <Input 
                           {...field} 
                           placeholder="e.g., Load Assignment Notification" 
+                          className="form-input-improved"
                           data-testid="input-template-name"
                         />
                       </FormControl>

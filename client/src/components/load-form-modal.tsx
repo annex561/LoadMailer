@@ -112,9 +112,9 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-screen overflow-y-auto" data-testid="load-form-modal">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Load" : "Create New Load"}</DialogTitle>
+      <DialogContent className="max-w-4xl max-h-screen overflow-y-auto dialog-improved" data-testid="load-form-modal">
+        <DialogHeader className="dialog-header-improved">
+          <DialogTitle className="dialog-title-improved">{isEdit ? "Edit Load" : "Create New Load"}</DialogTitle>
         </DialogHeader>
         
         <Form {...form}>
@@ -122,18 +122,19 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Load Information */}
               <div className="space-y-4">
-                <h4 className="text-lg font-medium text-gray-900">Load Information</h4>
+                <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100">Load Information</h4>
                 
                 <FormField
                   control={form.control}
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Description</FormLabel>
+                      <FormLabel className="form-label-improved">Description</FormLabel>
                       <FormControl>
                         <Input 
                           {...field} 
                           placeholder="e.g., Electronics & Appliances" 
+                          className="form-input-improved"
                           data-testid="input-description"
                         />
                       </FormControl>
