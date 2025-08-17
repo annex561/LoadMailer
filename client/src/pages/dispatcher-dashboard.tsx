@@ -149,8 +149,12 @@ export default function DispatcherDashboard() {
     }
   });
 
-  // Filter loads based on status and search
+  // Filter loads based on status and search - ONLY show loads that were sent to drivers
   const filteredLoads = loads.filter(load => {
+    // Only include loads that have offers (were sent to drivers)
+    const hasOffers = load.offers && load.offers.length > 0;
+    if (!hasOffers) return false;
+    
     const matchesStatus = statusFilter === 'all' || load.status === statusFilter;
     const matchesSearch = searchQuery === '' || 
       load.loadNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -288,8 +292,23 @@ export default function DispatcherDashboard() {
                           )}
 
                           {load.offers.length > 0 && (
-                            <div className="text-xs text-muted-foreground">
-                              {load.offers.filter(o => o.status === 'pending').length} pending offers
+                            <div className="bg-blue-50 border border-blue-200 rounded p-2 mt-2">
+                              <div className="text-xs font-medium text-blue-800 mb-1">Driver Offers:</div>
+                              {load.offers.map((offer: any, index: number) => {
+                                const driver = drivers.find(d => d.id === offer.driverId);
+                                const statusColor = offer.status === 'accepted' ? 'text-green-600' : 
+                                                  offer.status === 'declined' ? 'text-red-600' : 'text-yellow-600';
+                                const statusText = offer.status === 'pending' ? 'Awaiting Response' : 
+                                                 offer.status === 'accepted' ? 'Accepted' : 'Declined';
+                                return (
+                                  <div key={index} className="flex justify-between items-center text-xs">
+                                    <span className="font-medium">{driver?.name || 'Unknown Driver'}</span>
+                                    <span className={`capitalize ${statusColor}`}>
+                                      {statusText}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -324,7 +343,7 @@ export default function DispatcherDashboard() {
                       {selectedLoad.priority}
                     </Badge>
                     <div className="text-sm text-muted-foreground">
-                      Pickup: {selectedLoad.pickupDate ? new Date(selectedLoad.pickupDate).toLocaleDateString() : 'N/A'} 
+                      Pickup: {selectedLoad.pickupDate ? (typeof selectedLoad.pickupDate === 'string' ? new Date(selectedLoad.pickupDate).toLocaleDateString() : selectedLoad.pickupDate.toLocaleDateString()) : 'N/A'} 
                       {selectedLoad.pickupTime && ` at ${selectedLoad.pickupTime}`}
                     </div>
                   </div>
