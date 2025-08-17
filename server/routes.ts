@@ -14,6 +14,7 @@ import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
+import smsService from "./sms-service";
 
 // Email service configuration
 const transporter = nodemailer.createTransport({
@@ -1260,11 +1261,18 @@ Safe travels! 🚛`;
       // Create the onboarding link
       const onboardingLink = `${req.protocol}://${req.hostname}/driver-onboarding?token=${token}`;
       
-      // SMS message content
-      const smsMessage = `Welcome to LoadMaster! Complete your driver onboarding here: ${onboardingLink}. This link expires in 7 days.`;
+      // Send SMS using Twilio service
+      const smsResult = await smsService.sendOnboardingLink(phone, onboardingLink);
       
-      // Send SMS (placeholder - would use Twilio in production)
-      console.log(`SMS would be sent to ${phone}: ${smsMessage}`);
+      if (!smsResult.success) {
+        console.error(`Failed to send SMS to ${phone}:`, smsResult.error);
+        return res.status(500).json({ 
+          error: "Failed to send SMS invitation", 
+          details: smsResult.error 
+        });
+      }
+      
+      console.log(`SMS invitation sent successfully to ${phone} with message ID: ${smsResult.messageId}`);
       
       // Log the SMS attempt
       await storage.createEmailLog({
@@ -1277,6 +1285,7 @@ Safe travels! 🚛`;
       res.status(201).json({ 
         ...onboardingToken, 
         phone,
+        messageId: smsResult.messageId,
         message: "SMS invitation sent successfully"
       });
     } catch (error) {
