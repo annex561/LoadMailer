@@ -197,7 +197,7 @@ export default function Loads() {
                       <div>
                         <span className="text-sm font-medium text-primary">{load.loadNumber}</span>
                         <div className="text-xs text-gray-500">{load.description}</div>
-                        <div className="text-xs text-gray-500">{load.weight.toLocaleString()} lbs</div>
+                        <div className="text-xs text-gray-500">{load.equipmentType || 'Any Equipment'}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

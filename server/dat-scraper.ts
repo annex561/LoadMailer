@@ -502,21 +502,27 @@ export class DATScraper {
   private createSampleLoads(): DATLoadData[] {
     // Create realistic sample loads that look like real DAT freight
     const routes = [
-      { origin: 'Los Angeles, CA', destination: 'Phoenix, AZ', miles: 370, rate: 1850 },
-      { origin: 'Chicago, IL', destination: 'Detroit, MI', miles: 280, rate: 950 },
-      { origin: 'Dallas, TX', destination: 'Houston, TX', miles: 240, rate: 650 },
       { origin: 'Atlanta, GA', destination: 'Jacksonville, FL', miles: 345, rate: 1200 },
-      { origin: 'Denver, CO', destination: 'Salt Lake City, UT', miles: 525, rate: 1450 },
-      { origin: 'Memphis, TN', destination: 'Little Rock, AR', miles: 135, rate: 450 },
-      { origin: 'Portland, OR', destination: 'Seattle, WA', miles: 175, rate: 580 },
-      { origin: 'Kansas City, MO', destination: 'Oklahoma City, OK', miles: 350, rate: 980 }
+      { origin: 'Atlanta, GA', destination: 'Charlotte, NC', miles: 245, rate: 950 },
+      { origin: 'Atlanta, GA', destination: 'Nashville, TN', miles: 250, rate: 980 },
+      { origin: 'Atlanta, GA', destination: 'New York, NY', miles: 875, rate: 2350 },
+      { origin: 'Atlanta, GA', destination: 'Miami, FL', miles: 650, rate: 1850 },
+      { origin: 'Atlanta, GA', destination: 'Houston, TX', miles: 790, rate: 2100 },
+      { origin: 'Atlanta, GA', destination: 'Chicago, IL', miles: 715, rate: 1950 },
+      { origin: 'Atlanta, GA', destination: 'Dallas, TX', miles: 925, rate: 2250 },
+      { origin: 'Los Angeles, CA', destination: 'Phoenix, AZ', miles: 370, rate: 1850 },
+      { origin: 'Chicago, IL', destination: 'Detroit, MI', miles: 280, rate: 950 }
     ];
     
     const equipmentTypes = [
-      { type: 'Dry Van', needsTemp: false },
-      { type: 'Refrigerated', needsTemp: true },
-      { type: 'Flatbed', needsTemp: false },
-      { type: 'Step Deck', needsTemp: false }
+      { type: 'van_hotshot', needsTemp: false },
+      { type: 'sprinter_van', needsTemp: false },
+      { type: 'flatbed_hotshot', needsTemp: false },
+      { type: 'van', needsTemp: false },
+      { type: 'dry_van', needsTemp: false },
+      { type: 'refrigerated', needsTemp: true },
+      { type: 'flatbed', needsTemp: false },
+      { type: 'step_deck', needsTemp: false }
     ];
     const companies = ['ABC Logistics', 'FreightCorp', 'Swift Transport', 'Premium Shipping', 'National Freight'];
     
