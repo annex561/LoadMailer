@@ -110,93 +110,30 @@ export class TelegramLoadService {
       this.bot.sendMessage(msg.chat.id, 'Welcome to LAMP Load Dispatcher 🚛');
     });
 
-    // Book load handler
-    this.bot.onText(/book_(\w+)/, async (msg: any, match: any) => {
-      if (!this.bot || !match) return;
+    // Handle callback queries from inline keyboard buttons
+    this.bot.on('callback_query', async (callbackQuery: any) => {
+      if (!this.bot || !callbackQuery.data) return;
       
-      const loadId = match[1];
-      const telegramId = msg.from?.id.toString();
+      const data = callbackQuery.data;
+      const telegramId = callbackQuery.from?.id.toString();
+      const chatId = callbackQuery.message?.chat?.id;
       
-      if (!telegramId) return;
+      if (!telegramId || !chatId) return;
 
       try {
-        const driver = await storage.getDriverByTelegramId(telegramId);
-        if (!driver) {
-          this.bot.sendMessage(msg.chat.id, '❌ Driver not found. Please contact dispatcher.');
-          return;
+        // Answer callback query to remove loading state
+        await this.bot.answerCallbackQuery(callbackQuery.id);
+
+        if (data.startsWith('book_')) {
+          const loadId = data.substring(5); // Remove 'book_' prefix
+          await this.handleBookLoad(loadId, telegramId, chatId);
+        } else if (data.startsWith('decline_')) {
+          const loadId = data.substring(8); // Remove 'decline_' prefix
+          await this.handleDeclineLoad(loadId, telegramId, chatId);
         }
-
-        // Update load offer status
-        await storage.updateLoadOfferByLoadAndDriver(loadId, driver.id, {
-          status: 'accepted',
-          respondedAt: new Date()
-        });
-
-        // Assign driver to load
-        await storage.updateLoad(loadId, {
-          driverId: driver.id,
-          status: 'assigned'
-        });
-
-        // Send confirmation to driver
-        this.bot.sendMessage(
-          msg.chat.id,
-          '✅ Booking request received. Dispatcher is working on it. If no reply in 15 min, feel free to bid on other loads.'
-        );
-
-        // Notify dispatcher
-        if (this.config) {
-          this.bot.sendMessage(
-            this.config.dispatcherId,
-            `📞 *BOOKING CONFIRMATION*\nDriver *${driver.name}* accepted Load ${loadId}.\nPhone: ${driver.phone}\nLocation: ${driver.city}\n\n[📞 Call Carrier Now](tel:${driver.phone})`,
-            { parse_mode: 'Markdown' }
-          );
-        }
-
-        console.log(`Driver ${driver.name} accepted load ${loadId}`);
       } catch (error) {
-        console.error('Error handling book command:', error);
-        this.bot.sendMessage(msg.chat.id, '❌ Error processing booking request.');
-      }
-    });
-
-    // Decline load handler
-    this.bot.onText(/decline_(\w+)/, async (msg: any, match: any) => {
-      if (!this.bot || !match) return;
-      
-      const loadId = match[1];
-      const telegramId = msg.from?.id.toString();
-      
-      if (!telegramId) return;
-
-      try {
-        const driver = await storage.getDriverByTelegramId(telegramId);
-        if (!driver) {
-          this.bot.sendMessage(msg.chat.id, '❌ Driver not found. Please contact dispatcher.');
-          return;
-        }
-
-        // Update load offer status
-        await storage.updateLoadOfferByLoadAndDriver(loadId, driver.id, {
-          status: 'declined',
-          respondedAt: new Date()
-        });
-
-        // Notify dispatcher
-        if (this.config) {
-          this.bot.sendMessage(
-            this.config.dispatcherId,
-            `❌ Driver ${driver.name} declined Load ${loadId}.`
-          );
-        }
-
-        // Send confirmation to driver
-        this.bot.sendMessage(msg.chat.id, '❌ Load declined. Thank you for your response.');
-
-        console.log(`Driver ${driver.name} declined load ${loadId}`);
-      } catch (error) {
-        console.error('Error handling decline command:', error);
-        this.bot.sendMessage(msg.chat.id, '❌ Error processing decline request.');
+        console.error('Error handling callback query:', error);
+        this.bot.sendMessage(chatId, '❌ Error processing your request.');
       }
     });
   }
@@ -748,6 +685,116 @@ ${onboardingUrl}
     } catch (error) {
       console.error('Error sending message via Telegram:', error);
       return null;
+    }
+  }
+
+  private async handleBookLoad(loadId: string, telegramId: string, chatId: number): Promise<void> {
+    try {
+      const driver = await storage.getDriverByTelegramId(telegramId);
+      if (!driver) {
+        this.bot?.sendMessage(chatId, '❌ Driver not found. Please contact dispatcher.');
+        return;
+      }
+
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        this.bot?.sendMessage(chatId, '❌ Load not found.');
+        return;
+      }
+
+      // Update load offer status
+      await storage.updateLoadOfferByLoadAndDriver(loadId, driver.id, {
+        status: 'accepted',
+        respondedAt: new Date()
+      });
+
+      // Assign driver to load
+      await storage.updateLoad(loadId, {
+        driverId: driver.id,
+        status: 'assigned'
+      });
+
+      // Send confirmation to driver
+      this.bot?.sendMessage(
+        chatId,
+        `✅ *BOOKING CONFIRMED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${load.rate}\n\nDispatcher is processing your booking. You will receive confirmation within 15 minutes.`,
+        { parse_mode: 'Markdown' }
+      );
+
+      // Notify dispatcher with complete information
+      if (this.config) {
+        const dispatchMessage = `📞 *LOAD BOOKING CONFIRMATION*\n\n` +
+          `🚛 *DRIVER INFO:*\n` +
+          `• Name: ${driver.name}\n` +
+          `• Phone: ${driver.phone}\n` +
+          `• Location: ${driver.city || 'Not specified'}\n` +
+          `• Equipment: ${driver.equipmentType}\n` +
+          `• Capacity: ${driver.weightCapacity || 26000} lbs\n\n` +
+          `📦 *LOAD DETAILS:*\n` +
+          `• Load #: ${load.loadNumber}\n` +
+          `• Route: ${load.pickupAddress} → ${load.deliveryAddress}\n` +
+          `• Rate: $${load.rate} (${load.miles} miles)\n` +
+          `• Weight: ${load.weight.toLocaleString()} lbs\n` +
+          `• Equipment: ${load.equipmentType}\n` +
+          `• Pickup: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}\n` +
+          `• Delivery: ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime}\n` +
+          `• Company: ${load.company || 'Not specified'}\n\n` +
+          `[📞 Call Driver](tel:${driver.phone})`;
+
+        this.bot?.sendMessage(
+          this.config.dispatcherId,
+          dispatchMessage,
+          { parse_mode: 'Markdown' }
+        );
+      }
+
+      console.log(`Driver ${driver.name} accepted load ${load.loadNumber} via Telegram button`);
+    } catch (error) {
+      console.error('Error handling book load:', error);
+      this.bot?.sendMessage(chatId, '❌ Error processing booking request.');
+    }
+  }
+
+  private async handleDeclineLoad(loadId: string, telegramId: string, chatId: number): Promise<void> {
+    try {
+      const driver = await storage.getDriverByTelegramId(telegramId);
+      if (!driver) {
+        this.bot?.sendMessage(chatId, '❌ Driver not found. Please contact dispatcher.');
+        return;
+      }
+
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        this.bot?.sendMessage(chatId, '❌ Load not found.');
+        return;
+      }
+
+      // Update load offer status
+      await storage.updateLoadOfferByLoadAndDriver(loadId, driver.id, {
+        status: 'declined',
+        respondedAt: new Date()
+      });
+
+      // Send confirmation to driver
+      this.bot?.sendMessage(
+        chatId,
+        `❌ *LOAD DECLINED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\n\nThank you for your response. You will continue to receive new load offers.`,
+        { parse_mode: 'Markdown' }
+      );
+
+      // Notify dispatcher
+      if (this.config) {
+        this.bot?.sendMessage(
+          this.config.dispatcherId,
+          `❌ *LOAD DECLINED*\n\nDriver *${driver.name}* declined Load ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${load.rate}\n\nLoad is still available for other drivers.`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+
+      console.log(`Driver ${driver.name} declined load ${load.loadNumber} via Telegram button`);
+    } catch (error) {
+      console.error('Error handling decline load:', error);
+      this.bot?.sendMessage(chatId, '❌ Error processing decline request.');
     }
   }
 }
