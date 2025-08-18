@@ -16,13 +16,12 @@ import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmail
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
-import { DatabaseOnboardingTokenService } from "./db-storage";
+
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
 import smsService from "./sms-service";
 
-// Initialize database-backed token service
-const dbTokenService = new DatabaseOnboardingTokenService();
+// Database-backed token service handled by storage interface
 
 // Initialize prediction confidence service
 const predictionConfidenceService = new PredictionConfidenceService();
@@ -1448,7 +1447,7 @@ Safe travels! 🚛`;
       
       const validatedData = insertOnboardingTokenSchema.parse(tokenData);
       // Use database service instead of in-memory storage
-      const onboardingToken = await dbTokenService.createOnboardingToken(validatedData);
+      const onboardingToken = await storage.createOnboardingToken(validatedData);
       
       res.status(201).json(onboardingToken);
     } catch (error) {
@@ -1478,7 +1477,7 @@ Safe travels! 🚛`;
       
       const validatedData = insertOnboardingTokenSchema.parse(tokenData);
       // Use database service instead of in-memory storage
-      const onboardingToken = await dbTokenService.createOnboardingToken(validatedData);
+      const onboardingToken = await storage.createOnboardingToken(validatedData);
       
       // Create the onboarding link
       const onboardingLink = `${req.protocol}://${req.hostname}/driver-onboarding?token=${token}`;
@@ -1686,8 +1685,9 @@ Safe travels! 🚛`;
         return res.status(400).json({ error: "Token is required" });
       }
       
-      // Use database service for validation
-      const validation = await dbTokenService.validateToken(token);
+      // Use database service for validation - stub implementation for now
+      const tokenData = await storage.getOnboardingToken(token);
+      const validation = tokenData ? { valid: !tokenData.isUsed } : { valid: false, error: 'Invalid token' };
       
       res.json(validation);
     } catch (error) {
@@ -1704,23 +1704,22 @@ Safe travels! 🚛`;
         return res.status(400).json({ error: "Token is required" });
       }
       
-      // Validate token using database service
-      const validation = await dbTokenService.validateToken(token);
-      if (!validation.valid) {
-        return res.status(400).json({ error: validation.error });
+      // Validate token using database service - stub implementation for now
+      const tokenData = await storage.getOnboardingToken(token);
+      if (!tokenData || tokenData.isUsed) {
+        return res.status(400).json({ error: 'Invalid or expired token' });
       }
       
       const validatedData = driverOnboardingSchema.parse(driverData);
       
       // Create driver using database service
-      const driver = await dbTokenService.createDriver({
+      const driver = await storage.createDriver({
         ...validatedData,
-        isOnboarded: true,
-        createdAt: new Date()
+        isOnboarded: true
       });
       
       // Mark token as used
-      await dbTokenService.markTokenAsUsed(token);
+      await storage.markTokenAsUsed(token);
       
       res.status(201).json(driver);
     } catch (error) {
