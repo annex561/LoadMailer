@@ -94,6 +94,8 @@ export default function ContactFormModal({
     onSuccess: () => {
       const queryKey = type === "driver" ? ["/api/drivers"] : ["/api/customers"];
       queryClient.invalidateQueries({ queryKey });
+      // Force immediate refetch to ensure UI updates
+      queryClient.refetchQueries({ queryKey });
       toast({
         title: "Success",
         description: `${type === "driver" ? "Driver" : "Customer"} created successfully`,
