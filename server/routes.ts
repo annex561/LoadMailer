@@ -4353,17 +4353,18 @@ Safe travels! 🚛`;
 
   const httpServer = createServer(app);
 
-  // Start the load services
+  // AUTO-RESTART MECHANISM: Automatically restart DAT scraper after workflow restarts
   setTimeout(async () => {
     try {
-      console.log('⚠️  IMPORTANT: Currently using test data - not real DAT loads');
-      console.log('📋 To get REAL DAT loads, you need:');
-      console.log('   1. DAT LoadLink account credentials');
-      console.log('   2. Use /api/real-dat-scraper endpoints with your login');
-      console.log('   3. System will then pull authentic freight from DAT');
+      console.log('🔄 AUTO-RESTART: Initializing DAT LoadLink scraper with saved credentials...');
       
-      // Stop the test data generation
-      console.log('🛑 Stopping synthetic load generation to avoid confusion');
+      // Automatically set credentials and start DAT scraper to prevent stopping after restarts
+      realDATScraper.setCredentials("dispatch@lampslogistics.com", "Anonymous#561");
+      await realDATScraper.startRealScraping();
+      
+      console.log('✅ AUTO-RESTART: DAT LoadLink scraper automatically restarted');
+      console.log('📋 System is now pulling REAL loads from DAT LoadLink every 10 seconds');
+      console.log('🔒 Using verified credentials: dispatch@lampslogistics.com');
       
       // Optional: Try DAT API if configured
       try {
@@ -4374,7 +4375,8 @@ Safe travels! 🚛`;
         console.log('💡 DAT API not configured - website scraping is primary method');
       }
     } catch (error) {
-      console.error('Failed to start load services:', error);
+      console.error('AUTO-RESTART failed - DAT scraper may need manual restart:', error);
+      console.log('📞 Use POST /api/real-dat-scraper/start to manually restart if needed');
     }
   }, 5000);
 
