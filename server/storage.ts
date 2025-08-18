@@ -1264,12 +1264,25 @@ export class MemStorage implements IStorage {
         this.drivers.set(driver.id, driver);
       }
       
-      return dbDrivers.filter(driver => driver.telegramId && driver.enableTelegramNotifications);
+      // Filter out fake/test telegram IDs to prevent API errors
+      return dbDrivers.filter(driver => 
+        driver.telegramId && 
+        driver.enableTelegramNotifications &&
+        driver.telegramId !== '987654321' &&
+        driver.telegramId !== '5908383693' &&
+        !driver.telegramId.startsWith('test_')
+      );
     } catch (error) {
       console.error('Error getting drivers from database, using memory cache:', error);
-      // Fallback to memory cache
+      // Fallback to memory cache with same filtering
       return Array.from(this.drivers.values())
-        .filter(driver => driver.telegramId && driver.enableTelegramNotifications);
+        .filter(driver => 
+          driver.telegramId && 
+          driver.enableTelegramNotifications &&
+          driver.telegramId !== '987654321' &&
+          driver.telegramId !== '5908383693' &&
+          !driver.telegramId.startsWith('test_')
+        );
     }
   }
   

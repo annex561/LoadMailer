@@ -88,18 +88,20 @@ export class TelegramLoadService {
       console.log('Created default avoid locations');
     }
 
-    // Update existing driver with telegram info from script
+    // Skip automatic driver telegram update - this was causing fake chat ID issues
+    // Drivers will be updated when they actually connect via telegram bot
+    console.log('Telegram service initialized - waiting for real driver connections');
+    
+    // Set first driver to unavailable to prevent fake telegram messages
     const drivers = await storage.getAllDrivers();
     if (drivers.length > 0) {
       const firstDriver = drivers[0];
-      // Update with Alex Liberty info from script
       await storage.updateDriver(firstDriver.id, {
-        telegramId: '5908383693',
-        city: 'Atlanta, GA',
-        phone: '+15615777540',
-        enableTelegramNotifications: true
+        status: 'unavailable',
+        telegramId: null,
+        enableTelegramNotifications: false
       });
-      console.log('Updated driver with Telegram information');
+      console.log('Set test driver to unavailable to prevent fake telegram messages');
     }
   }
 

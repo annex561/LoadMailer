@@ -420,8 +420,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create driver using database service for full onboarding
-      const driver = await dbTokenService.createDriver(manualDriverData);
+      // Create driver using regular storage service for consistency
+      const validatedData = insertDriverSchema.parse(manualDriverData);
+      const driver = await storage.createDriver(validatedData);
       
       res.status(201).json(driver);
     } catch (error) {
