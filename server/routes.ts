@@ -18,6 +18,7 @@ import { RealLoadIntegrationService } from "./real-load-integration-service";
 import { DATAPIService } from "./dat-api-service";
 import { DATWebsiteScraper } from "./dat-website-scraper";
 import { RealDATScraper } from "./real-dat-scraper";
+import { DATLoadPoster } from "./dat-load-poster";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
@@ -49,6 +50,9 @@ const datWebsiteScraper = new DATWebsiteScraper(telegramLoadService);
 
 // Initialize real DAT scraper for authentic load board scraping
 const realDATScraper = new RealDATScraper(telegramLoadService);
+
+// Initialize DAT load poster for posting loads to DAT network
+const datLoadPoster = new DATLoadPoster();
 
 // Email service configuration
 const transporter = nodemailer.createTransport({
@@ -1270,6 +1274,62 @@ Safe travels! 🚛`;
       res.json({ instructions });
     } catch (error) {
       res.status(500).json({ error: 'Failed to get instructions' });
+    }
+  });
+
+  // DAT Load Posting endpoints
+  app.post("/api/dat-poster/set-credentials", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: 'DAT username and password required' });
+      }
+      datLoadPoster.setCredentials(username, password);
+      res.json({ message: 'DAT posting credentials set successfully' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to set DAT credentials' });
+    }
+  });
+
+  app.post("/api/dat-poster/post-load/:loadId", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const success = await datLoadPoster.postLoadToDAT(loadId);
+      
+      if (success) {
+        res.json({ message: `Load ${loadId} posted to DAT LoadLink successfully` });
+      } else {
+        res.status(500).json({ error: 'Failed to post load to DAT' });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to post load to DAT', details: error.message });
+    }
+  });
+
+  app.post("/api/dat-poster/post-all", async (req, res) => {
+    try {
+      await datLoadPoster.postAllAvailableLoads();
+      res.json({ message: 'All available loads posted to DAT LoadLink' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to post loads to DAT', details: error.message });
+    }
+  });
+
+  app.get("/api/dat-poster/status", async (req, res) => {
+    try {
+      const status = datLoadPoster.getStatus();
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get DAT poster status' });
+    }
+  });
+
+  app.get("/api/dat-poster/instructions", async (req, res) => {
+    try {
+      const instructions = datLoadPoster.getInstructions();
+      res.json({ instructions });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get DAT posting instructions' });
     }
   });
 
