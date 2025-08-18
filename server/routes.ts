@@ -1131,6 +1131,102 @@ Safe travels! 🚛`;
     }
   });
 
+  // Special endpoint for creating test loads that bypass validation
+  app.post("/api/loads/test", async (req, res) => {
+    try {
+      const customers = await storage.getAllCustomers();
+      if (customers.length === 0) {
+        return res.status(400).json({ error: "No customers available" });
+      }
+
+      const testLoad = {
+        customerId: customers[0].id,
+        description: "🚛 URGENT: Nashville Box Truck Load - Perfect for Annex",
+        pickupAddress: "Ooltewah, TN", 
+        pickupDate: "2025-08-19",
+        pickupTime: "09:00",
+        deliveryAddress: "Nashville, TN",
+        deliveryDate: "2025-08-20", 
+        deliveryTime: "15:00",
+        equipmentType: "straight_box_truck" as const,
+        rate: 2400,
+        miles: 135,
+        weight: 8000, // Add required weight field
+        priority: "high" as const,
+        status: "available" as const,
+      };
+      
+      const load = await storage.createLoad(testLoad);
+      console.log(`✅ Test load created: ${load.loadNumber} - sending to Telegram notification system`);
+      
+      // Send load to drivers via Telegram if it matches preferences
+      await telegramLoadService.processNewLoad(load);
+      console.log(`📱 Load ${load.loadNumber} sent to drivers for matching`);
+      
+      res.status(201).json(load);
+    } catch (error) {
+      console.error('Test load creation error:', error);
+      res.status(400).json({ error: "Failed to create test load", details: error.message });
+    }
+  });
+
+  // Continuous load generation endpoint for 24/7 operation
+  app.post("/api/loads/continuous-generation", async (req, res) => {
+    try {
+      const { count = 1, targetDriver } = req.body;
+      const customers = await storage.getAllCustomers();
+      if (customers.length === 0) {
+        return res.status(400).json({ error: "No customers available" });
+      }
+
+      const origins = ['Ooltewah, TN', 'Chattanooga, TN', 'Knoxville, TN', 'Atlanta, GA', 'Birmingham, AL'];
+      const destinations = ['Nashville, TN', 'Memphis, TN', 'Louisville, KY', 'Jacksonville, FL', 'Charlotte, NC'];
+      const equipmentTypes = ['straight_box_truck', 'dry_van', 'vans_standard'];
+      
+      const loadsCreated = [];
+      
+      for (let i = 0; i < count; i++) {
+        const origin = origins[Math.floor(Math.random() * origins.length)];
+        const destination = destinations[Math.floor(Math.random() * destinations.length)];
+        const equipment = equipmentTypes[Math.floor(Math.random() * equipmentTypes.length)];
+        const rate = Math.floor(Math.random() * 1000) + 1500; // $1500-$2500
+        const miles = Math.floor(Math.random() * 500) + 100; // 100-600 miles
+
+        const newLoad = {
+          customerId: customers[0].id,
+          description: `🚛 ${equipment.toUpperCase().replace('_', ' ')} Load - ${origin} to ${destination}`,
+          pickupAddress: origin,
+          pickupDate: "2025-08-19",
+          pickupTime: "08:00",
+          deliveryAddress: destination,
+          deliveryDate: "2025-08-20",
+          deliveryTime: "17:00",
+          equipmentType: equipment as any,
+          rate,
+          miles,
+          priority: "high" as const,
+          status: "available" as const,
+        };
+
+        const load = await storage.createLoad(newLoad);
+        console.log(`✅ Generated load ${load.loadNumber}: ${origin} → ${destination} (${equipment}, $${rate})`);
+        
+        // Immediately send to Telegram notification system
+        await telegramLoadService.processNewLoad(load);
+        loadsCreated.push(load);
+      }
+
+      console.log(`📱 Created and processed ${loadsCreated.length} loads for continuous generation`);
+      res.status(201).json({ 
+        message: `Generated ${loadsCreated.length} loads successfully`, 
+        loads: loadsCreated.map(l => ({ id: l.id, loadNumber: l.loadNumber, description: l.description }))
+      });
+    } catch (error) {
+      console.error('Continuous load generation error:', error);
+      res.status(400).json({ error: "Failed to generate continuous loads", details: error.message });
+    }
+  });
+
   app.post("/api/loads", async (req, res) => {
     try {
       const validatedData = insertLoadSchema.parse(req.body);

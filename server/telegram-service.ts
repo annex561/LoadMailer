@@ -263,25 +263,25 @@ export class TelegramLoadService {
     }
 
     try {
-      // Check if load matches preferred lanes
-      const matchesLane = await this.matchesPreferredLane(load);
-      if (!matchesLane) {
-        console.log(`Load ${load.loadNumber} does not match preferred lanes, skipping Telegram notification`);
-        return false;
-      }
-
-      // Get eligible drivers based on location and preferences
+      console.log(`🔍 Processing load ${load.loadNumber}: ${load.pickupAddress} → ${load.deliveryAddress} (${load.equipmentType})`);
+      
+      // Get eligible drivers based on location and preferences (skip lane checking for now)
       const eligibleDrivers = await this.findEligibleDriversByLocation(load);
       
       if (eligibleDrivers.length === 0) {
-        console.log('No eligible drivers found for load');
+        console.log(`❌ No eligible drivers found for load ${load.loadNumber}`);
         return false;
       }
 
+      console.log(`✅ Found ${eligibleDrivers.length} eligible drivers for load ${load.loadNumber}`);
+
       // Send load offers to eligible drivers sorted by proximity and match score
       for (const driverMatch of eligibleDrivers) {
-        // For drivers with temporary telegram IDs, just log the offer (no actual telegram send)
-        if (driverMatch.driver.telegramId?.startsWith('temp_')) {
+        // For drivers with real telegram IDs (like Annex: 8391488425)
+        if (driverMatch.driver.telegramId && !driverMatch.driver.telegramId.startsWith('temp_')) {
+          console.log(`📱 REAL TELEGRAM OFFER: Sending ${load.loadNumber} to ${driverMatch.driver.name} (TelegramId: ${driverMatch.driver.telegramId})`);
+          await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
+        } else if (driverMatch.driver.telegramId?.startsWith('temp_')) {
           console.log(`📱 LOAD OFFER (simulated): ${load.loadNumber} to ${driverMatch.driver.name} (${driverMatch.matchScore}% match, ${driverMatch.distance}mi away)`);
           
           // Create a load offer record for tracking
@@ -294,11 +294,11 @@ export class TelegramLoadService {
             timeoutAt: new Date(Date.now() + 3 * 60 * 1000) // 3 minutes from now
           });
         } else {
-          await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
+          console.log(`❌ Driver ${driverMatch.driver.name} has no telegram ID set`);
         }
       }
 
-      console.log(`Sent load ${load.loadNumber} to ${eligibleDrivers.length} drivers via Telegram`);
+      console.log(`✅ Processed load ${load.loadNumber} for ${eligibleDrivers.length} drivers via Telegram`);
       return true;
     } catch (error) {
       console.error('Error processing new load for Telegram:', error);

@@ -815,9 +815,89 @@ export class LoadBoardService {
 
   // Generate sample DAT loads for continuous operation when credentials aren't available
   private async generateSampleDATLoads(config: ScraperConfig): Promise<{ loadsScraped: number; loadsCreated: number }> {
+    console.log(`🎯 Generating sample loads for continuous driver notifications - Config: ${config.name}`);
+    
+    const customers = await storage.getAllCustomers();
+    if (customers.length === 0) {
+      console.log('❌ No customers found - cannot create sample loads');
+      return { loadsScraped: 0, loadsCreated: 0 };
+    }
+
+    const sampleLoads = [
+      {
+        customerId: customers[0].id,
+        description: "Nashville Run - Box Truck Needed",
+        pickupAddress: "Ooltewah, TN", 
+        pickupDate: "2025-08-19",
+        pickupTime: "09:00",
+        deliveryAddress: "Nashville, TN",
+        deliveryDate: "2025-08-20", 
+        deliveryTime: "15:00",
+        equipmentType: "straight_box_truck" as const,
+        rate: 2400,
+        miles: 135,
+        priority: "high" as const,
+        status: "available" as const,
+      },
+      {
+        customerId: customers[0].id,
+        description: "Atlanta Express - Refrigerated Load",
+        pickupAddress: "Chattanooga, TN", 
+        pickupDate: "2025-08-19",
+        pickupTime: "10:00", 
+        deliveryAddress: "Atlanta, GA",
+        deliveryDate: "2025-08-20",
+        deliveryTime: "16:00",
+        equipmentType: "refrigerated" as const,
+        rate: 1800,
+        miles: 118,
+        priority: "standard" as const,
+        status: "available" as const,
+      },
+      {
+        customerId: customers[0].id,
+        description: "Memphis Flatbed - Steel Coils",
+        pickupAddress: "Knoxville, TN", 
+        pickupDate: "2025-08-19",
+        pickupTime: "11:00",
+        deliveryAddress: "Memphis, TN", 
+        deliveryDate: "2025-08-21",
+        deliveryTime: "14:00",
+        equipmentType: "flatbed" as const,
+        rate: 3200,
+        miles: 214,
+        priority: "urgent" as const,
+        status: "available" as const,
+      }
+    ];
+
+    let loadsCreated = 0;
+    
+    for (const loadData of sampleLoads) {
+      try {
+        const created = await storage.createLoad(loadData);
+        console.log(`📦 Sample load created: ${created.loadNumber} - ${loadData.description}`);
+        loadsCreated++;
+        
+        // Send to Telegram notification system immediately
+        const telegramLoadService = (global as any).telegramLoadService;
+        if (telegramLoadService) {
+          await telegramLoadService.processNewLoad(created);
+          console.log(`📱 Load ${created.loadNumber} sent to Telegram for driver matching`);
+        }
+      } catch (error) {
+        console.error('Error creating sample load:', error);
+      }
+    }
+
+    console.log(`🎯 Generated ${loadsCreated} sample loads for driver notifications`);
+    return { loadsScraped: sampleLoads.length, loadsCreated };
+  }
+
+  // Fallback method to generate loads continuously
+  private async generateContinuousLoads(): Promise<void> {
     const sampleOrigins = ['Atlanta, GA', 'Nashville, TN', 'Chattanooga, TN', 'Memphis, TN', 'Knoxville, TN', 'Dallas, TX', 'Los Angeles, CA', 'Chicago, IL', 'Miami, FL', 'Phoenix, AZ'];
     const sampleDestinations = ['Charlotte, NC', 'Jacksonville, FL', 'New York, NY', 'Houston, TX', 'Denver, CO', 'Seattle, WA', 'Boston, MA', 'Las Vegas, NV', 'Nashville, TN', 'Atlanta, GA'];
-    // Increase probability of straight_box_truck and compatible equipment types for Annex
     const equipmentTypes = ['straight_box_truck', 'dry_van', 'vans_standard', 'straight_box_truck', 'moving_van', 'van_lift_gate', 'van_hotshot', 'flatbed_hotshot', 'sprinter_van'];
     const companies = ['ABC Logistics', 'Fast Freight Co', 'Prime Shipping', 'Elite Transport', 'Direct Haul'];
     
