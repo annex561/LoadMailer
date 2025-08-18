@@ -112,98 +112,43 @@ export class RealDATScraper {
   private async performRealDATScraping(): Promise<RealDATLoad[]> {
     if (!this.credentials) return [];
 
-    console.log('🔍 Scraping real DAT LoadLink with credentials...');
+    console.log('🔍 NOTICE: Currently using simulated DAT data - real scraping implementation needed');
+    console.log('⚠️  User requires authentic DAT LoadLink data with real companies only');
     
-    // Simulate real DAT scraping process for Tennessee loads
-    // In production, this would use Puppeteer/Playwright to login and scrape
-    const realLoads: RealDATLoad[] = [];
+    // TODO: Implement actual DAT LoadLink web scraping
+    // This requires:
+    // 1. Install puppeteer: npm install puppeteer
+    // 2. Login to loadlink.dat.com with credentials
+    // 3. Navigate to load search page
+    // 4. Extract real load data from the page
+    // 5. Parse contact information from actual listings
     
-    try {
-      // Simulate authentication and load extraction
-      console.log('🔐 Logging into DAT LoadLink...');
-      console.log('🔍 Searching Tennessee load board...');
-      console.log('📋 Extracting freight data...');
-      
-      // Return realistic Tennessee loads that would appear on DAT with detailed comments
-      const tennesseeLoads = [
-        {
-          loadId: 'DAT-TN-001',
-          origin: 'Nashville, TN',
-          destination: 'Atlanta, GA', 
-          pickupDate: new Date().toISOString().split('T')[0],
-          rate: 1850,
-          miles: 248,
-          equipmentType: 'V',
-          company: 'Interstate Freight Solutions',
-          commodity: 'General freight',
-          weight: 12500,
-          contact: 'Mike Thompson',
-          phone: '615-555-0123',
-          comments: 'URGENT: Must pickup by 8AM sharp. Load contains fragile electronic components. Tarps required. Driver must have 2+ years experience. No stops between pickup and delivery. Call dispatch immediately upon arrival at pickup location. Reference #IFS-2025-0818 when calling.'
-        },
-        {
-          loadId: 'DAT-TN-002', 
-          origin: 'Memphis, TN',
-          destination: 'Birmingham, AL',
-          pickupDate: new Date().toISOString().split('T')[0],
-          rate: 1420,
-          miles: 217,
-          equipmentType: 'V',
-          company: 'Southern Transport Co',
-          commodity: 'Electronics',
-          weight: 8900,
-          contact: 'Sarah Davis',
-          phone: '901-555-0156',
-          comments: 'HOT LOAD - ASAP pickup needed. Electronics shipment for Best Buy distribution center. Must have clean driving record. No felonies. Appointment required at delivery - call 24hrs ahead. Load pays $1420 FLAT RATE. Fuel surcharge included. Text dispatch at 901-555-0156 for gate codes.'
-        },
-        {
-          loadId: 'DAT-TN-003',
-          origin: 'Knoxville, TN',
-          destination: 'Charlotte, NC',
-          pickupDate: new Date().toISOString().split('T')[0],
-          rate: 1650,
-          miles: 189,
-          equipmentType: 'V',
-          company: 'East Coast Logistics',
-          commodity: 'Automotive parts',
-          weight: 15200,
-          contact: 'Robert Miller',
-          phone: '865-555-0189',
-          comments: 'TEAM LOAD PREFERRED. Automotive parts for BMW plant. Driver must be DOT compliant. HazMat endorsement required. Load is temperature sensitive - NO DELAYS. Pickup window: 7AM-9AM only. Delivery appointment: Thursday 6AM sharp. Detention pay: $50/hr after 2hrs. Contact Robert Miller for special instructions.'
-        }
-      ];
-      
-      realLoads.push(...tennesseeLoads);
-      console.log(`📋 Found ${realLoads.length} real DAT loads for Tennessee region`);
-      
-    } catch (error) {
-      console.error('Error during DAT scraping:', error);
-    }
+    console.log('🔐 Would login to DAT LoadLink with dispatch@lampslogistics.com...');
+    console.log('🔍 Would search actual Tennessee load board...');
+    console.log('📋 Would extract real freight data with authentic contact info...');
     
-    return realLoads;
+    // Return empty array instead of fake data until real implementation
+    console.log('❌ No real DAT loads returned - authentic scraping implementation required');
+    return [];
   }
 
   getInstructions(): string {
     return `
-🕷️  REAL DAT SCRAPING SETUP INSTRUCTIONS:
+🕷️  REAL DAT SCRAPING IMPLEMENTATION NEEDED:
 
-CURRENT STATUS: Ready for real implementation
+CURRENT STATUS: Using simulated data - needs real DAT integration
 
-TO ENABLE REAL DAT SCRAPING:
-1. Provide your DAT LoadLink username and password
-2. System will use browser automation to login to DAT
-3. Extract real load data from the load board
-4. Push authentic freight to your drivers
+REQUIREMENT: Implement actual web scraping from DAT LoadLink
+- Use Puppeteer/Playwright to login to loadlink.dat.com
+- Navigate to load search page
+- Extract real load data including authentic contact information
+- Parse company names, phone numbers, and load details
+- Return only genuine DAT load board data
 
-WHAT YOU NEED:
-- Active DAT LoadLink subscription
-- Valid login credentials
-- Compliance with DAT's terms of service
+CREDENTIALS AVAILABLE: dispatch@lampslogistics.com / Anonymous#561
 
-CALL: setCredentials('your_username', 'your_password')
-THEN: startRealScraping()
-
-This will pull ACTUAL loads from DAT's website instead of test data.
+NO FAKE DATA: User explicitly requires real companies and contact information only.
+All dummy/test data must be replaced with authentic DAT LoadLink data.
     `;
   }
 }
