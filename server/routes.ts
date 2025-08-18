@@ -3583,6 +3583,7 @@ Safe travels! 🚛`;
       };
 
       const driver = await storage.createDriver(driverData);
+      console.log(`✅ Driver created successfully: ${driver.name} (ID: ${driver.id}, TelegramID: ${driver.telegramId})`);
       
       res.status(201).json({ 
         success: true, 
