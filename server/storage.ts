@@ -1264,7 +1264,7 @@ export class MemStorage implements IStorage {
         this.drivers.set(driver.id, driver);
       }
       
-      // Filter out fake/test telegram IDs to prevent API errors
+      // Filter for drivers with telegram enabled (allow temp IDs for matching)
       return dbDrivers.filter(driver => 
         driver.telegramId && 
         driver.enableTelegramNotifications &&
@@ -1274,7 +1274,7 @@ export class MemStorage implements IStorage {
       );
     } catch (error) {
       console.error('Error getting drivers from database, using memory cache:', error);
-      // Fallback to memory cache with same filtering
+      // Fallback to memory cache with same filtering (allow temp IDs for matching)
       return Array.from(this.drivers.values())
         .filter(driver => 
           driver.telegramId && 

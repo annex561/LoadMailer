@@ -255,7 +255,24 @@ export class TelegramLoadService {
 
       // Send load offers to eligible drivers sorted by proximity and match score
       for (const driverMatch of eligibleDrivers) {
-        await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
+        // For drivers with temporary telegram IDs, just log the offer (no actual telegram send)
+        if (driverMatch.driver.telegramId?.startsWith('temp_')) {
+          console.log(`📱 LOAD OFFER (simulated): ${load.loadNumber} to ${driverMatch.driver.name} (${driverMatch.matchScore}% match, ${driverMatch.distance}mi away)`);
+          
+          // Create a load offer record for tracking
+          const { randomUUID } = await import('crypto');
+          await storage.createLoadOffer({
+            id: randomUUID(),
+            loadId: load.id,
+            driverId: driverMatch.driver.id,
+            status: 'simulated', // Special status for test drivers
+            rateOffered: load.rate || 0,
+            sentAt: new Date(),
+            sentVia: 'console_log'
+          });
+        } else {
+          await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
+        }
       }
 
       console.log(`Sent load ${load.loadNumber} to ${eligibleDrivers.length} drivers via Telegram`);

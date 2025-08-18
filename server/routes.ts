@@ -3577,6 +3577,7 @@ Safe travels! 🚛`;
         status: "available" as const,
         enableTelegramNotifications: true,
         telegramUsername: telegramUsername.replace('@', ''), // Remove @ if present
+        telegramId: `temp_${Date.now()}`, // Temporary ID until real Telegram ID is obtained
         preferredLanes: [],
         avoidAreas: []
       };
