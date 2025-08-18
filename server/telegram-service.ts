@@ -352,6 +352,7 @@ export class TelegramLoadService {
   private async findEligibleDriversByLocation(load: LoadWithRelations): Promise<Array<{driver: Driver, matchScore: number, distance: number}>> {
     try {
       const allDrivers = await storage.getDriversWithTelegramEnabled();
+      console.log(`Found ${allDrivers.length} drivers with telegram enabled for load ${load.loadNumber}`);
       const eligibleDrivers: Array<{driver: Driver, matchScore: number, distance: number}> = [];
 
       for (const driver of allDrivers) {
@@ -365,12 +366,13 @@ export class TelegramLoadService {
 
         // Calculate proximity score and distance
         const proximity = await this.calculateDriverProximity(driver, load);
-        if (proximity.distance > 150) continue; // Skip drivers more than 150 miles away
+        console.log(`Driver ${driver.name} proximity check: distance=${proximity.distance}mi, city=${driver.city}, pickup=${load.pickupAddress}`);
+        if (proximity.distance > 200) continue; // Increased from 150 to 200 miles for better coverage
 
         // Calculate overall match score
         const matchScore = await this.calculateDriverMatchScore(driver, load, proximity.distance);
-        console.log(`Driver ${driver.name} match score for load ${load.loadNumber}: ${matchScore}% (distance: ${proximity.distance}mi, equipment: ${driver.equipmentType}/${load.equipmentType})`);
-        if (matchScore < 65) continue; // Only send loads to drivers with 65% or higher match score
+        console.log(`Driver ${driver.name} match score for load ${load.loadNumber}: ${matchScore}% (distance: ${proximity.distance}mi, equipment: ${driver.equipmentType}/${load.equipmentType}, status: ${driver.status})`);
+        if (matchScore < 40) continue; // Reduced from 65% to 40% for better matching
 
         eligibleDrivers.push({
           driver,
@@ -418,9 +420,13 @@ export class TelegramLoadService {
           return { distance, isNearby: distance <= 100 };
         }
         
-        // Fallback to simple city matching
+        // Fallback to simple city matching - be more generous with proximity
         const isSameCity = driverCity === pickupCity;
-        return { distance: isSameCity ? 15 : 85, isNearby: isSameCity };
+        const isSameState = driver.city?.includes(load.pickupAddress.split(',')[1]?.trim() || '');
+        
+        if (isSameCity) return { distance: 15, isNearby: true };
+        if (isSameState) return { distance: 75, isNearby: true };
+        return { distance: 120, isNearby: false }; // More generous default distance
       }
 
       return { distance: 999, isNearby: false };

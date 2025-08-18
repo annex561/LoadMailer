@@ -3546,7 +3546,7 @@ Safe travels! 🚛`;
         
         // License defaults (can be updated later)
         licenseNumber: "PENDING",
-        licenseState: city.split(', ')[1] || "TX", // Extract state from city
+        licenseState: city.includes(',') ? city.split(', ')[1] : "TX", // Extract state from city
         licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
         medicalCertExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         
