@@ -2746,6 +2746,50 @@ Safe travels! 🚛`;
     }
   });
 
+  // API endpoint for Annex to get his Telegram Chat ID instructions
+  app.get("/api/telegram/get-my-id/:driverName", async (req, res) => {
+    try {
+      const driverName = req.params.driverName;
+      
+      if (!driverName) {
+        return res.status(400).json({ error: "Driver name is required" });
+      }
+      
+      const drivers = await storage.getAllDrivers();
+      const driver = drivers.find(d => 
+        d.name.toLowerCase().includes(driverName.toLowerCase()) ||
+        (d.telegramUsername && d.telegramUsername.toLowerCase().includes(driverName.toLowerCase()))
+      );
+      
+      if (!driver) {
+        return res.status(404).json({ error: `Driver '${driverName}' not found` });
+      }
+      
+      res.json({
+        driverName: driver.name,
+        telegramUsername: driver.telegramUsername,
+        currentTelegramId: driver.telegramId,
+        hasValidTelegramId: !!driver.telegramId,
+        telegramNotificationsEnabled: driver.enableTelegramNotifications,
+        instructions: {
+          step1: "Open Telegram and search for @userinfobot",
+          step2: "Send any message to @userinfobot",
+          step3: "Copy your Chat ID from the bot's response",
+          step4: "Use the manual endpoint POST /api/telegram/set-chat-id with your name and chat ID",
+          alternativeStep1: "Open your browser and go to https://t.me/userinfobot",
+          alternativeStep2: "Send /start to the bot and copy your chat ID",
+          manualEndpoint: "POST /api/telegram/set-chat-id",
+          exampleRequest: `{"driverName": "${driver.name}", "telegramChatId": "YOUR_CHAT_ID_HERE"}`
+        },
+        botLink: "https://t.me/LAMPDispatchbot",
+        userInfoBotLink: "https://t.me/userinfobot"
+      });
+    } catch (error) {
+      console.error("Error getting driver Telegram info:", error);
+      res.status(500).json({ error: "Failed to get driver info" });
+    }
+  });
+
   // Test endpoint to simulate Telegram /start command
   app.post("/api/simulate-telegram-start", async (req, res) => {
     try {

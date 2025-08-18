@@ -6,6 +6,7 @@ import ContactFormModal from "@/components/contact-form-modal";
 import { DriverPerformanceModal } from "@/components/DriverPerformanceModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { HealthScoreSpeedometer, calculateHealthScore } from "@/components/ui/health-score-speedometer";
 
 export default function Contacts() {
   const [showDriverModal, setShowDriverModal] = useState(false);
@@ -145,10 +146,33 @@ export default function Contacts() {
                       <div className="w-12 h-12 bg-primary bg-opacity-10 rounded-full flex items-center justify-center">
                         <User className="text-primary w-5 h-5" />
                       </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">{driver.name}</h4>
-                        <p className="text-sm text-gray-500">{driver.phone}</p>
-                        <p className="text-sm text-gray-500">{driver.email}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-medium text-gray-900">{driver.name}</h4>
+                            <p className="text-sm text-gray-500">{driver.phone}</p>
+                            <p className="text-sm text-gray-500">{driver.email}</p>
+                          </div>
+                          {/* Health Score Speedometer */}
+                          <div className="ml-4">
+                            <HealthScoreSpeedometer 
+                              score={calculateHealthScore({
+                                averageRating: driver.averageRating || 0,
+                                onTimeDeliveries: driver.onTimeDeliveries || 0,
+                                lateDeliveries: driver.lateDeliveries || 0,
+                                completedLoads: driver.completedLoads || 0,
+                                cancelledLoads: driver.cancelledLoads || 0,
+                                currentStreak: driver.currentStreak || 0,
+                                safetyScore: driver.safetyScore || 100,
+                                maintenanceScore: 100, // Default maintenance score
+                                totalLoads: driver.totalLoads || 0
+                              })}
+                              size="sm"
+                              showLabel={true}
+                              driverName={driver.name}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
