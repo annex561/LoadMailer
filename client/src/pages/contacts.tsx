@@ -154,7 +154,7 @@ export default function Contacts() {
                             <p className="text-sm text-gray-500">{driver.email}</p>
                           </div>
                           {/* Health Score Speedometer */}
-                          <div className="ml-4">
+                          <div className="flex items-center space-x-3">
                             <HealthScoreSpeedometer 
                               score={calculateHealthScore({
                                 averageRating: driver.averageRating || 0,
@@ -164,7 +164,7 @@ export default function Contacts() {
                                 cancelledLoads: driver.cancelledLoads || 0,
                                 currentStreak: driver.currentStreak || 0,
                                 safetyScore: driver.safetyScore || 100,
-                                maintenanceScore: 100, // Default maintenance score
+                                maintenanceScore: 100,
                                 totalLoads: driver.totalLoads || 0
                               })}
                               size="sm"
