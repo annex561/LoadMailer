@@ -51,7 +51,7 @@ export function PredictionConfidenceIndicator({
   const fetchPredictions = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/prediction-confidence/load/${loadId}`);
+      const response = await fetch(`/api/prediction-confidence/${loadId}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch predictions');
