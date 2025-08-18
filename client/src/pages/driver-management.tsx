@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle, Trash2, AlertTriangle, UserPlus } from "lucide-react";
+import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle, Trash2, AlertTriangle, UserPlus, BarChart3 } from "lucide-react";
 import type { Driver, OnboardingToken } from "@shared/schema";
 import { EQUIPMENT_TYPES } from "@shared/equipment-types";
 import { apiRequest } from "@/lib/queryClient";
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { DriverPerformanceModal } from "@/components/DriverPerformanceModal";
 
 const inviteDriverSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -56,6 +57,8 @@ export default function DriverManagement() {
   const [showManualOnboardingModal, setShowManualOnboardingModal] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string>("");
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
+  const [performanceDriver, setPerformanceDriver] = useState<Driver | null>(null);
+  const [showPerformanceModal, setShowPerformanceModal] = useState(false);
   const { toast } = useToast();
 
   const telegramForm = useForm<SMSDriverForm>({
@@ -1175,6 +1178,16 @@ export default function DriverManagement() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Performance Modal */}
+      <DriverPerformanceModal
+        driver={performanceDriver}
+        isOpen={showPerformanceModal}
+        onClose={() => {
+          setShowPerformanceModal(false);
+          setPerformanceDriver(null);
+        }}
+      />
     </div>
   );
 }

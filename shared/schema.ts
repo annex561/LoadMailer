@@ -29,6 +29,25 @@ export const drivers = pgTable("drivers", {
   currentMood: text("current_mood").default("😐"), // emoji representing current mood
   moodUpdatedAt: timestamp("mood_updated_at"),
   moodNote: text("mood_note"), // optional note about mood
+  
+  // Performance metrics for contextual visualization
+  totalLoads: integer("total_loads").default(0),
+  completedLoads: integer("completed_loads").default(0),
+  averageRating: real("average_rating").default(0.0), // 1-5 rating
+  totalRatings: integer("total_ratings").default(0),
+  totalMiles: integer("total_miles").default(0),
+  totalRevenue: real("total_revenue").default(0.0),
+  onTimeDeliveries: integer("on_time_deliveries").default(0),
+  lateDeliveries: integer("late_deliveries").default(0),
+  cancelledLoads: integer("cancelled_loads").default(0),
+  lastLoadDate: timestamp("last_load_date"),
+  bestStreak: integer("best_streak").default(0), // consecutive successful deliveries
+  currentStreak: integer("current_streak").default(0),
+  averageDeliveryTime: real("average_delivery_time").default(0.0), // in hours
+  fuelEfficiency: real("fuel_efficiency").default(0.0), // miles per gallon
+  maintenanceScore: real("maintenance_score").default(100.0), // 0-100 health score
+  safetyScore: real("safety_score").default(100.0), // 0-100 safety rating
+  
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Edit, User, Building } from "lucide-react";
+import { Plus, Edit, User, Building, BarChart3 } from "lucide-react";
 import type { Driver, Customer } from "@shared/schema";
 import ContactFormModal from "@/components/contact-form-modal";
+import { DriverPerformanceModal } from "@/components/DriverPerformanceModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -11,6 +12,8 @@ export default function Contacts() {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [performanceDriver, setPerformanceDriver] = useState<Driver | null>(null);
+  const [showPerformanceModal, setShowPerformanceModal] = useState(false);
 
   const { data: drivers = [], isLoading: driversLoading } = useQuery<Driver[]>({
     queryKey: ["/api/drivers"],
@@ -110,6 +113,18 @@ export default function Contacts() {
                     </div>
                     <div className="flex items-center space-x-2">
                       {getDriverStatusBadge(driver.status)}
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => {
+                          setPerformanceDriver(driver);
+                          setShowPerformanceModal(true);
+                        }}
+                        data-testid={`button-performance-${driver.id}`}
+                        title="View Performance Dashboard"
+                      >
+                        <BarChart3 className="w-4 h-4 text-blue-600" />
+                      </Button>
                       <Button 
                         variant="ghost" 
                         size="sm" 
@@ -229,6 +244,16 @@ export default function Contacts() {
           isEdit={true}
         />
       )}
+
+      {/* Performance Modal */}
+      <DriverPerformanceModal
+        driver={performanceDriver}
+        isOpen={showPerformanceModal}
+        onClose={() => {
+          setShowPerformanceModal(false);
+          setPerformanceDriver(null);
+        }}
+      />
     </>
   );
 }

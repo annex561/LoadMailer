@@ -322,6 +322,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Driver performance endpoints
+  app.get("/api/drivers/performance/:driverId", async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      const { period = "30d" } = req.query;
+      
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+
+      // Calculate performance metrics
+      const completionRate = (driver.totalLoads || 0) > 0 
+        ? ((driver.completedLoads || 0) / (driver.totalLoads || 0)) * 100 
+        : 0;
+      
+      const onTimeRate = (driver.completedLoads || 0) > 0
+        ? ((driver.onTimeDeliveries || 0) / (driver.completedLoads || 0)) * 100
+        : 0;
+        
+      const cancellationRate = (driver.totalLoads || 0) > 0
+        ? ((driver.cancelledLoads || 0) / (driver.totalLoads || 0)) * 100
+        : 0;
+        
+      const revenuePerMile = (driver.totalMiles || 0) > 0
+        ? (driver.totalRevenue || 0) / (driver.totalMiles || 0)
+        : 0;
+
+      // Calculate overall score based on performance weights
+      const overallScore = (
+        (completionRate * 0.25) +
+        (onTimeRate * 0.25) +
+        (((driver.averageRating || 0) / 5) * 100 * 0.2) +
+        ((driver.safetyScore || 100) * 0.15) +
+        ((driver.maintenanceScore || 100) * 0.15)
+      );
+
+      // Determine performance trend (simplified)
+      const performanceTrend = overallScore >= 75 ? 'up' : overallScore >= 50 ? 'stable' : 'down';
+      
+      // Determine recent activity
+      const daysSinceLastLoad = driver.lastLoadDate 
+        ? Math.floor((Date.now() - new Date(driver.lastLoadDate).getTime()) / (1000 * 60 * 60 * 24))
+        : undefined;
+      
+      const recentActivity = daysSinceLastLoad === undefined ? 'low' :
+        daysSinceLastLoad <= 3 ? 'high' :
+        daysSinceLastLoad <= 7 ? 'medium' : 'low';
+
+      const performanceMetrics = {
+        driverId: driver.id,
+        driverName: driver.name,
+        totalLoads: driver.totalLoads || 0,
+        completedLoads: driver.completedLoads || 0,
+        completionRate,
+        averageRating: driver.averageRating || 0,
+        totalRatings: driver.totalRatings || 0,
+        totalRevenue: driver.totalRevenue || 0,
+        totalMiles: driver.totalMiles || 0,
+        revenuePerMile,
+        onTimeDeliveries: driver.onTimeDeliveries || 0,
+        lateDeliveries: driver.lateDeliveries || 0,
+        onTimeRate,
+        averageDeliveryTime: driver.averageDeliveryTime || 0,
+        cancelledLoads: driver.cancelledLoads || 0,
+        cancellationRate,
+        currentStreak: driver.currentStreak || 0,
+        bestStreak: driver.bestStreak || 0,
+        fuelEfficiency: driver.fuelEfficiency || 0,
+        maintenanceScore: driver.maintenanceScore || 100,
+        safetyScore: driver.safetyScore || 100,
+        overallScore,
+        lastLoadDate: driver.lastLoadDate,
+        daysSinceLastLoad,
+        performanceTrend: performanceTrend as 'up' | 'down' | 'stable',
+        recentActivity: recentActivity as 'high' | 'medium' | 'low'
+      };
+
+      res.json(performanceMetrics);
+    } catch (error) {
+      console.error("Error fetching driver performance:", error);
+      res.status(500).json({ error: "Failed to fetch driver performance" });
+    }
+  });
+
+  // Driver performance chart data
+  app.get("/api/drivers/performance-chart/:driverId", async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      const { period = "30d" } = req.query;
+      
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+
+      // Generate sample chart data for demonstration
+      // In a real implementation, this would query historical data
+      const chartData = [];
+      const periodDays = period === "7d" ? 7 : period === "30d" ? 30 : period === "90d" ? 90 : 365;
+      
+      for (let i = periodDays - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        
+        chartData.push({
+          period: date.toLocaleDateString(),
+          loads: Math.floor(Math.random() * 5),
+          revenue: Math.floor(Math.random() * 2000) + 500,
+          miles: Math.floor(Math.random() * 500) + 100,
+          rating: 3.5 + Math.random() * 1.5
+        });
+      }
+
+      res.json(chartData);
+    } catch (error) {
+      console.error("Error fetching driver performance chart:", error);
+      res.status(500).json({ error: "Failed to fetch performance chart data" });
+    }
+  });
+
   // Check for duplicate contacts before creation
   app.post("/api/check-duplicates", async (req, res) => {
     try {
