@@ -1272,10 +1272,6 @@ Safe travels! 🚛`;
       res.status(500).json({ error: 'Failed to get instructions' });
     }
   });
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to update scrape interval' });
-    }
-  });
 
   // Get integration instructions
   app.get("/api/loads/integration-instructions", async (req, res) => {
