@@ -74,6 +74,7 @@ Preferred communication style: Simple, everyday language.
 - **Distance Filtering**: 150-mile radius proximity checking working correctly
 - **Simulated Load Offers**: Console logs showing load offers being sent to eligible drivers
 - **Production Ready**: Load board generating 1000+ loads with real-time driver matching
+- **Annex Luberisse Update**: TelegramId updated to 8391488425 for proper messaging integration (August 18, 2025)
 
 ### FINAL RESOLUTION: Telegram Onboarding System - PRODUCTION READY ✅
 - **Complete Database Migration**: All performance tracking columns successfully added to production database
