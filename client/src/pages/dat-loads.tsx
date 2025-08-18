@@ -467,9 +467,9 @@ function DATLoads() {
 
       {/* Load Booking Modal */}
       <Dialog open={showBookingModal} onOpenChange={setShowBookingModal}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white">
+          <DialogHeader className="bg-white">
+            <DialogTitle className="flex items-center space-x-2 text-gray-900">
               <Truck className="w-5 h-5 text-blue-600" />
               <span>Book Load - {selectedLoad?.loadNumber}</span>
               <Badge className="bg-blue-100 text-blue-800 border-blue-200">
@@ -479,17 +479,17 @@ function DATLoads() {
           </DialogHeader>
           
           {selectedLoad && (
-            <div className="space-y-6">
+            <div className="space-y-6 bg-white text-gray-900">
               {/* Load Overview */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center">
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader className="bg-white">
+                    <CardTitle className="text-lg flex items-center text-gray-900">
                       <MapPin className="w-5 h-5 text-green-600 mr-2" />
                       Route Information
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-4 bg-white">
                     <div>
                       <label className="text-sm font-medium text-gray-500">Origin</label>
                       <div className="flex items-center mt-1">
@@ -520,14 +520,14 @@ function DATLoads() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center">
+                <Card className="bg-white border border-gray-200">
+                  <CardHeader className="bg-white">
+                    <CardTitle className="text-lg flex items-center text-gray-900">
                       <DollarSign className="w-5 h-5 text-green-600 mr-2" />
                       Rate & Payment
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-4 bg-white">
                     <div className="text-center">
                       <div className="text-3xl font-bold text-green-600">
                         {formatCurrency(selectedLoad.rate)}
@@ -553,14 +553,14 @@ function DATLoads() {
               </div>
 
               {/* Load Details */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center">
+              <Card className="bg-white border border-gray-200">
+                <CardHeader className="bg-white">
+                  <CardTitle className="text-lg flex items-center text-gray-900">
                     <Truck className="w-5 h-5 text-blue-600 mr-2" />
                     Load Details
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Commodity</label>
                     <div className="mt-1 text-lg font-medium">{selectedLoad.commodity}</div>
@@ -584,14 +584,14 @@ function DATLoads() {
               </Card>
 
               {/* Company Information */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center">
+              <Card className="bg-white border border-gray-200">
+                <CardHeader className="bg-white">
+                  <CardTitle className="text-lg flex items-center text-gray-900">
                     <Building className="w-5 h-5 text-purple-600 mr-2" />
                     Shipper Information
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Company</label>
                     <div className="mt-1 text-lg font-medium">{selectedLoad.company}</div>
@@ -607,14 +607,14 @@ function DATLoads() {
               </Card>
 
               {/* Comments & Special Instructions */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center">
+              <Card className="bg-white border border-gray-200">
+                <CardHeader className="bg-white">
+                  <CardTitle className="text-lg flex items-center text-gray-900">
                     <MessageSquare className="w-5 h-5 text-amber-600 mr-2" />
                     Comments & Special Instructions
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="bg-white">
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                     <div className="text-sm text-amber-700 leading-relaxed">
                       {selectedLoad.comments || selectedLoad.description?.includes('COMMENTS: ') 
@@ -627,14 +627,14 @@ function DATLoads() {
               </Card>
 
               {/* Load Status & Age */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center">
+              <Card className="bg-white border border-gray-200">
+                <CardHeader className="bg-white">
+                  <CardTitle className="text-lg flex items-center text-gray-900">
                     <Clock className="w-5 h-5 text-gray-600 mr-2" />
                     Load Status
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Current Status</label>
                     <div className="mt-1">
@@ -662,7 +662,7 @@ function DATLoads() {
               </Card>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-6 border-t">
+              <div className="flex items-center justify-between pt-6 border-t bg-white">
                 <div className="flex items-center space-x-2 text-sm text-gray-500">
                   <ExternalLink className="w-4 h-4" />
                   <span>Source: DAT LoadLink - dispatch@lampslogistics.com</span>
