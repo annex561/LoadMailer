@@ -17,6 +17,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { DriverPerformanceModal } from "@/components/DriverPerformanceModal";
+import { HealthScoreSpeedometer, calculateHealthScore } from "@/components/ui/health-score-speedometer";
 
 const inviteDriverSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -460,16 +461,52 @@ export default function DriverManagement() {
                     <div className="w-10 h-10 bg-primary bg-opacity-10 rounded-full flex items-center justify-center">
                       <Users className="text-primary w-5 h-5" />
                     </div>
-                    <div>
-                      <h4 className="font-medium text-gray-900">{driver.name}</h4>
-                      <p className="text-sm text-gray-500">{driver.email}</p>
-                      <p className="text-sm text-gray-500">{driver.phone}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-900">{driver.name}</h4>
+                          <p className="text-sm text-gray-500">{driver.email}</p>
+                          <p className="text-sm text-gray-500">{driver.phone}</p>
+                        </div>
+                        {/* Health Score Speedometer */}
+                        <div className="ml-4">
+                          <HealthScoreSpeedometer 
+                            score={calculateHealthScore({
+                              averageRating: driver.averageRating || 0,
+                              onTimeDeliveries: driver.onTimeDeliveries || 0,
+                              lateDeliveries: driver.lateDeliveries || 0,
+                              completedLoads: driver.completedLoads || 0,
+                              cancelledLoads: driver.cancelledLoads || 0,
+                              currentStreak: driver.currentStreak || 0,
+                              safetyScore: driver.safetyScore || 100,
+                              maintenanceScore: 100, // Default maintenance score
+                              totalLoads: driver.totalLoads || 0
+                            })}
+                            size="sm"
+                            showLabel={true}
+                            driverName={driver.name}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     {getDriverStatusBadge(driver)}
                     <Button variant="ghost" size="sm" title="View Location">
                       <MapPin className="w-4 h-4 text-blue-600" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      title="View Performance"
+                      onClick={() => {
+                        setPerformanceDriver(driver);
+                        setShowPerformanceModal(true);
+                      }}
+                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                      data-testid={`button-performance-${driver.id}`}
+                    >
+                      <BarChart3 className="w-4 h-4" />
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
