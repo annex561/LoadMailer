@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
-import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile, Upload, MapPin, Wrench, Brain, ChevronLeft, ChevronRight, Menu, X } from "lucide-react";
+import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile, Upload, MapPin, Wrench, Brain, ChevronLeft, ChevronRight, Menu, X, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -15,6 +15,7 @@ const navigation = [
   { name: "GPS Tracking", href: "/gps-tracking", icon: MapPin, section: "main" },
   { name: "Predictive Maintenance", href: "/predictive-maintenance", icon: Wrench, section: "main" },
   { name: "Smart Load Matching", href: "/smart-load-matching", icon: Brain, section: "main" },
+  { name: "Prediction Confidence", href: "/prediction-confidence", icon: TrendingUp, section: "main" },
   { name: "Mood Tracker", href: "/mood-tracker", icon: Smile, section: "main" },
   { name: "Payment Workflow", href: "/payments", icon: DollarSign, section: "main" },
   { name: "DAT Scrapers", href: "/scrapers", icon: Bot, section: "main" },

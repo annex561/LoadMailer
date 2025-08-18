@@ -23,6 +23,7 @@ import GPSTracking from "@/pages/gps-tracking";
 import PredictiveMaintenance from "@/pages/predictive-maintenance";
 import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import SmartLoadMatching from "@/pages/smart-load-matching";
+import PredictionConfidence from "@/pages/prediction-confidence";
 import SMSStatus from "@/pages/sms-status";
 import DebugToken from "@/pages/debug-token";
 
@@ -49,6 +50,7 @@ function Router() {
       <Route path="/predictive-maintenance" component={PredictiveMaintenance} />
       <Route path="/analytics" component={AnalyticsDashboard} />
       <Route path="/smart-load-matching" component={SmartLoadMatching} />
+      <Route path="/prediction-confidence" component={PredictionConfidence} />
       <Route component={NotFound} />
     </Switch>
   );

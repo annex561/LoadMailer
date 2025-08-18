@@ -11,6 +11,7 @@ import { gpsTrackingService } from "./gps-tracking-service";
 import { loadBoardService } from "./load-board-service";
 import { biddingService } from "./bidding-service";
 import { smartLoadMatchingService } from "./smart-load-matching-service";
+import { PredictionConfidenceService } from "./prediction-confidence-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
@@ -22,6 +23,9 @@ import smsService from "./sms-service";
 
 // Initialize database-backed token service
 const dbTokenService = new DatabaseOnboardingTokenService();
+
+// Initialize prediction confidence service
+const predictionConfidenceService = new PredictionConfidenceService();
 
 // Email service configuration
 const transporter = nodemailer.createTransport({
@@ -3593,6 +3597,162 @@ Safe travels! 🚛`;
     } catch (error) {
       console.error("Simple driver registration error:", error);
       res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  // Prediction Confidence API endpoints
+  
+  // Get prediction confidence for a specific driver-load combination
+  app.get("/api/prediction-confidence/:loadId/:driverId", async (req, res) => {
+    try {
+      const { loadId, driverId } = req.params;
+      
+      const load = await storage.getLoad(loadId);
+      const driver = await storage.getDriver(driverId);
+      
+      if (!load || !driver) {
+        return res.status(404).json({ error: "Load or driver not found" });
+      }
+      
+      // Get historical offers for this driver
+      const historicalOffers = await storage.getLoadOffersByDriver(driverId);
+      
+      const prediction = await predictionConfidenceService.calculatePredictionConfidence(
+        driver,
+        load,
+        historicalOffers
+      );
+      
+      res.json(prediction);
+    } catch (error) {
+      console.error("Prediction confidence error:", error);
+      res.status(500).json({ error: "Failed to calculate prediction confidence" });
+    }
+  });
+
+  // Get bulk prediction confidence for all eligible drivers for a specific load
+  app.get("/api/prediction-confidence/load/:loadId", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        return res.status(404).json({ error: "Load not found" });
+      }
+      
+      // Get all drivers with telegram enabled
+      const eligibleDrivers = await storage.getDriversWithTelegramEnabled();
+      
+      const predictions = await Promise.all(
+        eligibleDrivers.map(async (driver) => {
+          const historicalOffers = await storage.getLoadOffersByDriver(driver.id);
+          const prediction = await predictionConfidenceService.calculatePredictionConfidence(
+            driver,
+            load,
+            historicalOffers
+          );
+          
+          return {
+            driverId: driver.id,
+            driverName: driver.name,
+            driverCity: driver.city,
+            equipmentType: driver.equipmentType,
+            status: driver.status,
+            ...prediction
+          };
+        })
+      );
+      
+      // Sort by confidence score (highest first)
+      predictions.sort((a, b) => b.confidenceScore - a.confidenceScore);
+      
+      res.json({
+        loadId,
+        loadNumber: load.loadNumber,
+        pickupAddress: load.pickupAddress,
+        deliveryAddress: load.deliveryAddress,
+        rate: load.rate,
+        equipmentType: load.equipmentType,
+        predictions
+      });
+    } catch (error) {
+      console.error("Bulk prediction confidence error:", error);
+      res.status(500).json({ error: "Failed to calculate bulk prediction confidence" });
+    }
+  });
+
+  // Real-time prediction confidence stream endpoint
+  app.get("/api/prediction-confidence/realtime", async (req, res) => {
+    try {
+      // Set up Server-Sent Events
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+      
+      const sendPredictionUpdate = async () => {
+        try {
+          // Get recent loads (last 10)
+          const recentLoads = await storage.getAllLoads();
+          const loads = recentLoads.slice(-10);
+          
+          const updates = await Promise.all(
+            loads.map(async (load) => {
+              const eligibleDrivers = await storage.getDriversWithTelegramEnabled();
+              
+              const predictions = await Promise.all(
+                eligibleDrivers.slice(0, 3).map(async (driver) => { // Limit to top 3 for performance
+                  const historicalOffers = await storage.getLoadOffersByDriver(driver.id);
+                  const prediction = await predictionConfidenceService.calculatePredictionConfidence(
+                    driver,
+                    load,
+                    historicalOffers
+                  );
+                  
+                  return {
+                    driverId: driver.id,
+                    driverName: driver.name,
+                    confidenceScore: prediction.confidenceScore,
+                    acceptanceProbability: prediction.acceptanceProbability,
+                    riskLevel: prediction.riskLevel
+                  };
+                })
+              );
+              
+              return {
+                loadId: load.id,
+                loadNumber: load.loadNumber,
+                status: load.status,
+                topPredictions: predictions.sort((a, b) => b.confidenceScore - a.confidenceScore)
+              };
+            })
+          );
+          
+          res.write(`data: ${JSON.stringify({ 
+            timestamp: new Date().toISOString(),
+            updates 
+          })}\n\n`);
+        } catch (error) {
+          console.error("Real-time prediction update error:", error);
+        }
+      };
+      
+      // Send initial data
+      await sendPredictionUpdate();
+      
+      // Send updates every 30 seconds
+      const interval = setInterval(sendPredictionUpdate, 30000);
+      
+      // Clean up on client disconnect
+      req.on('close', () => {
+        clearInterval(interval);
+      });
+      
+    } catch (error) {
+      console.error("Real-time prediction stream error:", error);
+      res.status(500).json({ error: "Failed to start real-time stream" });
     }
   });
 
