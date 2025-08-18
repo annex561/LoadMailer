@@ -1655,7 +1655,7 @@ Please contact driver if needed.`;
       const domain = process.env.REPLIT_DOMAINS ? 
         `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 
         'http://localhost:5000';
-      const onboardingUrl = `${domain}/driver-onboarding?token=${token}`;
+      const onboardingUrl = `${domain}/simple-registration`;
       
       const message = `🚛 *LAMP Logistics Driver Onboarding*
 

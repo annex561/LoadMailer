@@ -13,6 +13,7 @@ import Contacts from "@/pages/contacts";
 import Templates from "@/pages/templates";
 import DriverManagement from "@/pages/driver-management";
 import DriverOnboarding from "@/pages/driver-onboarding";
+import SimpleDriverRegistration from "@/pages/simple-driver-registration";
 import DriverDashboard from "@/pages/driver-dashboard";
 import PaymentWorkflow from "@/pages/payment-workflow";
 import ScraperManagement from "@/pages/scraper-management";
@@ -60,6 +61,7 @@ function App() {
         <Switch>
           {/* Standalone driver pages without sidebar/header */}
           <Route path="/driver-onboarding" component={DriverOnboarding} />
+          <Route path="/simple-registration" component={SimpleDriverRegistration} />
           <Route path="/driver-dashboard" component={DriverDashboard} />
           <Route path="/sms-status" component={SMSStatus} />
           <Route path="/debug-token" component={DebugToken} />

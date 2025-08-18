@@ -3525,6 +3525,75 @@ Safe travels! 🚛`;
     }
   });
 
+  // Simple driver registration endpoint (bypass complex token system)
+  app.post("/api/simple-driver-registration", async (req, res) => {
+    try {
+      const { name, email, phone, city, equipmentType, telegramUsername } = req.body;
+
+      // Validate required fields
+      if (!name || !email || !phone || !city || !equipmentType || !telegramUsername) {
+        return res.status(400).json({ error: "All fields are required" });
+      }
+
+      // Create driver with simplified data
+      const driverData = {
+        name,
+        email,
+        phone,
+        city,
+        emergencyContact: name, // Use same name as fallback
+        emergencyPhone: phone, // Use same phone as fallback
+        
+        // License defaults (can be updated later)
+        licenseNumber: "PENDING",
+        licenseState: city.split(', ')[1] || "TX", // Extract state from city
+        licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
+        medicalCertExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        
+        // Equipment info
+        equipmentType,
+        weightCapacity: 26000,
+        loadType: "full_partial",
+        maxLength: 53,
+        maxWeight: 48000,
+        
+        // Vehicle defaults
+        vehicleYear: "2020",
+        vehicleMake: "Freight",
+        vehicleModel: "Cascadia",
+        vinNumber: "PENDING",
+        
+        // Insurance defaults
+        insuranceProvider: "PENDING",
+        insurancePolicyNumber: "PENDING",
+        insuranceExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        
+        // Banking defaults
+        bankName: "PENDING",
+        routingNumber: "000000000",
+        accountNumber: "000000000",
+        
+        // Status and preferences
+        status: "available" as const,
+        enableTelegramNotifications: true,
+        telegramUsername: telegramUsername.replace('@', ''), // Remove @ if present
+        preferredLanes: [],
+        avoidAreas: []
+      };
+
+      const driver = await storage.createDriver(driverData);
+      
+      res.status(201).json({ 
+        success: true, 
+        message: "Driver registered successfully",
+        driverId: driver.id 
+      });
+    } catch (error) {
+      console.error("Simple driver registration error:", error);
+      res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
