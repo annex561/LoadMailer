@@ -20,8 +20,22 @@ export class TelegramLoadService {
       // Initialize bot configuration
       await this.initializeBotConfig();
       
-      // Create bot instance
-      this.bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
+      // Create bot instance with enhanced logging
+      this.bot = new TelegramBot(TELEGRAM_TOKEN, { 
+        polling: {
+          interval: 1000,
+          autoStart: true,
+        }
+      });
+      
+      // Add error handling for bot
+      this.bot.on('error', (error) => {
+        console.error('Telegram bot error:', error);
+      });
+      
+      this.bot.on('polling_error', (error) => {
+        console.error('Telegram polling error:', error);
+      });
       
       // Set up command handlers
       this.setupCommandHandlers();
@@ -108,6 +122,11 @@ export class TelegramLoadService {
   private setupCommandHandlers(): void {
     if (!this.bot) return;
 
+    // Enhanced message logging
+    this.bot.on('message', (msg: any) => {
+      console.log(`📱 TELEGRAM MESSAGE RECEIVED: User ${msg.from?.first_name || 'Unknown'} (${msg.from?.id || 'no-id'}) Chat: ${msg.chat?.id || 'no-chat'} Text: "${msg.text || 'no-text'}"`);
+    });
+    
     // Welcome message with automatic onboarding
     this.bot.onText(/\/start/, async (msg: any) => {
       if (!this.bot) return;
@@ -115,23 +134,29 @@ export class TelegramLoadService {
       const chatId = msg.chat.id;
       const userInfo = msg.from;
       
-      console.log(`📱 New user started chat: ${userInfo?.first_name || 'Unknown'} ${userInfo?.last_name || ''} (${chatId})`);
+      console.log(`📱 NEW USER STARTED CHAT: ${userInfo?.first_name || 'Unknown'} ${userInfo?.last_name || ''} (ID: ${userInfo?.id}) Chat: ${chatId}`);
       
-      // Send welcome message
-      await this.bot.sendMessage(chatId, 
-        `🚛 *Welcome to LAMP Logistics!*\n\n` +
-        `Hi ${userInfo?.first_name || 'Driver'}! I'm your personal load dispatcher bot.\n\n` +
-        `I'll help you:\n` +
-        `• Receive instant load offers\n` +
-        `• Book loads with one click\n` +
-        `• Track your assignments\n` +
-        `• Communicate with dispatch\n\n` +
-        `Let me get you set up...`,
-        { parse_mode: 'Markdown' }
-      );
+      try {
+        // Send welcome message
+        await this.bot.sendMessage(chatId, 
+          `🚛 *Welcome to LAMP Logistics!*\n\n` +
+          `Hi ${userInfo?.first_name || 'Driver'}! I'm your personal load dispatcher bot.\n\n` +
+          `I'll help you:\n` +
+          `• Receive instant load offers\n` +
+          `• Book loads with one click\n` +
+          `• Track your assignments\n` +
+          `• Communicate with dispatch\n\n` +
+          `Let me get you set up...`,
+          { parse_mode: 'Markdown' }
+        );
+        
+        console.log(`✅ Welcome message sent to ${userInfo?.first_name} (${chatId})`);
 
-      // Automatically send onboarding invitation
-      await this.sendAutoOnboarding(chatId, userInfo);
+        // Automatically send onboarding invitation
+        await this.sendAutoOnboarding(chatId, userInfo);
+      } catch (error) {
+        console.error(`❌ Error sending welcome message to ${chatId}:`, error);
+      }
     });
 
     // Handle callback queries from inline keyboard buttons
@@ -262,13 +287,11 @@ export class TelegramLoadService {
           // Create a load offer record for tracking
           const { randomUUID } = await import('crypto');
           await storage.createLoadOffer({
-            id: randomUUID(),
             loadId: load.id,
             driverId: driverMatch.driver.id,
             status: 'simulated', // Special status for test drivers
-            rateOffered: load.rate || 0,
             sentAt: new Date(),
-            sentVia: 'console_log'
+            timeoutAt: new Date(Date.now() + 3 * 60 * 1000) // 3 minutes from now
           });
         } else {
           await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
@@ -484,7 +507,7 @@ export class TelegramLoadService {
     // Weight capacity consideration (10% weight) - critical safety check
     maxScore += 10;
     const driverMaxWeight = driver.maxWeight || 26000;
-    const loadWeight = load.weight;
+    const loadWeight = (load as any).weight; // Load weight property may not be in the schema yet
     if (!loadWeight || loadWeight <= driverMaxWeight) {
       score += 10; // Full score if load weight is within driver's capacity
     } else if (loadWeight <= driverMaxWeight * 1.05) {
