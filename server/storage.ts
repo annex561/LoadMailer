@@ -1271,14 +1271,11 @@ export class MemStorage implements IStorage {
       );
     } catch (error) {
       console.error('Error getting drivers from database, using memory cache:', error);
-      // Fallback to memory cache with same filtering (allow temp IDs for matching)
+      // Fallback to memory cache with same filtering
       return Array.from(this.drivers.values())
         .filter(driver => 
           driver.telegramId && 
-          driver.enableTelegramNotifications &&
-          driver.telegramId !== '987654321' &&
-          driver.telegramId !== '5908383693' &&
-          !driver.telegramId.startsWith('test_')
+          driver.enableTelegramNotifications
         );
     }
   }
