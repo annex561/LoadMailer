@@ -181,16 +181,14 @@ export default function SimpleDriverRegistration() {
                 <MapPin className="h-4 w-4 inline mr-1" />
                 Location *
               </Label>
-              <Select value={formData.city} onValueChange={(value) => updateFormData('city', value)}>
-                <SelectTrigger className="bg-white border border-gray-300" data-testid="select-driver-city">
-                  <SelectValue placeholder="Select city" />
-                </SelectTrigger>
-                <SelectContent className="bg-white border border-gray-300 shadow-lg">
-                  {US_CITIES.map((city) => (
-                    <SelectItem key={city} value={city}>{city}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                id="city"
+                value={formData.city}
+                onChange={(e) => updateFormData('city', e.target.value)}
+                placeholder="Enter your city, e.g. Miami, FL"
+                className="bg-white border border-gray-300"
+                data-testid="input-driver-city"
+              />
             </div>
           </div>
 
