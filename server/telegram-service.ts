@@ -1647,7 +1647,9 @@ Please contact driver if needed.`;
         isUsed: false,
       };
       
-      await storage.createOnboardingToken(tokenData);
+      console.log('Creating onboarding token for Telegram user:', { token, email: tempEmail, chatId });
+      const createdToken = await storage.createOnboardingToken(tokenData);
+      console.log('Token created successfully:', createdToken.id);
       
       // Format the onboarding message
       const onboardingUrl = `${process.env.REPLIT_DOMAINS || 'http://localhost'}/driver-onboarding?token=${token}`;

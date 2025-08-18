@@ -2710,6 +2710,25 @@ Safe travels! 🚛`;
     }
   });
 
+  // Test endpoint to simulate Telegram /start command
+  app.post("/api/simulate-telegram-start", async (req, res) => {
+    try {
+      const { chatId, userInfo } = req.body;
+      
+      if (!chatId || !userInfo) {
+        return res.status(400).json({ error: "chatId and userInfo are required" });
+      }
+      
+      // Simulate the /start command trigger
+      await telegramLoadService.sendAutoOnboarding(chatId, userInfo);
+      
+      res.json({ success: true, message: "Telegram onboarding simulation completed" });
+    } catch (error) {
+      console.error("Error simulating Telegram start:", error);
+      res.status(500).json({ error: "Failed to simulate Telegram onboarding" });
+    }
+  });
+
   app.post("/api/telegram/test-load", async (req, res) => {
     try {
       const success = await telegramLoadService.sendTestLoad();
