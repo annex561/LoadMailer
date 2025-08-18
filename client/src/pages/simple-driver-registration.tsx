@@ -101,8 +101,11 @@ export default function SimpleDriverRegistration() {
                 You can now start receiving load offers via Telegram.
               </p>
               <div className="flex gap-4 justify-center">
-                <Button onClick={() => setLocation('/dashboard')} data-testid="button-go-to-dashboard">
+                <Button onClick={() => setLocation('/')} data-testid="button-go-to-dashboard">
                   Go to Dashboard
+                </Button>
+                <Button variant="outline" onClick={() => window.close()} data-testid="button-close-window">
+                  Close
                 </Button>
               </div>
             </div>
