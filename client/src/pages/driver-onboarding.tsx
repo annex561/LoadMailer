@@ -112,12 +112,8 @@ export default function DriverOnboarding() {
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     
-    console.log('URL search params:', window.location.search);
-    console.log('Extracted token:', urlToken);
-    
     if (urlToken) {
       // Token found in URL parameters directly
-      console.log('Setting token from URL params:', urlToken);
       setOnboardingToken(urlToken);
       setTokenError(null);
     } else {
@@ -125,16 +121,11 @@ export default function DriverOnboarding() {
       const urlString = window.location.href;
       const tokenMatch = urlString.match(/[?&]token=([^&]+)/);
       
-      console.log('Full URL:', urlString);
-      console.log('Token match:', tokenMatch);
-      
       if (tokenMatch && tokenMatch[1]) {
         const token = decodeURIComponent(tokenMatch[1]);
-        console.log('Setting token from regex match:', token);
         setOnboardingToken(token);
         setTokenError(null);
       } else {
-        console.error('No token found in URL');
         setTokenError('No onboarding token found. Please use the invitation link.');
       }
     }
@@ -145,41 +136,27 @@ export default function DriverOnboarding() {
     queryKey: ['validate-token', onboardingToken],
     queryFn: async () => {
       if (!onboardingToken) return null;
-      console.log('Validating token:', onboardingToken);
       const response = await fetch('/api/validate-onboarding-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: onboardingToken })
       });
-      console.log('Validation response status:', response.status);
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Validation failed:', errorData);
         throw new Error(errorData.error || 'Failed to validate token');
       }
-      const result = await response.json();
-      console.log('Validation result:', result);
-      return result;
+      return response.json();
     },
     enabled: !!onboardingToken,
     retry: false // Don't retry failed validation
   });
 
   useEffect(() => {
-    console.log('Token validation state:', { 
-      validationError, 
-      tokenValidation, 
-      onboardingToken 
-    });
-    
     if (validationError) {
-      console.error('Validation error:', validationError);
       setTokenError('Token validation failed. Please check your invitation link.');
     } else if (tokenValidation && !tokenValidation.valid) {
-      console.error('Token invalid:', tokenValidation);
       setTokenError(tokenValidation.error || 'Token not found');
     } else if (tokenValidation && tokenValidation.valid) {
-      console.log('Token valid:', tokenValidation);
       setTokenError(null);
       // Pre-fill email if available
       if (tokenValidation.email && !formData.email) {
