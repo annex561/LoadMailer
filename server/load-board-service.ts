@@ -137,7 +137,11 @@ export class LoadBoardService {
 
     if (!config.enabled) return;
 
-    // For critical load board data, use 10-second intervals
+    // Disabled automatic scraping to prevent log spam - can be manually triggered from UI
+    // For critical load board data, use 10-second intervals when enabled
+    console.log(`Automatic scraping disabled for ${config.name} - use manual trigger from dashboard`);
+    return; // Exit early to disable auto-scraping
+    
     const interval = setInterval(async () => {
       try {
         await this.runScraper(config.id);
