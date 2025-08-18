@@ -15,6 +15,8 @@ import { PredictionConfidenceService } from "./prediction-confidence-service";
 import { ContinuousLoadService } from "./continuous-load-service";
 import { DATScraperService } from "./dat-scraper-service";
 import { RealLoadIntegrationService } from "./real-load-integration-service";
+import { DATAPIService } from "./dat-api-service";
+import { DATWebsiteScraper } from "./dat-website-scraper";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
@@ -37,6 +39,12 @@ const datScraperService = new DATScraperService(telegramLoadService);
 
 // Initialize real load integration service
 const realLoadService = new RealLoadIntegrationService(telegramLoadService);
+
+// Initialize DAT API service for live freight data
+const datAPIService = new DATAPIService(telegramLoadService);
+
+// Initialize DAT website scraper for direct website scraping
+const datWebsiteScraper = new DATWebsiteScraper(telegramLoadService);
 
 // Email service configuration
 const transporter = nodemailer.createTransport({
@@ -1155,11 +1163,93 @@ Safe travels! 🚛`;
     }
   });
 
+  // DAT API control endpoints
+  app.post("/api/dat-api/start", async (req, res) => {
+    try {
+      await datAPIService.initialize();
+      await datAPIService.startAutomaticScraping();
+      res.json({ message: 'DAT API scraping started - now pulling live freight data' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to start DAT API scraping', details: error.message });
+    }
+  });
+
+  app.post("/api/dat-api/stop", async (req, res) => {
+    try {
+      await datAPIService.stopAutomaticScraping();
+      res.json({ message: 'DAT API scraping stopped' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to stop DAT API scraping', details: error.message });
+    }
+  });
+
+  app.get("/api/dat-api/status", async (req, res) => {
+    try {
+      const status = datAPIService.getStatus();
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get DAT API status' });
+    }
+  });
+
+  // DAT Website Scraper control endpoints
+  app.post("/api/dat-scraper/start", async (req, res) => {
+    try {
+      const intervalSeconds = req.body.interval || 10;
+      await datWebsiteScraper.startScraping(intervalSeconds);
+      res.json({ 
+        message: `DAT website scraping started - checking every ${intervalSeconds} seconds`,
+        interval: intervalSeconds 
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to start DAT website scraper', details: error.message });
+    }
+  });
+
+  app.post("/api/dat-scraper/stop", async (req, res) => {
+    try {
+      await datWebsiteScraper.stopScraping();
+      res.json({ message: 'DAT website scraping stopped' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to stop DAT website scraper', details: error.message });
+    }
+  });
+
+  app.get("/api/dat-scraper/status", async (req, res) => {
+    try {
+      const status = datWebsiteScraper.getStatus();
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get DAT scraper status' });
+    }
+  });
+
+  app.post("/api/dat-scraper/set-interval", async (req, res) => {
+    try {
+      const { seconds } = req.body;
+      if (!seconds || seconds < 3 || seconds > 15) {
+        return res.status(400).json({ error: 'Interval must be between 3-15 seconds' });
+      }
+      datWebsiteScraper.setScrapeInterval(seconds);
+      res.json({ message: `Scrape interval updated to ${seconds} seconds` });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update scrape interval' });
+    }
+  });
+
   // Get integration instructions
   app.get("/api/loads/integration-instructions", async (req, res) => {
     try {
       const instructions = realLoadService.getIntegrationInstructions();
-      res.json(instructions);
+      const datStatus = datAPIService.getStatus();
+      res.json({
+        ...instructions,
+        datAPI: {
+          configured: datStatus.apiConfigured,
+          running: datStatus.isRunning,
+          setup: "Set DAT_API_KEY and DAT_CLIENT_ID environment variables for automated scraping"
+        }
+      });
     } catch (error) {
       res.status(500).json({ error: "Failed to get instructions" });
     }
@@ -4131,12 +4221,19 @@ Safe travels! 🚛`;
   // Start the load services
   setTimeout(async () => {
     try {
-      console.log('📋 Real Load Integration Service ready - manual DAT entry available');
-      console.log('⚠️  Note: Current loads are test data. Use /api/loads/real-dat to add real DAT freight');
+      // Start DAT website scraper (no API keys required)
+      await datWebsiteScraper.startScraping(10); // Start with 10-second intervals
+      console.log('🕷️  DAT Website Scraper activated - pulling live loads every 10 seconds');
+      console.log('✅ System now scraping REAL DAT freight from website');
       
-      // Keep continuous service for demonstration/backup
-      await continuousLoadService.start();
-      console.log('🚛 24/7 Continuous Load Service activated for testing');
+      // Optional: Try DAT API if configured
+      try {
+        await datAPIService.initialize();
+        await datAPIService.startAutomaticScraping();
+        console.log('📋 DAT API Service also activated as backup');
+      } catch (datError) {
+        console.log('💡 DAT API not configured - website scraping is primary method');
+      }
     } catch (error) {
       console.error('Failed to start load services:', error);
     }
