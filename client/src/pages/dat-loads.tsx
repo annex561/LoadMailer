@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -17,7 +17,8 @@ import {
   Building,
   Navigation,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  MessageSquare
 } from "lucide-react";
 import { format, isAfter, isBefore, addDays } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -330,7 +331,6 @@ export default function DATLoads() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Equipment</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comments</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -340,83 +340,93 @@ export default function DATLoads() {
                   const rateInfo = formatRate(load.rate, load.miles);
                   
                   return (
-                    <tr key={load.id} className="hover:bg-gray-50 transition-colors" data-testid={`dat-load-row-${load.id}`}>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        <div className="flex items-center">
-                          <Clock className="w-3 h-3 text-gray-400 mr-1" />
-                          <span className={ageHours < 1 ? "text-green-600 font-medium" : "text-gray-600"}>
-                            {ageHours < 1 ? "New" : `${ageHours}h`}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm font-medium text-blue-600">{load.loadNumber}</div>
-                        <div className="text-xs text-gray-500">{load.commodity}</div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm font-bold text-green-600">{rateInfo.total}</div>
-                        <div className="text-xs text-gray-500">{rateInfo.perMile}</div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-900">
-                          <MapPin className="w-3 h-3 text-gray-400 mr-1" />
-                          {load.origin}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {load.pickupDate ? format(new Date(load.pickupDate), 'MMM d') : 'ASAP'}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-900">
-                          <Navigation className="w-3 h-3 text-gray-400 mr-1" />
-                          {load.destination}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {load.deliveryDate ? format(new Date(load.deliveryDate), 'MMM d') : 'Flexible'}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        {load.miles} mi
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {getEquipmentBadge(load)}
-                        <div className="text-xs text-gray-500 mt-1">{load.weight ? `${load.weight}lbs` : 'Any'}</div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{load.company}</div>
-                        <div className="text-xs text-gray-500 flex items-center">
-                          <Phone className="w-3 h-3 mr-1" />
-                          {load.contact}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {getStatusBadge(load)}
-                      </td>
-                      <td className="px-4 py-3 text-sm w-80">
-                        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 h-auto min-h-[60px]">
-                          <div className="text-xs font-medium text-amber-800 mb-2">DAT LoadLink Comments:</div>
-                          <div className="text-xs text-amber-700 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto">
-                            {load.comments || load.description?.includes('COMMENTS: ') 
-                              ? load.description?.split('COMMENTS: ')[1] || load.comments || 'No specific comments from shipper'
-                              : 'No specific comments from shipper'
-                            }
+                    <React.Fragment key={load.id}>
+                      {/* Main Load Row */}
+                      <tr className="hover:bg-gray-50 transition-colors" data-testid={`dat-load-row-${load.id}`}>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <div className="flex items-center">
+                            <Clock className="w-3 h-3 text-gray-400 mr-1" />
+                            <span className={ageHours < 1 ? "text-green-600 font-medium" : "text-gray-600"}>
+                              {ageHours < 1 ? "New" : `${ageHours}h`}
+                            </span>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm">
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            onClick={() => handleBookLoad(load.id)}
-                            disabled={bookLoadMutation.isPending || load.status !== 'available'}
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
-                            data-testid={`button-book-load-${load.id}`}
-                          >
-                            {bookLoadMutation.isPending ? "Booking..." : "Book"}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="text-sm font-medium text-blue-600">{load.loadNumber}</div>
+                          <div className="text-xs text-gray-500">{load.commodity}</div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="text-sm font-bold text-green-600">{rateInfo.total}</div>
+                          <div className="text-xs text-gray-500">{rateInfo.perMile}</div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center text-sm text-gray-900">
+                            <MapPin className="w-3 h-3 text-gray-400 mr-1" />
+                            {load.origin}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {load.pickupDate ? format(new Date(load.pickupDate), 'MMM d') : 'ASAP'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center text-sm text-gray-900">
+                            <Navigation className="w-3 h-3 text-gray-400 mr-1" />
+                            {load.destination}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {load.deliveryDate ? format(new Date(load.deliveryDate), 'MMM d') : 'Flexible'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {load.miles} mi
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {getEquipmentBadge(load)}
+                          <div className="text-xs text-gray-500 mt-1">{load.weight ? `${load.weight}lbs` : 'Any'}</div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{load.company}</div>
+                          <div className="text-xs text-gray-500 flex items-center">
+                            <Phone className="w-3 h-3 mr-1" />
+                            {load.contact}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {getStatusBadge(load)}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleBookLoad(load.id)}
+                              disabled={bookLoadMutation.isPending || load.status !== 'available'}
+                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                              data-testid={`button-book-load-${load.id}`}
+                            >
+                              {bookLoadMutation.isPending ? "Booking..." : "Book"}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                      
+                      {/* Comments Row - Spans full width */}
+                      <tr className="bg-amber-50/30">
+                        <td colSpan={10} className="px-4 py-3">
+                          <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
+                            <div className="flex items-center mb-2">
+                              <MessageSquare className="w-4 h-4 text-amber-600 mr-2" />
+                              <span className="text-sm font-medium text-amber-800">DAT LoadLink Comments</span>
+                            </div>
+                            <div className="text-sm text-amber-700 leading-relaxed">
+                              {load.comments || load.description?.includes('COMMENTS: ') 
+                                ? load.description?.split('COMMENTS: ')[1] || load.comments || 'No specific comments from shipper'
+                                : 'No specific comments from shipper'
+                              }
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
