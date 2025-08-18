@@ -22,7 +22,8 @@ import PredictiveMaintenance from "@/pages/predictive-maintenance";
 import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import SmartLoadMatching from "@/pages/smart-load-matching";
 import SMSStatus from "@/pages/sms-status";
-import TokenTest from "@/pages/token-test";
+import DebugToken from "@/pages/debug-token";
+
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
 
@@ -58,7 +59,7 @@ function App() {
           <Route path="/driver-onboarding" component={DriverOnboarding} />
           <Route path="/driver-dashboard" component={DriverDashboard} />
           <Route path="/sms-status" component={SMSStatus} />
-          <Route path="/token-test" component={TokenTest} />
+          <Route path="/debug-token" component={DebugToken} />
           
           {/* Main app with sidebar layout */}
           <Route>
