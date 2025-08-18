@@ -51,8 +51,8 @@ const datWebsiteScraper = new DATWebsiteScraper(telegramLoadService);
 // Initialize real DAT scraper for authentic load board scraping
 const realDATScraper = new RealDATScraper(telegramLoadService);
 
-// Initialize DAT load poster for posting loads to DAT network
-const datLoadPoster = new DATLoadPoster();
+// DAT load posting removed - focusing only on pulling loads from DAT
+// const datLoadPoster = new DATLoadPoster();
 
 // Email service configuration
 const transporter = nodemailer.createTransport({

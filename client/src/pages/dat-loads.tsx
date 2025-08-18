@@ -46,6 +46,7 @@ interface DATLoad {
   commodity: string;
   createdAt: string;
   source: string;
+  comments?: string;
 }
 
 export default function DATLoads() {
@@ -320,6 +321,7 @@ export default function DATLoads() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Equipment</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comments</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -380,6 +382,17 @@ export default function DATLoads() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {getStatusBadge(load)}
+                      </td>
+                      <td className="px-4 py-3 text-sm max-w-xs">
+                        <div className="bg-amber-50 border border-amber-200 rounded-md p-2">
+                          <div className="text-xs font-medium text-amber-800 mb-1">DAT Comments:</div>
+                          <div className="text-xs text-amber-700 break-words">
+                            {load.comments || load.description?.includes('COMMENTS: ') 
+                              ? load.description?.split('COMMENTS: ')[1] || load.comments || 'No specific comments from shipper'
+                              : 'No specific comments from shipper'
+                            }
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm">
                         <div className="flex space-x-2">
