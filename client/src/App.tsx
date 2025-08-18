@@ -64,6 +64,7 @@ function App() {
           {/* Standalone driver pages without sidebar/header */}
           <Route path="/driver-onboarding" component={DriverOnboarding} />
           <Route path="/simple-registration" component={SimpleDriverRegistration} />
+          <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
           <Route path="/driver-dashboard" component={DriverDashboard} />
           <Route path="/sms-status" component={SMSStatus} />
           <Route path="/debug-token" component={DebugToken} />
