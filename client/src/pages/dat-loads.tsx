@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface DATLoad {
   id: string;
@@ -54,6 +55,8 @@ function DATLoads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [equipmentFilter, setEquipmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedLoad, setSelectedLoad] = useState<DATLoad | null>(null);
+  const [showBookingModal, setShowBookingModal] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -84,8 +87,17 @@ function DATLoads() {
     },
   });
 
-  const handleBookLoad = (loadId: string) => {
-    bookLoadMutation.mutate(loadId);
+  const handleBookLoad = (load: DATLoad) => {
+    setSelectedLoad(load);
+    setShowBookingModal(true);
+  };
+
+  const confirmBooking = () => {
+    if (selectedLoad) {
+      bookLoadMutation.mutate(selectedLoad.id);
+      setShowBookingModal(false);
+      setSelectedLoad(null);
+    }
   };
 
   // Filter loads based on search and filters - ONLY DAT LoadLink loads
@@ -398,7 +410,7 @@ function DATLoads() {
                           <div className="flex space-x-2">
                             <Button
                               size="sm"
-                              onClick={() => handleBookLoad(load.id)}
+                              onClick={() => handleBookLoad(load)}
                               disabled={bookLoadMutation.isPending || load.status !== 'available'}
                               className="bg-blue-600 hover:bg-blue-700 text-white"
                               data-testid={`button-book-load-${load.id}`}
@@ -452,6 +464,231 @@ function DATLoads() {
           </Card>
         )}
       </div>
+
+      {/* Load Booking Modal */}
+      <Dialog open={showBookingModal} onOpenChange={setShowBookingModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Truck className="w-5 h-5 text-blue-600" />
+              <span>Book Load - {selectedLoad?.loadNumber}</span>
+              <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                DAT LoadLink
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedLoad && (
+            <div className="space-y-6">
+              {/* Load Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center">
+                      <MapPin className="w-5 h-5 text-green-600 mr-2" />
+                      Route Information
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Origin</label>
+                      <div className="flex items-center mt-1">
+                        <MapPin className="w-4 h-4 text-green-600 mr-2" />
+                        <span className="text-lg font-medium">{selectedLoad.origin}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 ml-6">
+                        Pickup: {selectedLoad.pickupDate ? format(new Date(selectedLoad.pickupDate), 'MMM d, yyyy') : 'ASAP'}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-center">
+                      <Navigation className="w-5 h-5 text-gray-400" />
+                      <div className="flex-1 border-t border-gray-300 mx-2"></div>
+                      <span className="text-sm text-gray-500">{selectedLoad.miles} miles</span>
+                      <div className="flex-1 border-t border-gray-300 mx-2"></div>
+                      <Navigation className="w-5 h-5 text-red-600 rotate-180" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Destination</label>
+                      <div className="flex items-center mt-1">
+                        <MapPin className="w-4 h-4 text-red-600 mr-2" />
+                        <span className="text-lg font-medium">{selectedLoad.destination}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 ml-6">
+                        Delivery: {selectedLoad.deliveryDate ? format(new Date(selectedLoad.deliveryDate), 'MMM d, yyyy') : 'ASAP'}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center">
+                      <DollarSign className="w-5 h-5 text-green-600 mr-2" />
+                      Rate & Payment
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-green-600">
+                        {formatCurrency(selectedLoad.rate)}
+                      </div>
+                      <div className="text-sm text-gray-500">Total Rate</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                      <div>
+                        <div className="text-lg font-semibold">
+                          {formatCurrency(selectedLoad.rate / selectedLoad.miles)}
+                        </div>
+                        <div className="text-xs text-gray-500">Per Mile</div>
+                      </div>
+                      <div>
+                        <div className="text-lg font-semibold text-blue-600">
+                          {selectedLoad.miles}
+                        </div>
+                        <div className="text-xs text-gray-500">Total Miles</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Load Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <Truck className="w-5 h-5 text-blue-600 mr-2" />
+                    Load Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Commodity</label>
+                    <div className="mt-1 text-lg font-medium">{selectedLoad.commodity}</div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Equipment Type</label>
+                    <div className="mt-1">
+                      {getEquipmentBadge(selectedLoad)}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Weight</label>
+                    <div className="mt-1 flex items-center">
+                      <Weight className="w-4 h-4 text-gray-400 mr-1" />
+                      <span className="text-lg font-medium">
+                        {selectedLoad.weight ? `${selectedLoad.weight.toLocaleString()} lbs` : 'Not specified'}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Company Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <Building className="w-5 h-5 text-purple-600 mr-2" />
+                    Shipper Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Company</label>
+                    <div className="mt-1 text-lg font-medium">{selectedLoad.company}</div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Contact</label>
+                    <div className="mt-1 flex items-center">
+                      <Phone className="w-4 h-4 text-gray-400 mr-2" />
+                      <span className="text-lg font-medium">{selectedLoad.contact}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Comments & Special Instructions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <MessageSquare className="w-5 h-5 text-amber-600 mr-2" />
+                    Comments & Special Instructions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <div className="text-sm text-amber-700 leading-relaxed">
+                      {selectedLoad.comments || selectedLoad.description?.includes('COMMENTS: ') 
+                        ? selectedLoad.description?.split('COMMENTS: ')[1] || selectedLoad.comments || 'No specific comments from shipper'
+                        : 'No specific comments from shipper'
+                      }
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Load Status & Age */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center">
+                    <Clock className="w-5 h-5 text-gray-600 mr-2" />
+                    Load Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Current Status</label>
+                    <div className="mt-1">
+                      {getStatusBadge(selectedLoad)}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Load Age</label>
+                    <div className="mt-1 flex items-center">
+                      <Clock className="w-4 h-4 text-gray-400 mr-1" />
+                      <span className="text-lg font-medium">
+                        {getAgeInHours(selectedLoad.createdAt) < 1 ? "New" : `${getAgeInHours(selectedLoad.createdAt)}h`}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Priority</label>
+                    <div className="mt-1">
+                      <Badge className={selectedLoad.priority === 'high' ? 'bg-red-100 text-red-800 border-red-200' : 'bg-gray-100 text-gray-800 border-gray-200'}>
+                        {selectedLoad.priority}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-6 border-t">
+                <div className="flex items-center space-x-2 text-sm text-gray-500">
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Source: DAT LoadLink - dispatch@lampslogistics.com</span>
+                </div>
+                <div className="flex space-x-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowBookingModal(false)}
+                    data-testid="button-cancel-booking"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={confirmBooking}
+                    disabled={bookLoadMutation.isPending || selectedLoad.status !== 'available'}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    data-testid="button-confirm-booking"
+                  >
+                    {bookLoadMutation.isPending ? "Booking..." : "Confirm Booking"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
