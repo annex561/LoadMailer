@@ -1661,9 +1661,6 @@ Please contact driver if needed.`;
 
 Hi ${userInfo?.first_name || 'Driver'}! Ready to join our fleet and start earning?
 
-📋 *Complete Your Registration:*
-${onboardingUrl}
-
 ✅ *What You'll Need:*
 • Driver's License Number
 • Emergency Contact Information  
@@ -1679,11 +1676,11 @@ Need help? Just reply to this message.`;
       const keyboard = {
         inline_keyboard: [
           [
-            { text: '📋 Start Registration', url: onboardingUrl }
+            { text: '📝 START REGISTRATION', url: onboardingUrl }
           ],
           [
-            { text: '📞 Contact Support', callback_data: 'contact_support' },
-            { text: 'ℹ️ How It Works', callback_data: 'how_it_works' }
+            { text: '❓ How It Works', callback_data: 'how_it_works' },
+            { text: '📞 Contact Support', callback_data: 'contact_support' }
           ]
         ]
       };
