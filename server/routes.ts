@@ -17,6 +17,7 @@ import { DATScraperService } from "./dat-scraper-service";
 import { RealLoadIntegrationService } from "./real-load-integration-service";
 import { DATAPIService } from "./dat-api-service";
 import { DATWebsiteScraper } from "./dat-website-scraper";
+import { RealDATScraper } from "./real-dat-scraper";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
@@ -45,6 +46,9 @@ const datAPIService = new DATAPIService(telegramLoadService);
 
 // Initialize DAT website scraper for direct website scraping
 const datWebsiteScraper = new DATWebsiteScraper(telegramLoadService);
+
+// Initialize real DAT scraper for authentic load board scraping
+const realDATScraper = new RealDATScraper(telegramLoadService);
 
 // Email service configuration
 const transporter = nodemailer.createTransport({
@@ -1232,6 +1236,42 @@ Safe travels! 🚛`;
       }
       datWebsiteScraper.setScrapeInterval(seconds);
       res.json({ message: `Scrape interval updated to ${seconds} seconds` });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to update scrape interval' });
+    }
+  });
+
+  // Real DAT scraper endpoints (requires DAT login credentials)
+  app.post("/api/real-dat-scraper/set-credentials", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: 'DAT username and password required' });
+      }
+      realDATScraper.setCredentials(username, password);
+      res.json({ message: 'DAT credentials set successfully' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to set DAT credentials' });
+    }
+  });
+
+  app.post("/api/real-dat-scraper/start", async (req, res) => {
+    try {
+      await realDATScraper.startRealScraping();
+      res.json({ message: 'Real DAT scraping started with login credentials' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to start real DAT scraping', details: error.message });
+    }
+  });
+
+  app.get("/api/real-dat-scraper/instructions", async (req, res) => {
+    try {
+      const instructions = realDATScraper.getInstructions();
+      res.json({ instructions });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get instructions' });
+    }
+  });
     } catch (error) {
       res.status(500).json({ error: 'Failed to update scrape interval' });
     }
@@ -4221,10 +4261,14 @@ Safe travels! 🚛`;
   // Start the load services
   setTimeout(async () => {
     try {
-      // Start DAT website scraper (no API keys required)
-      await datWebsiteScraper.startScraping(10); // Start with 10-second intervals
-      console.log('🕷️  DAT Website Scraper activated - pulling live loads every 10 seconds');
-      console.log('✅ System now scraping REAL DAT freight from website');
+      console.log('⚠️  IMPORTANT: Currently using test data - not real DAT loads');
+      console.log('📋 To get REAL DAT loads, you need:');
+      console.log('   1. DAT LoadLink account credentials');
+      console.log('   2. Use /api/real-dat-scraper endpoints with your login');
+      console.log('   3. System will then pull authentic freight from DAT');
+      
+      // Stop the test data generation
+      console.log('🛑 Stopping synthetic load generation to avoid confusion');
       
       // Optional: Try DAT API if configured
       try {

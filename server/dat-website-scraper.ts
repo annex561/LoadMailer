@@ -95,57 +95,77 @@ export class DATWebsiteScraper {
   }
 
   private async simulateWebScraping(): Promise<ScrapedLoad[]> {
-    // This simulates real DAT website scraping results
-    // Replace this with actual web scraping implementation
-    const currentTime = new Date();
-    const loads: ScrapedLoad[] = [];
-
-    // Generate 1-3 realistic loads per scrape
-    const loadCount = Math.floor(Math.random() * 3) + 1;
+    // IMPORTANT: This is currently simulated data
+    // To implement real DAT scraping, you would need:
+    // 1. Valid DAT login credentials
+    // 2. Browser automation (Puppeteer/Playwright)
+    // 3. Proper session management and CSRF handling
+    // 4. Compliance with DAT's terms of service
     
-    for (let i = 0; i < loadCount; i++) {
-      const origins = [
-        'Nashville, TN', 'Memphis, TN', 'Knoxville, TN', 
-        'Chattanooga, TN', 'Clarksville, TN', 'Murfreesboro, TN'
-      ];
+    console.log('⚠️  WARNING: Currently returning simulated data - real DAT scraping requires login credentials');
+    
+    // Return empty array to stop fake data generation
+    // Uncomment the code below if you want to continue with test data while implementing real scraping
+    return [];
+    
+    /*
+    // Real DAT scraping would look like this:
+    
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    
+    const page = await browser.newPage();
+    
+    try {
+      // Navigate to DAT LoadLink
+      await page.goto('https://one.dat.com/');
       
-      const destinations = [
-        'Atlanta, GA', 'Birmingham, AL', 'Louisville, KY',
-        'Charlotte, NC', 'Jacksonville, FL', 'Indianapolis, IN',
-        'Cincinnati, OH', 'Columbus, OH'
-      ];
-
-      const companies = [
-        'Music City Freight', 'Tennessee Transport Co', 'Volunteer Logistics',
-        'Cumberland Express', 'Smoky Mountain Shipping', 'Delta Regional Transport'
-      ];
-
-      const commodities = [
-        'General freight', 'Electronics', 'Auto parts', 'Food products',
-        'Building materials', 'Retail goods', 'Paper products', 'Machinery'
-      ];
-
-      const origin = origins[Math.floor(Math.random() * origins.length)];
-      const destination = destinations[Math.floor(Math.random() * destinations.length)];
-      const miles = Math.floor(Math.random() * 400) + 100;
-      const rate = Math.floor(miles * (2.5 + Math.random() * 1.5));
-
-      loads.push({
-        loadId: `DAT-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-        origin,
-        destination,
-        pickupDate: new Date(currentTime.getTime() + Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        rate,
-        miles,
-        equipmentType: 'V', // Van/Box truck
-        company: companies[Math.floor(Math.random() * companies.length)],
-        weight: Math.floor(Math.random() * 15000) + 5000,
-        commodity: commodities[Math.floor(Math.random() * commodities.length)],
-        postedTime: currentTime.toISOString()
+      // Login with credentials (you'd need actual DAT account)
+      await page.type('#username', 'YOUR_DAT_USERNAME');
+      await page.type('#password', 'YOUR_DAT_PASSWORD');
+      await page.click('#login-button');
+      
+      // Wait for load board to load
+      await page.waitForSelector('.load-results');
+      
+      // Extract load data from the page
+      const loads = await page.evaluate(() => {
+        const loadRows = document.querySelectorAll('.load-row');
+        const scrapedLoads = [];
+        
+        loadRows.forEach(row => {
+          const origin = row.querySelector('.origin')?.textContent?.trim();
+          const destination = row.querySelector('.destination')?.textContent?.trim();
+          const rate = row.querySelector('.rate')?.textContent?.replace(/[^0-9]/g, '');
+          const miles = row.querySelector('.miles')?.textContent?.replace(/[^0-9]/g, '');
+          
+          if (origin && destination && rate && miles) {
+            scrapedLoads.push({
+              loadId: row.getAttribute('data-load-id'),
+              origin,
+              destination,
+              rate: parseInt(rate),
+              miles: parseInt(miles),
+              equipmentType: 'V',
+              company: row.querySelector('.company')?.textContent?.trim() || 'Unknown',
+              commodity: row.querySelector('.commodity')?.textContent?.trim() || 'General freight'
+            });
+          }
+        });
+        
+        return scrapedLoads;
       });
+      
+      await browser.close();
+      return loads;
+      
+    } catch (error) {
+      await browser.close();
+      throw error;
     }
-
-    return loads;
+    */
   }
 
   private async processScrapedLoad(scrapedLoad: ScrapedLoad): Promise<void> {
