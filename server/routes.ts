@@ -2714,6 +2714,38 @@ Safe travels! 🚛`;
     }
   });
 
+  // Manual chat ID assignment for troubleshooting
+  app.post("/api/telegram/set-chat-id", async (req, res) => {
+    try {
+      const { driverName, telegramChatId } = req.body;
+      
+      if (!driverName || !telegramChatId) {
+        return res.status(400).json({ error: "driverName and telegramChatId are required" });
+      }
+      
+      // Find driver by name
+      const drivers = await storage.getAllDrivers();
+      const driver = drivers.find(d => d.name === driverName);
+      if (!driver) {
+        return res.status(404).json({ error: `Driver ${driverName} not found` });
+      }
+      
+      // Update telegram_id
+      await storage.updateDriver(driver.id, { telegramId: telegramChatId });
+      
+      console.log(`✅ Manually set telegram chat ID for ${driverName}: ${telegramChatId}`);
+      
+      res.json({ 
+        success: true, 
+        message: `Chat ID ${telegramChatId} assigned to ${driverName}`,
+        driver: { name: driver.name, telegramId: telegramChatId }
+      });
+    } catch (error) {
+      console.error('Error setting chat ID:', error);
+      res.status(500).json({ error: 'Failed to set chat ID' });
+    }
+  });
+
   // Test endpoint to simulate Telegram /start command
   app.post("/api/simulate-telegram-start", async (req, res) => {
     try {
