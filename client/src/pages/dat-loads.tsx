@@ -16,10 +16,10 @@ import {
   Phone,
   Building,
   Navigation,
-  RefreshCw
+  RefreshCw,
+  ExternalLink
 } from "lucide-react";
 import { format, isAfter, isBefore, addDays } from "date-fns";
-import type { LoadWithRelations } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,22 +27,37 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
+interface DATLoad {
+  id: string;
+  loadNumber: string;
+  description: string;
+  origin: string;
+  destination: string;
+  pickupDate: string;
+  deliveryDate: string;
+  rate: number;
+  miles: number;
+  weight: number;
+  equipmentType: string;
+  status: string;
+  priority: string;
+  company: string;
+  contact: string;
+  commodity: string;
+  createdAt: string;
+  source: string;
+}
+
 export default function DATLoads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [equipmentFilter, setEquipmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [temperatureFilter, setTemperatureFilter] = useState("all");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: loads = [], isLoading, refetch } = useQuery<LoadWithRelations[]>({
-    queryKey: ["/api/loads"],
-    refetchInterval: 30000, // Refresh every 30 seconds for real-time updates
-  });
-
-  const { data: expirationStats } = useQuery({
-    queryKey: ["/api/load-expiration-stats"],
-    refetchInterval: 60000, // Check expiration stats every minute
+  const { data: loads = [], isLoading, refetch } = useQuery({
+    queryKey: ["/api/dat-loads"],
+    refetchInterval: 10000, // Refresh every 10 seconds for real-time DAT updates
   });
 
   // Book load mutation
@@ -52,7 +67,7 @@ export default function DATLoads() {
       return response.json();
     },
     onSuccess: (data, loadId) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dat-loads"] });
       toast({
         title: "Booking Request Sent",
         description: `Your booking request for Load ${data.loadNumber} has been sent to the dispatcher. You will receive confirmation shortly.`,
@@ -71,47 +86,43 @@ export default function DATLoads() {
     bookLoadMutation.mutate(loadId);
   };
 
-  // Filter loads to show only DAT loads and apply filters
-  const filteredLoads = loads.filter(load => {
-    // Only show DAT loads (from scraper)
-    if (load.sourceBoard !== 'dat') return false;
-    
+  // Filter loads based on search and filters
+  const filteredLoads = loads.filter((load: DATLoad) => {
     const matchesSearch = !searchTerm || 
       load.loadNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      load.pickupAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      load.deliveryAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      load.company?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesEquipment = !equipmentFilter || equipmentFilter === "all" || load.equipmentType === equipmentFilter;
-    const matchesStatus = !statusFilter || statusFilter === "all" || load.status === statusFilter;
-    
-    const matchesTemperature = !temperatureFilter || temperatureFilter === "all" || 
-      (temperatureFilter === "refrigerated" && load.temperatureRequired) ||
-      (temperatureFilter === "dry" && !load.temperatureRequired);
-    
-    return matchesSearch && matchesEquipment && matchesStatus && matchesTemperature;
+      load.origin?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      load.destination?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      load.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      load.commodity?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesEquipment = equipmentFilter === "all" || load.equipmentType === equipmentFilter;
+    const matchesStatus = statusFilter === "all" || load.status === statusFilter;
+
+    return matchesSearch && matchesEquipment && matchesStatus;
   });
 
   const getEquipmentIcon = (equipmentType: string) => {
     switch (equipmentType) {
-      case 'refrigerated':
+      case 'refrigerated_truck':
         return <Thermometer className="w-4 h-4" />;
-      case 'flatbed':
+      case 'flatbed_truck':
+        return <Truck className="w-4 h-4" />;
+      case 'straight_box_truck':
         return <Truck className="w-4 h-4" />;
       default:
         return <Truck className="w-4 h-4" />;
     }
   };
 
-  const getEquipmentBadge = (load: LoadWithRelations) => {
+  const getEquipmentBadge = (load: DATLoad) => {
     const equipmentDisplay = {
-      dry_van: { label: "Dry Van", className: "bg-blue-100 text-blue-800 border-blue-200" },
-      refrigerated: { label: "Reefer", className: "bg-cyan-100 text-cyan-800 border-cyan-200" },
-      flatbed: { label: "Flatbed", className: "bg-orange-100 text-orange-800 border-orange-200" },
-      step_deck: { label: "Step Deck", className: "bg-purple-100 text-purple-800 border-purple-200" },
+      straight_box_truck: { label: "Box Truck", className: "bg-blue-100 text-blue-800 border-blue-200" },
+      refrigerated_truck: { label: "Reefer", className: "bg-cyan-100 text-cyan-800 border-cyan-200" },
+      flatbed_truck: { label: "Flatbed", className: "bg-orange-100 text-orange-800 border-orange-200" },
+      tractor_trailer: { label: "Tractor", className: "bg-purple-100 text-purple-800 border-purple-200" },
     };
 
-    const config = equipmentDisplay[load.equipmentType as keyof typeof equipmentDisplay] || equipmentDisplay.dry_van;
+    const config = equipmentDisplay[load.equipmentType as keyof typeof equipmentDisplay] || equipmentDisplay.straight_box_truck;
     
     return (
       <Badge className={`${config.className} flex items-center gap-1`}>
@@ -121,396 +132,290 @@ export default function DATLoads() {
     );
   };
 
-  const getStatusBadge = (load: LoadWithRelations) => {
-    const now = new Date();
-    const isExpired = load.expiresAt && new Date(load.expiresAt.toString()) <= now;
-    const isExpiringSoon = load.expiresAt && 
-      new Date(load.expiresAt.toString()) > now && 
-      new Date(load.expiresAt.toString()) <= addDays(now, 1);
-
-    if (isExpired || load.status === 'expired') {
-      return (
-        <Badge className="bg-red-100 text-red-800 border-red-200 flex items-center gap-1">
-          <AlertTriangle className="w-3 h-3" />
-          Expired
-        </Badge>
-      );
-    }
-
-    if (isExpiringSoon) {
-      return (
-        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 flex items-center gap-1">
-          <Clock className="w-3 h-3" />
-          Expires Soon
-        </Badge>
-      );
-    }
-
+  const getStatusBadge = (load: DATLoad) => {
     const statusConfig = {
-      scheduled: { label: "Available", className: "bg-green-100 text-green-800 border-green-200", icon: "✓" },
-      in_transit: { label: "Booked", className: "bg-blue-100 text-blue-800 border-blue-200", icon: "🚛" },
-      delivered: { label: "Completed", className: "bg-gray-100 text-gray-800 border-gray-200", icon: "✅" },
+      available: { label: "Available", className: "bg-green-100 text-green-800 border-green-200", icon: "✓" },
+      active: { label: "Active", className: "bg-blue-100 text-blue-800 border-blue-200", icon: "🔄" },
+      booked: { label: "Booked", className: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: "📋" },
+      completed: { label: "Completed", className: "bg-gray-100 text-gray-800 border-gray-200", icon: "✅" },
     };
 
-    const config = statusConfig[load.status as keyof typeof statusConfig] || statusConfig.scheduled;
+    const config = statusConfig[load.status as keyof typeof statusConfig] || statusConfig.available;
     
     return (
       <Badge className={`${config.className} flex items-center gap-1`}>
-        <span>{config.icon}</span>
+        <span className="text-xs">{config.icon}</span>
         {config.label}
       </Badge>
     );
   };
 
-  const getTemperatureDisplay = (load: LoadWithRelations) => {
-    if (!load.temperatureRequired) return null;
-
-    return (
-      <div className="flex items-center gap-2 text-sm text-cyan-700 bg-cyan-50 px-2 py-1 rounded">
-        <Thermometer className="w-4 h-4" />
-        <span>
-          {load.minTemperature && load.maxTemperature 
-            ? `${load.minTemperature}° - ${load.maxTemperature}°${load.temperatureUnit || 'F'}`
-            : "Temp Controlled"
-          }
-        </span>
-      </div>
-    );
-  };
-
-  const getRateDisplay = (load: LoadWithRelations) => {
-    if (!load.rate) return "Rate TBD";
-    
-    return (
-      <div className="flex items-center gap-1 text-green-700 font-medium">
-        <DollarSign className="w-4 h-4" />
-        {load.rate.toLocaleString()}
-      </div>
-    );
-  };
-
-  const getExpirationDisplay = (load: LoadWithRelations) => {
-    if (!load.expiresAt) return null;
-
-    const expirationDate = new Date(load.expiresAt.toString());
+  const getAgeInHours = (createdAt: string) => {
+    const created = new Date(createdAt);
     const now = new Date();
-    const timeLeft = expirationDate.getTime() - now.getTime();
-    const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
-
-    if (timeLeft <= 0) {
-      return (
-        <div className="flex items-center gap-1 text-red-600 text-xs">
-          <AlertTriangle className="w-3 h-3" />
-          Expired
-        </div>
-      );
-    }
-
-    if (hoursLeft < 24) {
-      return (
-        <div className="flex items-center gap-1 text-yellow-600 text-xs">
-          <Clock className="w-3 h-3" />
-          {hoursLeft}h left
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex items-center gap-1 text-gray-500 text-xs">
-        <Calendar className="w-3 h-3" />
-        {format(expirationDate, "MMM d")}
-      </div>
-    );
+    const diffHours = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60));
+    return diffHours;
   };
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="h-20 bg-gray-200 rounded"></div>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="h-32 bg-gray-200 rounded"></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const formatRate = (rate: number, miles: number) => {
+    const ratePerMile = miles > 0 ? rate / miles : 0;
+    return {
+      total: formatCurrency(rate),
+      perMile: `$${ratePerMile.toFixed(2)}/mi`
+    };
+  };
 
   return (
-    <div className="p-6">
-      {/* Header with Stats */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">DAT Load Board</h1>
-            <p className="text-gray-500">Real-time freight from DAT Power</p>
-          </div>
+    <div className="space-y-6 p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">DAT LoadLink Loads</h1>
+          <p className="text-gray-600 mt-1">
+            Real-time loads scraped from your DAT LoadLink account • Updates every 10 seconds
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
           <Button 
-            onClick={() => refetch()}
-            className="flex items-center gap-2"
-            data-testid="button-refresh-loads"
+            onClick={() => refetch()} 
+            variant="outline" 
+            size="sm"
+            disabled={isLoading}
+            data-testid="button-refresh-dat-loads"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
+      </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Available Loads</p>
-                  <p className="text-2xl font-bold">{filteredLoads.filter(l => l.status === 'scheduled').length}</p>
-                </div>
-                <Truck className="w-8 h-8 text-blue-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Refrigerated</p>
-                  <p className="text-2xl font-bold">{filteredLoads.filter(l => l.temperatureRequired).length}</p>
-                </div>
-                <Thermometer className="w-8 h-8 text-cyan-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Expiring Today</p>
-                  <p className="text-2xl font-bold text-yellow-600">{(expirationStats as any)?.expiringToday || 0}</p>
-                </div>
-                <Clock className="w-8 h-8 text-yellow-600" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Avg Rate</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    ${Math.round(filteredLoads.reduce((sum, l) => sum + (l.rate || 0), 0) / Math.max(filteredLoads.length, 1)).toLocaleString()}
-                  </p>
-                </div>
-                <DollarSign className="w-8 h-8 text-green-600" />
-              </div>
-            </CardContent>
-          </Card>
+      {/* Search and Filters */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+          <div className="flex-1 max-w-lg">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                type="text"
+                placeholder="Search by origin, destination, company..."
+                className="pl-10"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                data-testid="input-search-dat-loads"
+              />
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <Select value={equipmentFilter} onValueChange={setEquipmentFilter} data-testid="select-equipment-filter">
+              <SelectTrigger className="w-48 bg-white border border-gray-300">
+                <SelectValue placeholder="All Equipment" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                <SelectItem value="all">All Equipment</SelectItem>
+                <SelectItem value="straight_box_truck">Box Truck</SelectItem>
+                <SelectItem value="refrigerated_truck">Refrigerated</SelectItem>
+                <SelectItem value="flatbed_truck">Flatbed</SelectItem>
+                <SelectItem value="tractor_trailer">Tractor Trailer</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Select value={statusFilter} onValueChange={setStatusFilter} data-testid="select-status-filter">
+              <SelectTrigger className="w-40 bg-white border border-gray-300">
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="available">Available</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="booked">Booked</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <Card className="mb-6">
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 lg:space-x-4">
-            <div className="flex-1 max-w-lg">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  type="text"
-                  placeholder="Search by origin, destination, or company..."
-                  className="pl-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  data-testid="input-search-dat-loads"
-                />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total DAT Loads</p>
+                <p className="text-2xl font-bold text-gray-900">{loads.length}</p>
               </div>
+              <Truck className="w-8 h-8 text-blue-600" />
             </div>
-            
-            <div className="flex items-center space-x-4">
-              <Select value={equipmentFilter} onValueChange={setEquipmentFilter}>
-                <SelectTrigger className="w-40 bg-white border border-gray-300 shadow-sm">
-                  <SelectValue placeholder="Equipment" />
-                </SelectTrigger>
-                <SelectContent className="bg-white border border-gray-300 shadow-lg z-50">
-                  <SelectItem value="all">All Equipment</SelectItem>
-                  <SelectItem value="sprinter_van">Sprinter Van</SelectItem>
-                  <SelectItem value="van">Standard Van</SelectItem>
-                  <SelectItem value="van_lift_gate">Van with Lift Gate</SelectItem>
-                  <SelectItem value="van_hotshot">Van Hotshot</SelectItem>
-                  <SelectItem value="straight_box_truck">Straight Box Truck</SelectItem>
-                  <SelectItem value="box_truck">Box Truck</SelectItem>
-                  <SelectItem value="moving_van">Moving Van</SelectItem>
-                  <SelectItem value="flatbed">Flatbed</SelectItem>
-                  <SelectItem value="flatbed_hotshot">Flatbed Hotshot</SelectItem>
-                  <SelectItem value="step_deck">Step Deck</SelectItem>
-                  <SelectItem value="lowboy">Lowboy</SelectItem>
-                  <SelectItem value="dry_van">Dry Van</SelectItem>
-                  <SelectItem value="refrigerated">Refrigerated</SelectItem>
-                  <SelectItem value="power_only">Power Only</SelectItem>
-                  <SelectItem value="container">Container</SelectItem>
-                  <SelectItem value="car_carrier">Car Carrier</SelectItem>
-                  <SelectItem value="tanker">Tanker</SelectItem>
-                  <SelectItem value="dump_truck">Dump Truck</SelectItem>
-                  <SelectItem value="conestoga">Conestoga</SelectItem>
-                  <SelectItem value="removable_gooseneck">Removable Gooseneck (RGN)</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              <Select value={temperatureFilter} onValueChange={setTemperatureFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Temperature" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="refrigerated">Temp Controlled</SelectItem>
-                  <SelectItem value="dry">Dry Freight</SelectItem>
-                </SelectContent>
-              </Select>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Available Now</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {loads.filter((load: DATLoad) => load.status === 'available').length}
+                </p>
+              </div>
+              <Clock className="w-8 h-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Average Rate</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {loads.length > 0 ? formatCurrency(loads.reduce((sum: number, load: DATLoad) => sum + load.rate, 0) / loads.length) : '$0'}
+                </p>
+              </div>
+              <DollarSign className="w-8 h-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Fresh Loads</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  {loads.filter((load: DATLoad) => getAgeInHours(load.createdAt) < 1).length}
+                </p>
+              </div>
+              <AlertTriangle className="w-8 h-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="scheduled">Available</SelectItem>
-                  <SelectItem value="in_transit">Booked</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      {/* DAT Loads Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <RefreshCw className="w-6 h-6 animate-spin text-gray-400 mr-3" />
+            <span className="text-gray-500">Loading DAT loads from LoadLink...</span>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Load Cards - DAT Style */}
-      <div className="space-y-4">
-        {filteredLoads.map((load) => (
-          <Card key={load.id} className="border border-gray-200 hover:shadow-md transition-shadow" data-testid={`dat-load-card-${load.id}`}>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="text-lg font-bold text-primary">{load.loadNumber}</div>
-                  {getEquipmentBadge(load)}
-                  {getStatusBadge(load)}
-                  {getExpirationDisplay(load)}
-                </div>
-                <div className="text-right">
-                  {getRateDisplay(load)}
-                  {load.miles && (
-                    <div className="flex items-center gap-1 text-gray-600 text-sm mt-1">
-                      <Navigation className="w-3 h-3" />
-                      {load.miles} mi
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Route Information */}
-                <div className="lg:col-span-2">
-                  <div className="flex items-center gap-6">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <MapPin className="w-4 h-4 text-green-600" />
-                        <span className="text-sm font-medium text-gray-500">PICKUP</span>
-                      </div>
-                      <div className="font-medium text-gray-900">{load.pickupAddress}</div>
-                      <div className="text-sm text-gray-600">
-                        {format(new Date(load.pickupDate), "MMM d, yyyy")} at {load.pickupTime}
-                      </div>
-                    </div>
-                    
-                    <div className="flex-shrink-0 text-gray-300">
-                      <div className="w-8 h-px bg-gray-300 relative">
-                        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-2 h-2 border-r-2 border-t-2 border-gray-300 rotate-45"></div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <MapPin className="w-4 h-4 text-red-600" />
-                        <span className="text-sm font-medium text-gray-500">DELIVERY</span>
-                      </div>
-                      <div className="font-medium text-gray-900">{load.deliveryAddress}</div>
-                      <div className="text-sm text-gray-600">
-                        {format(new Date(load.deliveryDate), "MMM d, yyyy")} by {load.deliveryTime}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Temperature Requirements */}
-                  {getTemperatureDisplay(load)}
-                </div>
-
-                {/* Load Details */}
-                <div className="space-y-3">
-
+        ) : filteredLoads.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Age</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Load ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Origin</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Destination</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Distance</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Equipment</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredLoads.map((load: DATLoad) => {
+                  const ageHours = getAgeInHours(load.createdAt);
+                  const rateInfo = formatRate(load.rate, load.miles);
                   
-                  {load.company && (
-                    <div className="flex items-center gap-2">
-                      <Building className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm text-gray-600">{load.company}</span>
-                    </div>
-                  )}
-                  
-                  {load.contactPhone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-gray-500" />
-                      <span className="text-sm text-gray-600">{load.contactPhone}</span>
-                    </div>
-                  )}
-
-                  <div className="pt-2">
-                    <Button 
-                      onClick={() => handleBookLoad(load.id)}
-                      disabled={bookLoadMutation.isPending || load.status === 'assigned' || load.status === 'in_transit' || load.status === 'delivered'}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400"
-                      data-testid={`button-book-load-${load.id}`}
-                    >
-                      {bookLoadMutation.isPending ? "Booking..." : 
-                       load.status === 'assigned' ? "Already Assigned" : 
-                       load.status === 'in_transit' ? "In Transit" : 
-                       load.status === 'delivered' ? "Delivered" : "Book This Load"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {load.specialInstructions && (
-                <>
-                  <Separator className="my-4" />
-                  <div className="text-sm text-gray-600">
-                    <span className="font-medium">Special Instructions: </span>
-                    {load.specialInstructions}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-
-        {filteredLoads.length === 0 && (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No loads found</h3>
-              <p className="text-gray-500">
-                {searchTerm || equipmentFilter !== "all" || statusFilter !== "all" || temperatureFilter !== "all"
+                  return (
+                    <tr key={load.id} className="hover:bg-gray-50 transition-colors" data-testid={`dat-load-row-${load.id}`}>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        <div className="flex items-center">
+                          <Clock className="w-3 h-3 text-gray-400 mr-1" />
+                          <span className={ageHours < 1 ? "text-green-600 font-medium" : "text-gray-600"}>
+                            {ageHours < 1 ? "New" : `${ageHours}h`}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm font-medium text-blue-600">{load.loadNumber}</div>
+                        <div className="text-xs text-gray-500">{load.commodity}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm font-bold text-green-600">{rateInfo.total}</div>
+                        <div className="text-xs text-gray-500">{rateInfo.perMile}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center text-sm text-gray-900">
+                          <MapPin className="w-3 h-3 text-gray-400 mr-1" />
+                          {load.origin}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {load.pickupDate ? format(new Date(load.pickupDate), 'MMM d') : 'ASAP'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center text-sm text-gray-900">
+                          <Navigation className="w-3 h-3 text-gray-400 mr-1" />
+                          {load.destination}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {load.deliveryDate ? format(new Date(load.deliveryDate), 'MMM d') : 'Flexible'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {load.miles} mi
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {getEquipmentBadge(load)}
+                        <div className="text-xs text-gray-500 mt-1">{load.weight ? `${load.weight}lbs` : 'Any'}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{load.company}</div>
+                        <div className="text-xs text-gray-500 flex items-center">
+                          <Phone className="w-3 h-3 mr-1" />
+                          {load.contact}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {getStatusBadge(load)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                        <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleBookLoad(load.id)}
+                            disabled={bookLoadMutation.isPending || load.status !== 'available'}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            data-testid={`button-book-load-${load.id}`}
+                          >
+                            {bookLoadMutation.isPending ? "Booking..." : "Book"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Card className="m-6">
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <Truck className="w-12 h-12 text-gray-300 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No DAT loads available
+              </h3>
+              <p className="text-gray-500 mb-4 max-w-md">
+                {searchTerm || equipmentFilter !== "all" || statusFilter !== "all"
                   ? "Try adjusting your search filters to see more loads."
-                  : "No DAT loads are currently available. Check back soon!"}
+                  : "No DAT loads are currently being scraped. Check your DAT LoadLink connection and scraper status."}
               </p>
+              <div className="flex items-center space-x-2 text-sm text-gray-500">
+                <ExternalLink className="w-4 h-4" />
+                <span>Connected to DAT LoadLink: dispatch@lampslogistics.com</span>
+              </div>
             </CardContent>
           </Card>
         )}

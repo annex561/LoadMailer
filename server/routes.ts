@@ -1277,6 +1277,45 @@ Safe travels! 🚛`;
     }
   });
 
+  // Get DAT scraped loads endpoint
+  app.get("/api/dat-loads", async (req, res) => {
+    try {
+      const allLoads = await storage.getAllLoads();
+      
+      // Filter to only show loads scraped from DAT (marked with [DAT REAL] in description)
+      const datLoads = allLoads.filter(load => 
+        load.description && load.description.includes('[DAT REAL]')
+      );
+      
+      // Transform to match frontend expectations
+      const transformedLoads = datLoads.map(load => ({
+        id: load.id,
+        loadNumber: load.loadNumber,
+        description: load.description,
+        origin: load.pickupAddress,
+        destination: load.deliveryAddress,
+        pickupDate: load.pickupDate,
+        deliveryDate: load.deliveryDate,
+        rate: load.rate,
+        miles: load.miles,
+        weight: load.weight,
+        equipmentType: load.equipmentType,
+        status: load.status,
+        priority: load.priority,
+        company: load.description?.match(/- ([^(]+) \(/)?.[1] || 'Unknown',
+        contact: load.description?.match(/\(([^)]+)\)/)?.[1] || 'Unknown',
+        commodity: load.description?.split(' - ')[0]?.replace('[DAT REAL] ', '') || 'General freight',
+        createdAt: load.createdAt,
+        source: 'DAT LoadLink'
+      }));
+      
+      res.json(transformedLoads);
+    } catch (error) {
+      console.error('Error fetching DAT loads:', error);
+      res.status(500).json({ error: 'Failed to fetch DAT loads' });
+    }
+  });
+
   // DAT Load Posting endpoints
   app.post("/api/dat-poster/set-credentials", async (req, res) => {
     try {
