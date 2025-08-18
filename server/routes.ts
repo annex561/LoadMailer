@@ -3532,10 +3532,16 @@ Safe travels! 🚛`;
   // Simple driver registration endpoint (bypass complex token system)
   app.post("/api/simple-driver-registration", async (req, res) => {
     try {
-      const { name, email, phone, city, equipmentType, telegramUsername } = req.body;
+      const { 
+        name, email, phone, city, equipmentType, telegramUsername,
+        maxWeight, maxLength, loadType, vehicleYear, vehicleMake, vehicleModel,
+        licenseNumber, licenseState 
+      } = req.body;
 
       // Validate required fields
-      if (!name || !email || !phone || !city || !equipmentType || !telegramUsername) {
+      if (!name || !email || !phone || !city || !equipmentType || !telegramUsername ||
+          !vehicleYear || !vehicleMake || !vehicleModel || !licenseNumber || !licenseState ||
+          !maxWeight || !maxLength || !loadType) {
         return res.status(400).json({ error: "All fields are required" });
       }
 
@@ -3548,23 +3554,22 @@ Safe travels! 🚛`;
         emergencyContact: name, // Use same name as fallback
         emergencyPhone: phone, // Use same phone as fallback
         
-        // License defaults (can be updated later)
-        licenseNumber: "PENDING",
-        licenseState: city.includes(',') ? city.split(', ')[1] : "TX", // Extract state from city
+        // License info - use actual form data
+        licenseNumber,
+        licenseState,
         licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
         medicalCertExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         
-        // Equipment info
+        // Equipment info - use actual form data
         equipmentType,
-        weightCapacity: 26000,
-        loadType: "full_partial",
-        maxLength: 53,
-        maxWeight: 48000,
+        loadType,
+        maxLength: parseInt(maxLength) || 53,
+        maxWeight: parseInt(maxWeight) || 26000,
         
-        // Vehicle defaults
-        vehicleYear: "2020",
-        vehicleMake: "Freight",
-        vehicleModel: "Cascadia",
+        // Vehicle info - use actual form data
+        vehicleYear,
+        vehicleMake,
+        vehicleModel,
         vinNumber: "PENDING",
         
         // Insurance defaults

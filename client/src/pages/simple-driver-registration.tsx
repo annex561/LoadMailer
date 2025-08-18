@@ -18,13 +18,26 @@ interface SimpleDriverData {
   city: string;
   equipmentType: string;
   telegramUsername: string;
+  maxWeight: number;
+  maxLength: number;
+  loadType: string;
+  vehicleYear: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  licenseNumber: string;
+  licenseState: string;
 }
 
-const US_CITIES = [
-  'Atlanta, GA', 'Miami, FL', 'Dallas, TX', 'Houston, TX', 'Phoenix, AZ', 
-  'Los Angeles, CA', 'Chicago, IL', 'New York, NY', 'Boston, MA', 
-  'Seattle, WA', 'Denver, CO', 'Las Vegas, NV', 'Charlotte, NC', 
-  'Jacksonville, FL', 'Detroit, MI', 'Orlando, FL', 'Tampa, FL'
+const US_STATES = [
+  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 
+  'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 
+  'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
+];
+
+const LOAD_TYPES = [
+  { value: 'full_partial', label: 'Full & Partial Loads' },
+  { value: 'full', label: 'Full Loads Only' },
+  { value: 'partial', label: 'Partial Loads Only' }
 ];
 
 export default function SimpleDriverRegistration() {
@@ -34,7 +47,15 @@ export default function SimpleDriverRegistration() {
     phone: '',
     city: '',
     equipmentType: '',
-    telegramUsername: ''
+    telegramUsername: '',
+    maxWeight: 26000,
+    maxLength: 53,
+    loadType: 'full_partial',
+    vehicleYear: '',
+    vehicleMake: '',
+    vehicleModel: '',
+    licenseNumber: '',
+    licenseState: ''
   });
   
   const [isComplete, setIsComplete] = useState(false);
@@ -73,13 +94,16 @@ export default function SimpleDriverRegistration() {
     }
   });
 
-  const updateFormData = (field: keyof SimpleDriverData, value: string) => {
+  const updateFormData = (field: keyof SimpleDriverData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const isFormValid = () => {
     return formData.name && formData.email && formData.phone && 
-           formData.city && formData.equipmentType && formData.telegramUsername;
+           formData.city && formData.equipmentType && formData.telegramUsername &&
+           formData.vehicleYear && formData.vehicleMake && formData.vehicleModel &&
+           formData.licenseNumber && formData.licenseState && 
+           formData.maxWeight > 0 && formData.maxLength > 0;
   };
 
   const handleSubmit = () => {
@@ -211,21 +235,140 @@ export default function SimpleDriverRegistration() {
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="telegramUsername">
-              Telegram Username *
-            </Label>
-            <Input
-              id="telegramUsername"
-              value={formData.telegramUsername}
-              onChange={(e) => updateFormData('telegramUsername', e.target.value)}
-              placeholder="@username (without @)"
-              className="bg-white border border-gray-300"
-              data-testid="input-telegram-username"
-            />
-            <p className="text-xs text-gray-500">
-              Enter your Telegram username to receive load offers
-            </p>
+          {/* Vehicle Information Section */}
+          <div className="border-t pt-4 mt-6">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">Vehicle Information</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="vehicleYear">Vehicle Year *</Label>
+                <Input
+                  id="vehicleYear"
+                  value={formData.vehicleYear}
+                  onChange={(e) => updateFormData('vehicleYear', e.target.value)}
+                  placeholder="2020"
+                  className="bg-white border border-gray-300"
+                  data-testid="input-vehicle-year"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="vehicleMake">Vehicle Make *</Label>
+                <Input
+                  id="vehicleMake"
+                  value={formData.vehicleMake}
+                  onChange={(e) => updateFormData('vehicleMake', e.target.value)}
+                  placeholder="Ford"
+                  className="bg-white border border-gray-300"
+                  data-testid="input-vehicle-make"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="vehicleModel">Vehicle Model *</Label>
+                <Input
+                  id="vehicleModel"
+                  value={formData.vehicleModel}
+                  onChange={(e) => updateFormData('vehicleModel', e.target.value)}
+                  placeholder="Transit"
+                  className="bg-white border border-gray-300"
+                  data-testid="input-vehicle-model"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* License Information Section */}
+          <div className="border-t pt-4 mt-6">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">License Information</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="licenseNumber">License Number *</Label>
+                <Input
+                  id="licenseNumber"
+                  value={formData.licenseNumber}
+                  onChange={(e) => updateFormData('licenseNumber', e.target.value)}
+                  placeholder="DL12345678"
+                  className="bg-white border border-gray-300"
+                  data-testid="input-license-number"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="licenseState">License State *</Label>
+                <Select value={formData.licenseState} onValueChange={(value) => updateFormData('licenseState', value)}>
+                  <SelectTrigger className="bg-white border border-gray-300" data-testid="select-license-state">
+                    <SelectValue placeholder="Select state" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                    {US_STATES.map((state) => (
+                      <SelectItem key={state} value={state}>{state}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* Load Capacity Section */}
+          <div className="border-t pt-4 mt-6">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">Load Capacity & Preferences</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="maxWeight">Max Weight (lbs) *</Label>
+                <Input
+                  id="maxWeight"
+                  type="number"
+                  value={formData.maxWeight}
+                  onChange={(e) => updateFormData('maxWeight', parseInt(e.target.value) || 0)}
+                  placeholder="26000"
+                  className="bg-white border border-gray-300"
+                  data-testid="input-max-weight"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="maxLength">Max Length (ft) *</Label>
+                <Input
+                  id="maxLength"
+                  type="number"
+                  value={formData.maxLength}
+                  onChange={(e) => updateFormData('maxLength', parseInt(e.target.value) || 0)}
+                  placeholder="53"
+                  className="bg-white border border-gray-300"
+                  data-testid="input-max-length"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="loadType">Load Preferences *</Label>
+                <Select value={formData.loadType} onValueChange={(value) => updateFormData('loadType', value)}>
+                  <SelectTrigger className="bg-white border border-gray-300" data-testid="select-load-type">
+                    <SelectValue placeholder="Select load type" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                    {LOAD_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* Telegram Section */}
+          <div className="border-t pt-4 mt-6">
+            <h3 className="text-lg font-semibold mb-4 text-gray-800">Communication</h3>
+            <div className="space-y-2">
+              <Label htmlFor="telegramUsername">
+                Telegram Username *
+              </Label>
+              <Input
+                id="telegramUsername"
+                value={formData.telegramUsername}
+                onChange={(e) => updateFormData('telegramUsername', e.target.value)}
+                placeholder="@username (without @)"
+                className="bg-white border border-gray-300"
+                data-testid="input-telegram-username"
+              />
+              <p className="text-xs text-gray-500">
+                Enter your Telegram username to receive instant load offers directly to your phone
+              </p>
+            </div>
           </div>
 
           <Button
