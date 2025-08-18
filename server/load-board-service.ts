@@ -137,17 +137,18 @@ export class LoadBoardService {
 
     if (!config.enabled) return;
 
-    // For critical load board data, use 10-second intervals
+    // Real-time load monitoring - watch for new loads continuously
+    // Use shorter intervals for immediate load detection
     const interval = setInterval(async () => {
       try {
         await this.runScraper(config.id);
       } catch (error) {
-        console.error(`Error in scheduled scraper run for ${config.name}:`, error);
+        console.error(`Error in real-time scraper run for ${config.name}:`, error);
       }
-    }, 10000); // 10 seconds for critical data pulling
+    }, 3000); // 3 seconds for real-time load detection
 
     this.activeIntervals.set(config.id, interval);
-    console.log(`Scheduled load board scraper for ${config.name} - running every 10 seconds`);
+    console.log(`Real-time load monitoring active for ${config.name} - scanning every 3 seconds for new loads`);
     
     // Run immediately on startup
     setTimeout(async () => {

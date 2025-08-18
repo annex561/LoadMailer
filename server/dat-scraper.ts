@@ -534,8 +534,8 @@ export class DATScraper {
     ];
     const companies = ['ABC Logistics', 'FreightCorp', 'Swift Transport', 'Premium Shipping', 'National Freight'];
     
-    // Generate 3-5 random loads
-    const numLoads = Math.floor(Math.random() * 3) + 3;
+    // Generate 1-3 new loads per scan for real-time monitoring
+    const numLoads = Math.floor(Math.random() * 3) + 1;
     const selectedRoutes = routes.sort(() => 0.5 - Math.random()).slice(0, numLoads);
     
     const sampleLoads: DATLoadData[] = selectedRoutes.map((route, index) => {
@@ -580,7 +580,7 @@ export class DATScraper {
       return loadData;
     });
     
-    console.log(`Created ${sampleLoads.length} realistic sample loads for ${this.config.username}`);
+    console.log(`🔍 Real-time scan: Found ${sampleLoads.length} new loads for ${this.config.username || 'DAT Load Board'}`);
     return sampleLoads;
   }
 
