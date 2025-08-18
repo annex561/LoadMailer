@@ -107,18 +107,27 @@ export default function DriverOnboarding() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Get token from URL parameters
+  // Get token from URL parameters using API endpoint
   useEffect(() => {
-    // Direct token extraction from URL
-    const urlString = window.location.href;
-    const tokenMatch = urlString.match(/[?&]token=([^&]+)/);
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
     
-    if (tokenMatch && tokenMatch[1]) {
-      const token = decodeURIComponent(tokenMatch[1]);
-      setOnboardingToken(token);
+    if (urlToken) {
+      // Token found in URL parameters directly
+      setOnboardingToken(urlToken);
       setTokenError(null);
     } else {
-      setTokenError('No onboarding token found. Please use the invitation link.');
+      // Fallback: Try to extract from full URL string
+      const urlString = window.location.href;
+      const tokenMatch = urlString.match(/[?&]token=([^&]+)/);
+      
+      if (tokenMatch && tokenMatch[1]) {
+        const token = decodeURIComponent(tokenMatch[1]);
+        setOnboardingToken(token);
+        setTokenError(null);
+      } else {
+        setTokenError('No onboarding token found. Please use the invitation link.');
+      }
     }
   }, []);
 

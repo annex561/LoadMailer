@@ -1,5 +1,7 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer, type Server } from "http";
+import fs from "fs";
+import path from "path";
 import { storage } from "./storage";
 import { analyticsService } from "./analytics-service";
 import { schedulerService } from "./scheduler-service";
@@ -3367,6 +3369,16 @@ Safe travels! 🚛`;
     } catch (error) {
       console.error("Error predicting rates:", error);
       res.status(500).json({ error: "Failed to predict optimal rates" });
+    }
+  });
+
+  // API route to inject token for onboarding
+  app.get('/api/onboarding-token', (req, res) => {
+    const token = req.query.token;
+    if (token) {
+      res.json({ token });
+    } else {
+      res.status(400).json({ error: 'No token provided' });
     }
   });
 
