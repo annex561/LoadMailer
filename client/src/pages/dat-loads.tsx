@@ -50,7 +50,7 @@ interface DATLoad {
   comments?: string;
 }
 
-export default function DATLoads() {
+function DATLoads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [equipmentFilter, setEquipmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -342,7 +342,7 @@ export default function DATLoads() {
                   return (
                     <React.Fragment key={load.id}>
                       {/* Main Load Row */}
-                      <tr className="hover:bg-gray-50 transition-colors" data-testid={`dat-load-row-${load.id}`}>
+                      <tr className="hover:bg-gray-50 transition-colors">{/* data-testid={`dat-load-row-${load.id}`} */}
                         <td className="px-4 py-3 whitespace-nowrap text-sm">
                           <div className="flex items-center">
                             <Clock className="w-3 h-3 text-gray-400 mr-1" />
@@ -455,3 +455,5 @@ export default function DATLoads() {
     </div>
   );
 }
+
+export default DATLoads;
