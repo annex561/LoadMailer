@@ -71,7 +71,7 @@ export class RealDATScraper {
 
       const loadData = {
         customerId: customers[0].id,
-        description: `[DAT REAL] ${datLoad.commodity} - ${datLoad.company} (${datLoad.contact}) ID: ${datLoad.loadId}${datLoad.comments ? '\n\nCOMMENTS: ' + datLoad.comments : ''}`,
+        description: `[DAT REAL] ${datLoad.commodity} - ${datLoad.company} (Contact: ${datLoad.contact}) ID: ${datLoad.loadId}${datLoad.comments ? '\n\nCOMMENTS: ' + datLoad.comments : ''}`,
         pickupAddress: datLoad.origin,
         pickupDate: datLoad.pickupDate,
         pickupTime: "08:00",
@@ -84,6 +84,9 @@ export class RealDATScraper {
         weight: datLoad.weight || 10000,
         priority: "high" as const,
         status: "available" as const,
+        // Store actual contact from DAT
+        contact: datLoad.phone || datLoad.contact,
+        company: datLoad.company,
       };
 
       const load = await storage.createLoad(loadData);

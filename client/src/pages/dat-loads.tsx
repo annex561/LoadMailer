@@ -610,29 +610,16 @@ function DATLoads() {
                   
                   {/* Contact Methods */}
                   <div className="border-t pt-4">
-                    <label className="text-sm font-medium text-gray-500 mb-3 block">Contact Methods</label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div className="flex items-center mb-2">
-                          <Phone className="w-5 h-5 text-blue-600 mr-2" />
-                          <span className="font-medium text-blue-900">Phone</span>
-                        </div>
-                        <div className="text-xl font-bold text-blue-700">
-                          {selectedLoad.contact}
-                        </div>
-                        <div className="text-xs text-blue-600 mt-1">Primary dispatch line</div>
+                    <label className="text-sm font-medium text-gray-500 mb-3 block">Contact Information</label>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center mb-2">
+                        <Phone className="w-5 h-5 text-blue-600 mr-2" />
+                        <span className="font-medium text-blue-900">Phone Number</span>
                       </div>
-                      
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <div className="flex items-center mb-2">
-                          <span className="w-5 h-5 text-green-600 mr-2">📧</span>
-                          <span className="font-medium text-green-900">Email</span>
-                        </div>
-                        <div className="text-lg font-bold text-green-700">
-                          {selectedLoad.company.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '')}@loadboard.com
-                        </div>
-                        <div className="text-xs text-green-600 mt-1">Load booking inquiries</div>
+                      <div className="text-xl font-bold text-blue-700">
+                        {selectedLoad.contact}
                       </div>
+                      <div className="text-xs text-blue-600 mt-1">Call to book this load</div>
                     </div>
                   </div>
 
@@ -640,13 +627,14 @@ function DATLoads() {
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <div className="flex items-center mb-2">
                       <span className="w-5 h-5 text-yellow-600 mr-2">💡</span>
-                      <span className="font-medium text-yellow-900">Booking Instructions</span>
+                      <span className="font-medium text-yellow-900">How to Book This Load</span>
                     </div>
                     <div className="text-sm text-yellow-800">
-                      <div className="mb-2">1. Call {selectedLoad.contact} to confirm load availability</div>
+                      <div className="mb-2">1. Call the phone number above to confirm load availability</div>
                       <div className="mb-2">2. Reference Load ID: {selectedLoad.loadNumber}</div>
                       <div className="mb-2">3. Provide your MC number and insurance certificate</div>
-                      <div>4. Confirm pickup time and delivery appointment</div>
+                      <div className="mb-2">4. Confirm pickup time and delivery appointment</div>
+                      <div className="text-xs text-yellow-600 mt-2">📋 Contact information sourced directly from DAT LoadLink</div>
                     </div>
                   </div>
                 </CardContent>
