@@ -1651,8 +1651,11 @@ Please contact driver if needed.`;
       const createdToken = await storage.createOnboardingToken(tokenData);
       console.log('Token created successfully:', createdToken.id);
       
-      // Format the onboarding message
-      const onboardingUrl = `${process.env.REPLIT_DOMAINS || 'http://localhost'}/driver-onboarding?token=${token}`;
+      // Format the onboarding message with proper domain
+      const domain = process.env.REPLIT_DOMAINS ? 
+        `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 
+        'http://localhost:5000';
+      const onboardingUrl = `${domain}/driver-onboarding?token=${token}`;
       
       const message = `🚛 *LAMP Logistics Driver Onboarding*
 
