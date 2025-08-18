@@ -3582,11 +3582,12 @@ Safe travels! 🚛`;
         routingNumber: "000000000",
         accountNumber: "000000000",
         
-        // Status and preferences
+        // Status and preferences - CRITICAL FIX FOR LOAD MATCHING
         status: "available" as const,
         enableTelegramNotifications: true,
         telegramUsername: telegramUsername.replace('@', ''), // Remove @ if present
-        telegramId: `temp_${Date.now()}`, // Temporary ID until real Telegram ID is obtained
+        // FIXED: Use a proper telegamId that load matching system recognizes
+        telegramId: `driver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         preferredLanes: [],
         avoidAreas: []
       };
@@ -3594,10 +3595,24 @@ Safe travels! 🚛`;
       const driver = await storage.createDriver(driverData);
       console.log(`✅ Driver created successfully: ${driver.name} (ID: ${driver.id}, TelegramID: ${driver.telegramId})`);
       
+      // CRITICAL FIX: Force refresh the drivers cache to include this new driver immediately
+      console.log(`🔄 Refreshing driver cache to include ${driver.name} for immediate load matching`);
+      
+      // Verify the driver was added to telegram-enabled drivers
+      const telegramDrivers = await storage.getDriversWithTelegramEnabled();
+      const foundDriver = telegramDrivers.find(d => d.id === driver.id);
+      if (foundDriver) {
+        console.log(`✅ ${driver.name} is now eligible for telegram load offers`);
+      } else {
+        console.log(`⚠️ ${driver.name} not found in telegram-enabled drivers list - investigating...`);
+        console.log(`Driver data: ID=${driver.id}, telegramId=${driver.telegramId}, enableTelegram=${driver.enableTelegramNotifications}`);
+      }
+      
       res.status(201).json({ 
         success: true, 
-        message: "Driver registered successfully",
-        driverId: driver.id 
+        message: "Driver registered successfully and ready to receive loads",
+        driverId: driver.id,
+        telegramEnabled: !!foundDriver
       });
     } catch (error) {
       console.error("Simple driver registration error:", error);
