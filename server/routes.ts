@@ -2946,8 +2946,10 @@ Safe travels! 🚛`;
   app.get('/api/drivers/:driverId/offers', async (req, res) => {
     try {
       const { driverId } = req.params;
-      const offers = await storage.getDriverOffers(driverId);
-      res.json(offers);
+      // Get all load offers and filter for this driver
+      const allOffers = await storage.getAllLoadOffers();
+      const driverOffers = allOffers.filter(offer => offer.driverId === driverId);
+      res.json(driverOffers);
     } catch (error) {
       console.error('Error fetching driver offers:', error);
       res.status(500).json({ error: 'Failed to fetch driver offers' });
