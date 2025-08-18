@@ -1144,7 +1144,8 @@ Safe travels! 🚛`;
       
       res.status(201).json(load);
     } catch (error) {
-      res.status(400).json({ error: "Invalid load data" });
+      console.error('Load validation error:', error);
+      res.status(400).json({ error: "Invalid load data", details: error.message });
     }
   });
 

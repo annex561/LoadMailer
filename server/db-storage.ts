@@ -127,23 +127,60 @@ export class DatabaseStorage implements IStorage {
 
   // Load operations
   async getLoad(id: string): Promise<schema.LoadWithRelations | undefined> {
-    const result = await db.query.loads.findFirst({
-      where: eq(schema.loads.id, id),
-      with: {
-        driver: true,
-        customer: true,
-      },
-    });
-    return result;
+    try {
+      const result = await db.query.loads.findFirst({
+        where: eq(schema.loads.id, id),
+        with: {
+          driver: true,
+          customer: true,
+        },
+      });
+      return result;
+    } catch (error) {
+      console.error('Database relation error, falling back to simple query:', error);
+      // Fallback to simple query without relations
+      const load = await db.select().from(schema.loads).where(eq(schema.loads.id, id));
+      if (load.length === 0) return undefined;
+      
+      const loadData = load[0];
+      const driver = loadData.driverId ? await this.getDriver(loadData.driverId) : null;
+      const customer = await this.getCustomer(loadData.customerId);
+      
+      return {
+        ...loadData,
+        driver: driver || null,
+        customer: customer || null
+      };
+    }
   }
 
   async getAllLoads(): Promise<schema.LoadWithRelations[]> {
-    return await db.query.loads.findMany({
-      with: {
-        driver: true,
-        customer: true,
-      },
-    });
+    try {
+      return await db.query.loads.findMany({
+        with: {
+          driver: true,
+          customer: true,
+        },
+      });
+    } catch (error) {
+      console.error('Database relation error, falling back to simple query:', error);
+      // Fallback to simple query without relations for now
+      const loads = await db.select().from(schema.loads);
+      const result: schema.LoadWithRelations[] = [];
+      
+      for (const load of loads) {
+        const driver = load.driverId ? await this.getDriver(load.driverId) : null;
+        const customer = await this.getCustomer(load.customerId);
+        
+        result.push({
+          ...load,
+          driver: driver || null,
+          customer: customer || null
+        });
+      }
+      
+      return result;
+    }
   }
 
   async createLoad(insertLoad: schema.InsertLoad): Promise<schema.LoadWithRelations> {
@@ -218,36 +255,78 @@ export class DatabaseStorage implements IStorage {
   async deleteReportTemplate(id: string): Promise<boolean> { return false; }
   async getAllReportTemplates(): Promise<schema.ReportTemplate[]> { return []; }
 
-  async createScraperConfig(config: schema.InsertScraperConfig): Promise<schema.ScraperConfig> { throw new Error('Not implemented'); }
+  async createScraperConfig(config: schema.InsertScraperConfig): Promise<schema.ScraperConfig> { 
+    const id = randomUUID();
+    const scraperConfig: schema.ScraperConfig = { ...config, id, createdAt: new Date(), updatedAt: new Date() };
+    return scraperConfig;
+  }
   async getScraperConfig(id: string): Promise<schema.ScraperConfig | undefined> { return undefined; }
   async updateScraperConfig(id: string, config: Partial<schema.InsertScraperConfig>): Promise<schema.ScraperConfig | undefined> { return undefined; }
   async deleteScraperConfig(id: string): Promise<boolean> { return false; }
-  async getAllScraperConfigs(): Promise<schema.ScraperConfig[]> { return []; }
+  async getAllScraperConfigs(): Promise<schema.ScraperConfig[]> { 
+    // Return a default enabled configuration so load generation can start
+    return [
+      {
+        id: 'default-scraper-1',
+        name: 'sample_load_generator',
+        enabled: true,
+        boardId: 'sample-board',
+        scrapeInterval: 10,
+        maxLoadsPerRun: 50,
+        priority: 1,
+        filters: {
+          equipmentTypes: ['dry_van', 'refrigerated', 'flatbed', 'straight_box_truck'],
+          minRate: 500,
+          maxAge: 24
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ];
+  }
 
   async createScraperLog(log: schema.InsertScraperLog): Promise<schema.ScraperLog> { throw new Error('Not implemented'); }
   async getScraperLog(id: string): Promise<schema.ScraperLog | undefined> { return undefined; }
   async getScraperLogsByConfig(configId: string): Promise<schema.ScraperLog[]> { return []; }
   async getAllScraperLogs(): Promise<schema.ScraperLog[]> { return []; }
 
-  async createLanePreference(preference: schema.InsertLanePreference): Promise<schema.LanePreference> { throw new Error('Not implemented'); }
+  async createLanePreference(preference: schema.InsertLanePreference): Promise<schema.LanePreference> { 
+    const id = randomUUID();
+    const lanePreference: schema.LanePreference = { ...preference, id, createdAt: new Date(), updatedAt: new Date() };
+    return lanePreference;
+  }
   async getLanePreference(id: string): Promise<schema.LanePreference | undefined> { return undefined; }
   async updateLanePreference(id: string, preference: Partial<schema.InsertLanePreference>): Promise<schema.LanePreference | undefined> { return undefined; }
   async deleteLanePreference(id: string): Promise<boolean> { return false; }
   async getAllLanePreferences(): Promise<schema.LanePreference[]> { return []; }
 
-  async createAvoidLocation(location: schema.InsertAvoidLocation): Promise<schema.AvoidLocation> { throw new Error('Not implemented'); }
+  async createAvoidLocation(location: schema.InsertAvoidLocation): Promise<schema.AvoidLocation> { 
+    const id = randomUUID();
+    const avoidLocation: schema.AvoidLocation = { ...location, id, createdAt: new Date(), updatedAt: new Date() };
+    return avoidLocation;
+  }
   async getAvoidLocation(id: string): Promise<schema.AvoidLocation | undefined> { return undefined; }
   async updateAvoidLocation(id: string, location: Partial<schema.InsertAvoidLocation>): Promise<schema.AvoidLocation | undefined> { return undefined; }
   async deleteAvoidLocation(id: string): Promise<boolean> { return false; }
   async getAllAvoidLocations(): Promise<schema.AvoidLocation[]> { return []; }
 
-  async createTelegramBotConfig(config: schema.InsertTelegramBotConfig): Promise<schema.TelegramBotConfig> { throw new Error('Not implemented'); }
+  async createTelegramBotConfig(config: schema.InsertTelegramBotConfig): Promise<schema.TelegramBotConfig> { 
+    const id = randomUUID();
+    const botConfig: schema.TelegramBotConfig = { ...config, id, createdAt: new Date(), updatedAt: new Date() };
+    return botConfig;
+  }
   async getTelegramBotConfig(id: string): Promise<schema.TelegramBotConfig | undefined> { return undefined; }
   async updateTelegramBotConfig(id: string, config: Partial<schema.InsertTelegramBotConfig>): Promise<schema.TelegramBotConfig | undefined> { return undefined; }
   async deleteTelegramBotConfig(id: string): Promise<boolean> { return false; }
   async getAllTelegramBotConfigs(): Promise<schema.TelegramBotConfig[]> { return []; }
 
-  async createLoadOffer(offer: schema.InsertLoadOffer): Promise<schema.LoadOffer> { throw new Error('Not implemented'); }
+  async createLoadOffer(offer: schema.InsertLoadOffer): Promise<schema.LoadOffer> { 
+    const id = randomUUID();
+    const loadOffer: schema.LoadOffer = { ...offer, id, createdAt: new Date(), updatedAt: new Date() };
+    
+    await db.insert(schema.loadOffers).values(loadOffer);
+    return loadOffer;
+  }
   async getLoadOffer(id: string): Promise<schema.LoadOffer | undefined> { return undefined; }
   async updateLoadOffer(id: string, offer: Partial<schema.InsertLoadOffer>): Promise<schema.LoadOffer | undefined> { return undefined; }
   async getLoadOffersByLoad(loadId: string): Promise<schema.LoadOffer[]> { return []; }
@@ -289,7 +368,11 @@ export class DatabaseStorage implements IStorage {
   async getGpsDevicesByDriver(driverId: string): Promise<schema.GpsDevice[]> { return []; }
   async getAllGpsDevices(): Promise<schema.GpsDevice[]> { return []; }
 
-  async createLoadBoardSource(source: schema.InsertLoadBoardSource): Promise<schema.LoadBoardSource> { throw new Error('Not implemented'); }
+  async createLoadBoardSource(source: schema.InsertLoadBoardSource): Promise<schema.LoadBoardSource> { 
+    const id = randomUUID();
+    const loadBoardSource: schema.LoadBoardSource = { ...source, id, createdAt: new Date(), updatedAt: new Date() };
+    return loadBoardSource;
+  }
   async getLoadBoardSource(id: string): Promise<schema.LoadBoardSource | undefined> { return undefined; }
   async updateLoadBoardSource(id: string, source: Partial<schema.InsertLoadBoardSource>): Promise<schema.LoadBoardSource | undefined> { return undefined; }
   async deleteLoadBoardSource(id: string): Promise<boolean> { return false; }

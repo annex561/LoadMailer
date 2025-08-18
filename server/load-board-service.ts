@@ -45,6 +45,9 @@ export class LoadBoardService {
       // Initialize default load board sources
       await this.initializeDefaultSources();
       
+      // Create default scraper configurations
+      await this.createDefaultScraperConfigs();
+      
       // Start active scraper configurations
       await this.startScheduledScrapers();
       
@@ -112,6 +115,33 @@ export class LoadBoardService {
         await storage.createLoadBoardSource(source);
       }
       console.log(`Created ${defaultSources.length} default load board sources`);
+    }
+  }
+
+  private async createDefaultScraperConfigs(): Promise<void> {
+    const existingConfigs = await storage.getAllScraperConfigs();
+    
+    if (existingConfigs.length === 0) {
+      const defaultConfigs = [
+        {
+          name: 'sample_load_generator',
+          enabled: true,
+          boardId: 'sample-board',
+          scrapeInterval: 10,
+          maxLoadsPerRun: 50,
+          priority: 1,
+          filters: {
+            equipmentTypes: ['dry_van', 'refrigerated', 'flatbed', 'straight_box_truck'],
+            minRate: 500,
+            maxAge: 24
+          }
+        }
+      ];
+
+      for (const config of defaultConfigs) {
+        await storage.createScraperConfig(config);
+      }
+      console.log(`Created ${defaultConfigs.length} default scraper configurations`);
     }
   }
 
