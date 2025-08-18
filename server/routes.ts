@@ -3756,6 +3756,150 @@ Safe travels! 🚛`;
     }
   });
 
+  // Prediction Confidence API endpoints
+  app.get("/api/prediction-confidence", async (req, res) => {
+    try {
+      // Get all active loads
+      const loads = await storage.getLoads();
+      const activeLoads = loads.filter(l => l.status === 'scheduled').slice(-50); // Last 50 active loads
+      
+      // Generate predictions for all active loads
+      const predictions = await Promise.all(activeLoads.map(async (load) => {
+        const loadPredictions = await predictionConfidenceService.getPredictionsForLoad(load);
+        return {
+          loadId: load.id,
+          loadNumber: load.loadNumber,
+          pickupAddress: load.pickupAddress,
+          deliveryAddress: load.deliveryAddress,
+          rate: load.rate,
+          equipmentType: load.equipmentType,
+          status: load.status,
+          predictions: loadPredictions.slice(0, 5) // Top 5 predictions per load
+        };
+      }));
+
+      // Calculate summary statistics
+      const totalLoads = predictions.length;
+      const allPredictions = predictions.flatMap(p => p.predictions);
+      const averageConfidence = allPredictions.length > 0 
+        ? Math.round(allPredictions.reduce((sum, pred) => sum + pred.confidenceScore, 0) / allPredictions.length)
+        : 0;
+      const highConfidenceCount = allPredictions.filter(pred => pred.confidenceScore >= 80).length;
+      const activeDrivers = new Set(allPredictions.map(pred => pred.driverId)).size;
+
+      res.json({
+        summary: {
+          totalLoads,
+          averageConfidence,
+          highConfidenceCount,
+          activeDrivers
+        },
+        loads: predictions
+      });
+    } catch (error) {
+      console.error("Error getting prediction confidence:", error);
+      res.status(500).json({ error: "Failed to fetch predictions" });
+    }
+  });
+
+  app.get("/api/prediction-confidence/:loadId", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      
+      // Get the load details
+      const loads = await storage.getLoads();
+      const load = loads.find(l => l.id === loadId);
+      
+      if (!load) {
+        return res.status(404).json({ error: "Load not found" });
+      }
+      
+      // Get prediction analysis for this load
+      const predictions = await predictionConfidenceService.getPredictionsForLoad(load);
+      
+      res.json({
+        loadNumber: load.loadNumber,
+        pickupAddress: load.pickupAddress,
+        deliveryAddress: load.deliveryAddress,
+        rate: load.rate,
+        equipmentType: load.equipmentType,
+        predictions: predictions
+      });
+    } catch (error) {
+      console.error("Error getting prediction confidence:", error);
+      res.status(500).json({ error: "Failed to fetch predictions" });
+    }
+  });
+
+
+
+  // Real-time prediction confidence stream
+  app.get("/api/prediction-confidence/realtime", async (req, res) => {
+    try {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+
+      // Get current active loads and predictions
+      const loads = await storage.getLoads();
+      const activeLoads = loads.filter(l => l.status === 'scheduled').slice(-10); // Last 10 active loads
+      
+      const updates = await Promise.all(activeLoads.map(async (load) => {
+        const predictions = await predictionConfidenceService.getPredictionsForLoad(load);
+        return {
+          loadId: load.id,
+          loadNumber: load.loadNumber,
+          status: load.status,
+          topPredictions: predictions.slice(0, 3) // Top 3 predictions
+        };
+      }));
+
+      const streamData = {
+        timestamp: new Date().toISOString(),
+        updates: updates
+      };
+
+      res.write(`data: ${JSON.stringify(streamData)}\n\n`);
+      
+      // Keep connection alive and send updates every 30 seconds
+      const interval = setInterval(async () => {
+        try {
+          const loads = await storage.getLoads();
+          const activeLoads = loads.filter(l => l.status === 'scheduled').slice(-10);
+          
+          const updates = await Promise.all(activeLoads.map(async (load) => {
+            const predictions = await predictionConfidenceService.getPredictionsForLoad(load);
+            return {
+              loadId: load.id,
+              loadNumber: load.loadNumber,
+              status: load.status,
+              topPredictions: predictions.slice(0, 3)
+            };
+          }));
+
+          const streamData = {
+            timestamp: new Date().toISOString(),
+            updates: updates
+          };
+
+          res.write(`data: ${JSON.stringify(streamData)}\n\n`);
+        } catch (error) {
+          console.error("Error in prediction stream:", error);
+        }
+      }, 30000);
+
+      req.on('close', () => {
+        clearInterval(interval);
+      });
+      
+    } catch (error) {
+      console.error("Error setting up prediction stream:", error);
+      res.status(500).json({ error: "Failed to setup real-time stream" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
