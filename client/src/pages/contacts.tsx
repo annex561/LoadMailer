@@ -73,6 +73,46 @@ export default function Contacts() {
   return (
     <>
       <div className="p-6">
+        {/* Driver Registration Section */}
+        <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  LAMP Logistics Driver Registration
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Quick registration to start receiving load offers
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => window.open('/simple-registration', '_blank')}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              data-testid="button-open-registration"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Open Registration
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+              <div className="h-2 w-2 rounded-full bg-green-500"></div>
+              Essential driver information only
+            </div>
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+              <div className="h-2 w-2 rounded-full bg-green-500"></div>
+              Instant database integration
+            </div>
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+              <div className="h-2 w-2 rounded-full bg-green-500"></div>
+              Mobile-friendly interface
+            </div>
+          </div>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Drivers Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
