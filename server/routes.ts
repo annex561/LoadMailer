@@ -12,6 +12,7 @@ import { loadBoardService } from "./load-board-service";
 import { biddingService } from "./bidding-service";
 import { smartLoadMatchingService } from "./smart-load-matching-service";
 import { PredictionConfidenceService } from "./prediction-confidence-service";
+import { ContinuousLoadService } from "./continuous-load-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
@@ -25,6 +26,9 @@ import smsService from "./sms-service";
 
 // Initialize prediction confidence service
 const predictionConfidenceService = new PredictionConfidenceService();
+
+// Initialize continuous load service for 24/7 operation
+const continuousLoadService = new ContinuousLoadService(telegramLoadService);
 
 // Email service configuration
 const transporter = nodemailer.createTransport({
@@ -1204,6 +1208,7 @@ Safe travels! 🚛`;
           equipmentType: equipment as any,
           rate,
           miles,
+          weight: Math.floor(Math.random() * 3000) + 6000, // 6000-9000 lbs
           priority: "high" as const,
           status: "available" as const,
         };
@@ -4093,5 +4098,16 @@ Safe travels! 🚛`;
   });
 
   const httpServer = createServer(app);
+
+  // Start the 24/7 continuous load generation system
+  setTimeout(async () => {
+    try {
+      await continuousLoadService.start();
+      console.log('🚛 24/7 Continuous Load Service activated for Annex');
+    } catch (error) {
+      console.error('Failed to start continuous load service:', error);
+    }
+  }, 5000); // Start after 5 seconds to allow system initialization
+
   return httpServer;
 }

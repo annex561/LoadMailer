@@ -279,25 +279,18 @@ export class DatabaseStorage implements IStorage {
   // Driver Telegram methods
   async getDriversWithTelegramEnabled(): Promise<schema.Driver[]> {
     try {
-      const drivers = await db.select().from(schema.drivers)
-        .where(and(
-          isNotNull(schema.drivers.telegramId),
-          eq(schema.drivers.enableTelegramNotifications, true),
-          eq(schema.drivers.status, 'available')
-        ));
-      console.log(`📱 Found ${drivers.length} drivers with Telegram enabled`);
-      return drivers;
-    } catch (error) {
-      console.error('Error fetching drivers with Telegram enabled:', error);
-      // Fallback: get all drivers and filter in memory
+      // Get all drivers and filter in memory to avoid SQL import issues
       const allDrivers = await this.getAllDrivers();
       const telegramDrivers = allDrivers.filter(d => 
         d.telegramId && 
         d.enableTelegramNotifications && 
         d.status === 'available'
       );
-      console.log(`📱 Fallback found ${telegramDrivers.length} drivers with Telegram enabled`);
+      console.log(`📱 Found ${telegramDrivers.length} drivers with Telegram enabled`);
       return telegramDrivers;
+    } catch (error) {
+      console.error('Error fetching drivers with Telegram enabled:', error);
+      return [];
     }
   }
 
