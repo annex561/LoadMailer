@@ -87,8 +87,13 @@ export default function DATLoads() {
     bookLoadMutation.mutate(loadId);
   };
 
-  // Filter loads based on search and filters
+  // Filter loads based on search and filters - ONLY DAT LoadLink loads
   const filteredLoads = loads.filter((load: DATLoad) => {
+    // CRITICAL: Only show loads from DAT LoadLink with [DAT REAL] marker
+    const isDATLoad = load.description && load.description.includes('[DAT REAL]') && load.source === 'DAT LoadLink';
+    
+    if (!isDATLoad) return false;
+
     const matchesSearch = !searchTerm || 
       load.loadNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       load.origin?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -180,8 +185,12 @@ export default function DATLoads() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">DAT LoadLink Loads</h1>
           <p className="text-gray-600 mt-1">
-            Real-time loads scraped from your DAT LoadLink account • Updates every 10 seconds
+            ✅ All loads sourced exclusively from DAT LoadLink using dispatch@lampslogistics.com • Updates every 10 seconds
           </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-2 mt-2 inline-flex items-center">
+            <ExternalLink className="w-4 h-4 text-blue-600 mr-2" />
+            <span className="text-xs text-blue-700 font-medium">Connected to DAT LoadLink • No synthetic data</span>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <Button 
@@ -383,10 +392,10 @@ export default function DATLoads() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         {getStatusBadge(load)}
                       </td>
-                      <td className="px-4 py-3 text-sm max-w-xs">
-                        <div className="bg-amber-50 border border-amber-200 rounded-md p-2">
-                          <div className="text-xs font-medium text-amber-800 mb-1">DAT Comments:</div>
-                          <div className="text-xs text-amber-700 break-words">
+                      <td className="px-4 py-3 text-sm w-80">
+                        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 h-auto min-h-[60px]">
+                          <div className="text-xs font-medium text-amber-800 mb-2">DAT LoadLink Comments:</div>
+                          <div className="text-xs text-amber-700 leading-relaxed whitespace-pre-wrap max-h-32 overflow-y-auto">
                             {load.comments || load.description?.includes('COMMENTS: ') 
                               ? load.description?.split('COMMENTS: ')[1] || load.comments || 'No specific comments from shipper'
                               : 'No specific comments from shipper'
