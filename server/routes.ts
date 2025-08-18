@@ -13,6 +13,8 @@ import { biddingService } from "./bidding-service";
 import { smartLoadMatchingService } from "./smart-load-matching-service";
 import { PredictionConfidenceService } from "./prediction-confidence-service";
 import { ContinuousLoadService } from "./continuous-load-service";
+import { DATScraperService } from "./dat-scraper-service";
+import { RealLoadIntegrationService } from "./real-load-integration-service";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
@@ -29,6 +31,12 @@ const predictionConfidenceService = new PredictionConfidenceService();
 
 // Initialize continuous load service for 24/7 operation
 const continuousLoadService = new ContinuousLoadService(telegramLoadService);
+
+// Initialize DAT scraper service for real load board data
+const datScraperService = new DATScraperService(telegramLoadService);
+
+// Initialize real load integration service
+const realLoadService = new RealLoadIntegrationService(telegramLoadService);
 
 // Email service configuration
 const transporter = nodemailer.createTransport({
@@ -1136,6 +1144,27 @@ Safe travels! 🚛`;
   });
 
   // Special endpoint for creating test loads that bypass validation
+  // Real DAT load entry endpoint
+  app.post("/api/loads/real-dat", async (req, res) => {
+    try {
+      const result = await realLoadService.addRealDATLoad(req.body);
+      res.status(201).json(result);
+    } catch (error) {
+      console.error('Error adding real DAT load:', error);
+      res.status(400).json({ error: "Failed to add real DAT load", details: error.message });
+    }
+  });
+
+  // Get integration instructions
+  app.get("/api/loads/integration-instructions", async (req, res) => {
+    try {
+      const instructions = realLoadService.getIntegrationInstructions();
+      res.json(instructions);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get instructions" });
+    }
+  });
+
   app.post("/api/loads/test", async (req, res) => {
     try {
       const customers = await storage.getAllCustomers();
@@ -4099,15 +4128,19 @@ Safe travels! 🚛`;
 
   const httpServer = createServer(app);
 
-  // Start the 24/7 continuous load generation system
+  // Start the load services
   setTimeout(async () => {
     try {
+      console.log('📋 Real Load Integration Service ready - manual DAT entry available');
+      console.log('⚠️  Note: Current loads are test data. Use /api/loads/real-dat to add real DAT freight');
+      
+      // Keep continuous service for demonstration/backup
       await continuousLoadService.start();
-      console.log('🚛 24/7 Continuous Load Service activated for Annex');
+      console.log('🚛 24/7 Continuous Load Service activated for testing');
     } catch (error) {
-      console.error('Failed to start continuous load service:', error);
+      console.error('Failed to start load services:', error);
     }
-  }, 5000); // Start after 5 seconds to allow system initialization
+  }, 5000);
 
   return httpServer;
 }
