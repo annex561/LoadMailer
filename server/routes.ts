@@ -3760,7 +3760,7 @@ Safe travels! 🚛`;
   app.get("/api/prediction-confidence", async (req, res) => {
     try {
       // Get all active loads
-      const loads = await storage.getLoads();
+      const loads = await storage.getAllLoads();
       const activeLoads = loads.filter(l => l.status === 'scheduled').slice(-50); // Last 50 active loads
       
       // Generate predictions for all active loads
@@ -3807,7 +3807,7 @@ Safe travels! 🚛`;
       const { loadId } = req.params;
       
       // Get the load details
-      const loads = await storage.getLoads();
+      const loads = await storage.getAllLoads();
       const load = loads.find(l => l.id === loadId);
       
       if (!load) {
@@ -3843,7 +3843,7 @@ Safe travels! 🚛`;
       res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
 
       // Get current active loads and predictions
-      const loads = await storage.getLoads();
+      const loads = await storage.getAllLoads();
       const activeLoads = loads.filter(l => l.status === 'scheduled').slice(-10); // Last 10 active loads
       
       const updates = await Promise.all(activeLoads.map(async (load) => {

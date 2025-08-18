@@ -270,4 +270,68 @@ export class PredictionConfidenceService {
     if (confidenceScore >= 50) return 'medium';
     return 'high';
   }
+
+  /**
+   * Get predictions for all eligible drivers for a specific load
+   */
+  async getPredictionsForLoad(load: Load): Promise<Array<ConfidencePrediction & { driverId: string, driverName: string }>> {
+    // Import storage service to get drivers
+    const { storage } = await import('./storage');
+    
+    try {
+      // Get all available drivers
+      const drivers = await storage.getAllDrivers();
+      const availableDrivers = drivers.filter((driver: Driver) => 
+        driver.status === 'available' && 
+        driver.isOnboarded &&
+        driver.telegramUsername // Only drivers who can receive offers
+      );
+
+      // Generate predictions for each driver
+      const predictions = await Promise.all(
+        availableDrivers.map(async (driver: Driver) => {
+          try {
+            // Get historical offers for this driver (if available)
+            const loadOffers = await storage.getAllLoadOffers();
+            const driverOffers = loadOffers.filter((offer: LoadOffer) => offer.driverId === driver.id);
+            
+            const prediction = await this.calculatePredictionConfidence(driver, load, driverOffers);
+            
+            return {
+              ...prediction,
+              driverId: driver.id,
+              driverName: `${driver.firstName} ${driver.lastName}`
+            };
+          } catch (error) {
+            console.error(`Error calculating prediction for driver ${driver.id}:`, error);
+            // Return a default prediction in case of error
+            return {
+              confidenceScore: 50,
+              acceptanceProbability: 50,
+              factors: {
+                distanceScore: 50,
+                equipmentCompatibilityScore: 50,
+                rateAttractivenessScore: 50,
+                driverHistoryScore: 50,
+                timeOfDayScore: 50,
+                routePreferenceScore: 50,
+                recentActivityScore: 50
+              },
+              reasoning: ['Error calculating prediction - using default values'],
+              riskLevel: 'medium' as const,
+              driverId: driver.id,
+              driverName: `${driver.firstName} ${driver.lastName}`
+            };
+          }
+        })
+      );
+
+      // Sort by confidence score (highest first)
+      return predictions.sort((a: any, b: any) => b.confidenceScore - a.confidenceScore);
+      
+    } catch (error) {
+      console.error('Error getting predictions for load:', error);
+      return [];
+    }
+  }
 }
