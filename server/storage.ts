@@ -393,7 +393,9 @@ export class MemStorage implements IStorage {
   }
 
   async getAllDrivers(): Promise<Driver[]> {
-    return Array.from(this.drivers.values());
+    const drivers = Array.from(this.drivers.values());
+    console.log(`📋 Storage returned ${drivers.length} drivers:`, drivers.map(d => `${d.name} (${d.id})`));
+    return drivers;
   }
 
   async createDriver(insertDriver: InsertDriver): Promise<Driver> {

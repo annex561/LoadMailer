@@ -363,7 +363,7 @@ export default function TelegramDispatching() {
                       <div className="flex items-center gap-2 text-sm">
                         <Weight className="w-3 h-3 text-gray-500" />
                         <span className="text-gray-600">Weight: </span>
-                        <span className="font-medium">{offer.load.weight.toLocaleString()} lbs</span>
+                        <span className="font-medium">{offer.load.weight ? offer.load.weight.toLocaleString() : 'TBD'} lbs</span>
                       </div>
                       
                       {offer.load.miles && (
