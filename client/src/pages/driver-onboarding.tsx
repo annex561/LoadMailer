@@ -109,11 +109,18 @@ export default function DriverOnboarding() {
 
   // Get token from URL parameters using API endpoint
   useEffect(() => {
+    console.log('Driver onboarding page loaded');
+    console.log('Current URL:', window.location.href);
+    console.log('Search params:', window.location.search);
+    
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     
+    console.log('Token from URLSearchParams:', urlToken);
+    
     if (urlToken) {
       // Token found in URL parameters directly
+      console.log('Setting token from URL params:', urlToken);
       setOnboardingToken(urlToken);
       setTokenError(null);
     } else {
@@ -121,11 +128,15 @@ export default function DriverOnboarding() {
       const urlString = window.location.href;
       const tokenMatch = urlString.match(/[?&]token=([^&]+)/);
       
+      console.log('Token regex match:', tokenMatch);
+      
       if (tokenMatch && tokenMatch[1]) {
         const token = decodeURIComponent(tokenMatch[1]);
+        console.log('Setting token from regex match:', token);
         setOnboardingToken(token);
         setTokenError(null);
       } else {
+        console.log('No token found in URL');
         setTokenError('No onboarding token found. Please use the invitation link.');
       }
     }
@@ -669,6 +680,12 @@ export default function DriverOnboarding() {
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
               <p>Validating onboarding invitation...</p>
+              {/* Debug info */}
+              <div className="mt-4 text-xs text-gray-500 space-y-1">
+                <p>URL: {window.location.href}</p>
+                <p>Token: {onboardingToken || 'Not found'}</p>
+                <p>Validating: {isValidatingToken ? 'Yes' : 'No'}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
