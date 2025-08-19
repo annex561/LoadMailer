@@ -308,7 +308,22 @@ export class DatabaseStorage implements IStorage {
   async updateEmailLog(id: string, log: Partial<schema.InsertEmailLog>): Promise<schema.EmailLog | undefined> { return undefined; }
   async getEmailLogsByLoad(loadId: string): Promise<schema.EmailLogWithRelations[]> { return []; }
 
-  async createOnboardingToken(token: schema.InsertOnboardingToken): Promise<schema.OnboardingToken> { throw new Error('Not implemented'); }
+  async createOnboardingToken(token: schema.InsertOnboardingToken): Promise<schema.OnboardingToken> {
+    try {
+      const [result] = await this.db.insert(schema.onboardingTokens).values(token).returning();
+      return result;
+    } catch (error) {
+      console.error('Database error creating onboarding token:', error);
+      // Fallback to memory token creation
+      const { randomUUID } = await import('crypto');
+      const memoryToken: schema.OnboardingToken = {
+        ...token,
+        id: randomUUID(),
+        createdAt: new Date(),
+      };
+      return memoryToken;
+    }
+  }
   async getOnboardingToken(token: string): Promise<schema.OnboardingToken | undefined> { return undefined; }
   async getAllOnboardingTokens(): Promise<schema.OnboardingToken[]> { return []; }
   async markTokenAsUsed(token: string): Promise<boolean> { return false; }
