@@ -5,10 +5,12 @@ import { storage } from './storage.js';
 export class SimpleDATConnector {
   private isRunning = false;
   private interval?: NodeJS.Timeout;
+  private telegramService: any;
 
-  async startRealLoadGeneration(): Promise<void> {
+  async startRealLoadGeneration(telegramService?: any): Promise<void> {
     console.log('🚚 Starting real DAT load simulation for Tennessee region...');
     this.isRunning = true;
+    this.telegramService = telegramService;
 
     // Create initial batch of Tennessee loads
     await this.createTennesseeLoads();
@@ -120,6 +122,16 @@ export class SimpleDATConnector {
 
         const load = await storage.createLoad(loadData);
         console.log(`✅ [TN LOAD] Created ${load.loadNumber}: ${selectedLoad.origin} → ${selectedLoad.destination} ($${selectedLoad.rate}) - ${selectedLoad.company}`);
+        
+        // Send Tennessee load to Telegram
+        if (this.telegramService && load) {
+          try {
+            await this.telegramService.processNewLoad(load);
+            console.log(`📱 Sent Tennessee load ${load.loadNumber} to Telegram for driver notifications`);
+          } catch (error) {
+            console.error(`❌ Failed to send load ${load.loadNumber} to Telegram:`, error);
+          }
+        }
       }
 
     } catch (error) {

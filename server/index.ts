@@ -72,8 +72,9 @@ app.use((req, res, next) => {
     setTimeout(async () => {
       try {
         const { simpleDATConnector } = await import('./simple-dat-connector.js');
-        await simpleDATConnector.startRealLoadGeneration();
-        log('✅ Auto-started Tennessee load generation');
+        const { telegramService } = await import('./telegram-service.js');
+        await simpleDATConnector.startRealLoadGeneration(telegramService);
+        log('✅ Auto-started Tennessee load generation with Telegram notifications');
       } catch (error) {
         log(`❌ Failed to auto-start Tennessee load generation: ${String(error)}`);
       }
