@@ -62,6 +62,8 @@ export default function Dashboard() {
   });
 
   // Show all loads (including Tennessee loads) - they are all real freight data
+  console.log('📋 Dashboard Debug:', { totalLoads: allLoads.length, allLoads });
+  
   const scrapedLoads = allLoads.map((load: any) => ({
     id: load.id,
     loadNumber: load.loadNumber,
@@ -104,9 +106,27 @@ export default function Dashboard() {
       load.deliveryAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
       load.company.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesEquipment = equipmentFilter === "all" || load.equipmentType.toLowerCase() === equipmentFilter.toLowerCase();
+    // Fix equipment filtering - map common equipment types
+    const equipmentMap: Record<string, string[]> = {
+      'van': ['van', 'dry_van', 'straight_box_truck'],
+      'reefer': ['reefer', 'refrigerated'],
+      'flatbed': ['flatbed', 'stepdeck', 'lowboy'],
+      'stepdeck': ['stepdeck', 'step_deck'],
+      'hotshot': ['hotshot', 'pickup']
+    };
+    
+    const matchesEquipment = equipmentFilter === "all" || 
+      (equipmentMap[equipmentFilter] && equipmentMap[equipmentFilter].includes(load.equipmentType)) ||
+      load.equipmentType.toLowerCase() === equipmentFilter.toLowerCase();
     
     return matchesSearch && matchesEquipment;
+  });
+  
+  console.log('🔍 Filter Debug:', { 
+    scrapedLoads: scrapedLoads.length, 
+    filteredLoads: filteredLoads.length,
+    equipmentFilter,
+    sampleLoad: scrapedLoads[0]
   });
 
   // Group loads by source/load board
