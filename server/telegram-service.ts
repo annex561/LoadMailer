@@ -132,13 +132,16 @@ export class TelegramLoadService {
         const userInfo = msg.from;
         const responseText = msg.text.toUpperCase().trim();
         
+        console.log(`🔍 Processing response: "${responseText}" from ${userInfo?.first_name}`);
+        
         if (responseText === 'YES' || responseText === 'Y') {
           // Driver is ready to register - connect them directly
           await this.handleDriverRegistration(chatId, userInfo);
         } else if (responseText === 'INFO' || responseText === 'HELP') {
-          // Send information about how the system works
+          // Send information about how the system works - start with a question
           await this.bot?.sendMessage(chatId,
-            `ℹ️ *How LAMP Logistics Works*\n\n` +
+            `*Want to know how LAMP Logistics can help you earn more money?*\n\n` +
+            `ℹ️ Here's exactly how it works:\n\n` +
             `1️⃣ *Complete Registration*\n` +
             `• Provide your driver details\n` +
             `• Set equipment preferences\n` +
