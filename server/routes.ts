@@ -4498,37 +4498,85 @@ Safe travels! 🚛`;
     }
   });
 
+  // Session-based DAT scraper endpoints
+  app.get('/api/session-dat/status', async (req, res) => {
+    try {
+      const { sessionBasedDATScraper } = await import('./session-based-dat-scraper.js');
+      const status = sessionBasedDATScraper.getStatus();
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get session scraper status' });
+    }
+  });
+
+  app.post('/api/session-dat/start', async (req, res) => {
+    try {
+      const { sessionBasedDATScraper } = await import('./session-based-dat-scraper.js');
+      
+      console.log('🚀 Starting session-based DAT scraper via API...');
+      const isAuthenticated = await sessionBasedDATScraper.checkAuthenticatedSession();
+      
+      if (isAuthenticated) {
+        await sessionBasedDATScraper.startSessionBasedScraping();
+        res.json({ 
+          success: true, 
+          message: 'Session-based DAT scraping started successfully',
+          authenticated: true
+        });
+      } else {
+        res.json({ 
+          success: false, 
+          message: 'No authenticated DAT session found. Please log into DAT manually first.',
+          authenticated: false
+        });
+      }
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  app.post('/api/session-dat/stop', async (req, res) => {
+    try {
+      const { sessionBasedDATScraper } = await import('./session-based-dat-scraper.js');
+      await sessionBasedDATScraper.stopSessionBasedScraping();
+      res.json({ success: true, message: 'Session-based DAT scraping stopped' });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
-  // AUTO-RESTART MECHANISM: Focus on real DAT authentication only
+  // AUTO-RESTART MECHANISM: Use session-based DAT scraping for manual authentication
   setTimeout(async () => {
     try {
-      console.log('🔄 AUTO-RESTART: Initializing REAL DAT LoadLink scraper only...');
+      console.log('🔄 AUTO-RESTART: Starting session-based DAT scraper for manual authentication...');
       console.log('🚫 NO SAMPLE LOADS - Real DAT data only as requested');
       
-      // Clear any existing sample loads from memory
-      console.log('🧹 Clearing any existing sample/test loads from system...');
+      // Import session-based scraper
+      const { sessionBasedDATScraper } = await import('./session-based-dat-scraper.js');
       
-      // Focus entirely on real DAT authentication and scraping
-      try {
-        console.log('🔐 Configuring DAT LoadLink scraper with real credentials...');
-        realDATScraper.setCredentials("dispatch@lampslogistics.com", "Anonymous#561");
-        
-        console.log('🚀 Starting REAL DAT LoadLink authentication and scraping...');
-        await realDATScraper.startRealScraping();
-        
-        console.log('✅ REAL DAT LoadLink scraper initialized successfully');
-        console.log('📋 System will display ONLY real DAT loads from LoadLink');
-        console.log('🔗 Visit /dat-login to complete manual authentication if needed');
-        
-      } catch (error) {
-        console.error('❌ DAT scraper initialization failed:', error);
-        console.log('🔧 Manual DAT authentication required via /dat-login page');
-        console.log('🚫 System will show NO loads until real DAT connection established');
+      console.log('🔍 Checking for existing authenticated DAT session...');
+      const isAuthenticated = await sessionBasedDATScraper.checkAuthenticatedSession();
+      
+      if (isAuthenticated) {
+        console.log('✅ Authenticated DAT session detected - starting real load scraping!');
+        await sessionBasedDATScraper.startSessionBasedScraping();
+        console.log('📋 System now pulling REAL loads from your authenticated DAT session');
+      } else {
+        console.log('🔐 No authenticated session detected');
+        console.log('📋 Please log into DAT manually, then visit /dat-login to activate scraping');
+        console.log('🚫 System will show NO loads until DAT authentication is completed');
       }
       
     } catch (error) {
-      console.error('AUTO-RESTART failed - DAT initialization error:', error);
+      console.error('AUTO-RESTART failed - session-based scraper error:', error);
     }
   }, 5000);
 

@@ -164,7 +164,7 @@ export default function DATLogin() {
         </CardHeader>
         <CardContent>
           {!status && (
-            <div className="text-center py-8">
+            <div className="text-center py-8 space-y-4">
               <Button 
                 onClick={startLogin} 
                 disabled={loading}
@@ -173,6 +173,35 @@ export default function DATLogin() {
               >
                 {loading ? "Starting Login Process..." : "Start DAT Login Process"}
               </Button>
+              
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-3">Already logged into DAT manually?</p>
+                <Button 
+                  onClick={async () => {
+                    setLoading(true);
+                    try {
+                      const response = await fetch('/api/session-dat/start', { method: 'POST' });
+                      const data = await response.json();
+                      if (data.success) {
+                        alert('Session-based DAT scraping started! Real loads will appear in the dashboard.');
+                        window.location.href = '/dashboard';
+                      } else {
+                        alert(data.message || 'No authenticated DAT session found. Please log into DAT manually first.');
+                      }
+                    } catch (error) {
+                      alert('Error starting session-based scraper');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  disabled={loading}
+                  variant="outline"
+                  size="lg"
+                  className="w-full max-w-md"
+                >
+                  {loading ? "Checking Session..." : "Use My Existing DAT Login"}
+                </Button>
+              </div>
             </div>
           )}
 
