@@ -28,6 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ManualDATLogin } from '@/components/ManualDATLogin';
+import { Link } from 'wouter';
 
 interface DATLoad {
   id: string;
@@ -57,10 +59,11 @@ function DATLoads() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedLoad, setSelectedLoad] = useState<DATLoad | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showManualLogin, setShowManualLogin] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: loads = [], isLoading, refetch } = useQuery({
+  const { data: loads = [], isLoading, refetch } = useQuery<DATLoad[]>({
     queryKey: ["/api/dat-loads"],
     refetchInterval: 10000, // Refresh every 10 seconds for real-time DAT updates
   });
@@ -206,6 +209,25 @@ function DATLoads() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/dat-login">
+            <Button 
+              variant="default" 
+              size="sm"
+              data-testid="button-dat-login-workflow"
+            >
+              <ExternalLink className="w-4 h-4 mr-2" />
+              DAT Login Workflow
+            </Button>
+          </Link>
+          <Button 
+            onClick={() => setShowManualLogin(true)} 
+            variant="outline" 
+            size="sm"
+            data-testid="button-manual-dat-login"
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            Quick Login
+          </Button>
           <Button 
             onClick={() => refetch()} 
             variant="outline" 
@@ -721,6 +743,16 @@ function DATLoads() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual DAT Login Dialog */}
+      <Dialog open={showManualLogin} onOpenChange={setShowManualLogin}>
+        <DialogContent className="max-w-5xl max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Manual DAT Login Assistant</DialogTitle>
+          </DialogHeader>
+          <ManualDATLogin />
         </DialogContent>
       </Dialog>
     </div>

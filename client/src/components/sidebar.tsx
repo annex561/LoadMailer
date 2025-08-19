@@ -9,6 +9,7 @@ const navigation = [
   { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Headphones, section: "main" },
   { name: "Manage Loads", href: "/loads", icon: Package, section: "main" },
   { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "main" },
+  { name: "DAT Login", href: "/dat-login", icon: Bot, section: "main" },
   { name: "Telegram Dispatching", href: "/telegram-dispatching", icon: MessageSquare, section: "main" },
   { name: "Contacts", href: "/contacts", icon: Users, section: "main" },
   { name: "Driver Management", href: "/driver-management", icon: UserPlus, section: "main" },

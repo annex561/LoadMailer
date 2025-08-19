@@ -4351,6 +4351,139 @@ Safe travels! 🚛`;
     }
   });
 
+  // Manual verification endpoint for DAT login
+  app.post('/api/dat/verify', async (req, res) => {
+    try {
+      const { verificationCode } = req.body;
+      
+      if (!verificationCode || typeof verificationCode !== 'string') {
+        return res.status(400).json({ error: 'Verification code is required' });
+      }
+      
+      console.log('📨 Manual verification code received from user');
+      
+      // Set verification code and continue login process
+      realDATScraper.setVerificationCode(verificationCode.trim());
+      await realDATScraper.continueWithVerification();
+      
+      res.json({ 
+        success: true, 
+        message: 'Verification code submitted successfully. DAT login process continuing...' 
+      });
+      
+    } catch (error) {
+      console.error('Verification error:', error);
+      res.status(500).json({ error: 'Failed to process verification code' });
+    }
+  });
+
+  // Check DAT verification status
+  app.get('/api/dat/verification-status', (req, res) => {
+    res.json({
+      isWaitingForVerification: realDATScraper.isWaitingForVerification(),
+      status: realDATScraper.isWaitingForVerification() ? 'waiting_for_verification' : 'ready'
+    });
+  });
+
+  // Reset DAT verification state
+  app.post('/api/dat/reset-verification', (req, res) => {
+    realDATScraper.resetVerificationState();
+    res.json({ 
+      success: true, 
+      message: 'DAT verification state reset',
+      isWaitingForVerification: false
+    });
+  });
+
+  // Manual DAT login endpoints
+  app.post('/api/dat/manual-login/start', async (req, res) => {
+    try {
+      const { getManualDATLoginInstance } = await import('./manual-dat-login');
+      const loginManager = getManualDATLoginInstance();
+      const result = await loginManager.startManualLogin();
+      res.json(result);
+    } catch (error) {
+      console.error('Error starting manual DAT login:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  app.get('/api/dat/manual-login/status', async (req, res) => {
+    try {
+      const { getManualDATLoginInstance } = await import('./manual-dat-login');
+      const loginManager = getManualDATLoginInstance();
+      const status = await loginManager.getStatus();
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Login manager not initialized' 
+      });
+    }
+  });
+
+  app.post('/api/dat/manual-login/next', async (req, res) => {
+    try {
+      const { getManualDATLoginInstance } = await import('./manual-dat-login');
+      const loginManager = getManualDATLoginInstance();
+      const input = req.body || {};
+      const result = await loginManager.proceedToNextStep(input);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  app.post('/api/dat/manual-login/reset', async (req, res) => {
+    try {
+      const { getManualDATLoginInstance } = await import('./manual-dat-login');
+      const loginManager = getManualDATLoginInstance();
+      await loginManager.reset();
+      res.json({ success: true, message: 'Manual login session reset' });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  app.post('/api/dat/manual-login/cleanup', async (req, res) => {
+    try {
+      const { getManualDATLoginInstance } = await import('./manual-dat-login');
+      const loginManager = getManualDATLoginInstance();
+      await loginManager.cleanup();
+      res.json({ success: true, message: 'Manual login session cleaned up' });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  // Manual trigger for DAT login test (for testing verification flow)
+  app.post('/api/dat/trigger-login', async (req, res) => {
+    try {
+      console.log('🧪 Manual DAT login trigger requested');
+      await realDATScraper.performRealDATScraping();
+      res.json({ success: true, message: 'DAT login test triggered' });
+    } catch (error) {
+      console.log('Expected: DAT login requires manual verification');
+      res.json({ 
+        success: true, 
+        message: 'DAT login test triggered - check for verification prompts',
+        waitingForVerification: realDATScraper.isWaitingForVerification()
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // AUTO-RESTART MECHANISM: Automatically restart DAT scraper after workflow restarts

@@ -8,6 +8,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Loads from "@/pages/loads";
 import DATLoads from "@/pages/dat-loads";
+import DATLogin from "@/pages/dat-login";
 import TelegramDispatching from "@/pages/telegram-dispatching";
 import Contacts from "@/pages/contacts";
 import Templates from "@/pages/templates";
@@ -29,6 +30,7 @@ import DebugToken from "@/pages/debug-token";
 
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
+import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 
 
 
@@ -38,6 +40,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/loads" component={Loads} />
       <Route path="/dat-loads" component={DATLoads} />
+      <Route path="/dat-login" component={DATLogin} />
       <Route path="/telegram-dispatching" component={TelegramDispatching} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/templates" component={Templates} />
@@ -82,6 +85,7 @@ function App() {
             </div>
           </Route>
         </Switch>
+        <DATVerificationDialog />
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
