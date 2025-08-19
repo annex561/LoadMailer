@@ -62,8 +62,6 @@ export default function Dashboard() {
   });
 
   // Show all loads (including Tennessee loads) - they are all real freight data
-  console.log('📋 Dashboard Debug:', { totalLoads: allLoads.length, allLoads });
-  
   const scrapedLoads = allLoads.map((load: any) => ({
     id: load.id,
     loadNumber: load.loadNumber,
@@ -130,14 +128,7 @@ export default function Dashboard() {
     return acc;
   }, {} as Record<string, any[]>);
 
-  console.log('🔍 Filter Debug:', { 
-    scrapedLoads: scrapedLoads.length, 
-    filteredLoads: filteredLoads.length,
-    equipmentFilter,
-    sampleLoad: scrapedLoads[0],
-    loadsBySource: Object.keys(loadsBySource),
-    loadsBySourceCount: Object.keys(loadsBySource).length
-  });
+
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -476,32 +467,15 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Debug Info */}
-        <Card className="bg-yellow-50 border-yellow-200">
-          <CardContent className="p-4">
-            <h3 className="font-bold text-yellow-800">DEBUG INFO</h3>
-            <p className="text-sm text-yellow-700">
-              Total Loads: {allLoads.length} | 
-              Scraped: {scrapedLoads.length} | 
-              Filtered: {filteredLoads.length} | 
-              Sources: {filteredLoads.length > 0 ? 1 : 0} | 
-              Filter: {equipmentFilter}
-            </p>
-            {scrapedLoads.length > 0 && (
-              <p className="text-xs text-yellow-600 mt-2">
-                Sample Load: {scrapedLoads[0]?.loadNumber} - {scrapedLoads[0]?.company} - {scrapedLoads[0]?.equipmentType}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+
 
         {/* No Load Boards Message */}
         {Object.keys(loadsBySource).length === 0 && (
           <Card>
             <CardContent className="text-center py-12">
               <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Tennessee Loads Found</h3>
-              <p className="text-gray-500 mb-6">The Tennessee load feed should be generating real freight data. Check the logs for any issues.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Tennessee Loads Available</h3>
+              <p className="text-gray-500 mb-6">Tennessee freight loads are being generated every 30 seconds. Please wait a moment or refresh the page.</p>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => window.location.reload()}>
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Refresh Dashboard

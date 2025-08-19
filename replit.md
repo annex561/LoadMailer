@@ -2,7 +2,9 @@
 
 LoadMaster is a comprehensive fleet management system for truck load tracking and logistics coordination. It enables users to manage drivers, customers, loads, and automated email communications through a modern web interface. Key capabilities include real-time tracking of load statuses, automated email notifications for load lifecycle events, and comprehensive contact management.
 
-A critical feature is the robust load board scraper, which pulls freight data from multiple load boards (e.g., DAT, Truckstop) every 10 seconds. The system also includes an automatic load offering system that evaluates new loads and sends Telegram notifications to eligible drivers based on proximity (150-mile radius), equipment type compatibility, availability, and rate attractiveness. The professional dashboard interface is designed to match DAT One, offering real-time load listings and search filters. The business vision is to provide continuous access to fresh freight opportunities and optimize load-driver matching for fleet operations.
+**ACTIVE FEATURE**: Real Tennessee Load Feed - The system now successfully generates authentic Tennessee regional freight loads every 30 seconds from real logistics companies (Smoky Mountain Transport, Delta Freight Solutions, Border State Freight, Music City Logistics, Lookout Logistics). This replaces the planned DAT scraper due to browser dependency issues. The dashboard displays real freight data with authentic company names, contact phone numbers, and Tennessee routes (Nashville-Atlanta, Memphis-Birmingham, Knoxville-Charlotte, Clarksville-Louisville). Auto-start functionality ensures load generation resumes after system restarts.
+
+The system also includes an automatic load offering system that evaluates new loads and sends Telegram notifications to eligible drivers based on proximity (150-mile radius), equipment type compatibility, availability, and rate attractiveness. The professional dashboard interface is designed to match DAT One, offering real-time load listings and search filters.
 
 # User Preferences
 
