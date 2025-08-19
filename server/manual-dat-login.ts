@@ -63,10 +63,10 @@ export class ManualDATLogin {
     try {
       console.log('🚀 Starting manual DAT login process...');
       
-      // Launch browser with stealth mode
+      // Launch browser with stealth mode using system Chromium
       this.browser = await puppeteer.launch({
         headless: true, // Must be headless in server environment
-        // Use default Puppeteer Chrome installation
+        executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium', // Use system Chromium
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -207,7 +207,7 @@ export class ManualDATLogin {
         });
         screenshot = screenshotBuffer.toString('base64');
       } catch (error) {
-        console.log('Could not capture screenshot:', error.message);
+        console.log('Could not capture screenshot:', (error as Error).message);
       }
     }
     
@@ -290,7 +290,7 @@ export class ManualDATLogin {
       return {
         success: false,
         currentStep: this.steps[this.currentStep],
-        message: `Error: ${error.message}`
+        message: `Error: ${(error as Error).message}`
       };
     }
   }
@@ -424,7 +424,7 @@ export class ManualDATLogin {
       try {
         await this.page.close();
       } catch (error) {
-        console.log('Error closing page:', error.message);
+        console.log('Error closing page:', (error as Error).message);
       }
     }
     
@@ -432,7 +432,7 @@ export class ManualDATLogin {
       try {
         await this.browser.close();
       } catch (error) {
-        console.log('Error closing browser:', error.message);
+        console.log('Error closing browser:', (error as Error).message);
       }
     }
     
