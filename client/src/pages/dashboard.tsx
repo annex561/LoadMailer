@@ -61,10 +61,8 @@ export default function Dashboard() {
     queryKey: ["/api/loads"],
   });
 
-  // Filter to only show loads from load boards
-  const scrapedLoads = allLoads.filter((load: any) => 
-    load.sourceBoard && load.sourceBoard !== 'manual'
-  ).map((load: any) => ({
+  // Show all loads (including Tennessee loads) - they are all real freight data
+  const scrapedLoads = allLoads.map((load: any) => ({
     id: load.id,
     loadNumber: load.loadNumber,
     status: load.status,
@@ -79,8 +77,8 @@ export default function Dashboard() {
     rate: load.rate || 0,
     equipmentType: load.equipmentType || 'van',
     distance: load.miles || 0,
-    company: load.company || 'Unknown',
-    contactPhone: load.contactPhone || '',
+    company: load.specialInstructions?.match(/Company: ([^.]+)/)?.[1] || load.customer?.name || 'Unknown',
+    contactPhone: load.specialInstructions?.match(/Contact: ([^f]+)/)?.[1]?.trim() || load.contactPhone || '',
     contactEmail: '',
     priority: load.priority,
     temperatureRequired: load.temperatureRequired || false,

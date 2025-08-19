@@ -65,7 +65,18 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
+  }, async () => {
     log(`serving on port ${port}`);
+    
+    // Auto-start Tennessee load generation to ensure real data is always available
+    setTimeout(async () => {
+      try {
+        const { simpleDATConnector } = await import('./simple-dat-connector.js');
+        await simpleDATConnector.startRealLoadGeneration();
+        log('✅ Auto-started Tennessee load generation');
+      } catch (error) {
+        log(`❌ Failed to auto-start Tennessee load generation: ${String(error)}`);
+      }
+    }, 5000); // Wait 5 seconds for services to initialize
   });
 })();
