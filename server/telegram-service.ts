@@ -122,9 +122,50 @@ export class TelegramLoadService {
   private setupCommandHandlers(): void {
     if (!this.bot) return;
 
-    // Enhanced message logging
-    this.bot.on('message', (msg: any) => {
+    // Enhanced message logging and response handling
+    this.bot.on('message', async (msg: any) => {
       console.log(`📱 TELEGRAM MESSAGE RECEIVED: User ${msg.from?.first_name || 'Unknown'} (${msg.from?.id || 'no-id'}) Chat: ${msg.chat?.id || 'no-chat'} Text: "${msg.text || 'no-text'}"`);
+      
+      // Handle driver responses to get them engaged
+      if (msg.text && !msg.text.startsWith('/')) {
+        const chatId = msg.chat.id;
+        const userInfo = msg.from;
+        const responseText = msg.text.toUpperCase().trim();
+        
+        if (responseText === 'YES' || responseText === 'Y') {
+          // Driver is ready to register
+          await this.sendAutoOnboarding(chatId, userInfo);
+        } else if (responseText === 'INFO' || responseText === 'HELP') {
+          // Send information about how the system works
+          await this.bot?.sendMessage(chatId,
+            `ℹ️ *How LAMP Logistics Works*\n\n` +
+            `1️⃣ *Complete Registration*\n` +
+            `• Provide your driver details\n` +
+            `• Set equipment preferences\n` +
+            `• Add emergency contacts\n\n` +
+            `2️⃣ *Receive Load Offers*\n` +
+            `• Get matched Tennessee loads instantly\n` +
+            `• See rate, miles, and pickup details\n` +
+            `• Book with one click\n\n` +
+            `3️⃣ *Start Earning*\n` +
+            `• Track your assignments\n` +
+            `• Update pickup/delivery status\n` +
+            `• Get paid fast\n\n` +
+            `*Ready to get started? Reply "YES" to begin registration!*`,
+            { parse_mode: 'Markdown' }
+          );
+        } else {
+          // General engagement response
+          await this.bot?.sendMessage(chatId,
+            `Thanks for your message! 👍\n\n` +
+            `To get started receiving load offers:\n` +
+            `• Reply "YES" to register as a driver\n` +
+            `• Reply "INFO" to learn more\n\n` +
+            `Tennessee freight loads are waiting for you!`,
+            { parse_mode: 'Markdown' }
+          );
+        }
+      }
     });
     
     // Welcome message with automatic onboarding
@@ -137,7 +178,7 @@ export class TelegramLoadService {
       console.log(`📱 NEW USER STARTED CHAT: ${userInfo?.first_name || 'Unknown'} ${userInfo?.last_name || ''} (ID: ${userInfo?.id}) Chat: ${chatId}`);
       
       try {
-        // Send welcome message
+        // Send interactive welcome message that prompts for a response
         await this.bot.sendMessage(chatId, 
           `🚛 *Welcome to LAMP Logistics!*\n\n` +
           `Hi ${userInfo?.first_name || 'Driver'}! I'm your personal load dispatcher bot.\n\n` +
@@ -146,7 +187,8 @@ export class TelegramLoadService {
           `• Book loads with one click\n` +
           `• Track your assignments\n` +
           `• Communicate with dispatch\n\n` +
-          `Let me get you set up...`,
+          `*Are you ready to start receiving Tennessee freight loads?*\n\n` +
+          `Please reply with "YES" to continue with registration, or "INFO" to learn more about how it works.`,
           { parse_mode: 'Markdown' }
         );
         
