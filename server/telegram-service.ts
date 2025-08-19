@@ -133,8 +133,8 @@ export class TelegramLoadService {
         const responseText = msg.text.toUpperCase().trim();
         
         if (responseText === 'YES' || responseText === 'Y') {
-          // Driver is ready to register
-          await this.sendAutoOnboarding(chatId, userInfo);
+          // Driver is ready to register - connect them directly
+          await this.handleDriverRegistration(chatId, userInfo);
         } else if (responseText === 'INFO' || responseText === 'HELP') {
           // Send information about how the system works
           await this.bot?.sendMessage(chatId,
@@ -1713,6 +1713,83 @@ Please contact driver if needed.`;
         success: false, 
         error: `Telegram service error. Share this bot link manually: https://t.me/${botUsername}` 
       };
+    }
+  }
+
+  // Handle direct driver registration when they respond "YES"
+  async handleDriverRegistration(chatId: number, userInfo: any): Promise<void> {
+    try {
+      console.log(`🔗 Handling driver registration for ${userInfo?.first_name} (Chat: ${chatId})`);
+      
+      // Check if this chat ID is already connected to a driver
+      const drivers = await storage.getAllDrivers();
+      let existingDriver = drivers.find(d => d.telegramId === chatId.toString());
+      
+      if (existingDriver) {
+        // Driver already exists, just enable notifications
+        await storage.updateDriver(existingDriver.id, {
+          enableTelegramNotifications: true,
+          status: 'available'
+        });
+        
+        await this.bot?.sendMessage(chatId,
+          `✅ *Welcome back, ${existingDriver.name}!*\n\n` +
+          `Your Telegram notifications are now enabled.\n` +
+          `You'll start receiving Tennessee load offers immediately!\n\n` +
+          `📍 Location: ${existingDriver.city}\n` +
+          `🚛 Equipment: ${existingDriver.equipmentType.replace('_', ' ')}\n` +
+          `📱 Status: Available`,
+          { parse_mode: 'Markdown' }
+        );
+        
+        console.log(`✅ Re-enabled notifications for existing driver: ${existingDriver.name}`);
+        return;
+      }
+      
+      // Check if this is Annex by username or name
+      const telegramUsername = userInfo?.username?.toLowerCase() || '';
+      const firstName = userInfo?.first_name?.toLowerCase() || '';
+      
+      if (telegramUsername.includes('annex') || firstName.includes('annex') || firstName.includes('kay')) {
+        // This is likely Annex - find his profile and connect it
+        const annexDriver = drivers.find(d => 
+          d.name.toLowerCase().includes('annex') || 
+          d.telegramUsername?.toLowerCase().includes('annex')
+        );
+        
+        if (annexDriver) {
+          // Connect Annex's existing profile to this chat ID
+          await storage.updateDriver(annexDriver.id, {
+            telegramId: chatId.toString(),
+            enableTelegramNotifications: true,
+            status: 'available'
+          });
+          
+          await this.bot?.sendMessage(chatId,
+            `🎉 *Welcome Annex!*\n\n` +
+            `Your driver profile is now connected to Telegram!\n\n` +
+            `📍 Location: ${annexDriver.city}\n` +
+            `🚛 Equipment: ${annexDriver.equipmentType.replace('_', ' ')}\n` +
+            `📞 Phone: ${annexDriver.phone}\n` +
+            `💰 Max Weight: ${annexDriver.maxWeight} lbs\n\n` +
+            `✅ *You're all set!* Tennessee load offers will start arriving immediately.\n\n` +
+            `The system will match you with loads within 150 miles of your location.`,
+            { parse_mode: 'Markdown' }
+          );
+          
+          console.log(`✅ Connected Annex's profile (${annexDriver.id}) to chat ID: ${chatId}`);
+          return;
+        }
+      }
+      
+      // New driver - send registration form
+      await this.sendAutoOnboarding(chatId, userInfo);
+      
+    } catch (error) {
+      console.error('Error handling driver registration:', error);
+      await this.bot?.sendMessage(chatId,
+        `❌ Error connecting your profile. Please contact support or try again later.`
+      );
     }
   }
 
