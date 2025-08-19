@@ -4551,6 +4551,33 @@ Safe travels! 🚛`;
     }
   });
 
+  // Simple DAT connector endpoints (fallback for browser issues)
+  app.post('/api/simple-dat/start', async (req, res) => {
+    try {
+      const { simpleDATConnector } = await import('./simple-dat-connector.js');
+      await simpleDATConnector.startRealLoadGeneration();
+      res.json({ 
+        success: true, 
+        message: 'Tennessee load generation started - real freight data from TN region'
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  app.get('/api/simple-dat/status', async (req, res) => {
+    try {
+      const { simpleDATConnector } = await import('./simple-dat-connector.js');
+      const status = simpleDATConnector.getStatus();
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get simple DAT connector status' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // AUTO-RESTART MECHANISM: Use session-based DAT scraping for manual authentication

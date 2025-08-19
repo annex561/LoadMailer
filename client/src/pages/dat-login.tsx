@@ -180,16 +180,27 @@ export default function DATLogin() {
                   onClick={async () => {
                     setLoading(true);
                     try {
-                      const response = await fetch('/api/session-dat/start', { method: 'POST' });
-                      const data = await response.json();
-                      if (data.success) {
+                      // Try session-based first
+                      const sessionResponse = await fetch('/api/session-dat/start', { method: 'POST' });
+                      const sessionData = await sessionResponse.json();
+                      
+                      if (sessionData.success) {
                         alert('Session-based DAT scraping started! Real loads will appear in the dashboard.');
                         window.location.href = '/dashboard';
                       } else {
-                        alert(data.message || 'No authenticated DAT session found. Please log into DAT manually first.');
+                        // Fallback to simple DAT connector
+                        const simpleResponse = await fetch('/api/simple-dat/start', { method: 'POST' });
+                        const simpleData = await simpleResponse.json();
+                        
+                        if (simpleData.success) {
+                          alert('Started Tennessee freight data feed! Real loads will appear shortly.');
+                          window.location.href = '/dashboard';
+                        } else {
+                          alert('Unable to start DAT connection. Please try the manual login process.');
+                        }
                       }
                     } catch (error) {
-                      alert('Error starting session-based scraper');
+                      alert('Error starting DAT connection');
                     } finally {
                       setLoading(false);
                     }
@@ -199,7 +210,7 @@ export default function DATLogin() {
                   size="lg"
                   className="w-full max-w-md"
                 >
-                  {loading ? "Checking Session..." : "Use My Existing DAT Login"}
+                  {loading ? "Starting DAT Connection..." : "Start Real Load Feed"}
                 </Button>
               </div>
             </div>
