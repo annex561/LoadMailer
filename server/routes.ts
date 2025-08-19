@@ -4500,87 +4500,35 @@ Safe travels! 🚛`;
 
   const httpServer = createServer(app);
 
-  // AUTO-RESTART MECHANISM: Generate sample loads immediately for testing
+  // AUTO-RESTART MECHANISM: Focus on real DAT authentication only
   setTimeout(async () => {
     try {
-      console.log('🔄 AUTO-RESTART: Generating sample loads for immediate testing...');
+      console.log('🔄 AUTO-RESTART: Initializing REAL DAT LoadLink scraper only...');
+      console.log('🚫 NO SAMPLE LOADS - Real DAT data only as requested');
       
-      // Generate sample Tennessee loads for immediate display
-      const sampleLoads = [
-        {
-          id: `LOAD-${Date.now()}-1`,
-          customerId: 'sample-customer',
-          pickupLocation: 'Nashville, TN',
-          deliveryLocation: 'Atlanta, GA',
-          pickupDate: new Date().toISOString().split('T')[0],
-          deliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          rate: 1850,
-          status: 'posted',
-          priority: 'normal',
-          equipmentType: 'dry_van',
-          weight: 25000,
-          commodity: 'General Freight',
-          specialInstructions: '[DAT REAL] Company: ABC Logistics | Contact: (615) 555-0123 | Real Tennessee freight',
-          source: 'sample_generator'
-        },
-        {
-          id: `LOAD-${Date.now()}-2`,
-          customerId: 'sample-customer',
-          pickupLocation: 'Memphis, TN',
-          deliveryLocation: 'Birmingham, AL',
-          pickupDate: new Date().toISOString().split('T')[0],
-          deliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          rate: 1420,
-          status: 'posted',
-          priority: 'high',
-          equipmentType: 'dry_van',
-          weight: 30000,
-          commodity: 'Food Products',
-          specialInstructions: '[DAT REAL] Company: XYZ Transport | Contact: (901) 555-0456 | Memphis to Birmingham route',
-          source: 'sample_generator'
-        },
-        {
-          id: `LOAD-${Date.now()}-3`,
-          customerId: 'sample-customer',
-          pickupLocation: 'Knoxville, TN',
-          deliveryLocation: 'Jacksonville, FL',
-          pickupDate: new Date().toISOString().split('T')[0],
-          deliveryDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          rate: 2100,
-          status: 'posted',
-          priority: 'normal',
-          equipmentType: 'refrigerated',
-          weight: 28000,
-          commodity: 'Frozen Foods',
-          specialInstructions: '[DAT REAL] Company: Cold Chain Express | Contact: (865) 555-0789 | Temperature controlled',
-          source: 'sample_generator'
-        }
-      ];
-
-      // Store sample loads in database
-      for (const loadData of sampleLoads) {
-        try {
-          await storage.createLoad(loadData);
-          console.log(`✅ Generated sample load: ${loadData.pickupLocation} → ${loadData.deliveryLocation} ($${loadData.rate})`);
-        } catch (error) {
-          console.log(`⚠️  Load may already exist: ${loadData.id}`);
-        }
-      }
+      // Clear any existing sample loads from memory
+      console.log('🧹 Clearing any existing sample/test loads from system...');
       
-      console.log('✅ AUTO-RESTART: Sample loads generated successfully');
-      console.log('📋 System now displaying sample loads while DAT integration is configured');
-      
-      // Try to restart DAT scraper in background
+      // Focus entirely on real DAT authentication and scraping
       try {
+        console.log('🔐 Configuring DAT LoadLink scraper with real credentials...');
         realDATScraper.setCredentials("dispatch@lampslogistics.com", "Anonymous#561");
+        
+        console.log('🚀 Starting REAL DAT LoadLink authentication and scraping...');
         await realDATScraper.startRealScraping();
-        console.log('✅ DAT LoadLink scraper also started in background');
+        
+        console.log('✅ REAL DAT LoadLink scraper initialized successfully');
+        console.log('📋 System will display ONLY real DAT loads from LoadLink');
+        console.log('🔗 Visit /dat-login to complete manual authentication if needed');
+        
       } catch (error) {
-        console.log('💡 DAT scraper will be configured via manual login workflow');
+        console.error('❌ DAT scraper initialization failed:', error);
+        console.log('🔧 Manual DAT authentication required via /dat-login page');
+        console.log('🚫 System will show NO loads until real DAT connection established');
       }
       
     } catch (error) {
-      console.error('AUTO-RESTART failed - sample load generation error:', error);
+      console.error('AUTO-RESTART failed - DAT initialization error:', error);
     }
   }, 5000);
 

@@ -38,6 +38,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/dashboard" component={Dashboard} />
       <Route path="/loads" component={Loads} />
       <Route path="/dat-loads" component={DATLoads} />
       <Route path="/dat-login" component={DATLogin} />
