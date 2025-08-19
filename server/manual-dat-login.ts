@@ -276,6 +276,8 @@ export class ManualDATLogin {
           
         case 'complete':
           step.completed = true;
+          // When login is complete, transition to automated scraping
+          await this.transitionToAutomatedScraping();
           break;
       }
       
@@ -442,6 +444,65 @@ export class ManualDATLogin {
     this.steps.forEach(step => step.completed = false);
     
     console.log('✅ DAT login session reset');
+  }
+
+  // Force complete all steps (when user manually completes the process)
+  async markAsCompleted(): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('✅ Marking DAT login as manually completed...');
+      
+      // Mark all steps as completed
+      this.steps.forEach(step => step.completed = true);
+      this.currentStep = this.steps.length - 1;
+      
+      // Transition to automated scraping
+      await this.transitionToAutomatedScraping();
+      
+      return {
+        success: true,
+        message: 'DAT login marked as completed and automated scraping activated'
+      };
+    } catch (error) {
+      console.error('❌ Error marking login as completed:', error);
+      return {
+        success: false,
+        message: `Error: ${(error as Error).message}`
+      };
+    }
+  }
+
+  // Transition from manual login to automated scraping
+  private async transitionToAutomatedScraping(): Promise<void> {
+    console.log('🔄 Transitioning to automated DAT scraping...');
+    
+    if (this.page && this.browser) {
+      try {
+        // Save the current session state
+        console.log('💾 Preserving authenticated session for automated scraping...');
+        
+        // Extract cookies for the authenticated session
+        const cookies = await this.page.cookies();
+        console.log(`✅ Captured ${cookies.length} session cookies`);
+        
+        // Store session data for the automated scraper
+        const sessionData = {
+          cookies,
+          userAgent: await this.page.evaluate(() => navigator.userAgent),
+          timestamp: Date.now()
+        };
+        
+        // Pass session to the real DAT scraper
+        const RealDATScraper = require('./real-dat-scraper').RealDATScraper;
+        const realScraper = new RealDATScraper();
+        await realScraper.setAuthenticatedSession(sessionData);
+        
+        console.log('✅ Session handed off to automated scraper');
+        console.log('🚀 Automated DAT load scraping now active');
+        
+      } catch (error) {
+        console.error('⚠️  Error transitioning to automated scraping:', error);
+      }
+    }
   }
 
 

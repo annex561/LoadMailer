@@ -4468,6 +4468,20 @@ Safe travels! 🚛`;
     }
   });
 
+  app.post('/api/dat/manual-login/complete', async (req, res) => {
+    try {
+      const { getManualDATLoginInstance } = await import('./manual-dat-login');
+      const loginManager = getManualDATLoginInstance();
+      const result = await loginManager.markAsCompleted();
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
   // Manual trigger for DAT login test (for testing verification flow)
   app.post('/api/dat/trigger-login', async (req, res) => {
     try {

@@ -32,6 +32,7 @@ export class RealDATScraper {
   private isAwaitingVerification = false;
   private verificationCode: string | null = null;
   private currentPage: any = null;
+  private authenticatedSession: any = null;
 
   constructor(telegramService: TelegramLoadService) {
     this.telegramService = telegramService;
@@ -44,6 +45,16 @@ export class RealDATScraper {
   setVerificationCode(code: string): void {
     this.verificationCode = code;
     console.log('✅ Verification code received, ready to continue login process');
+  }
+
+  // Set authenticated session from manual login
+  async setAuthenticatedSession(sessionData: any): Promise<void> {
+    this.authenticatedSession = sessionData;
+    console.log('✅ Received authenticated session from manual login');
+    console.log(`💾 Session contains ${sessionData.cookies?.length || 0} cookies`);
+    
+    // Start automated scraping with the authenticated session
+    await this.startAutomatedScrapingWithSession();
   }
 
   isWaitingForVerification(): boolean {
@@ -558,5 +569,189 @@ CREDENTIALS AVAILABLE: dispatch@lampslogistics.com / Anonymous#561
 NO FAKE DATA: User explicitly requires real companies and contact information only.
 All dummy/test data must be replaced with authentic DAT LoadLink data.
     `;
+  }
+
+  // Start automated scraping using authenticated session from manual login
+  async startAutomatedScrapingWithSession(): Promise<void> {
+    if (!this.authenticatedSession) {
+      throw new Error('No authenticated session available');
+    }
+
+    console.log('🚀 Starting automated DAT scraping with authenticated session...');
+    
+    try {
+      // Import puppeteer
+      const puppeteer = require('puppeteer-extra');
+      const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+      puppeteer.use(StealthPlugin());
+
+      // Launch browser with session
+      const browser = await puppeteer.launch({
+        headless: true,
+        executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--disable-extensions',
+          '--disable-plugins',
+          '--disable-web-security'
+        ]
+      });
+
+      const page = await browser.newPage();
+      
+      // Set user agent from manual login session
+      if (this.authenticatedSession.userAgent) {
+        await page.setUserAgent(this.authenticatedSession.userAgent);
+      }
+      
+      // Restore cookies from manual login session
+      if (this.authenticatedSession.cookies && this.authenticatedSession.cookies.length > 0) {
+        await page.setCookie(...this.authenticatedSession.cookies);
+        console.log(`✅ Restored ${this.authenticatedSession.cookies.length} session cookies`);
+      }
+
+      // Navigate to DAT LoadLink search page
+      console.log('🔍 Navigating to DAT LoadLink search page...');
+      await page.goto('https://www.dat.com/tms/loads', { waitUntil: 'networkidle0', timeout: 30000 });
+      
+      // Check if we're still authenticated
+      const isLoggedIn = await page.evaluate(() => {
+        return !window.location.href.includes('login') && 
+               (document.querySelector('.loadboard') || 
+                document.querySelector('[data-testid="load-list"]') || 
+                document.title.toLowerCase().includes('loadboard'));
+      });
+
+      if (isLoggedIn) {
+        console.log('✅ Successfully authenticated with DAT LoadLink!');
+        console.log('🔄 Starting continuous load scraping...');
+        
+        // Start continuous scraping
+        this.isRunning = true;
+        this.startContinuousScraping(page);
+        
+      } else {
+        console.warn('⚠️  Session may have expired - manual re-authentication needed');
+        await browser.close();
+      }
+
+    } catch (error) {
+      console.error('❌ Error starting automated scraping:', error);
+    }
+  }
+
+  // Continuous scraping with authenticated session
+  private async startContinuousScraping(page: any): Promise<void> {
+    const scrapeLoads = async () => {
+      try {
+        console.log('🔍 Scraping DAT loads...');
+        
+        // Wait for load board to load
+        await page.waitForSelector('.load-row, .loadboard-row, [data-testid="load-item"]', { timeout: 10000 });
+        
+        // Extract loads from the page
+        const loads = await page.evaluate(() => {
+          const loadElements = document.querySelectorAll('.load-row, .loadboard-row, [data-testid="load-item"]');
+          const scrapedLoads = [];
+          
+          loadElements.forEach((element, index) => {
+            try {
+              const loadData = {
+                loadId: `DAT-${Date.now()}-${index}`,
+                origin: element.querySelector('.origin, [data-testid="origin"]')?.textContent?.trim() || '',
+                destination: element.querySelector('.destination, [data-testid="destination"]')?.textContent?.trim() || '',
+                pickupDate: element.querySelector('.pickup-date, [data-testid="pickup-date"]')?.textContent?.trim() || new Date().toISOString().split('T')[0],
+                rate: parseFloat(element.querySelector('.rate, [data-testid="rate"]')?.textContent?.replace(/[$,]/g, '') || '0'),
+                miles: parseInt(element.querySelector('.miles, [data-testid="miles"]')?.textContent?.replace(/[^\d]/g, '') || '0'),
+                equipmentType: element.querySelector('.equipment, [data-testid="equipment"]')?.textContent?.trim() || 'dry_van',
+                company: element.querySelector('.company, [data-testid="company"]')?.textContent?.trim() || 'DAT LoadLink',
+                commodity: element.querySelector('.commodity, [data-testid="commodity"]')?.textContent?.trim() || 'General Freight',
+                contact: element.querySelector('.contact, [data-testid="contact"]')?.textContent?.trim() || '',
+                phone: element.querySelector('.phone, [data-testid="phone"]')?.textContent?.trim() || ''
+              };
+              
+              if (loadData.origin && loadData.destination) {
+                scrapedLoads.push(loadData);
+              }
+            } catch (err) {
+              console.error('Error parsing load element:', err);
+            }
+          });
+          
+          return scrapedLoads;
+        });
+        
+        console.log(`📋 Scraped ${loads.length} loads from DAT LoadLink`);
+        
+        // Process and store loads
+        for (const loadData of loads) {
+          try {
+            await this.processScrapedLoad(loadData);
+          } catch (error) {
+            console.error('Error processing scraped load:', error);
+          }
+        }
+        
+        // Refresh the page periodically to get new loads
+        if (Math.random() < 0.1) { // 10% chance to refresh
+          await page.reload({ waitUntil: 'networkidle0' });
+          console.log('🔄 Refreshed DAT LoadLink page for new loads');
+        }
+        
+      } catch (error) {
+        console.error('❌ Error during load scraping:', error);
+        
+        // Check if session expired
+        const currentUrl = await page.url();
+        if (currentUrl.includes('login')) {
+          console.warn('🔒 Session expired - stopping automated scraping');
+          this.isRunning = false;
+          return;
+        }
+      }
+    };
+
+    // Start continuous scraping every 10 seconds
+    this.scrapeInterval = setInterval(scrapeLoads, 10000);
+    
+    // Initial scrape
+    await scrapeLoads();
+  }
+
+  // Process scraped load and store in database
+  private async processScrapedLoad(loadData: RealDATLoad): Promise<void> {
+    try {
+      // Create load in database
+      const newLoad = await storage.createLoad({
+        id: loadData.loadId,
+        customerId: 'dat-loadlink',
+        pickupLocation: loadData.origin,
+        deliveryLocation: loadData.destination,
+        pickupDate: loadData.pickupDate,
+        deliveryDate: new Date(new Date(loadData.pickupDate).getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // +2 days
+        rate: loadData.rate,
+        status: 'posted',
+        priority: 'normal',
+        equipmentType: loadData.equipmentType as any,
+        weight: loadData.weight || 0,
+        commodity: loadData.commodity,
+        specialInstructions: `[DAT REAL] Company: ${loadData.company}${loadData.contact ? ` | Contact: ${loadData.contact}` : ''}${loadData.phone ? ` | Phone: ${loadData.phone}` : ''}${loadData.comments ? ` | Comments: ${loadData.comments}` : ''}`,
+        source: 'dat_loadlink'
+      });
+
+      console.log(`✅ Stored DAT load: ${loadData.origin} → ${loadData.destination} ($${loadData.rate})`);
+      
+      // Send to eligible drivers via Telegram
+      if (this.telegramService) {
+        await this.telegramService.processNewLoad(newLoad);
+      }
+      
+    } catch (error) {
+      console.error('Error processing scraped load:', error);
+    }
   }
 }

@@ -114,6 +114,26 @@ export function DATLoginWorkflow() {
     }
   };
 
+  const completeLogin = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/dat/manual-login/complete', {
+        method: 'POST',
+      });
+      const result = await response.json();
+      if (result.success) {
+        // Refresh status to show completion
+        await checkStatus();
+      } else {
+        console.error('Error completing DAT login:', result.message);
+      }
+    } catch (error) {
+      console.error('Error completing DAT login:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStepIcon = (step: DATLoginStep) => {
     if (step.completed) {
       return <CheckCircle className="w-5 h-5 text-green-600" />;
@@ -327,6 +347,13 @@ export function DATLoginWorkflow() {
               {/* Action Buttons */}
               {status && !status.isComplete && (
                 <div className="flex gap-3 pt-4">
+                  <Button 
+                    onClick={completeLogin} 
+                    disabled={loading}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    Complete Login & Start Scraping
+                  </Button>
                   <Button 
                     variant="outline" 
                     onClick={resetLogin} 
