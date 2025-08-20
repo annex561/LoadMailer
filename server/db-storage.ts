@@ -429,9 +429,41 @@ export class DatabaseStorage implements IStorage {
   }
   async getLoadOffer(id: string): Promise<schema.LoadOffer | undefined> { return undefined; }
   async updateLoadOffer(id: string, offer: Partial<schema.InsertLoadOffer>): Promise<schema.LoadOffer | undefined> { return undefined; }
-  async getLoadOffersByLoad(loadId: string): Promise<schema.LoadOffer[]> { return []; }
-  async getLoadOffersByDriver(driverId: string): Promise<schema.LoadOffer[]> { return []; }
-  async getAllLoadOffers(): Promise<schema.LoadOffer[]> { return []; }
+  async getLoadOffers(loadId: string): Promise<schema.LoadOffer[]> {
+    try {
+      console.log(`📋 Searching for load offers for load ${loadId}`);
+      const result = await db.select().from(schema.loadOffers).where(eq(schema.loadOffers.loadId, loadId));
+      console.log(`📋 Found ${result.length} load offers for load ${loadId}`);
+      return result.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+    } catch (error) {
+      console.error(`❌ Database error getting load offers for ${loadId}:`, error);
+      throw error;
+    }
+  }
+
+  async getLoadOffersByLoad(loadId: string): Promise<schema.LoadOffer[]> { 
+    return this.getLoadOffers(loadId);
+  }
+  
+  async getLoadOffersByDriver(driverId: string): Promise<schema.LoadOffer[]> { 
+    try {
+      const result = await db.select().from(schema.loadOffers).where(eq(schema.loadOffers.driverId, driverId));
+      return result.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+    } catch (error) {
+      console.error('Error getting driver load offers:', error);
+      return [];
+    }
+  }
+  
+  async getAllLoadOffers(): Promise<schema.LoadOffer[]> { 
+    try {
+      const result = await db.select().from(schema.loadOffers);
+      return result.sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
+    } catch (error) {
+      console.error('Error getting all load offers:', error);
+      return [];
+    }
+  }
 
   async createLoadDocument(data: schema.InsertLoadDocument): Promise<schema.LoadDocument> { throw new Error('Not implemented'); }
   async getLoadDocument(id: string): Promise<schema.LoadDocument | null> { return null; }
