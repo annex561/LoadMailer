@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard, section: "main" },
+  { name: "LoadOps Dashboard", href: "/loadops-dashboard", icon: TrendingUp, section: "main" },
   { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Headphones, section: "main" },
   { name: "Manage Loads", href: "/loads", icon: Package, section: "main" },
   { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "main" },

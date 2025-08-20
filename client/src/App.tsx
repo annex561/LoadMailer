@@ -19,6 +19,7 @@ import DriverDashboard from "@/pages/driver-dashboard";
 import PaymentWorkflow from "@/pages/payment-workflow";
 import ScraperManagement from "@/pages/scraper-management";
 import DispatcherDashboard from "@/pages/dispatcher-dashboard";
+import LoadOpsDashboard from "@/pages/loadops-dashboard";
 import { MoodTracker } from "@/pages/mood-tracker";
 import GPSTracking from "@/pages/gps-tracking";
 import PredictiveMaintenance from "@/pages/predictive-maintenance";
@@ -49,6 +50,7 @@ function Router() {
       <Route path="/scrapers" component={ScraperManagement} />
       <Route path="/dispatcher" component={DispatcherDashboard} />
       <Route path="/dispatcher-dashboard" component={DispatcherDashboard} />
+      <Route path="/loadops-dashboard" component={LoadOpsDashboard} />
       <Route path="/payments" component={PaymentWorkflow} />
       <Route path="/mood-tracker" component={MoodTracker} />
       <Route path="/gps-tracking" component={GPSTracking} />
