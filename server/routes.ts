@@ -23,6 +23,7 @@ import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmail
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
+import { realDriverLocationService } from "./real-driver-location-service";
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -269,6 +270,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('Scheduler service initialized');
   } catch (error) {
     console.error('Failed to initialize scheduler service:', error);
+  }
+
+  // Initialize real driver location service on startup
+  try {
+    await realDriverLocationService.initialize();
+    console.log('Real Driver Location Service initialized');
+  } catch (error) {
+    console.error('Failed to initialize real driver location service:', error);
   }
 
   // Initialize load expiration service on startup
@@ -1600,6 +1609,35 @@ Safe travels! 🚛`;
     } catch (error) {
       console.error('Error assigning driver:', error);
       res.status(500).json({ error: 'Failed to assign driver' });
+    }
+  });
+
+  // Real-time driver location endpoints
+  app.get('/api/driver-locations/active', async (req, res) => {
+    try {
+      const locations = await realDriverLocationService.getActiveDriverLocations();
+      res.json({
+        locations,
+        count: locations.length,
+        serviceRunning: realDriverLocationService.isServiceRunning(),
+        trackedDrivers: realDriverLocationService.getTrackedDriverCount()
+      });
+    } catch (error) {
+      console.error('Error fetching active driver locations:', error);
+      res.status(500).json({ error: 'Failed to fetch driver locations' });
+    }
+  });
+
+  app.get('/api/driver-locations/status', async (req, res) => {
+    try {
+      res.json({
+        serviceRunning: realDriverLocationService.isServiceRunning(),
+        trackedDrivers: realDriverLocationService.getTrackedDriverCount(),
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error fetching driver location service status:', error);
+      res.status(500).json({ error: 'Failed to fetch service status' });
     }
   });
 

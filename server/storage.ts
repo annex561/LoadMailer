@@ -55,8 +55,12 @@ export interface IStorage {
   updateDriverLocation(id: string, location: Partial<InsertDriverLocation>): Promise<DriverLocation | undefined>;
   getDriverCurrentLocation(driverId: string): Promise<DriverLocation | undefined>;
   getDriverLocationHistory(driverId: string): Promise<DriverLocation[]>;
+  getDriverLocations(driverId: string, limit?: number): Promise<DriverLocation[]>;
   getAllCurrentDriverLocations(): Promise<DriverLocation[]>;
   cleanupOldDriverLocations(driverId: string, keepCount: number): Promise<void>;
+  
+  // Additional methods for real driver location service
+  getDrivers(): Promise<Driver[]>;
 
   // GPS Device operations
   getGpsDevice(id: string): Promise<GpsDevice | undefined>;

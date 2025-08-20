@@ -565,4 +565,124 @@ export class DatabaseStorage implements IStorage {
   async deleteDispatcherNotification(id: string): Promise<boolean> { return false; }
   async getDispatcherNotificationsByBid(bidId: string): Promise<schema.DispatcherNotification[]> { return []; }
   async getAllDispatcherNotifications(): Promise<schema.DispatcherNotification[]> { return []; }
+
+  // Driver location operations - Real implementations
+  async createDriverLocation(location: schema.InsertDriverLocation): Promise<schema.DriverLocation> {
+    const id = randomUUID();
+    const driverLocation: schema.DriverLocation = {
+      ...location,
+      id,
+      createdAt: new Date(),
+    };
+    
+    try {
+      await db.insert(schema.driverLocations).values(driverLocation);
+      return driverLocation;
+    } catch (error) {
+      console.error('Error creating driver location:', error);
+      throw error;
+    }
+  }
+
+  async updateDriverLocation(id: string, location: Partial<schema.InsertDriverLocation>): Promise<schema.DriverLocation | undefined> {
+    try {
+      await db.update(schema.driverLocations).set(location).where(eq(schema.driverLocations.id, id));
+      const result = await db.select().from(schema.driverLocations).where(eq(schema.driverLocations.id, id));
+      return result[0];
+    } catch (error) {
+      console.error('Error updating driver location:', error);
+      return undefined;
+    }
+  }
+
+  async getDriverCurrentLocation(driverId: string): Promise<schema.DriverLocation | undefined> {
+    try {
+      const result = await db.select()
+        .from(schema.driverLocations)
+        .where(and(eq(schema.driverLocations.driverId, driverId), eq(schema.driverLocations.isActive, true)))
+        .orderBy(sql`${schema.driverLocations.timestamp} desc`)
+        .limit(1);
+      return result[0];
+    } catch (error) {
+      console.error('Error getting current driver location:', error);
+      return undefined;
+    }
+  }
+
+  async getDriverLocationHistory(driverId: string): Promise<schema.DriverLocation[]> {
+    try {
+      const result = await db.select()
+        .from(schema.driverLocations)
+        .where(eq(schema.driverLocations.driverId, driverId))
+        .orderBy(sql`${schema.driverLocations.timestamp} desc`)
+        .limit(100);
+      return result;
+    } catch (error) {
+      console.error('Error getting driver location history:', error);
+      return [];
+    }
+  }
+
+  async getDriverLocations(driverId: string, limit = 10): Promise<schema.DriverLocation[]> {
+    try {
+      const result = await db.select()
+        .from(schema.driverLocations)
+        .where(eq(schema.driverLocations.driverId, driverId))
+        .orderBy(sql`${schema.driverLocations.timestamp} desc`)
+        .limit(limit);
+      return result;
+    } catch (error) {
+      console.error('Error getting driver locations:', error);
+      return [];
+    }
+  }
+
+  async getAllCurrentDriverLocations(): Promise<schema.DriverLocation[]> {
+    try {
+      const result = await db.select()
+        .from(schema.driverLocations)
+        .where(eq(schema.driverLocations.isActive, true))
+        .orderBy(sql`${schema.driverLocations.timestamp} desc`);
+      return result;
+    } catch (error) {
+      console.error('Error getting all current driver locations:', error);
+      return [];
+    }
+  }
+
+  async cleanupOldDriverLocations(driverId: string, keepCount: number): Promise<void> {
+    try {
+      // Get locations to keep
+      const locationsToKeep = await db.select()
+        .from(schema.driverLocations)
+        .where(eq(schema.driverLocations.driverId, driverId))
+        .orderBy(sql`${schema.driverLocations.timestamp} desc`)
+        .limit(keepCount);
+
+      if (locationsToKeep.length === keepCount) {
+        const keepIds = locationsToKeep.map(l => l.id);
+        await db.delete(schema.driverLocations)
+          .where(and(
+            eq(schema.driverLocations.driverId, driverId),
+            sql`${schema.driverLocations.id} NOT IN (${keepIds.map(id => `'${id}'`).join(',')})`
+          ));
+      }
+    } catch (error) {
+      console.error('Error cleaning up old driver locations:', error);
+    }
+  }
+
+  // Driver management - add convenience method
+  async getDrivers(): Promise<schema.Driver[]> {
+    return this.getAllDrivers();
+  }
+
+  // Additional GPS tracking methods
+  async getActiveGeofences(): Promise<schema.Geofence[]> {
+    return [];
+  }
+
+  async getGpsDeviceByDriver(driverId: string): Promise<schema.GpsDevice | undefined> {
+    return undefined;
+  }
 }

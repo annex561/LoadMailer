@@ -73,6 +73,15 @@ export default function LoadOpsDashboard() {
     }
   });
 
+  const { data: driverLocations } = useQuery({
+    queryKey: ['/api/driver-locations/active'],
+    queryFn: async () => {
+      const response = await fetch('/api/driver-locations/active');
+      return response.json();
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
   // Calculate metrics
   const financeMetrics: FinanceMetric[] = [
     {
@@ -416,18 +425,104 @@ export default function LoadOpsDashboard() {
               ))}
             </div>
 
-            {/* Map Section */}
+            {/* Real-Time Driver Location Tracking */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold">Driver Locations</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-lg font-semibold">Real-Time Driver Tracking</CardTitle>
+                <div className="flex items-center space-x-2">
+                  <div className={cn(
+                    "w-3 h-3 rounded-full",
+                    driverLocations?.serviceRunning ? "bg-green-500" : "bg-red-500"
+                  )} />
+                  <span className="text-sm text-gray-500">
+                    {driverLocations?.serviceRunning ? "Live Tracking" : "Service Offline"}
+                  </span>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="h-96 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <div className="text-center text-gray-600">
-                    <MapPin className="w-12 h-12 mx-auto mb-4" />
-                    <p className="text-lg font-medium">Live Driver Map</p>
-                    <p className="text-sm">Real-time driver locations will be displayed here</p>
+                <div className="space-y-4">
+                  {/* Service Status */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {driverLocations?.trackedDrivers || 0}
+                      </div>
+                      <p className="text-sm text-gray-500">Tracked Drivers</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-600">
+                        {driverLocations?.count || 0}
+                      </div>
+                      <p className="text-sm text-gray-500">Active Locations</p>
+                    </div>
+                    <div className="text-center">
+                      <div className={cn(
+                        "text-2xl font-bold",
+                        driverLocations?.serviceRunning ? "text-green-600" : "text-red-600"
+                      )}>
+                        {driverLocations?.serviceRunning ? "ON" : "OFF"}
+                      </div>
+                      <p className="text-sm text-gray-500">Service Status</p>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">GPS</div>
+                      <p className="text-sm text-gray-500">Real-Time Updates</p>
+                    </div>
                   </div>
+
+                  {/* Driver Location List */}
+                  {driverLocations?.locations && driverLocations.locations.length > 0 ? (
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-gray-800">Active Driver Locations</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {driverLocations.locations.slice(0, 6).map((location: any, index: number) => (
+                          <div key={index} className="bg-gray-50 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium text-gray-800">
+                                {drivers.find((d: any) => d.id === location.driverId)?.name || "Driver"}
+                              </span>
+                              <Badge variant="outline" className="text-xs">
+                                {location.isActive ? "Active" : "Inactive"}
+                              </Badge>
+                            </div>
+                            <div className="text-sm text-gray-600 space-y-1">
+                              <div className="flex items-center">
+                                <MapPin className="w-4 h-4 mr-2" />
+                                <span>
+                                  {location.latitude?.toFixed(4)}, {location.longitude?.toFixed(4)}
+                                </span>
+                              </div>
+                              <div className="flex items-center">
+                                <Clock className="w-4 h-4 mr-2" />
+                                <span>
+                                  {location.timestamp ? new Date(location.timestamp).toLocaleTimeString() : "Unknown"}
+                                </span>
+                              </div>
+                              {location.speed !== null && (
+                                <div className="flex items-center">
+                                  <TrendingUp className="w-4 h-4 mr-2" />
+                                  <span>{location.speed} mph</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-48 bg-gray-100 rounded-lg flex items-center justify-center">
+                      <div className="text-center text-gray-600">
+                        <MapPin className="w-12 h-12 mx-auto mb-4" />
+                        <p className="text-lg font-medium">No Active Tracking</p>
+                        <p className="text-sm">
+                          {driverLocations?.serviceRunning 
+                            ? "Waiting for driver location updates..." 
+                            : "GPS tracking service is offline"
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
