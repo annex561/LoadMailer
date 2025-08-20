@@ -48,6 +48,7 @@ function Router() {
       <Route path="/driver-management" component={DriverManagement} />
       <Route path="/scrapers" component={ScraperManagement} />
       <Route path="/dispatcher" component={DispatcherDashboard} />
+      <Route path="/dispatcher-dashboard" component={DispatcherDashboard} />
       <Route path="/payments" component={PaymentWorkflow} />
       <Route path="/mood-tracker" component={MoodTracker} />
       <Route path="/gps-tracking" component={GPSTracking} />
