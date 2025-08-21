@@ -275,7 +275,7 @@ export default function Loads() {
                         {/* Comments */}
                         <td className="px-3 py-2 max-w-32">
                           <div className="text-xs text-gray-700 truncate" title={datLoad.comments}>
-                            {datLoad.comments}
+                            {datLoad.comments || 'No special requirements'}
                           </div>
                         </td>
                         {/* Actions */}
