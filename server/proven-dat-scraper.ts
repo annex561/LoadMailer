@@ -2,8 +2,8 @@
 import puppeteer from 'puppeteer';
 
 const DAT_EMAIL = 'dispatch@lampslogistics.com';
-const DAT_PASSWORD = 'Anonymous#561';
-const LOGIN_URL = 'https://identity.dat.com/login';
+const DAT_PASSWORD = 'Anonymous#56111';
+const LOGIN_URL = 'https://www.dat.com/login';
 const LOADS_URL = 'https://one.dat.com/tms/load-board';
 
 export class ProvenDATScraper {
@@ -14,9 +14,9 @@ export class ProvenDATScraper {
 
   async initialize() {
     try {
-      console.log('🚀 Launching browser window for manual DAT login...');
+      console.log('🚀 Launching headless browser for automated DAT login...');
       this.browser = await puppeteer.launch({ 
-        headless: false,
+        headless: true, // Use headless for Replit environment
         args: [
           '--no-sandbox', 
           '--disable-setuid-sandbox',
@@ -25,15 +25,19 @@ export class ProvenDATScraper {
           '--disable-default-apps',
           '--disable-features=TranslateUI',
           '--disable-web-security',
-          '--disable-features=VizDisplayCompositor'
+          '--disable-features=VizDisplayCompositor',
+          '--disable-gpu',
+          '--disable-dev-shm-usage',
+          '--disable-setuid-sandbox',
+          '--no-first-run',
+          '--no-zygote',
+          '--single-process'
         ],
-        defaultViewport: null,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-        ignoreDefaultArgs: ['--disable-extensions']
+        defaultViewport: { width: 1280, height: 800 },
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
       });
       this.page = await this.browser.newPage();
-      await this.page.setViewport({ width: 1280, height: 800 });
-      console.log('✅ Browser window opened successfully');
+      console.log('✅ Headless browser launched successfully');
       return true;
     } catch (error) {
       console.error('❌ Failed to open browser window:', error);
@@ -45,27 +49,151 @@ export class ProvenDATScraper {
     try {
       console.log('🚀 Starting automated DAT login with proven method...');
       
-      // Step 1: Navigate to DAT identity login
-      console.log('📍 Navigating to DAT identity login...');
-      await this.page.goto(LOGIN_URL, { waitUntil: 'networkidle2' });
+      // Step 1: Navigate to DAT login page
+      console.log('📍 Navigating to DAT login page...');
+      await this.page.goto(LOGIN_URL, { waitUntil: 'networkidle2', timeout: 30000 });
       
-      // Step 2: Enter email
+      // Debug: Get page info
+      const currentUrl = this.page.url();
+      const pageTitle = await this.page.title();
+      console.log(`📍 Current URL: ${currentUrl}`);
+      console.log(`📋 Page Title: ${pageTitle}`);
+      
+      // Check page content
+      const pageContent = await this.page.content();
+      console.log(`📄 Page contains ${pageContent.length} characters`);
+      
+      // Look for any forms on the page
+      const forms = await this.page.$$('form');
+      console.log(`📝 Found ${forms.length} forms on page`);
+      
+      // Get all visible text to understand page structure
+      const visibleText = await this.page.evaluate(() => {
+        return document.body.innerText.substring(0, 500);
+      });
+      console.log(`📖 Page text preview: ${visibleText}`);
+      
+      // Step 2: Look for login form elements
+      console.log('🔍 Looking for login form...');
+      
+      // Try multiple selectors for email/username field
+      const emailSelectors = ['input[name="Email"]', 'input[name="email"]', 'input[type="email"]', 'input[name="username"]', '#email', '#username', 'input[placeholder*="email"]', 'input[placeholder*="Email"]', 'input[id*="email"]', 'input[class*="email"]'];
+      let emailField = null;
+      
+      for (const selector of emailSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 2000 });
+          emailField = selector;
+          console.log(`📧 Found email field: ${selector}`);
+          break;
+        } catch (e) {
+          console.log(`⚠️ Email selector not found: ${selector}`);
+        }
+      }
+      
+      if (!emailField) {
+        // Check if there's a login button to click first
+        const loginButtons = ['a[href*="login"]', 'a[href*="sign-in"]', '.login-btn', '.sign-in-btn', 'button[class*="login"]', 'button[class*="sign-in"]'];
+        for (const btnSelector of loginButtons) {
+          try {
+            await this.page.waitForSelector(btnSelector, { timeout: 2000 });
+            await this.page.click(btnSelector);
+            console.log(`🔗 Clicked login button: ${btnSelector}, waiting for form...`);
+            await this.page.waitForTimeout(5000);
+            
+            // Try email selectors again
+            for (const selector of emailSelectors) {
+              try {
+                await this.page.waitForSelector(selector, { timeout: 2000 });
+                emailField = selector;
+                console.log(`📧 Found email field after login click: ${selector}`);
+                break;
+              } catch (e) {}
+            }
+            if (emailField) break;
+          } catch (e) {}
+        }
+      }
+      
+      if (!emailField) {
+        console.log('❌ Could not find email field on DAT login page');
+        console.log('📋 Taking screenshot for debugging...');
+        await this.page.screenshot({ path: '/tmp/dat-login-debug.png', fullPage: true });
+        
+        // Try to find any input field as fallback
+        const allInputs = await this.page.$$('input');
+        console.log(`🔍 Found ${allInputs.length} input fields on page`);
+        
+        if (allInputs.length > 0) {
+          emailField = 'input';
+          console.log('⚡ Using first input field as email field');
+        } else {
+          return 'error';
+        }
+      }
+      
+      // Enter email
       console.log('📧 Entering email address...');
-      await this.page.waitForSelector('input[name="Email"]', { timeout: 10000 });
-      await this.page.type('input[name="Email"]', DAT_EMAIL);
+      await this.page.type(emailField, DAT_EMAIL);
       
-      // Step 3: Click submit for email
-      console.log('▶️ Submitting email...');
-      await this.page.click('button[type="submit"]');
+      // Look for password field (might be on same page or appear after email)
+      const passwordSelectors = ['input[name="Password"]', 'input[name="password"]', 'input[type="password"]', '#password'];
+      let passwordField = null;
       
-      // Step 4: Wait for password field and enter password
+      for (const selector of passwordSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 2000 });
+          passwordField = selector;
+          console.log(`🔐 Found password field: ${selector}`);
+          break;
+        } catch (e) {}
+      }
+      
+      if (!passwordField) {
+        // Try submitting email first, then look for password
+        console.log('▶️ Submitting email first...');
+        const submitButtons = ['button[type="submit"]', 'input[type="submit"]', '.submit-btn', 'button:contains("Next")', 'button:contains("Continue")'];
+        for (const btnSelector of submitButtons) {
+          try {
+            await this.page.waitForSelector(btnSelector, { timeout: 2000 });
+            await this.page.click(btnSelector);
+            console.log(`🔗 Clicked submit button: ${btnSelector}`);
+            await this.page.waitForTimeout(3000);
+            break;
+          } catch (e) {}
+        }
+        
+        // Look for password field again
+        for (const selector of passwordSelectors) {
+          try {
+            await this.page.waitForSelector(selector, { timeout: 3000 });
+            passwordField = selector;
+            console.log(`🔐 Found password field after email submit: ${selector}`);
+            break;
+          } catch (e) {}
+        }
+      }
+      
+      if (!passwordField) {
+        console.log('❌ Could not find password field');
+        return 'error';
+      }
+      
+      // Enter password
       console.log('🔐 Entering password...');
-      await this.page.waitForSelector('input[name="Password"]', { timeout: 10000 });
-      await this.page.type('input[name="Password"]', DAT_PASSWORD);
+      await this.page.type(passwordField, DAT_PASSWORD);
       
-      // Step 5: Submit password
-      console.log('▶️ Submitting password...');
-      await this.page.click('button[type="submit"]');
+      // Submit final login
+      console.log('▶️ Submitting login form...');
+      const finalSubmitButtons = ['button[type="submit"]', 'input[type="submit"]', '.submit-btn', 'button:contains("Login")', 'button:contains("Sign In")'];
+      for (const btnSelector of finalSubmitButtons) {
+        try {
+          await this.page.waitForSelector(btnSelector, { timeout: 2000 });
+          await this.page.click(btnSelector);
+          console.log(`🔗 Clicked final submit: ${btnSelector}`);
+          break;
+        } catch (e) {}
+      }
       
       // Step 6: Wait for 2FA or successful login
       console.log('🛡️ Checking for 2FA requirement...');
