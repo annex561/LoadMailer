@@ -26,7 +26,7 @@ export function TwoFAInput() {
         setNeedsCode(true);
         toast({
           title: "2FA Required",
-          description: "A browser window opened for DAT login. Please complete 2FA verification there, then click 'Check Authentication' below.",
+          description: "Browser window opened. Enter your email/password, then complete 2FA verification. Click 'Check Authentication' when done.",
           variant: "default",
         });
         
