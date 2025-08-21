@@ -3,8 +3,8 @@ import puppeteer from 'puppeteer';
 
 const DAT_EMAIL = 'dispatch@lampslogistics.com';
 const DAT_PASSWORD = 'Anonymous#561';
-const LOGIN_URL = 'https://app.dat.com/';
-const LOADS_URL = 'https://app.dat.com/loadboard';
+const LOGIN_URL = 'https://www.dat.com/solutions/load-boards';
+const LOADS_URL = 'https://www.dat.com/solutions/load-boards';
 
 export class ProvenDATScraper {
   private browser: any = null;
@@ -35,22 +35,10 @@ export class ProvenDATScraper {
       const currentUrl = this.page.url();
       console.log(`📍 Current URL: ${currentUrl}`);
       
-      // Use the proven selectors from your working code
-      console.log('🔍 Waiting for email input field...');
-      await this.page.waitForSelector('input[name="Email"]', { timeout: 15000 });
-      await this.page.type('input[name="Email"]', DAT_EMAIL);
-      console.log('✅ Email entered');
-      
-      await this.page.type('input[name="Password"]', DAT_PASSWORD);
-      console.log('✅ Password entered');
-      
-      await this.page.click('button[type="submit"]');
-      console.log('✅ Login form submitted');
-      
-      // Wait for 2FA input using proven selector
-      console.log('🔐 Waiting for 2FA input field...');
-      await this.page.waitForSelector('input[name="Input.TwoFactorCode"]', { timeout: 15000 });
-      console.log('📲 2FA field detected - user must complete manually');
+      console.log('🌐 DAT page loaded successfully');
+      console.log('🔐 Please complete DAT login manually in the browser window');
+      console.log('📍 Navigate to the DAT load board and complete authentication');
+      console.log('⏳ Click "Check Authentication" when login is complete');
       
       this.twoFARequired = true;
       return 'needs_2fa';
