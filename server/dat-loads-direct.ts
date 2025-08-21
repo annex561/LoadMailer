@@ -116,41 +116,44 @@ export function setupDirectDATLoads(app: Express) {
   // Direct DAT loads endpoint - now prioritizes real authenticated session loads
   app.get('/api/dat-loads-direct', async (req, res) => {
     try {
-      // Force extraction from authenticated session 
-      if (realDATScraper && realDATScraper.isAuthenticated && realDATScraper.isAuthenticated()) {
-        console.log('📋 [AUTHENTICATED] Attempting to extract real loads from your DAT session...');
-        
-        try {
-          const realLoads = await realDATScraper.scrapeCurrentSession();
-          if (realLoads && realLoads.length > 0) {
-            // Convert to DAT loads format
-            const formattedLoads = realLoads.map((load: any, index: number) => ({
-              id: load.id || `DAT-REAL-${Date.now()}-${index}`,
-              origin: load.origin || load.pickup || `${load.originCity}, ${load.originState}`,
-              destination: load.destination || load.delivery || `${load.destCity}, ${load.destState}`,
-              pickup: load.pickupDate || 'Today',
-              delivery: load.deliveryDate || 'Tomorrow',
-              weight: load.weight?.toString() || `${Math.floor(Math.random() * 30000) + 10000} lbs`,
-              length: load.length || '48 ft',
-              rate: load.rate?.toString() || (Math.floor(Math.random() * 2000) + 800).toString(),
-              miles: load.miles?.toString() || (Math.floor(Math.random() * 800) + 200).toString(),
-              deadhead: load.deadhead || `${Math.floor(Math.random() * 50) + 15} mi`,
-              equipment: load.equipment || load.equipmentType || 'Van',
-              broker: load.company || load.broker || 'DAT LoadLink Member',
-              email: load.email || `dispatch@${(load.company || 'broker').toLowerCase().replace(/\s+/g, '')}.com`,
-              phone: load.phone || load.contact || '800-555-LOAD',
-              comments: load.comments || `Real DAT LoadLink load from authenticated session. Post ID: ${load.id || 'N/A'}`,
-              age: load.age || `${Math.floor(Math.random() * 6) + 1}h`,
+      // Since DAT scraper is authenticated but not extracting loads properly, 
+      // manually trigger extraction from the authenticated session
+      console.log('📋 [FORCE-EXTRACT] Forcing load extraction from authenticated DAT session...');
+      
+      try {
+        if (realDATScraper && realDATScraper.performRealDATScraping) {
+          const extractedLoads = await realDATScraper.performRealDATScraping();
+          
+          if (extractedLoads && extractedLoads.length > 0) {
+            console.log(`🎯 SUCCESS! Extracted ${extractedLoads.length} real loads from DAT session`);
+            
+            // Format for DAT loads display with proper post IDs
+            const formattedLoads = extractedLoads.map((load: any, index: number) => ({
+              id: load.loadId || `DAT-LIVE-${Date.now()}-${index}`,
+              origin: load.origin,
+              destination: load.destination,
+              pickup: 'Today',
+              delivery: 'Tomorrow',
+              weight: `${load.weight.toLocaleString()} lbs`,
+              length: '48 ft',
+              rate: load.rate.toString(),
+              miles: load.miles.toString(),
+              deadhead: '25 mi',
+              equipment: load.equipmentType === 'V' ? 'Van' : (load.equipmentType === 'R' ? 'Reefer' : load.equipmentType),
+              broker: load.company,
+              email: load.contact.includes('@') ? load.contact : `dispatch@${load.company.toLowerCase().replace(/\s+/g, '')}.com`,
+              phone: load.phone || '800-DAT-LOAD',
+              comments: `${load.comments} Post ID: ${load.loadId}`,
+              age: '1h 30m',
               scrapedAt: new Date().toISOString()
             }));
             
             authenticatedSessionLoads = formattedLoads;
-            console.log(`📋 [SUCCESS] Extracted ${formattedLoads.length} real loads from authenticated DAT session`);
             return res.json(formattedLoads);
           }
-        } catch (scrapeError) {
-          console.error('Error extracting from authenticated session:', scrapeError);
         }
+      } catch (error) {
+        console.error('Force extraction error:', error);
       }
       
       // Use cached authenticated loads if available
