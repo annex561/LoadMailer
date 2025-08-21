@@ -172,10 +172,10 @@ export function setupDirectDATLoads(app: Express) {
     });
   });
 
-  // Initiate DAT login process 
+  // Initiate DAT login process using proven method
   app.post('/api/dat/start-login', async (req, res) => {
     try {
-      console.log('🚀 User initiated DAT login process');
+      console.log('🚀 User initiated proven DAT login process');
       const result = await datLoginMonitor.startLoginProcess();
       res.json(result);
     } catch (error) {
@@ -184,47 +184,33 @@ export function setupDirectDATLoads(app: Express) {
     }
   });
 
-  // Endpoint to submit 2FA code
-  app.post('/api/dat/submit-2fa', async (req, res) => {
-    const { code } = req.body;
-    
-    if (!code || code.length < 4) {
-      return res.json({ success: false, error: 'Please provide a valid 2FA code' });
-    }
-    
+  // Check authentication status
+  app.get('/api/dat/check-auth', async (req, res) => {
     try {
-      console.log('📲 Submitting user-provided 2FA code...');
-      const success = await datLoginMonitor.submit2FACode(code);
+      const status = await datLoginMonitor.checkAuthenticationStatus();
       
-      if (success) {
-        console.log('✅ 2FA successful - now attempting to scrape real loads');
-        
-        // Get the scraper instance and immediately try to scrape loads
-        const scraper = datLoginMonitor.getScraper();
-        if (scraper) {
-          const realLoads = await scraper.scrapeRealLoads();
-          
-          if (realLoads && realLoads.length > 0) {
-            authenticatedSessionLoads = realLoads;
-            return res.json({
-              success: true,
-              message: '2FA successful - real DAT loads loaded',
-              loadsFound: realLoads.length,
-              loads: realLoads
-            });
-          } else {
-            return res.json({
-              success: true,
-              message: '2FA successful but no loads currently visible in your DAT account'
-            });
-          }
+      if (status.status === 'authenticated') {
+        // Immediately scrape loads if authenticated
+        const loads = await datLoginMonitor.scrapeLoads();
+        if (loads.length > 0) {
+          authenticatedSessionLoads = loads;
         }
+        
+        res.json({
+          authenticated: true,
+          loadsFound: loads.length,
+          loads: loads,
+          message: `Found ${loads.length} real DAT loads`
+        });
       } else {
-        return res.json({ success: false, error: '2FA code verification failed' });
+        res.json({
+          authenticated: false,
+          message: status.message || 'Not yet authenticated'
+        });
       }
     } catch (error) {
-      console.error('❌ 2FA submission error:', error);
-      return res.json({ success: false, error: 'Failed to submit 2FA code' });
+      console.error('❌ Auth check error:', error);
+      res.json({ authenticated: false, message: error.message });
     }
   });
 

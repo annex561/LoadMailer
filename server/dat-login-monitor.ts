@@ -1,42 +1,33 @@
-// DAT Login Monitor - Initiates login and monitors for 2FA requirement
-import { WorkingDATScraper } from './working-dat-scraper';
+// DAT Login Monitor - Uses proven scraper method
+import { provenDATScraper } from './proven-dat-scraper';
 
 export class DATLoginMonitor {
-  private scraper: WorkingDATScraper | null = null;
   private isMonitoring = false;
   
   async startLoginProcess() {
     try {
-      console.log('🚀 Starting DAT login process...');
+      console.log('🚀 Starting proven DAT login process...');
       
-      if (!this.scraper) {
-        this.scraper = new WorkingDATScraper();
-        await this.scraper.initialize();
+      // Initialize the proven scraper
+      const initialized = await provenDATScraper.initialize();
+      if (!initialized) {
+        throw new Error('Failed to initialize proven DAT scraper');
       }
       
-      console.log('🔐 Initiating DAT login - this will trigger 2FA code to be sent to you');
-      const loginResult = await this.scraper.loginToDAT();
+      console.log('🔐 Initiating DAT login with proven method');
+      const loginResult = await provenDATScraper.startLogin();
       
       if (loginResult === 'needs_2fa') {
-        console.log('📲 2FA code required - waiting for user to provide verification code');
+        console.log('📲 2FA required - user must complete manually in browser');
         return {
           status: 'needs_2fa',
-          message: 'DAT has sent a verification code to your registered device. Please enter it in the 2FA field.',
+          message: 'Please complete 2FA verification in the browser window that opened. Once complete, the system will detect authentication and load your real DAT loads.',
           ready: true
-        };
-      } else if (loginResult === true) {
-        console.log('✅ Login successful - attempting to scrape loads immediately');
-        const loads = await this.scraper.scrapeRealLoads();
-        return {
-          status: 'authenticated',
-          message: 'Successfully authenticated with DAT',
-          loads: loads,
-          loadsFound: loads?.length || 0
         };
       } else {
         return {
           status: 'error',
-          message: 'Failed to initiate DAT login process'
+          message: 'Unexpected login result'
         };
       }
     } catch (error) {
@@ -48,16 +39,12 @@ export class DATLoginMonitor {
     }
   }
   
-  async submit2FACode(code: string) {
-    if (!this.scraper) {
-      throw new Error('Login process not initiated');
-    }
-    
-    return await this.scraper.submitTwoFACode(code);
+  async checkAuthenticationStatus() {
+    return await provenDATScraper.checkLoginStatus();
   }
   
-  getScraper() {
-    return this.scraper;
+  async scrapeLoads() {
+    return await provenDATScraper.scrapeRealLoads();
   }
 }
 

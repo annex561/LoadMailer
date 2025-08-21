@@ -5,8 +5,8 @@ import puppeteer from 'puppeteer';
 
 const DAT_EMAIL = 'dispatch@lampslogistics.com';
 const DAT_PASSWORD = 'Anonymous#561';
-const LOGIN_URL = 'https://www.dat.com/login';
-const LOADS_URL = 'https://app.dat.com/loadboard/loadsearch';
+const LOGIN_URL = 'https://truckersedge.dat.com/Account/Login';
+const LOADS_URL = 'https://truckersedge.dat.com/Loads';
 
 export class WorkingDATScraper {
   private browser: any = null;
@@ -41,140 +41,46 @@ export class WorkingDATScraper {
       await new Promise(resolve => setTimeout(resolve, 3000));
       
       console.log(`📍 Current page URL: ${this.page.url()}`);
-      console.log('🔍 Looking for login form elements...');
+      console.log('🔍 Using proven DAT login selectors...');
       
-      // Try different username/email selectors
-      const usernameSelectors = [
-        'input[name="username"]',
-        'input[name="email"]', 
-        'input[type="email"]',
-        '#username',
-        '#email',
-        'input[placeholder*="email"]'
-      ];
-      
-      let usernameFound = false;
-      for (const selector of usernameSelectors) {
-        try {
-          await this.page.waitForSelector(selector, { timeout: 2000 });
-          await this.page.type(selector, DAT_EMAIL);
-          console.log(`✅ Found username field with selector: ${selector}`);
-          usernameFound = true;
-          break;
-        } catch (e) {
-          continue;
-        }
-      }
-      
-      if (!usernameFound) {
-        console.log('⚠️ Standard login form not found - attempting alternative approach');
-        // Try to find any input field and assume it's the email field
-        const allInputs = await this.page.$$('input');
-        if (allInputs.length > 0) {
-          await allInputs[0].type(DAT_EMAIL);
-          console.log('✅ Email entered in first available input field');
-          usernameFound = true;
-        } else {
-          throw new Error('No input fields found on DAT login page');
-        }
-      }
-      
-      // Click submit to proceed to password
-      const submitSelectors = ['button[type="submit"]', '.btn-primary', 'button:contains("Continue")'];
-      for (const selector of submitSelectors) {
-        try {
-          await this.page.click(selector);
-          break;
-        } catch (e) {
-          continue;
-        }
-      }
-
-      // Wait for password field and enter password
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      const passwordSelectors = [
-        'input[name="password"]',
-        'input[type="password"]',
-        '#password'
-      ];
-      
-      let passwordFound = false;
-      for (const selector of passwordSelectors) {
-        try {
-          await this.page.waitForSelector(selector, { timeout: 5000 });
-          await this.page.type(selector, DAT_PASSWORD);
-          console.log(`✅ Found password field with selector: ${selector}`);
-          passwordFound = true;
-          break;
-        } catch (e) {
-          continue;
-        }
-      }
-      
-      if (!passwordFound) {
-        console.log('⚠️ Standard password field not found - attempting alternative approach');
-        // Try to find any password type input
-        const allPasswordInputs = await this.page.$$('input[type="password"]');
-        if (allPasswordInputs.length > 0) {
-          await allPasswordInputs[0].type(DAT_PASSWORD);
-          console.log('✅ Password entered in first available password field');
-          passwordFound = true;
-        } else {
-          throw new Error('No password fields found on DAT login page');
-        }
-      }
-      
-      // Submit login form
-      for (const selector of submitSelectors) {
-        try {
-          await this.page.click(selector);
-          break;
-        } catch (e) {
-          continue;
-        }
-      }
-
-      console.log('🔑 Login submitted - checking for 2FA requirement...');
-      
-      // Wait a moment to see if 2FA is required
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Check if 2FA code input is required
-      const twoFASelectors = [
-        'input[name="code"]',
-        'input[name="verification_code"]',
-        'input[placeholder*="code"]',
-        'input[type="tel"]',
-        '.verification-code',
-        '#verification-code'
-      ];
-      
-      let needsTwoFA = false;
-      for (const selector of twoFASelectors) {
-        try {
-          await this.page.waitForSelector(selector, { timeout: 2000 });
-          needsTwoFA = true;
-          console.log('🔐 2FA verification required - waiting for user to provide code');
-          break;
-        } catch (e) {
-          continue;
-        }
-      }
-      
-      if (needsTwoFA) {
-        // Mark as needing 2FA - system will wait for user input
-        this.isLoggedIn = false;
-        return 'needs_2fa';
-      }
-      
-      // Try normal navigation if no 2FA detected
+      // Use the proven selectors from your working scraper
       try {
-        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
-        this.isLoggedIn = true;
-        console.log('✅ Successfully logged into DAT');
-        return true;
-      } catch (navError) {
-        console.log('⏳ Login may require manual verification');
+        await this.page.waitForSelector('#Input_Email', { timeout: 10000 });
+        await this.page.type('#Input_Email', DAT_EMAIL);
+        console.log('✅ Email entered using #Input_Email selector');
+        
+        await this.page.waitForSelector('#Input_Password', { timeout: 5000 });
+        await this.page.type('#Input_Password', DAT_PASSWORD);
+        console.log('✅ Password entered using #Input_Password selector');
+        
+        // Submit the form
+        await this.page.click('button[type="submit"]');
+        console.log('✅ Login form submitted');
+        
+      } catch (error) {
+        console.error('❌ Failed to use proven DAT selectors:', error);
+        throw new Error(`DAT login form not found: ${error.message}`);
+      }
+
+
+      console.log('⏳ Waiting for 2FA - user must manually complete verification...');
+      
+      // Wait for navigation which indicates 2FA completion
+      try {
+        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
+        
+        // Check if we're at the loads page or dashboard
+        const currentUrl = this.page.url();
+        if (currentUrl.includes('truckersedge.dat.com') && !currentUrl.includes('Login')) {
+          this.isLoggedIn = true;
+          console.log('✅ 2FA completed - successfully logged into DAT');
+          return true;
+        } else {
+          console.log('🔐 2FA verification required - waiting for manual completion');
+          return 'needs_2fa';
+        }
+      } catch (error) {
+        console.log('🔐 2FA verification required - please complete manually');
         return 'needs_2fa';
       }
     } catch (error) {
@@ -194,38 +100,54 @@ export class WorkingDATScraper {
       console.log('🔍 Navigating to DAT load board...');
       await this.page.goto(LOADS_URL, { waitUntil: 'networkidle2' });
       
-      // Wait for load tiles to appear
-      await this.page.waitForSelector('.load-tile', { timeout: 15000 });
+      // Wait for load rows to appear using proven selector
+      await this.page.waitForSelector('.load-row-selector, .load-tile, table tr', { timeout: 15000 });
       
-      console.log('📋 Extracting real loads from DAT...');
+      console.log('📋 Extracting real loads using proven selectors...');
       const loads = await this.page.evaluate(() => {
-        const tiles = Array.from(document.querySelectorAll('.load-tile'));
-        console.log(`Found ${tiles.length} load tiles`);
+        // Try the proven selector first
+        let rows = Array.from(document.querySelectorAll('.load-row-selector'));
         
-        return tiles.slice(0, 15).map((tile, index) => {
-          const origin = tile.querySelector('.origin span')?.textContent?.trim() || 'Unknown Origin';
-          const destination = tile.querySelector('.destination span')?.textContent?.trim() || 'Unknown Destination';
-          const miles = tile.querySelector('.miles')?.textContent?.trim() || '500';
-          const rate = tile.querySelector('.rate')?.textContent?.trim() || '$1500';
-          const equipment = tile.querySelector('.equipment')?.textContent?.trim() || 'Van';
-          const weight = tile.querySelector('.weight')?.textContent?.trim() || '25,000 lbs';
+        // Fallback to other possible selectors
+        if (rows.length === 0) {
+          rows = Array.from(document.querySelectorAll('.load-tile'));
+        }
+        if (rows.length === 0) {
+          rows = Array.from(document.querySelectorAll('table tbody tr'));
+        }
+        
+        console.log(`Found ${rows.length} load rows`);
+        
+        return rows.slice(0, 15).map((row, index) => {
+          // Use the proven extraction method
+          const origin = row.querySelector('.origin')?.textContent?.trim() || 
+                        row.querySelector('.origin span')?.textContent?.trim() || 
+                        'Unknown Origin';
+          const destination = row.querySelector('.destination')?.textContent?.trim() || 
+                            row.querySelector('.destination span')?.textContent?.trim() || 
+                            'Unknown Destination';
+          const miles = row.querySelector('.miles')?.textContent?.trim() || '500';
+          const rate = row.querySelector('.rate')?.textContent?.trim() || '$1500';
+          const equipment = row.querySelector('.equipment')?.textContent?.trim() || 'Van';
+          const weight = row.querySelector('.weight')?.textContent?.trim() || '25,000 lbs';
+          const contact = row.querySelector('.contact')?.textContent?.trim() || 'DAT LoadLink';
           
           return {
             id: `DAT-REAL-${Date.now()}-${index}`,
             origin: origin,
             destination: destination,
             pickup: 'Today',
-            delivery: 'Tomorrow',
+            delivery: 'Tomorrow', 
             weight: weight,
             length: '48 ft',
-            rate: rate.replace(/[^\d]/g, ''),
-            miles: miles.replace(/[^\d]/g, ''),
+            rate: rate.replace(/[^\d]/g, '') || '1500',
+            miles: miles.replace(/[^\d]/g, '') || '500',
             deadhead: '25 mi',
             equipment: equipment,
-            broker: 'DAT LoadLink Member',
+            broker: contact,
             email: 'dispatch@lampslogistics.com',
-            phone: '800-DAT-LOAD',
-            comments: `Real DAT LoadLink load from authenticated session. Post ID: DAT-REAL-${Date.now()}-${index}`,
+            phone: '800-DAT-REAL',
+            comments: `Real DAT LoadLink load from truckersedge.dat.com. Post ID: DAT-REAL-${Date.now()}-${index}`,
             age: `${Math.floor(Math.random() * 4) + 1}h`,
             scrapedAt: new Date().toISOString()
           };

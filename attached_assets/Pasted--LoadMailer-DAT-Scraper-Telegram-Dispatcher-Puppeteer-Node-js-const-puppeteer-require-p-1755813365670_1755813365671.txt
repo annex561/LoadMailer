@@ -1,0 +1,81 @@
+// LoadMailer: DAT Scraper & Telegram Dispatcher (Puppeteer + Node.js)
+
+const puppeteer = require("puppeteer");
+const TelegramBot = require("node-telegram-bot-api");
+const fs = require("fs");
+
+// ---------------- CONFIG ----------------
+const DAT_EMAIL = "dispatch@lampslogistics.com";
+const DAT_PASSWORD = "Anonymous#561";
+const TELEGRAM_BOT_TOKEN = "<YOUR_BOT_TOKEN>"; // Replace with your real token
+const DRIVER_IDS = [
+  { id: 5908383693, name: "Alex Liberty", locationZip: "32801", vehicleLength: 26, usedSpace: 0 },
+  // Add more drivers here as needed
+];
+const SCRAPE_INTERVAL_MINUTES = 3;
+const ACTIVE_HOURS = { start: 8, end: 18 }; // 8AM to 6PM
+
+// -------------- TELEGRAM SETUP --------------
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: false });
+
+// -------------- SCRAPER START --------------
+(async () => {
+  const browser = await puppeteer.launch({ headless: false });
+  const page = await browser.newPage();
+
+  console.log("Navigating to DAT login page...");
+  await page.goto("https://truckersedge.dat.com/Account/Login", { waitUntil: "networkidle2" });
+
+  await page.type("#Input_Email", DAT_EMAIL);
+  await page.type("#Input_Password", DAT_PASSWORD);
+  await page.click("button[type='submit']");
+
+  console.log("⏳ Waiting for you to enter 2FA code manually...");
+  await page.waitForNavigation({ waitUntil: "networkidle2" });
+  console.log("✅ 2FA Complete. Logged in!");
+
+  // Start scraping loop
+  while (true) {
+    const hour = new Date().getHours();
+    if (hour >= ACTIVE_HOURS.start && hour < ACTIVE_HOURS.end) {
+      console.log("🔍 Scraping new loads...");
+      const loads = await scrapeLoads(page);
+      await notifyDrivers(loads);
+    } else {
+      console.log("⏸️ Outside active hours. Sleeping...");
+    }
+    await sleep(SCRAPE_INTERVAL_MINUTES * 60 * 1000);
+  }
+})();
+
+// -------------- SCRAPE FUNCTION --------------
+async function scrapeLoads(page) {
+  const loads = [];
+
+  // Go to load search results
+  await page.goto("https://truckersedge.dat.com/Loads", { waitUntil: "networkidle2" });
+
+  // You may need to click filters or refresh results here depending on your setup
+
+  const rows = await page.$$(".load-row-selector"); // ← Update with actual class
+  for (let i = 0; i < Math.min(10, rows.length); i++) {
+    const row = rows[i];
+    const load = await page.evaluate((el) => {
+      return {
+        origin: el.querySelector(".origin").innerText.trim(),
+        destination: el.querySelector(".destination").innerText.trim(),
+        miles: el.querySelector(".miles").innerText.trim(),
+        weight: el.querySelector(".weight").innerText.trim(),
+        price: el.querySelector(".rate").innerText.trim(),
+        contact: el.querySelector(".contact")?.innerText.trim(),
+      };
+    }, row);
+    loads.push(load);
+  }
+  return loads;
+}
+
+// -------------- NOTIFY DRIVERS --------------
+async function notifyDrivers(loads) {
+  for (const load of loads) {
+    for (const driver of DRIVER_IDS) {

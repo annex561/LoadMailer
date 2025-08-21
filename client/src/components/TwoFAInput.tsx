@@ -9,6 +9,7 @@ export function TwoFAInput() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStartingLogin, setIsStartingLogin] = useState(false);
   const [needsCode, setNeedsCode] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(false);
 
   const handleStartLogin = async () => {
     setIsStartingLogin(true);
@@ -25,9 +26,12 @@ export function TwoFAInput() {
         setNeedsCode(true);
         toast({
           title: "2FA Required",
-          description: "DAT has sent a verification code to your device. Please enter it below.",
+          description: "A browser window opened for DAT login. Please complete 2FA verification there, then click 'Check Authentication' below.",
           variant: "default",
         });
+        
+        // Start checking for authentication completion
+        startAuthCheck();
       } else if (result.status === 'authenticated') {
         toast({
           title: "Login Successful",
@@ -51,6 +55,65 @@ export function TwoFAInput() {
       });
     } finally {
       setIsStartingLogin(false);
+    }
+  };
+
+  const startAuthCheck = () => {
+    const checkInterval = setInterval(async () => {
+      try {
+        const response = await fetch('/api/dat/check-auth');
+        const result = await response.json();
+        
+        if (result.authenticated) {
+          clearInterval(checkInterval);
+          setNeedsCode(false);
+          toast({
+            title: "Authentication Successful!",
+            description: `Found ${result.loadsFound} real DAT loads`,
+            variant: "default",
+          });
+          setTimeout(() => window.location.reload(), 1500);
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
+      }
+    }, 3000);
+    
+    // Stop checking after 10 minutes
+    setTimeout(() => clearInterval(checkInterval), 600000);
+  };
+
+  const handleCheckAuth = async () => {
+    setIsCheckingAuth(true);
+
+    try {
+      const response = await fetch('/api/dat/check-auth');
+      const result = await response.json();
+
+      if (result.authenticated) {
+        setNeedsCode(false);
+        toast({
+          title: "Authentication Successful!",
+          description: `Found ${result.loadsFound} real DAT loads`,
+          variant: "default",
+        });
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        toast({
+          title: "Still Waiting",
+          description: "Please complete 2FA verification in the browser window",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error('Auth check error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to check authentication status",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckingAuth(false);
     }
   };
 
@@ -126,29 +189,18 @@ export function TwoFAInput() {
 
   return (
     <div className="flex items-center gap-2">
-      <Input
-        type="text"
-        placeholder="Enter 2FA Code"
-        value={code}
-        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-        className="w-36"
-        maxLength={6}
-        disabled={isSubmitting}
-      />
       <Button
-        onClick={handleSubmit}
-        disabled={!code || isSubmitting}
+        onClick={handleCheckAuth}
+        disabled={isCheckingAuth}
         size="sm"
         className="bg-green-600 hover:bg-green-700"
       >
-        {isSubmitting ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+        {isCheckingAuth ? (
+          <Loader2 className="h-4 w-4 animate-spin mr-1" />
         ) : (
-          <>
-            <Shield className="mr-1 h-4 w-4" />
-            Verify
-          </>
+          <Shield className="mr-1 h-4 w-4" />
         )}
+        Check Authentication
       </Button>
     </div>
   );
