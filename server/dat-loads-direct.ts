@@ -100,14 +100,9 @@ const liveDAT_Loads = [
   }
 ];
 
-// Import real scraper service to get authentic loads
-let realDATScraper: any = null;
-try {
-  const { RealDATScraper } = require('./real-dat-scraper');
-  realDATScraper = new RealDATScraper(null);
-} catch (error) {
-  console.log('⚠️ RealDATScraper service not available:', error.message);
-}
+// Import working DAT scraper based on proven code
+import { WorkingDATScraper } from './working-dat-scraper';
+let workingDATScraper: WorkingDATScraper | null = null;
 
 // Store for real scraped loads from authenticated session
 let authenticatedSessionLoads: any[] = [];
@@ -116,11 +111,42 @@ export function setupDirectDATLoads(app: Express) {
   // Direct DAT loads endpoint - now prioritizes real authenticated session loads
   app.get('/api/dat-loads-direct', async (req, res) => {
     try {
-      // Since you want ONLY real DAT loads and the scraper authentication is verified but extraction fails,
-      // return empty array until DAT loads are actually visible in your authenticated session
-      console.log('📋 [DAT STATUS] Authentication verified with dispatch@lampslogistics.com');
-      console.log('📋 [DAT STATUS] Waiting for visible loads in your DAT LoadLink session');
-      console.log('📋 [DAT STATUS] System will only display loads that exist in your actual account');
+      // Initialize and use working DAT scraper
+      if (!workingDATScraper) {
+        workingDATScraper = new WorkingDATScraper();
+        const initialized = await workingDATScraper.initialize();
+        if (initialized) {
+          console.log('🚀 Working DAT scraper initialized successfully');
+        }
+      }
+      
+      // Try to scrape real loads using proven method
+      if (workingDATScraper) {
+        try {
+          console.log('🔍 Attempting to scrape real DAT loads...');
+          const realLoads = await workingDATScraper.scrapeRealLoads();
+          
+          if (realLoads && realLoads.length > 0) {
+            console.log(`✅ SUCCESS! Found ${realLoads.length} real DAT loads`);
+            authenticatedSessionLoads = realLoads;
+            return res.json(realLoads);
+          } else {
+            console.log('📋 No loads found in current DAT session');
+          }
+        } catch (error) {
+          console.error('❌ Working scraper error:', error.message);
+        }
+      }
+      
+      // Return cached loads if available
+      if (authenticatedSessionLoads.length > 0) {
+        console.log(`📋 Serving ${authenticatedSessionLoads.length} cached real DAT loads`);
+        return res.json(authenticatedSessionLoads);
+      }
+      
+      // No real loads available
+      console.log('📋 [WAITING] No real DAT loads currently available');
+      console.log('🔐 Ensure loads are visible in your DAT LoadLink account at dispatch@lampslogistics.com');
       res.json([]);
       
     } catch (error) {
@@ -137,6 +163,33 @@ export function setupDirectDATLoads(app: Express) {
       status: 'Connected but no visible loads found in session',
       message: 'System ready to display real loads when they appear in your DAT account'
     });
+  });
+
+  // Force refresh using working DAT scraper
+  app.post('/api/dat/force-scrape-real', async (req, res) => {
+    console.log('🔧 FORCE SCRAPE: Using proven DAT scraper method...');
+    
+    try {
+      if (!workingDATScraper) {
+        workingDATScraper = new WorkingDATScraper();
+        await workingDATScraper.initialize();
+      }
+      
+      const realLoads = await workingDATScraper.scrapeRealLoads();
+      
+      if (realLoads && realLoads.length > 0) {
+        authenticatedSessionLoads = realLoads;
+        console.log(`✅ Force scrape SUCCESS: Found ${realLoads.length} real DAT loads`);
+        return res.json({ success: true, loadsFound: realLoads.length, loads: realLoads });
+      } else {
+        console.log('⚠️ Force scrape: No loads found in DAT session');
+        return res.json({ success: false, message: 'No loads visible in DAT session' });
+      }
+      
+    } catch (error) {
+      console.error('❌ Force scrape error:', error);
+      return res.json({ success: false, error: error.message });
+    }
   });
 
   // Manual test endpoint to trigger real DAT scraping  
