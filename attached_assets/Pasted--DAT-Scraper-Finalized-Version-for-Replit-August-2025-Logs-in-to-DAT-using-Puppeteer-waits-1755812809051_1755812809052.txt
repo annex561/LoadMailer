@@ -1,0 +1,90 @@
+// DAT Scraper (Finalized Version) for Replit - August 2025
+// Logs in to DAT using Puppeteer, waits for your manual 2FA, scrapes real loads, and sends them to your Telegram bot
+
+const puppeteer = require('puppeteer');
+const fs = require('fs');
+require('dotenv').config();
+
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const DAT_EMAIL = 'dispatch@lampslogistics.com';
+const DAT_PASSWORD = 'Anonymous#561';
+const LOGIN_URL = 'https://www.dat.com/login';
+const LOADS_URL = 'https://app.dat.com/loadboard/loadsearch'; // Dashboard after login
+
+async function loginToDAT(page) {
+  await page.goto(LOGIN_URL, { waitUntil: 'networkidle2' });
+
+  await page.waitForSelector('input[name="username"]');
+  await page.type('input[name="username"]', DAT_EMAIL);
+  await page.click('button[type="submit"]');
+
+  await page.waitForSelector('input[name="password"]', { timeout: 10000 });
+  await page.type('input[name="password"]', DAT_PASSWORD);
+  await page.click('button[type="submit"]');
+
+  console.log('[ACTION REQUIRED] Please complete the 2FA manually.');
+  await page.waitForNavigation({ waitUntil: 'networkidle2' });
+}
+
+async function scrapeLoads(page) {
+  await page.goto(LOADS_URL, { waitUntil: 'networkidle2' });
+
+  await page.waitForSelector('.load-tile');
+  const loads = await page.evaluate(() => {
+    const tiles = Array.from(document.querySelectorAll('.load-tile'));
+    return tiles.slice(0, 10).map(tile => {
+      const origin = tile.querySelector('.origin span')?.textContent?.trim();
+      const destination = tile.querySelector('.destination span')?.textContent?.trim();
+      const miles = tile.querySelector('.miles')?.textContent?.trim();
+      const rate = tile.querySelector('.rate')?.textContent?.trim();
+      const equipment = tile.querySelector('.equipment')?.textContent?.trim();
+      const weight = tile.querySelector('.weight')?.textContent?.trim();
+      return { origin, destination, miles, rate, equipment, weight };
+    });
+  });
+  return loads;
+}
+
+async function sendToTelegram(load) {
+  const message = `🚚 *New Load Available!*
+
+📍 *From:* ${load.origin}
+📦 *To:* ${load.destination}
+📏 *Miles:* ${load.miles}
+💰 *Rate:* ${load.rate}
+🚛 *Truck Type:* ${load.equipment}
+⚖️ *Weight:* ${load.weight}
+
+🔘 Reply YES to accept this load.`;
+
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: TELEGRAM_CHAT_ID,
+      text: message,
+      parse_mode: 'Markdown'
+    })
+  });
+}
+
+(async () => {
+  const browser = await puppeteer.launch({ headless: false });
+  const page = await browser.newPage();
+
+  try {
+    await loginToDAT(page);
+    const loads = await scrapeLoads(page);
+
+    for (let i = 0; i < loads.length; i++) {
+      await sendToTelegram(loads[i]);
+      await new Promise(resolve => setTimeout(resolve, 30000)); // 30s pause between messages
+    }
+
+  } catch (error) {
+    console.error('Error:', error);
+  } finally {
+    await browser.close();
+  }
+})();

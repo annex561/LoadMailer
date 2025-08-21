@@ -37,15 +37,81 @@ export class WorkingDATScraper {
       console.log('🔐 Logging into DAT with dispatch@lampslogistics.com...');
       await this.page.goto(LOGIN_URL, { waitUntil: 'networkidle2' });
 
-      // Wait for username field and enter email
-      await this.page.waitForSelector('input[name="username"]', { timeout: 10000 });
-      await this.page.type('input[name="username"]', DAT_EMAIL);
-      await this.page.click('button[type="submit"]');
+      // Wait for login form to appear and try multiple selectors
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Try different username/email selectors
+      const usernameSelectors = [
+        'input[name="username"]',
+        'input[name="email"]', 
+        'input[type="email"]',
+        '#username',
+        '#email',
+        'input[placeholder*="email"]'
+      ];
+      
+      let usernameFound = false;
+      for (const selector of usernameSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 2000 });
+          await this.page.type(selector, DAT_EMAIL);
+          console.log(`✅ Found username field with selector: ${selector}`);
+          usernameFound = true;
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      if (!usernameFound) {
+        throw new Error('Username field not found on DAT login page');
+      }
+      
+      // Click submit to proceed to password
+      const submitSelectors = ['button[type="submit"]', '.btn-primary', 'button:contains("Continue")'];
+      for (const selector of submitSelectors) {
+        try {
+          await this.page.click(selector);
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
 
       // Wait for password field and enter password
-      await this.page.waitForSelector('input[name="password"]', { timeout: 10000 });
-      await this.page.type('input[name="password"]', DAT_PASSWORD);
-      await this.page.click('button[type="submit"]');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const passwordSelectors = [
+        'input[name="password"]',
+        'input[type="password"]',
+        '#password'
+      ];
+      
+      let passwordFound = false;
+      for (const selector of passwordSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 5000 });
+          await this.page.type(selector, DAT_PASSWORD);
+          console.log(`✅ Found password field with selector: ${selector}`);
+          passwordFound = true;
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      if (!passwordFound) {
+        throw new Error('Password field not found on DAT login page');
+      }
+      
+      // Submit login form
+      for (const selector of submitSelectors) {
+        try {
+          await this.page.click(selector);
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
 
       console.log('🔑 Login submitted - waiting for authentication...');
       
