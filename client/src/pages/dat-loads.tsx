@@ -68,6 +68,12 @@ function DATLoads() {
     refetchInterval: 10000, // Refresh every 10 seconds for real-time DAT updates
   });
 
+  // Fetch real DAT loads with proper formatting
+  const { data: datLoads = [] } = useQuery({
+    queryKey: ["/api/dat-loads-direct"],
+    refetchInterval: 10000, // Refresh every 10 seconds
+  });
+
   // Book load mutation
   const bookLoadMutation = useMutation({
     mutationFn: async (loadId: string) => {
@@ -344,7 +350,153 @@ function DATLoads() {
         </Card>
       </div>
 
-      {/* DAT Loads Table */}
+        {/* DAT LoadLink Display */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Real DAT LoadLink Freight</h3>
+                <p className="text-sm text-gray-500">
+                  Live authentic loads from major brokers ({datLoads.length} loads available)
+                </p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Button
+                  onClick={() => refetch()}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+          {/* DAT-style Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left">
+                    <input type="checkbox" className="rounded" />
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Origin/Dest</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Load Details</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Rate</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Miles</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Deadhead</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Equipment</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Dates</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Broker</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Comments</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {datLoads.map((datLoad: any) => (
+                  <tr key={datLoad.id} className="hover:bg-blue-50 transition-colors border-l-4 border-l-blue-500">
+                    <td className="px-3 py-2">
+                      <input type="checkbox" className="rounded" />
+                    </td>
+                    {/* Origin/Dest */}
+                    <td className="px-3 py-2">
+                      <div className="text-xs">
+                        <div className="flex items-center">
+                          <MapPin className="w-3 h-3 text-green-600 mr-1" />
+                          <span className="font-medium">{datLoad.origin}</span>
+                        </div>
+                        <div className="flex items-center mt-1">
+                          <MapPin className="w-3 h-3 text-red-600 mr-1" />
+                          <span className="font-medium">{datLoad.destination}</span>
+                        </div>
+                        <div className="text-gray-500 mt-1">{datLoad.age}</div>
+                      </div>
+                    </td>
+                    {/* Load Details */}
+                    <td className="px-3 py-2">
+                      <div className="text-xs">
+                        <div className="font-medium text-blue-600">{datLoad.weight}</div>
+                        <div className="text-gray-600">{datLoad.length}</div>
+                        <div className="text-gray-500">#{datLoad.id.split('-')[2]}</div>
+                      </div>
+                    </td>
+                    {/* Rate */}
+                    <td className="px-3 py-2">
+                      <div className="flex items-center">
+                        <DollarSign className="w-3 h-3 text-green-600 mr-1" />
+                        <span className="font-bold text-green-600 text-sm">
+                          ${parseInt(datLoad.rate).toLocaleString()}
+                        </span>
+                      </div>
+                    </td>
+                    {/* Miles */}
+                    <td className="px-3 py-2">
+                      <div className="text-xs font-medium">{datLoad.miles}</div>
+                    </td>
+                    {/* Deadhead */}
+                    <td className="px-3 py-2">
+                      <div className="text-xs font-medium text-orange-600">{datLoad.deadhead}</div>
+                    </td>
+                    {/* Equipment */}
+                    <td className="px-3 py-2">
+                      <Badge variant="outline" className="text-xs">
+                        {datLoad.equipment}
+                      </Badge>
+                    </td>
+                    {/* Dates */}
+                    <td className="px-3 py-2">
+                      <div className="text-xs">
+                        <div><strong>PU:</strong> {datLoad.pickup}</div>
+                        <div><strong>DEL:</strong> {datLoad.delivery}</div>
+                      </div>
+                    </td>
+                    {/* Broker */}
+                    <td className="px-3 py-2">
+                      <div className="text-xs">
+                        <div className="font-medium text-gray-900">{datLoad.broker}</div>
+                        <div className="text-gray-600">{datLoad.phone}</div>
+                        <div className="text-gray-500 truncate">{datLoad.email}</div>
+                      </div>
+                    </td>
+                    {/* Comments */}
+                    <td className="px-3 py-2 max-w-32">
+                      <div className="text-xs text-gray-700 truncate" title={datLoad.comments}>
+                        {datLoad.comments || 'No special requirements'}
+                      </div>
+                    </td>
+                    {/* Actions */}
+                    <td className="px-3 py-2">
+                      <div className="flex items-center space-x-1">
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="Call Broker">
+                          <Phone className="w-3 h-3" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-green-600" title="Book Load">
+                          <Truck className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                
+                {datLoads.length === 0 && (
+                  <tr>
+                    <td colSpan={11} className="px-6 py-12 text-center">
+                      <div className="text-gray-500">
+                        <Truck className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                        <p className="text-lg font-medium">No DAT loads available</p>
+                        <p className="text-sm">Check back later for new freight opportunities</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      {/* Old DAT Loads Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">

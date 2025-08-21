@@ -46,11 +46,7 @@ export default function Loads() {
     queryKey: ["/api/loads"],
   });
 
-  // Fetch real DAT loads to display alongside regular loads
-  const { data: datLoads = [] } = useQuery({
-    queryKey: ["/api/dat-loads-direct"],
-    refetchInterval: 10000, // Refresh every 10 seconds
-  });
+
 
   const filteredLoads = loads.filter(load => {
     const matchesSearch = !searchTerm || 
@@ -160,7 +156,7 @@ export default function Loads() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">All Loads</h3>
-                <p className="text-sm text-gray-500">Manage and track all loads ({filteredLoads.length + datLoads.length} total • {datLoads.length} DAT • {filteredLoads.length} Company)</p>
+                <p className="text-sm text-gray-500">Manage and track all your loads ({filteredLoads.length} total)</p>
               </div>
               <div className="flex items-center space-x-3">
                 <Button variant="outline" size="sm" data-testid="button-export-loads">
@@ -179,214 +175,98 @@ export default function Loads() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-3 py-2 text-left">
+                  <th className="px-6 py-3 text-left">
                     <Checkbox data-testid="checkbox-select-all" />
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Origin/Dest</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Load Details</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Miles</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Deadhead</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Equipment</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Dates</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Broker/Customer</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Comments</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Load Details</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Driver</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documents</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dates</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {/* Real DAT Loads Section */}
-                {datLoads.length > 0 && (
-                  <>
-                    <tr className="bg-blue-50">
-                      <td colSpan={10} className="px-6 py-3">
-                        <div className="flex items-center">
-                          <Truck className="w-5 h-5 mr-2 text-blue-600" />
-                          <span className="text-sm font-semibold text-blue-800">Real DAT LoadLink Freight ({datLoads.length} loads)</span>
-                          <Badge className="ml-2 bg-blue-600">Live Data</Badge>
-                        </div>
-                      </td>
-                    </tr>
-                    {datLoads.map((datLoad: any) => (
-                      <tr key={datLoad.id} className="hover:bg-blue-25 transition-colors border-l-4 border-l-blue-500 text-xs" data-testid={`dat-load-row-${datLoad.id}`}>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <Checkbox data-testid={`checkbox-dat-${datLoad.id}`} />
-                        </td>
-                        {/* Origin/Dest */}
-                        <td className="px-3 py-2">
-                          <div className="text-xs">
-                            <div className="flex items-center">
-                              <MapPin className="w-3 h-3 text-green-600 mr-1" />
-                              <span className="font-medium">{datLoad.origin}</span>
-                            </div>
-                            <div className="flex items-center mt-1">
-                              <MapPin className="w-3 h-3 text-red-600 mr-1" />
-                              <span className="font-medium">{datLoad.destination}</span>
-                            </div>
-                            <div className="text-gray-500 mt-1">{datLoad.age}</div>
-                          </div>
-                        </td>
-                        {/* Load Details */}
-                        <td className="px-3 py-2">
-                          <div className="text-xs">
-                            <div className="font-medium text-blue-600">{datLoad.weight}</div>
-                            <div className="text-gray-600">{datLoad.length}</div>
-                            <div className="text-gray-500">#{datLoad.id.split('-')[2]}</div>
-                          </div>
-                        </td>
-                        {/* Rate */}
-                        <td className="px-3 py-2">
-                          <div className="flex items-center">
-                            <DollarSign className="w-3 h-3 text-green-600 mr-1" />
-                            <span className="font-bold text-green-600 text-sm">
-                              ${parseInt(datLoad.rate).toLocaleString()}
-                            </span>
-                          </div>
-                        </td>
-                        {/* Miles */}
-                        <td className="px-3 py-2">
-                          <div className="text-xs font-medium">{datLoad.miles}</div>
-                        </td>
-                        {/* Deadhead */}
-                        <td className="px-3 py-2">
-                          <div className="text-xs font-medium text-orange-600">{datLoad.deadhead}</div>
-                        </td>
-                        {/* Equipment */}
-                        <td className="px-3 py-2">
-                          <Badge variant="outline" className="text-xs">
-                            {datLoad.equipment}
-                          </Badge>
-                        </td>
-                        {/* Dates */}
-                        <td className="px-3 py-2">
-                          <div className="text-xs">
-                            <div><strong>PU:</strong> {datLoad.pickup}</div>
-                            <div><strong>DEL:</strong> {datLoad.delivery}</div>
-                          </div>
-                        </td>
-                        {/* Broker/Customer */}
-                        <td className="px-3 py-2">
-                          <div className="text-xs">
-                            <div className="font-medium text-gray-900">{datLoad.broker}</div>
-                            <div className="text-gray-600">{datLoad.phone}</div>
-                            <div className="text-gray-500 truncate">{datLoad.email}</div>
-                          </div>
-                        </td>
-                        {/* Comments */}
-                        <td className="px-3 py-2 max-w-32">
-                          <div className="text-xs text-gray-700 truncate" title={datLoad.comments}>
-                            {datLoad.comments || 'No special requirements'}
-                          </div>
-                        </td>
-                        {/* Actions */}
-                        <td className="px-3 py-2">
-                          <div className="flex items-center space-x-1">
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="Call">
-                              <Phone className="w-3 h-3" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-green-600" title="Book">
-                              <Truck className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </>
-                )}
-                
-                {/* Regular Company Loads */}
-                {filteredLoads.length > 0 && (
-                  <tr className="bg-gray-50">
-                    <td colSpan={10} className="px-6 py-3">
-                      <div className="flex items-center">
-                        <Building2 className="w-5 h-5 mr-2 text-gray-600" />
-                        <span className="text-sm font-semibold text-gray-800">Company Loads ({filteredLoads.length} loads)</span>
-                      </div>
-                    </td>
-                  </tr>
-                )}
                 {filteredLoads.map((load) => (
-                  <tr key={load.id} className="hover:bg-gray-50 transition-colors text-xs" data-testid={`load-detail-row-${load.id}`}>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                  <tr key={load.id} className="hover:bg-gray-50 transition-colors" data-testid={`load-detail-row-${load.id}`}>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <Checkbox data-testid={`checkbox-load-${load.id}`} />
                     </td>
-                    {/* Origin/Dest */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <span className="text-sm font-medium text-primary">{load.loadNumber}</span>
+                        <div className="text-xs text-gray-500">{load.description}</div>
+                        <div className="text-xs text-gray-500">{load.equipmentType || 'Any Equipment'}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{load.customer.name}</div>
+                        <div className="text-sm text-gray-500">{load.customer.email}</div>
+                        <div className="text-xs text-gray-500">{load.customer.phone}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900 max-w-xs">
+                        <div><strong>From:</strong> <span className="truncate block">{load.pickupAddress}</span></div>
+                        <div className="mt-1"><strong>To:</strong> <span className="truncate block">{load.deliveryAddress}</span></div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {load.driver ? (
                         <div className="flex items-center">
-                          <MapPin className="w-3 h-3 text-green-600 mr-1" />
-                          <span className="font-medium truncate">{load.pickupAddress}</span>
+                          <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center mr-3">
+                            👤
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{load.driver.name}</div>
+                            <div className="text-sm text-gray-500">{load.driver.phone}</div>
+                          </div>
                         </div>
-                        <div className="flex items-center mt-1">
-                          <MapPin className="w-3 h-3 text-red-600 mr-1" />
-                          <span className="font-medium truncate">{load.deliveryAddress}</span>
-                        </div>
-                        <div className="text-gray-500 mt-1">Company Load</div>
+                      ) : (
+                        <span className="text-sm text-gray-500">Not assigned</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getStatusBadge(load.status)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <DocumentCount loadId={load.id} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        <div><strong>Pickup:</strong> {format(new Date(load.pickupDate), "MMM d, yyyy")}</div>
+                        <div><strong>Delivery:</strong> {format(new Date(load.deliveryDate), "MMM d, yyyy")}</div>
                       </div>
                     </td>
-                    {/* Load Details */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs">
-                        <div className="font-medium text-primary">{load.loadNumber}</div>
-                        <div className="text-gray-600">{load.equipmentType || 'Any Equipment'}</div>
-                        <div className="text-gray-500 truncate">{load.description}</div>
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getEmailStatusBadges()}
                     </td>
-                    {/* Rate */}
-                    <td className="px-3 py-2">
-                      <div className="flex items-center">
-                        <DollarSign className="w-3 h-3 text-green-600 mr-1" />
-                        <span className="font-bold text-green-600 text-sm">
-                          ${load.rate ? parseInt(load.rate.toString()).toLocaleString() : 'TBD'}
-                        </span>
-                      </div>
-                    </td>
-                    {/* Miles */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs font-medium">-</div>
-                    </td>
-                    {/* Deadhead */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs font-medium text-orange-600">-</div>
-                    </td>
-                    {/* Equipment */}
-                    <td className="px-3 py-2">
-                      <Badge variant="outline" className="text-xs">
-                        {load.equipmentType || 'Any'}
-                      </Badge>
-                    </td>
-                    {/* Dates */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs">
-                        <div><strong>PU:</strong> {format(new Date(load.pickupDate), "MMM d")}</div>
-                        <div><strong>DEL:</strong> {format(new Date(load.deliveryDate), "MMM d")}</div>
-                      </div>
-                    </td>
-                    {/* Broker/Customer */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs">
-                        <div className="font-medium text-gray-900">{load.customer.name}</div>
-                        <div className="text-gray-600">{load.customer.phone}</div>
-                        <div className="text-gray-500 truncate">{load.customer.email}</div>
-                      </div>
-                    </td>
-                    {/* Comments */}
-                    <td className="px-3 py-2 max-w-32">
-                      <div className="text-xs text-gray-700 truncate" title={load.description}>
-                        {getStatusBadge(load.status)}
-                      </div>
-                    </td>
-                    {/* Actions */}
-                    <td className="px-3 py-2">
-                      <div className="flex items-center space-x-1">
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-primary" title="Edit" onClick={() => setEditingLoad(load)}>
-                          <Edit className="w-3 h-3" />
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2">
+                        <Button variant="ghost" size="sm" title="View Details" data-testid={`button-view-detail-${load.id}`}>
+                          <Eye className="w-4 h-4 text-primary" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="Email">
-                          <Mail className="w-3 h-3" />
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          title="Edit Load"
+                          onClick={() => setEditingLoad(load)}
+                          data-testid={`button-edit-detail-${load.id}`}
+                        >
+                          <Edit className="w-4 h-4 text-gray-600" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-600" title="Delete">
-                          <Trash2 className="w-3 h-3" />
+                        <Button variant="ghost" size="sm" title="Send Email" data-testid={`button-email-detail-${load.id}`}>
+                          <Mail className="w-4 h-4 text-secondary" />
+                        </Button>
+                        <Button variant="ghost" size="sm" title="Duplicate" data-testid={`button-duplicate-detail-${load.id}`}>
+                          <Copy className="w-4 h-4 text-green-600" />
+                        </Button>
+                        <Button variant="ghost" size="sm" title="Delete" data-testid={`button-delete-detail-${load.id}`}>
+                          <Trash2 className="w-4 h-4 text-danger" />
                         </Button>
                       </div>
                     </td>
