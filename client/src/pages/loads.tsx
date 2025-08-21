@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Filter, Download, Plus, Eye, Edit, Mail, Copy, Trash2, FileText, Camera } from "lucide-react";
+import { Search, Filter, Download, Plus, Eye, Edit, Mail, Copy, Trash2, FileText, Camera, Truck, MapPin, DollarSign, Building2, Phone } from "lucide-react";
 import { format } from "date-fns";
 import type { LoadWithRelations, LoadDocument } from "@shared/schema";
 import LoadFormModal from "@/components/load-form-modal";
@@ -44,6 +44,12 @@ export default function Loads() {
 
   const { data: loads = [], isLoading } = useQuery<LoadWithRelations[]>({
     queryKey: ["/api/loads"],
+  });
+
+  // Fetch real DAT loads to display alongside regular loads
+  const { data: datLoads = [] } = useQuery({
+    queryKey: ["/api/dat-loads-direct"],
+    refetchInterval: 10000, // Refresh every 10 seconds
   });
 
   const filteredLoads = loads.filter(load => {
@@ -154,7 +160,7 @@ export default function Loads() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">All Loads</h3>
-                <p className="text-sm text-gray-500">Manage and track all your loads ({filteredLoads.length} total)</p>
+                <p className="text-sm text-gray-500">Manage and track all loads ({filteredLoads.length + datLoads.length} total • {datLoads.length} DAT • {filteredLoads.length} Company)</p>
               </div>
               <div className="flex items-center space-x-3">
                 <Button variant="outline" size="sm" data-testid="button-export-loads">
@@ -188,6 +194,107 @@ export default function Loads() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
+                {/* Real DAT Loads Section */}
+                {datLoads.length > 0 && (
+                  <>
+                    <tr className="bg-blue-50">
+                      <td colSpan={10} className="px-6 py-3">
+                        <div className="flex items-center">
+                          <Truck className="w-5 h-5 mr-2 text-blue-600" />
+                          <span className="text-sm font-semibold text-blue-800">Real DAT LoadLink Freight ({datLoads.length} loads)</span>
+                          <Badge className="ml-2 bg-blue-600">Live Data</Badge>
+                        </div>
+                      </td>
+                    </tr>
+                    {datLoads.map((datLoad: any) => (
+                      <tr key={datLoad.id} className="hover:bg-blue-25 transition-colors border-l-4 border-l-blue-500" data-testid={`dat-load-row-${datLoad.id}`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Checkbox data-testid={`checkbox-dat-${datLoad.id}`} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <span className="text-sm font-medium text-blue-600">{datLoad.id}</span>
+                            <div className="text-xs text-blue-500 font-semibold">DAT LoadLink</div>
+                            <div className="text-xs text-gray-500">{datLoad.equipment} • {datLoad.weight}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{datLoad.broker}</div>
+                            <div className="text-sm text-gray-500">{datLoad.email}</div>
+                            <div className="text-xs text-gray-500">{datLoad.phone}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-900 max-w-xs">
+                            <div className="flex items-center">
+                              <MapPin className="w-3 h-3 text-green-500 mr-1" />
+                              <span className="truncate block">{datLoad.origin}</span>
+                            </div>
+                            <div className="flex items-center mt-1">
+                              <MapPin className="w-3 h-3 text-red-500 mr-1" />
+                              <span className="truncate block">{datLoad.destination}</span>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">{datLoad.miles} miles</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Badge className="bg-yellow-100 text-yellow-800">Available</Badge>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Badge variant="outline" className="bg-green-50 border-green-200 text-green-700">
+                            Market Load
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <Phone className="w-3 h-3 text-gray-400 mr-1" />
+                            <span className="text-xs font-mono">{datLoad.phone}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            <div><strong>Pickup:</strong> {datLoad.pickup}</div>
+                            <div className="text-xs text-gray-500">Scraped: {new Date(datLoad.scrapedAt).toLocaleTimeString()}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <DollarSign className="w-4 h-4 text-green-600 mr-1" />
+                            <span className="text-lg font-bold text-green-600">
+                              ${parseInt(datLoad.rate).toLocaleString()}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex items-center space-x-2">
+                            <Button variant="ghost" size="sm" title="Contact Broker" className="text-blue-600">
+                              <Phone className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" title="Email Broker" className="text-blue-600">
+                              <Mail className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" title="Book Load" className="bg-green-50 text-green-600">
+                              <Truck className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+                
+                {/* Regular Company Loads */}
+                {filteredLoads.length > 0 && (
+                  <tr className="bg-gray-50">
+                    <td colSpan={10} className="px-6 py-3">
+                      <div className="flex items-center">
+                        <Building2 className="w-5 h-5 mr-2 text-gray-600" />
+                        <span className="text-sm font-semibold text-gray-800">Company Loads ({filteredLoads.length} loads)</span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {filteredLoads.map((load) => (
                   <tr key={load.id} className="hover:bg-gray-50 transition-colors" data-testid={`load-detail-row-${load.id}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
