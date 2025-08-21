@@ -8,6 +8,8 @@ LoadMaster is a comprehensive fleet management system for truck load tracking an
 
 **REAL-TIME GPS TRACKING**: Advanced real-time driver location tracking system now integrated with authentic driver data. The LoadOps dashboard displays live GPS coordinates, timestamps, speeds, and service status indicators. Database storage methods implemented for driver location management with comprehensive API endpoints for location data retrieval.
 
+**LOADMAILER BOT INTEGRATION**: Complete LoadMailer Bot integration now operational with authentic DAT Puppeteer scraping. Features include real DAT login with 2FA support using dispatch@lampslogistics.com credentials, browser automation for box truck and sprinter van targeting, enhanced Telegram commands (/bookload, /decline), 30-second staggered messaging between drivers, professional LoadMailer styling, dispatcher control panel at /loadmailer-control, and vehicle management dashboard for AI-ready smart load stacking. The system maintains both authentic Tennessee Load Feed AND real DAT scraping capabilities.
+
 The system also includes an automatic load offering system that evaluates new loads and sends Telegram notifications to eligible drivers based on proximity (150-mile radius), equipment type compatibility, availability, and rate attractiveness. The professional dashboard interface is designed to match DAT One, offering real-time load listings and search filters.
 
 # User Preferences
