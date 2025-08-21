@@ -40,6 +40,9 @@ export class WorkingDATScraper {
       // Wait for login form to appear and try multiple selectors
       await new Promise(resolve => setTimeout(resolve, 3000));
       
+      console.log(`📍 Current page URL: ${this.page.url()}`);
+      console.log('🔍 Looking for login form elements...');
+      
       // Try different username/email selectors
       const usernameSelectors = [
         'input[name="username"]',
@@ -113,18 +116,48 @@ export class WorkingDATScraper {
         }
       }
 
-      console.log('🔑 Login submitted - waiting for authentication...');
+      console.log('🔑 Login submitted - checking for 2FA requirement...');
       
-      // Wait for navigation after login (may include 2FA)
+      // Wait a moment to see if 2FA is required
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Check if 2FA code input is required
+      const twoFASelectors = [
+        'input[name="code"]',
+        'input[name="verification_code"]',
+        'input[placeholder*="code"]',
+        'input[type="tel"]',
+        '.verification-code',
+        '#verification-code'
+      ];
+      
+      let needsTwoFA = false;
+      for (const selector of twoFASelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 2000 });
+          needsTwoFA = true;
+          console.log('🔐 2FA verification required - waiting for user to provide code');
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      if (needsTwoFA) {
+        // Mark as needing 2FA - system will wait for user input
+        this.isLoggedIn = false;
+        return 'needs_2fa';
+      }
+      
+      // Try normal navigation if no 2FA detected
       try {
-        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 });
+        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
         this.isLoggedIn = true;
         console.log('✅ Successfully logged into DAT');
         return true;
       } catch (navError) {
-        console.log('⏳ Navigation taking longer than expected - may need manual 2FA');
-        // Continue anyway, user might need to complete 2FA manually
-        return true;
+        console.log('⏳ Login may require manual verification');
+        return 'needs_2fa';
       }
     } catch (error) {
       console.error('❌ Login failed:', error);
@@ -246,6 +279,68 @@ export class WorkingDATScraper {
     if (this.browser) {
       await this.browser.close();
       console.log('🔒 DAT scraper browser closed');
+    }
+  }
+
+  async submitTwoFACode(code: string) {
+    if (!this.page) return false;
+    
+    try {
+      console.log('🔐 Submitting 2FA code...');
+      
+      const twoFASelectors = [
+        'input[name="code"]',
+        'input[name="verification_code"]',
+        'input[placeholder*="code"]',
+        'input[type="tel"]',
+        '.verification-code',
+        '#verification-code'
+      ];
+      
+      // Find and fill 2FA code field
+      let codeSubmitted = false;
+      for (const selector of twoFASelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 2000 });
+          await this.page.type(selector, code);
+          console.log(`✅ 2FA code entered with selector: ${selector}`);
+          codeSubmitted = true;
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      if (!codeSubmitted) {
+        throw new Error('2FA code field not found');
+      }
+      
+      // Submit the 2FA code
+      const submitSelectors = [
+        'button[type="submit"]',
+        '.btn-primary',
+        'button:contains("Verify")',
+        'button:contains("Submit")'
+      ];
+      
+      for (const selector of submitSelectors) {
+        try {
+          await this.page.click(selector);
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      // Wait for navigation after 2FA
+      await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
+      this.isLoggedIn = true;
+      console.log('✅ 2FA verification successful - logged into DAT');
+      return true;
+      
+    } catch (error) {
+      console.error('❌ 2FA submission failed:', error);
+      return false;
     }
   }
 

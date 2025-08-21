@@ -157,12 +157,63 @@ export function setupDirectDATLoads(app: Express) {
 
   // Status endpoint for DAT scraping
   app.get('/api/dat/scraper-status', async (req, res) => {
+    const status = workingDATScraper ? 
+      (workingDATScraper.isAuthenticated() ? 'authenticated' : 'needs_2fa') : 
+      'not_initialized';
+      
     res.json({
-      authenticated: true,
+      authenticated: workingDATScraper?.isAuthenticated() || false,
       account: 'dispatch@lampslogistics.com',
-      status: 'Connected but no visible loads found in session',
-      message: 'System ready to display real loads when they appear in your DAT account'
+      status: status,
+      message: status === 'needs_2fa' ? 
+        'Please provide 2FA code to complete DAT authentication' : 
+        'System ready to display real loads when authenticated'
     });
+  });
+
+  // Endpoint to submit 2FA code
+  app.post('/api/dat/submit-2fa', async (req, res) => {
+    const { code } = req.body;
+    
+    if (!code || code.length < 4) {
+      return res.json({ success: false, error: 'Please provide a valid 2FA code' });
+    }
+    
+    if (!workingDATScraper) {
+      return res.json({ success: false, error: 'DAT scraper not initialized' });
+    }
+    
+    try {
+      console.log('📲 Submitting user-provided 2FA code...');
+      const success = await workingDATScraper.submitTwoFACode(code);
+      
+      if (success) {
+        console.log('✅ 2FA successful - now attempting to scrape real loads');
+        
+        // Immediately try to scrape loads after successful 2FA
+        const realLoads = await workingDATScraper.scrapeRealLoads();
+        
+        if (realLoads && realLoads.length > 0) {
+          authenticatedSessionLoads = realLoads;
+          return res.json({
+            success: true,
+            message: '2FA successful - real DAT loads loaded',
+            loadsFound: realLoads.length,
+            loads: realLoads
+          });
+        } else {
+          return res.json({
+            success: true,
+            message: '2FA successful but no loads currently visible in your DAT account'
+          });
+        }
+      } else {
+        return res.json({ success: false, error: '2FA code verification failed' });
+      }
+    } catch (error) {
+      console.error('❌ 2FA submission error:', error);
+      return res.json({ success: false, error: 'Failed to submit 2FA code' });
+    }
   });
 
   // Force refresh using working DAT scraper

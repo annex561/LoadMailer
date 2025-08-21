@@ -29,6 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ManualDATLogin } from '@/components/ManualDATLogin';
+import { TwoFAInput } from '@/components/TwoFAInput';
 import { Link } from 'wouter';
 
 interface DATLoad {
@@ -215,6 +216,7 @@ function DATLoads() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <TwoFAInput />
           <Link href="/dat-login">
             <Button 
               variant="default" 
