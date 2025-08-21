@@ -14,6 +14,7 @@ const navigation = [
   { name: "Telegram Dispatching", href: "/telegram-dispatching", icon: MessageSquare, section: "main" },
   { name: "Contacts", href: "/contacts", icon: Users, section: "main" },
   { name: "Driver Management", href: "/driver-management", icon: UserPlus, section: "main" },
+  { name: "Vehicle Management", href: "/dispatcher-vehicle-dashboard", icon: Truck, section: "main" },
   { name: "GPS Tracking", href: "/gps-tracking", icon: MapPin, section: "main" },
   { name: "Predictive Maintenance", href: "/predictive-maintenance", icon: Wrench, section: "main" },
   { name: "Smart Load Matching", href: "/smart-load-matching", icon: Brain, section: "main" },

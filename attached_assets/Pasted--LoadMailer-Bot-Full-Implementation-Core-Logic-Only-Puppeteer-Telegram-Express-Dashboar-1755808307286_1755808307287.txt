@@ -1,0 +1,177 @@
+// LoadMailer Bot - Full Implementation (Core Logic Only)
+// Puppeteer + Telegram + Express Dashboard + Smart Load Matching
+
+const puppeteer = require('puppeteer');
+const express = require('express');
+const TelegramBot = require('node-telegram-bot-api');
+const bodyParser = require('body-parser');
+const fs = require('fs');
+
+const TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN';
+const DISPATCHER_CHAT_ID = 'YOUR_DISPATCHER_TELEGRAM_ID';
+const DAT_LOGIN = 'dispatch@lampslogistics.com';
+const DAT_PASSWORD = 'Anonymous#561';
+const PORT = 3000;
+
+let drivers = [
+  {
+    id: 5908383693,
+    name: 'Alex Liberty',
+    zip: '33101',
+    vehicle: {
+      type: 'Box Truck',
+      totalLength: 26,
+      usedLength: 0
+    },
+    lang: 'en'
+  },
+  // Add more drivers here
+];
+
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+const app = express();
+app.use(bodyParser.json());
+
+//===============================//
+// Puppeteer - DAT Load Scraper  //
+//===============================//
+async function scrapeDATLoads() {
+  const browser = await puppeteer.launch({ headless: true });
+  const page = await browser.newPage();
+  await page.goto('https://www.dat.com/login');
+
+  await page.type('#username', DAT_LOGIN);
+  await page.type('#password', DAT_PASSWORD);
+  await page.click('#loginBtn');
+
+  await page.waitForSelector('#mfaInput');
+  console.log('Waiting for 2FA code...');
+
+  await new Promise(resolve => {
+    bot.once('message', async (msg) => {
+      const code = msg.text.trim();
+      await page.type('#mfaInput', code);
+      await page.click('#verifyButton');
+      await page.waitForNavigation();
+      resolve();
+    });
+  });
+
+  await page.goto('https://app.dat.com/search/results');
+  await page.waitForSelector('.load-card');
+
+  const loads = await page.evaluate(() => {
+    const cards = document.querySelectorAll('.load-card');
+    return Array.from(cards).slice(0, 10).map(card => {
+      return {
+        origin: card.querySelector('.origin')?.innerText,
+        destination: card.querySelector('.destination')?.innerText,
+        miles: card.querySelector('.miles')?.innerText,
+        weight: card.querySelector('.weight')?.innerText,
+        rate: card.querySelector('.rate')?.innerText,
+        contact: card.querySelector('.broker-contact')?.innerText,
+        dimensions: card.querySelector('.dims')?.innerText || 'N/A'
+      }
+    });
+  });
+
+  await browser.close();
+  return loads;
+}
+
+//=============================//
+// Telegram Dispatch Bot       //
+//=============================//
+function formatLoad(load) {
+  return `
+✨ *New Load Available* ✨
+
+📍 *From:* ${load.origin}
+📍 *To:* ${load.destination}
+
+🛢 *Miles:* ${load.miles}
+💡 *Weight:* ${load.weight}
+💵 *Rate:* ${load.rate}
+📞 *Contact:* ${load.contact}
+
+📦 *Dimensions:* ${load.dimensions}
+
+Tap below:
+✅ /bookload
+❌ /decline
+`;
+}
+
+function sendToDrivers(load) {
+  drivers.forEach((driver, i) => {
+    setTimeout(() => {
+      const msg = formatLoad(load);
+      bot.sendMessage(driver.id, msg, { parse_mode: 'Markdown' });
+    }, i * 30000); // 30-second stagger
+  });
+}
+
+bot.onText(/\/bookload/, (msg) => {
+  const driverId = msg.chat.id;
+  const driver = drivers.find(d => d.id == driverId);
+  bot.sendMessage(driverId, 'Booking in progress. Dispatcher will confirm.');
+  bot.sendMessage(DISPATCHER_CHAT_ID, `📞 *CALL CARRIER*
+
+Driver: ${driver.name}
+Phone: N/A
+
+Booking request received.`, { parse_mode: 'Markdown' });
+});
+
+bot.onText(/\/decline/, (msg) => {
+  bot.sendMessage(msg.chat.id, 'Load declined. Thanks for your response.');
+});
+
+//===============================//
+// Express UI for Dispatcher     //
+//===============================//
+app.get('/dashboard', (req, res) => {
+  let html = '<h2>Driver Settings</h2>';
+  drivers.forEach(d => {
+    html += `
+      <form method="POST" action="/update">
+        <strong>${d.name}</strong><br>
+        Vehicle: <input name="type" value="${d.vehicle.type}" /><br>
+        Total Length: <input name="totalLength" value="${d.vehicle.totalLength}" /><br>
+        Used Length: <input name="usedLength" value="${d.vehicle.usedLength}" /><br>
+        <input type="hidden" name="id" value="${d.id}" />
+        <button type="submit">Update</button><br><br>
+      </form>
+    `;
+  });
+  res.send(html);
+});
+
+app.post('/update', (req, res) => {
+  const { id, type, totalLength, usedLength } = req.body;
+  const d = drivers.find(d => d.id == id);
+  if (d) {
+    d.vehicle.type = type;
+    d.vehicle.totalLength = parseFloat(totalLength);
+    d.vehicle.usedLength = parseFloat(usedLength);
+  }
+  res.redirect('/dashboard');
+});
+
+//==========================//
+// Scheduler for Scraper     //
+//==========================//
+async function startScheduler() {
+  const now = new Date();
+  const hour = now.getHours();
+  if (hour >= 8 && hour <= 18) {
+    const loads = await scrapeDATLoads();
+    loads.forEach(load => {
+      sendToDrivers(load);
+    });
+  }
+  setTimeout(startScheduler, 2 * 60 * 1000); // every 2 mins
+}
+
+startScheduler();
+app.listen(PORT, () => console.log(`LoadMailer Dashboard running on http://localhost:${PORT}`));

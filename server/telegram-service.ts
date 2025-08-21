@@ -204,6 +204,70 @@ export class TelegramLoadService {
       }
     });
 
+    // LoadMailer Bot enhanced commands
+    this.bot.onText(/\/bookload/, async (msg: any) => {
+      const chatId = msg.chat.id;
+      const telegramId = msg.from?.id.toString();
+      console.log(`📱 Load booking request from ${msg.from?.first_name} (${chatId})`);
+      
+      try {
+        const driver = await storage.getDriverByTelegramId(telegramId);
+        if (!driver) {
+          await this.bot?.sendMessage(chatId, 
+            `Please register as a driver first using /start command.`
+          );
+          return;
+        }
+
+        await this.bot?.sendMessage(chatId, 
+          `📋 *Booking Request Received*\n\n` +
+          `Your load booking request is being processed.\n` +
+          `Dispatcher will confirm within 15 minutes.\n\n` +
+          `Thank you ${driver.name}! 👍`,
+          { parse_mode: 'Markdown' }
+        );
+
+        // Notify dispatcher with driver details
+        if (this.config?.dispatcherId) {
+          const dispatcherMessage = 
+            `📞 *LOAD BOOKING REQUEST*\n\n` +
+            `🚛 *Driver:* ${driver.name}\n` +
+            `📱 *Phone:* ${driver.phone}\n` +
+            `📍 *Location:* ${driver.city || 'Not specified'}\n` +
+            `🚚 *Equipment:* ${driver.equipmentType}\n` +
+            `⚖️ *Capacity:* ${driver.weightCapacity || 26000} lbs\n\n` +
+            `*Action Required:* Call driver to confirm load details\n` +
+            `[📞 Call Now](tel:${driver.phone})`;
+
+          await this.bot?.sendMessage(this.config.dispatcherId, dispatcherMessage, {
+            parse_mode: 'Markdown'
+          });
+          console.log(`✅ Sent booking notification to dispatcher`);
+        }
+      } catch (error) {
+        console.error('Error handling bookload command:', error);
+        await this.bot?.sendMessage(chatId, 'Error processing booking request. Please try again.');
+      }
+    });
+
+    this.bot.onText(/\/decline/, async (msg: any) => {
+      const chatId = msg.chat.id;
+      const telegramId = msg.from?.id.toString();
+      console.log(`📱 Load declined by ${msg.from?.first_name} (${chatId})`);
+      
+      try {
+        const driver = await storage.getDriverByTelegramId(telegramId);
+        await this.bot?.sendMessage(chatId, 
+          `✅ Load declined. Thanks for your response ${driver?.name || 'Driver'}!\n\n` +
+          `We'll keep you in mind for the next suitable load. 👍`
+        );
+        console.log(`✅ Load declined by ${driver?.name || 'unknown'}`);
+      } catch (error) {
+        console.error('Error handling decline command:', error);
+        await this.bot?.sendMessage(chatId, 'Response recorded. Thank you!');
+      }
+    });
+
     // Handle callback queries from inline keyboard buttons
     this.bot.on('callback_query', async (callbackQuery: any) => {
       if (!this.bot || !callbackQuery.data) return;
@@ -722,19 +786,32 @@ export class TelegramLoadService {
     // Calculate driver rate (10% less than posted rate)
     const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
     const rpm = driverRate && load.miles ? (driverRate / load.miles).toFixed(2) : 'N/A';
-    const distanceText = distance ? ` (${Math.round(distance)} mi away)` : '';
+    const deadheadText = deadheadDistance ? ` (${Math.round(deadheadDistance)} mi deadhead)` : '';
     const matchText = matchScore ? `\n📊 *Match Score:* ${matchScore}%` : '';
-    const deadheadText = deadheadDistance ? `\n🛣️ *Deadhead:* ${Math.round(deadheadDistance)} mi` : '';
     
-    return `🚛 *LAMP Logistics New Load Offer*${distanceText}
-Origin: *${load.pickupAddress}*
-Destination: *${load.deliveryAddress}*
-Pick-Up Date: *${load.pickupDate.toLocaleDateString()}*
-Rate: *$${driverRate.toLocaleString() || 'TBD'}*
-Miles: *${load.miles || 'N/A'} mi*
-Rate/Mile: *$${rpm}*${deadheadText}${matchText}
+    // Enhanced LoadMailer Bot formatting with professional styling
+    return `✨ *New Load Available* ✨
 
-${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.specialInstructions ? `📝 *Instructions:* ${load.specialInstructions}\n` : ''}
+📍 *From:* ${load.pickupAddress}
+📍 *To:* ${load.deliveryAddress}
+
+🛣 *Miles:* ${load.miles || 'TBD'} miles${deadheadText}
+💡 *Weight:* ${load.weight?.toLocaleString() || 'TBD'} lbs
+💵 *Rate:* $${driverRate.toLocaleString() || 'TBD'}
+📞 *Contact:* ${load.contactPhone || load.company || 'Broker'}
+
+📦 *Equipment:* ${load.equipmentType}
+🏢 *Company:* ${load.company || 'Direct Shipper'}
+💰 *Rate/Mile:* $${rpm}${matchText}
+
+📅 *Schedule:*
+• Pickup: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}
+• Delivery: ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime}
+
+${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.specialInstructions ? `📝 *Instructions:* ${load.specialInstructions}\n` : ''}Tap below:
+✅ /bookload
+❌ /decline
+
 *Load #:* ${load.loadNumber}`;
   }
 
