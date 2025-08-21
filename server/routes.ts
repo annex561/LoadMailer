@@ -4653,6 +4653,10 @@ Safe travels! 🚛`;
   // Setup DAT Loads API
   const { setupDATLoadsAPI } = await import('./dat-loads-api');
   setupDATLoadsAPI(app);
+  
+  // Setup Direct DAT Loads (bypassing cache issues)
+  const { setupDirectDATLoads } = await import('./dat-loads-direct');
+  setupDirectDATLoads(app);
 
   const httpServer = createServer(app);
 

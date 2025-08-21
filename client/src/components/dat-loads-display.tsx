@@ -36,7 +36,7 @@ export function DATLoadsDisplay() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
   const { data: datLoads = [], isLoading, refetch } = useQuery({
-    queryKey: ['/api/dat-loads'],
+    queryKey: ['/api/dat-loads-direct'],
     refetchInterval: 10000, // Refresh every 10 seconds
   });
 
