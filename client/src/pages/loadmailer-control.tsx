@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { DATLoadsDisplay } from '@/components/dat-loads-display';
 
 export default function LoadMailerControl() {
   const [scrapingStatus, setScrapingStatus] = useState<'idle' | 'running' | 'waiting_2fa'>('idle');
@@ -106,7 +107,10 @@ export default function LoadMailerControl() {
           </AlertDescription>
         </Alert>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Real DAT Loads Display */}
+        <DATLoadsDisplay />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
           {/* Control Panel */}
           <Card>
             <CardHeader>
