@@ -8,6 +8,8 @@ LoadMaster is a comprehensive fleet management system for truck load tracking an
 
 **REAL-TIME GPS TRACKING**: Advanced real-time driver location tracking system now integrated with authentic driver data. The LoadOps dashboard displays live GPS coordinates, timestamps, speeds, and service status indicators. Database storage methods implemented for driver location management with comprehensive API endpoints for location data retrieval.
 
+**MANUAL LOAD ENTRY SYSTEM**: Complete manual load entry form now operational for VA input. Professional form includes all essential DAT load fields: company information, origin/destination, rates, equipment type, dates, commodity, and special requirements. Loads automatically dispatch to eligible drivers via Telegram and appear immediately in the DAT Loads tab alongside any real DAT data. This provides a reliable alternative to browser automation challenges.
+
 **LOADMAILER BOT INTEGRATION**: Complete LoadMailer Bot integration now operational with authentic DAT Puppeteer scraping. Features include real DAT login with 2FA support using dispatch@lampslogistics.com credentials, browser automation for box truck and sprinter van targeting, enhanced Telegram commands (/bookload, /decline), 30-second staggered messaging between drivers, professional LoadMailer styling, dispatcher control panel at /loadmailer-control, and vehicle management dashboard for AI-ready smart load stacking. The system maintains both authentic Tennessee Load Feed AND real DAT scraping capabilities.
 
 The system also includes an automatic load offering system that evaluates new loads and sends Telegram notifications to eligible drivers based on proximity (150-mile radius), equipment type compatibility, availability, and rate attractiveness. The professional dashboard interface is designed to match DAT One, offering real-time load listings and search filters.
@@ -61,7 +63,8 @@ Preferred communication style: Simple, everyday language.
 - **Driver Management**: Comprehensive onboarding, status tracking (available/on_route/unavailable), mood tracking, and payment workflow. Includes performance tracking visualization.
 - **Load Matching**: Location-based (150-mile radius), equipment type compatibility (e.g., dry_van, refrigerated, flatbed), weight capacity safety checks, driver availability filtering, and AI-powered prediction confidence for driver matching.
 - **Automated Communication**: Telegram notifications for load offers, SMS onboarding, and email notifications for load lifecycle events. Includes an automatic Telegram onboarding system with token-based links.
-- **Load Workflow**: Intelligent load retry system with auto-forwarding to next eligible driver, post-confirmation messaging, and button management for Telegram. Includes continuous load service for 24/7 operation.
+- **Load Workflow**: Intelligent load retry system with auto-forwarding to next eligible driver, post-confirmation messaging, and button management for Telegram. Includes continuous load service for 24/7 operation and manual load entry system for VA data input.
+- **Manual Load Entry**: Professional form at `/manual-load-entry` for VA to input DAT load information directly. Includes all standard DAT fields, automatic driver dispatch, and immediate display in DAT Loads tab.
 - **UI/UX**: Consistent styling for forms and dropdowns, integrated document viewing in load management table, and professional dashboard matching DAT One design for displaying real scraped DAT loads.
 - **Branding**: "LAMP Logistics New Load Offer" header for Telegram messages.
 

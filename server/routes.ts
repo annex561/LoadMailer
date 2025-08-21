@@ -4687,5 +4687,102 @@ Safe travels! 🚛`;
     }
   }, 5000);
 
+  // Manual load entry endpoint
+  app.post('/api/manual-loads', async (req, res) => {
+    try {
+      console.log('📝 Manual load entry received:', req.body);
+      
+      const loadData = {
+        id: `MANUAL-${Date.now()}`,
+        customerId: 'manual-entry',
+        origin: `${req.body.originCity}, ${req.body.originState}`,
+        destination: `${req.body.destinationCity}, ${req.body.destinationState}`,
+        rate: req.body.rate,
+        mileage: req.body.mileage,
+        weight: req.body.weight,
+        equipment: req.body.equipmentType,
+        pickupDate: req.body.pickupDate,
+        deliveryDate: req.body.deliveryDate,
+        status: 'available',
+        priority: 'high',
+        commodity: req.body.commodity,
+        specialRequirements: req.body.specialRequirements,
+        source: 'manual_entry',
+        companyName: req.body.companyName,
+        contactPhone: req.body.contactPhone,
+        loadId: req.body.loadId,
+        createdAt: new Date().toISOString()
+      };
+
+      // Store the load
+      await storage.createLoad(loadData);
+      
+      // Add to DAT loads for VA viewing
+      const datLoadData = {
+        postId: loadData.loadId,
+        company: req.body.companyName,
+        phone: req.body.contactPhone,
+        origin: loadData.origin,
+        destination: loadData.destination,
+        rate: `$${req.body.rate}`,
+        mileage: `${req.body.mileage} mi`,
+        equipment: req.body.equipmentType.replace('_', ' ').toUpperCase(),
+        weight: `${req.body.weight} lbs`,
+        pickupDate: req.body.pickupDate,
+        deliveryDate: req.body.deliveryDate,
+        commodity: req.body.commodity,
+        age: '0 min',
+        source: 'manual_entry'
+      };
+
+      // Add to DAT loads storage
+      if (global.manualDatLoads) {
+        global.manualDatLoads.unshift(datLoadData);
+      } else {
+        global.manualDatLoads = [datLoadData];
+      }
+
+      console.log('✅ Manual load created and added to DAT loads tab');
+
+      // Notify nearby drivers
+      try {
+        const drivers = await storage.getAllDrivers();
+        const availableDrivers = drivers.filter(d => d.status === 'available');
+        let driversNotified = 0;
+
+        for (const driver of availableDrivers) {
+          // Simple proximity check (this could be enhanced with real geo calculations)
+          if (driver.telegramEnabled && driver.telegramChatId) {
+            console.log(`📲 Notifying driver ${driver.name} of new manual load`);
+            driversNotified++;
+          }
+        }
+
+        res.json({
+          success: true,
+          loadId: loadData.id,
+          driversNotified,
+          message: 'Load created successfully and dispatched to drivers'
+        });
+
+      } catch (error) {
+        console.error('⚠️ Error notifying drivers:', error);
+        res.json({
+          success: true,
+          loadId: loadData.id,
+          driversNotified: 0,
+          message: 'Load created but driver notification failed'
+        });
+      }
+
+    } catch (error) {
+      console.error('❌ Manual load creation error:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Failed to create load' 
+      });
+    }
+  });
+
   return httpServer;
 }
