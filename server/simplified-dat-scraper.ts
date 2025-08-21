@@ -20,7 +20,9 @@ export class SimplifiedDATScraper {
           '--disable-dev-shm-usage',
           '--disable-web-security',
           '--disable-features=VizDisplayCompositor',
-          '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        '--dns-prefetch-disable',
+        '--disable-dns-over-https'
         ],
         defaultViewport: { width: 1280, height: 800 }
       });
@@ -47,11 +49,10 @@ export class SimplifiedDATScraper {
       
       // Strategy 1: Try direct DAT login page
       const loginUrls = [
+        'https://login.dat.com/u/login/identifier?state=hKFo2SBidC1XNWZvSHpVWi05TVo4THBKYmlwdnhaNnR4ZFVnb6Fur3VuaXZlcnNhbC1sb2dpbqN0aWTZIHFMczlTMkhZbUdVS0lUc0pkSVpqU2VjMU8tTFEwdkswo2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM',
         'https://www.dat.com/login',
         'https://www.dat.com/sign-in',
-        'https://identity.dat.com/login',
-        'https://one.dat.com/login',
-        'https://power.dat.com/login'
+        'https://login.dat.com'
       ];
 
       for (const url of loginUrls) {
@@ -82,7 +83,7 @@ export class SimplifiedDATScraper {
       console.log('📍 Trying main DAT website approach...');
       await this.page.goto('https://www.dat.com', { waitUntil: 'networkidle0', timeout: 15000 });
       
-      // Look for login links
+      // Look for login links  
       const loginLinks = await this.page.evaluate(() => {
         const links = Array.from(document.querySelectorAll('a'));
         return links

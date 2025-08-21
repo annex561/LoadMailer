@@ -42,7 +42,7 @@ export class DATLoginMonitor {
         throw new Error('Both scrapers failed to initialize');
       }
       
-      console.log('🔐 Fallback DAT login method...');
+      console.log('🔐 Fallback DAT login method with authentic URL...');
       const loginResult = await provenDATScraper.startLogin();
       
       if (loginResult === 'needs_2fa') {

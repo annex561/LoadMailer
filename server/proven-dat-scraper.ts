@@ -3,7 +3,7 @@ import puppeteer from 'puppeteer';
 
 const DAT_EMAIL = 'dispatch@lampslogistics.com';
 const DAT_PASSWORD = 'Anonymous#56111';
-const LOGIN_URL = 'https://identity.select.dat.com/account/login';
+const LOGIN_URL = 'https://www.dat.com/login';
 const LOADS_URL = 'https://app.dat.com/loadboard/search';
 
 export class ProvenDATScraper {
@@ -49,28 +49,201 @@ export class ProvenDATScraper {
     try {
       console.log('🚀 Starting automated DAT login with proven method...');
       
-      // Step 1: Navigate to DAT identity login (proven URL)
-      console.log('📍 Navigating to DAT identity login...');
+      // Step 1: Navigate to DAT login and handle redirects
+      console.log('📍 Navigating to DAT login page...');
       await this.page.goto(LOGIN_URL, { waitUntil: 'networkidle2', timeout: 30000 });
       
-      // Step 2: Enter email (proven selector)
-      console.log('📧 Entering email address...');
-      await this.page.waitForSelector('input[type="email"]', { timeout: 10000 });
-      await this.page.type('input[type="email"]', DAT_EMAIL);
-      await this.page.click('button[type="submit"]');
-      await this.page.waitForTimeout(2000);
+      // Check if we're redirected to the Auth0 login
+      const currentUrl = this.page.url();
+      console.log(`📍 Current URL: ${currentUrl}`);
       
-      // Step 3: Enter password (proven selector) 
-      console.log('🔐 Entering password...');
-      await this.page.waitForSelector('input[type="password"]', { timeout: 10000 });
-      await this.page.type('input[type="password"]', DAT_PASSWORD);
-      await this.page.click('button[type="submit"]');
+      // If we're not on the right login page, try to find and click login
+      if (!currentUrl.includes('auth0') && !currentUrl.includes('login.dat.com')) {
+        console.log('🔗 Looking for login button on landing page...');
+        
+        // Common login selectors on DAT's main page
+        const loginSelectors = [
+          'a[href*="login"]',
+          'button:contains("Login")',
+          '.login-btn',
+          '[data-testid="login"]',
+          'a:contains("Login")'
+        ];
+        
+        for (const selector of loginSelectors) {
+          try {
+            await this.page.waitForSelector(selector, { timeout: 3000 });
+            console.log(`🔗 Found login link: ${selector}`);
+            await this.page.click(selector);
+            await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
+            break;
+          } catch (e) {
+            console.log(`⚠️ Login selector failed: ${selector}`);
+            continue;
+          }
+        }
+        
+        const newUrl = this.page.url();
+        console.log(`📍 After login click: ${newUrl}`);
+      }
       
-      // Step 4: Wait for 2FA screen
-      console.log('🛡️ Waiting for 2FA input...');
-      await this.page.waitForSelector('input[name="code"]', { timeout: 15000 });
-      console.log('📲 2FA code field detected - user needs to enter code manually');
-      this.twoFARequired = true;
+      // Step 2: Try to find and enter email (flexible approach)
+      console.log('📧 Looking for email input field...');
+      
+      // Try multiple email field selectors
+      const emailSelectors = [
+        'input[type="email"]',
+        'input[name="email"]', 
+        'input[name="username"]',
+        'input[placeholder*="email" i]',
+        'input[placeholder*="Email" i]',
+        '#email',
+        '#username',
+        '[data-testid="email"]'
+      ];
+      
+      let emailField = null;
+      for (const selector of emailSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 3000 });
+          emailField = selector;
+          console.log(`✅ Found email field: ${selector}`);
+          break;
+        } catch (e) {
+          console.log(`⚠️ Selector not found: ${selector}`);
+        }
+      }
+      
+      if (!emailField) {
+        console.log('❌ Could not find email field - trying manual approach');
+        // Try to click on the first input field and type email
+        const allInputs = await this.page.$$('input');
+        if (allInputs.length > 0) {
+          await allInputs[0].click();
+          await allInputs[0].type(DAT_EMAIL);
+          console.log('📧 Email entered via first input field');
+        } else {
+          throw new Error('No input fields found on login page');
+        }
+      } else {
+        await this.page.type(emailField, DAT_EMAIL);
+        console.log('📧 Email entered successfully');
+      }
+      
+      // Try to submit email
+      console.log('▶️ Attempting to submit email...');
+      const submitSelectors = [
+        'button[type="submit"]',
+        'input[type="submit"]',
+        'button:contains("Continue")',
+        'button:contains("Next")',
+        '.auth0-lock-submit'
+      ];
+      
+      let submitted = false;
+      for (const selector of submitSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 2000 });
+          await this.page.click(selector);
+          submitted = true;
+          console.log(`✅ Clicked submit: ${selector}`);
+          break;
+        } catch (e) {
+          console.log(`⚠️ Submit button not found: ${selector}`);
+        }
+      }
+      
+      if (!submitted) {
+        // Try pressing Enter
+        await this.page.keyboard.press('Enter');
+        console.log('⌨️ Pressed Enter to submit');
+      }
+      
+      await this.page.waitForTimeout(3000);
+      
+      // Step 3: Enter password
+      console.log('🔐 Looking for password field...');
+      const passwordSelectors = [
+        'input[type="password"]',
+        'input[name="password"]',
+        '#password',
+        '[data-testid="password"]'
+      ];
+      
+      let passwordField = null;
+      for (const selector of passwordSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 5000 });
+          passwordField = selector;
+          console.log(`✅ Found password field: ${selector}`);
+          break;
+        } catch (e) {
+          console.log(`⚠️ Password selector not found: ${selector}`);
+        }
+      }
+      
+      if (passwordField) {
+        await this.page.type(passwordField, DAT_PASSWORD);
+        console.log('🔐 Password entered successfully');
+        
+        // Submit password
+        for (const selector of submitSelectors) {
+          try {
+            await this.page.waitForSelector(selector, { timeout: 2000 });
+            await this.page.click(selector);
+            console.log(`✅ Password submitted: ${selector}`);
+            break;
+          } catch (e) {
+            continue;
+          }
+        }
+      } else {
+        console.log('❌ Could not find password field');
+        throw new Error('Password field not found');
+      }
+      
+      // Step 4: Check for 2FA or successful login
+      console.log('🛡️ Checking authentication result...');
+      await this.page.waitForTimeout(5000);
+      
+      // Look for 2FA field
+      const twoFASelectors = [
+        'input[name="code"]',
+        'input[type="text"][placeholder*="code" i]',
+        '[data-testid="code"]',
+        '.auth0-lock-input[type="text"]'
+      ];
+      
+      let twoFAField = null;
+      for (const selector of twoFASelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 3000 });
+          twoFAField = selector;
+          console.log(`📲 2FA field detected: ${selector}`);
+          break;
+        } catch (e) {
+          continue;
+        }
+      }
+      
+      if (twoFAField) {
+        console.log('🛡️ 2FA required - user must complete manually');
+        this.twoFARequired = true;
+        return 'needs_2fa';
+      }
+      
+      // Check if we're already logged in
+      const currentUrl = this.page.url();
+      console.log(`📍 Current URL after login attempt: ${currentUrl}`);
+      
+      if (currentUrl.includes('app.dat.com') || 
+          currentUrl.includes('one.dat.com') || 
+          currentUrl.includes('dashboard') ||
+          !currentUrl.includes('login')) {
+        console.log('✅ Login appears successful!');
+        this.isLoggedIn = true;
+        return 'success';
+      }
       
       return 'needs_2fa';
       
