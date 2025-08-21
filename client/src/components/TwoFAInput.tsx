@@ -14,8 +14,8 @@ export function TwoFAInput() {
   const handleStartLogin = async () => {
     setIsStartingLogin(true);
     
-    // Open DAT login in new tab
-    window.open('https://www.dat.com/login', '_blank');
+    // Open DAT login in new tab with correct URL
+    window.open('https://login.dat.com/u/login/identifier?state=hKFo2SBfX1ZVQklVUmJxSmZrT0FqRWtfZXNqWEhyODNfSlpPUaFur3VuaXZlcnNhbC1sb2dpbqN0aWTZIFIzbFZfNU0waDJNWXNmYldHQzB2U0NBakFpSUp2M01yo2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM', '_blank');
 
     try {
       const response = await fetch('/api/dat/start-login', {
@@ -29,7 +29,7 @@ export function TwoFAInput() {
         setNeedsCode(true);
         toast({
           title: "DAT Login Tab Opened",
-          description: "Complete your DAT authentication in the new tab, then click 'Check Authentication'.",
+          description: "Login with dispatch@lampslogistics.com in the new tab, complete 2FA, then click 'Check Authentication'.",
           variant: "default",
         });
         

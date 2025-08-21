@@ -3,8 +3,8 @@ import puppeteer from 'puppeteer';
 
 const DAT_EMAIL = 'dispatch@lampslogistics.com';
 const DAT_PASSWORD = 'Anonymous#561';
-const LOGIN_URL = 'https://www.dat.com/solutions/load-boards';
-const LOADS_URL = 'https://www.dat.com/solutions/load-boards';
+const LOGIN_URL = 'https://login.dat.com/u/login/identifier?state=hKFo2SBfX1ZVQklVUmJxSmZrT0FqRWtfZXNqWEhyODNfSlpPUaFur3VuaXZlcnNhbC1sb2dpbqN0aWTZIFIzbFZfNU0waDJNWXNmYldHQzB2U0NBakFpSUp2M01yo2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM';
+const LOADS_URL = 'https://one.dat.com/tms/load-board';
 
 export class ProvenDATScraper {
   private browser: any = null;
@@ -41,21 +41,18 @@ export class ProvenDATScraper {
   async startLogin() {
     try {
       console.log('🚀 Starting DAT login using proven method...');
+      console.log('🌐 Server browser ready - user completing authentication in their browser tab');
+      console.log('🔐 User should complete login at:', LOGIN_URL.substring(0, 50) + '...');
+      console.log('⏳ System will detect authentication when user clicks "Check Authentication"');
+      
+      // Initialize server-side session for verification
       await this.page.goto(LOGIN_URL, { waitUntil: 'networkidle2' });
-      
-      const currentUrl = this.page.url();
-      console.log(`📍 Current URL: ${currentUrl}`);
-      
-      console.log('🌐 DAT page loaded successfully');
-      console.log('🔐 Please complete DAT login manually in the browser window');
-      console.log('📍 Navigate to the DAT load board and complete authentication');
-      console.log('⏳ Click "Check Authentication" when login is complete');
       
       this.twoFARequired = true;
       return 'needs_2fa';
       
     } catch (error) {
-      console.error('❌ DAT login failed:', error);
+      console.error('❌ DAT login initialization failed:', error);
       throw error;
     }
   }
@@ -65,27 +62,26 @@ export class ProvenDATScraper {
       const currentUrl = this.page.url();
       console.log(`📍 Current URL: ${currentUrl}`);
       
-      // Check if we're successfully authenticated and on DAT dashboard
-      if (currentUrl.includes('app.dat.com') && !currentUrl.includes('Account/Login')) {
+      // Check if we're successfully authenticated and on DAT load board
+      if (currentUrl.includes('one.dat.com/tms') || currentUrl.includes('app.dat.com/tms')) {
         this.isLoggedIn = true;
         this.twoFARequired = false;
-        console.log('✅ Successfully logged into DAT - detected app.dat.com dashboard');
-        return { status: 'authenticated', message: 'Login successful - on DAT dashboard' };
+        console.log('✅ Successfully logged into DAT - detected load board access');
+        return { status: 'authenticated', message: 'Login successful - accessing DAT load board' };
       }
       
-      // Check for 2FA field presence
-      try {
-        const twoFAField = await this.page.$('input[name="Input.TwoFactorCode"]');
-        if (twoFAField) {
-          return { status: 'needs_2fa', message: 'Please complete 2FA verification in browser' };
-        }
-      } catch (e) {
-        // 2FA field not found
+      // Check if on DAT dashboard (authenticated but not on load board yet)
+      if (currentUrl.includes('one.dat.com') && !currentUrl.includes('login')) {
+        this.isLoggedIn = true;
+        this.twoFARequired = false;
+        console.log('✅ DAT authentication successful - navigating to load board');
+        await this.page.goto(LOADS_URL, { waitUntil: 'networkidle2' });
+        return { status: 'authenticated', message: 'Login successful - ready to scrape loads' };
       }
       
       // Check if still on login page
-      if (currentUrl.includes('Account/Login') || currentUrl.includes('login')) {
-        return { status: 'needs_2fa', message: 'Please complete authentication in the browser window' };
+      if (currentUrl.includes('login.dat.com') || currentUrl.includes('login')) {
+        return { status: 'needs_2fa', message: 'Please complete authentication in the DAT login tab' };
       }
       
       // Default to authenticated if we're on any DAT app page
