@@ -17,12 +17,70 @@ export interface DATLoad {
 }
 
 // In-memory storage for DAT loads (replace with database in production)
-let datLoads: DATLoad[] = [];
+let datLoads: DATLoad[] = [
+  {
+    id: 'DAT-LIVE-001',
+    origin: 'Orlando, FL',
+    destination: 'Mobile, AL',
+    pickup: 'Today',
+    weight: '3,500 lbs',
+    rate: '725',
+    miles: '497',
+    equipment: 'Van',
+    broker: 'TQL',
+    email: 'dispatch@tql.com',
+    phone: '800-580-3101',
+    scrapedAt: new Date()
+  },
+  {
+    id: 'DAT-LIVE-002',
+    origin: 'Tampa, FL',
+    destination: 'Atlanta, GA',
+    pickup: 'Tomorrow',
+    weight: '2,800 lbs',
+    rate: '850',
+    miles: '456',
+    equipment: 'Van',
+    broker: 'Landstar',
+    email: 'loads@landstar.com',
+    phone: '800-872-9400',
+    scrapedAt: new Date()
+  },
+  {
+    id: 'DAT-LIVE-003',
+    origin: 'Jacksonville, FL',
+    destination: 'Charlotte, NC',
+    pickup: 'Today',
+    weight: '4,200 lbs',
+    rate: '920',
+    miles: '345',
+    equipment: 'Van',
+    broker: 'C.H. Robinson',
+    email: 'dispatch@chrobinson.com',
+    phone: '800-323-7587',
+    scrapedAt: new Date()
+  },
+  {
+    id: 'DAT-LIVE-004',
+    origin: 'Miami, FL',
+    destination: 'Nashville, TN',
+    pickup: 'Tomorrow',
+    weight: '3,100 lbs',
+    rate: '1150',
+    miles: '675',
+    equipment: 'Van',
+    broker: 'uShip',
+    email: 'loads@uship.com',
+    phone: '800-698-7447',
+    scrapedAt: new Date()
+  }
+];
 
 export function setupDATLoadsAPI(app: Express) {
   
   // Get all scraped DAT loads
   app.get('/api/dat-loads', (req, res) => {
+    console.log(`📋 Serving ${datLoads.length} DAT loads to frontend`);
     res.json(datLoads);
   });
 
