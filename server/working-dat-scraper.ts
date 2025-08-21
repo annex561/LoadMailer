@@ -67,7 +67,16 @@ export class WorkingDATScraper {
       }
       
       if (!usernameFound) {
-        throw new Error('Username field not found on DAT login page');
+        console.log('⚠️ Standard login form not found - attempting alternative approach');
+        // Try to find any input field and assume it's the email field
+        const allInputs = await this.page.$$('input');
+        if (allInputs.length > 0) {
+          await allInputs[0].type(DAT_EMAIL);
+          console.log('✅ Email entered in first available input field');
+          usernameFound = true;
+        } else {
+          throw new Error('No input fields found on DAT login page');
+        }
       }
       
       // Click submit to proceed to password
@@ -103,7 +112,16 @@ export class WorkingDATScraper {
       }
       
       if (!passwordFound) {
-        throw new Error('Password field not found on DAT login page');
+        console.log('⚠️ Standard password field not found - attempting alternative approach');
+        // Try to find any password type input
+        const allPasswordInputs = await this.page.$$('input[type="password"]');
+        if (allPasswordInputs.length > 0) {
+          await allPasswordInputs[0].type(DAT_PASSWORD);
+          console.log('✅ Password entered in first available password field');
+          passwordFound = true;
+        } else {
+          throw new Error('No password fields found on DAT login page');
+        }
       }
       
       // Submit login form

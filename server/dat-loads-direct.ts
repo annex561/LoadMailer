@@ -102,6 +102,7 @@ const liveDAT_Loads = [
 
 // Import working DAT scraper based on proven code
 import { WorkingDATScraper } from './working-dat-scraper';
+import { datLoginMonitor } from './dat-login-monitor';
 let workingDATScraper: WorkingDATScraper | null = null;
 
 // Store for real scraped loads from authenticated session
@@ -171,6 +172,18 @@ export function setupDirectDATLoads(app: Express) {
     });
   });
 
+  // Initiate DAT login process 
+  app.post('/api/dat/start-login', async (req, res) => {
+    try {
+      console.log('🚀 User initiated DAT login process');
+      const result = await datLoginMonitor.startLoginProcess();
+      res.json(result);
+    } catch (error) {
+      console.error('❌ Start login error:', error);
+      res.json({ status: 'error', message: error.message });
+    }
+  });
+
   // Endpoint to submit 2FA code
   app.post('/api/dat/submit-2fa', async (req, res) => {
     const { code } = req.body;
@@ -179,33 +192,32 @@ export function setupDirectDATLoads(app: Express) {
       return res.json({ success: false, error: 'Please provide a valid 2FA code' });
     }
     
-    if (!workingDATScraper) {
-      return res.json({ success: false, error: 'DAT scraper not initialized' });
-    }
-    
     try {
       console.log('📲 Submitting user-provided 2FA code...');
-      const success = await workingDATScraper.submitTwoFACode(code);
+      const success = await datLoginMonitor.submit2FACode(code);
       
       if (success) {
         console.log('✅ 2FA successful - now attempting to scrape real loads');
         
-        // Immediately try to scrape loads after successful 2FA
-        const realLoads = await workingDATScraper.scrapeRealLoads();
-        
-        if (realLoads && realLoads.length > 0) {
-          authenticatedSessionLoads = realLoads;
-          return res.json({
-            success: true,
-            message: '2FA successful - real DAT loads loaded',
-            loadsFound: realLoads.length,
-            loads: realLoads
-          });
-        } else {
-          return res.json({
-            success: true,
-            message: '2FA successful but no loads currently visible in your DAT account'
-          });
+        // Get the scraper instance and immediately try to scrape loads
+        const scraper = datLoginMonitor.getScraper();
+        if (scraper) {
+          const realLoads = await scraper.scrapeRealLoads();
+          
+          if (realLoads && realLoads.length > 0) {
+            authenticatedSessionLoads = realLoads;
+            return res.json({
+              success: true,
+              message: '2FA successful - real DAT loads loaded',
+              loadsFound: realLoads.length,
+              loads: realLoads
+            });
+          } else {
+            return res.json({
+              success: true,
+              message: '2FA successful but no loads currently visible in your DAT account'
+            });
+          }
         }
       } else {
         return res.json({ success: false, error: '2FA code verification failed' });
