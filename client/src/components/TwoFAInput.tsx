@@ -90,29 +90,33 @@ export function TwoFAInput() {
     setIsCheckingAuth(true);
 
     try {
-      const response = await fetch('/api/dat/check-auth');
+      // Force a fresh authentication check
+      const response = await fetch('/api/dat/force-auth-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
       const result = await response.json();
 
       if (result.authenticated) {
         setNeedsCode(false);
         toast({
           title: "Authentication Successful!",
-          description: `Found ${result.loadsFound} real DAT loads`,
+          description: `Successfully connected to DAT. Loading real loads...`,
           variant: "default",
         });
         setTimeout(() => window.location.reload(), 1500);
       } else {
         toast({
-          title: "Still Waiting",
-          description: "Please complete 2FA verification in the browser window",
+          title: "Authentication Pending",
+          description: "Please ensure you're logged into DAT in the other tab, then try again",
           variant: "default",
         });
       }
     } catch (error) {
       console.error('Auth check error:', error);
       toast({
-        title: "Error",
-        description: "Failed to check authentication status",
+        title: "Check Failed",
+        description: "Unable to verify authentication status",
         variant: "destructive",
       });
     } finally {

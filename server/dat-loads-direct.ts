@@ -200,4 +200,36 @@ export function setupDirectDATLoads(app: Express) {
       return res.json({ success: false, error: error.message });
     }
   });
+
+  // Force authentication check endpoint
+  app.post('/api/dat/force-auth-check', async (req, res) => {
+    console.log('🔧 FORCE AUTH CHECK: User manually checking DAT authentication...');
+    
+    try {
+      // Try to navigate to DAT load board to test authentication
+      const result = await datLoginMonitor.checkAuthentication();
+      
+      if (result.authenticated) {
+        console.log('✅ FORCE AUTH SUCCESS: DAT authentication confirmed!');
+        // Immediately try to scrape loads
+        const loads = await datLoginMonitor.scrapeLoads();
+        authenticatedSessionLoads = loads || [];
+        
+        res.json({
+          authenticated: true,
+          message: 'DAT authentication successful - loads loading...',
+          loadsFound: loads?.length || 0
+        });
+      } else {
+        console.log('⚠️ FORCE AUTH: Still not authenticated - user needs to complete DAT login');
+        res.json({
+          authenticated: false,
+          message: 'Please complete login in your DAT tab first'
+        });
+      }
+    } catch (error) {
+      console.error('❌ Force auth check error:', error);
+      res.json({ authenticated: false, message: 'Authentication check failed' });
+    }
+  });
 }
