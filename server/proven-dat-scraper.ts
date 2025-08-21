@@ -3,6 +3,7 @@ import puppeteer from 'puppeteer';
 
 const DAT_EMAIL = 'dispatch@lampslogistics.com';
 const DAT_PASSWORD = 'Anonymous#561';
+const DAT_MAIN_URL = 'https://www.dat.com';
 const LOGIN_URL = 'https://login.dat.com/u/login/identifier?state=hKFo2SBidC1XNWZvSHpVWi05TVo4THBKYmlwdnhaNnR4ZFVnb6Fur3VuaXZlcnNhbC1sb2dpbqN0aWTZIHFMczlTMkhZbUdVS0lUc0pkSVpqU2VjMU8tTFEwdkswo2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM';
 const LOADS_URL = 'https://app.dat.com/loadboard/search';
 
@@ -49,17 +50,108 @@ export class ProvenDATScraper {
     try {
       console.log('🚀 Starting automated DAT login with proven method...');
       
-      // Step 1: Navigate directly to proven DAT login URL
-      console.log('📍 Navigating to proven DAT login URL...');
-      await this.page.goto(LOGIN_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+      // Step 1: Navigate to DAT main page first
+      console.log('📍 Navigating to DAT main page...');
+      await this.page.goto(DAT_MAIN_URL, { waitUntil: 'networkidle2', timeout: 30000 });
       
-      console.log('📍 Successfully reached DAT Auth0 login page');
+      // Step 2: Find and click Carriers dropdown using text-based approach
+      console.log('🔗 Looking for Carriers dropdown...');
       
-      // Step 2: Enter username using proven selector
+      const carriersElement = await this.page.evaluate(() => {
+        // Look for any clickable element that contains "Carriers"
+        const allElements = Array.from(document.querySelectorAll('a, button, [role="button"], .nav-link, .dropdown-toggle'));
+        
+        for (const element of allElements) {
+          const text = element.textContent?.trim().toLowerCase() || '';
+          if (text.includes('carriers')) {
+            return element;
+          }
+        }
+        return null;
+      });
+      
+      if (!carriersElement) {
+        console.log('❌ Could not find Carriers dropdown');
+        throw new Error('Carriers dropdown not found on page');
+      }
+      
+      await this.page.evaluate((element) => {
+        element.click();
+      }, carriersElement);
+      console.log('✅ Clicked Carriers dropdown');
+      
+      // Wait for dropdown to appear
+      await this.page.waitForTimeout(3000);
+      
+      // Step 3: Find and click DAT One Web in the dropdown
+      console.log('🔗 Looking for DAT One Web in dropdown...');
+      
+      const datOneElement = await this.page.evaluate(() => {
+        // Look for DAT One Web in dropdown menu
+        const allElements = Array.from(document.querySelectorAll('a, .dropdown-item, [role="menuitem"]'));
+        
+        for (const element of allElements) {
+          const text = element.textContent?.trim().toLowerCase() || '';
+          if (text.includes('dat one web') || text.includes('dat one') || text.includes('loadboard')) {
+            return element;
+          }
+        }
+        
+        // Fallback - look for any link with "one" in href
+        const linkElements = Array.from(document.querySelectorAll('a[href*="one"], a[href*="app.dat"], a[href*="login"]'));
+        if (linkElements.length > 0) {
+          return linkElements[0];
+        }
+        
+        return null;
+      });
+      
+      if (!datOneElement) {
+        console.log('❌ Could not find DAT One Web option in dropdown');
+        throw new Error('DAT One Web option not found in dropdown');
+      }
+      
+      await this.page.evaluate((element) => {
+        element.click();
+      }, datOneElement);
+      console.log('✅ Clicked DAT One Web in dropdown');
+      
+      // Wait for navigation to login page
+      console.log('⏳ Waiting for navigation to login page...');
+      await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
+      
+      const currentUrl = this.page.url();
+      console.log(`📍 Current URL after navigation: ${currentUrl}`);
+      
+      // Now we should be on the login page - enter credentials
       console.log('📧 Filling in credentials...');
-      await this.page.waitForSelector('input[name="username"]', { visible: true, timeout: 15000 });
-      await this.page.type('input[name="username"]', DAT_EMAIL);
-      await this.page.click('button[type="submit"]');
+      
+      try {
+        await this.page.waitForSelector('input[name="username"]', { visible: true, timeout: 20000 });
+        await this.page.type('input[name="username"]', DAT_EMAIL);
+        await this.page.click('button[type="submit"]');
+        console.log('✅ Username entered and submitted');
+      } catch (usernameError) {
+        console.log('❌ Username field not found after navigation');
+        console.log(`Current URL: ${this.page.url()}`);
+        
+        // Debug: Let's see what's actually on the page
+        const pageContent = await this.page.evaluate(() => {
+          const inputs = Array.from(document.querySelectorAll('input'));
+          return {
+            title: document.title,
+            url: window.location.href,
+            inputs: inputs.map(input => ({
+              type: input.type,
+              name: input.name,
+              id: input.id,
+              placeholder: input.placeholder
+            }))
+          };
+        });
+        console.log('Page debug info:', JSON.stringify(pageContent, null, 2));
+        throw usernameError;
+      }
       
       // Step 3: Enter password using proven selector  
       console.log('🔐 Waiting for password field...');
