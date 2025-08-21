@@ -28,8 +28,8 @@ export function TwoFAInput() {
       if (result.status === 'needs_2fa') {
         setNeedsCode(true);
         toast({
-          title: "DAT Login Tab Opened",
-          description: "Login with dispatch@lampslogistics.com in the new tab, complete 2FA, then click 'Check Authentication'.",
+          title: "DAT Login Started",
+          description: "Automated login in progress with dispatch@lampslogistics.com. Complete 2FA if prompted, then check authentication.",
           variant: "default",
         });
         

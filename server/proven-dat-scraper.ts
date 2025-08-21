@@ -3,7 +3,7 @@ import puppeteer from 'puppeteer';
 
 const DAT_EMAIL = 'dispatch@lampslogistics.com';
 const DAT_PASSWORD = 'Anonymous#561';
-const LOGIN_URL = 'https://login.dat.com/u/login/identifier?state=hKFo2SBfX1ZVQklVUmJxSmZrT0FqRWtfZXNqWEhyODNfSlpPUaFur3VuaXZlcnNhbC1sb2dpbqN0aWTZIFIzbFZfNU0waDJNWXNmYldHQzB2U0NBakFpSUp2M01yo2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM';
+const LOGIN_URL = 'https://identity.dat.com/login';
 const LOADS_URL = 'https://one.dat.com/tms/load-board';
 
 export class ProvenDATScraper {
@@ -23,10 +23,13 @@ export class ProvenDATScraper {
           '--disable-dev-shm-usage',
           '--no-first-run',
           '--disable-default-apps',
-          '--disable-features=TranslateUI'
+          '--disable-features=TranslateUI',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor'
         ],
         defaultViewport: null,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        ignoreDefaultArgs: ['--disable-extensions']
       });
       this.page = await this.browser.newPage();
       await this.page.setViewport({ width: 1280, height: 800 });
@@ -40,19 +43,60 @@ export class ProvenDATScraper {
 
   async startLogin() {
     try {
-      console.log('🚀 Starting DAT login using proven method...');
-      console.log('🌐 Server browser ready - user completing authentication in their browser tab');
-      console.log('🔐 User should complete login at:', LOGIN_URL.substring(0, 50) + '...');
-      console.log('⏳ System will detect authentication when user clicks "Check Authentication"');
+      console.log('🚀 Starting automated DAT login with proven method...');
       
-      // Initialize server-side session for verification
+      // Step 1: Navigate to DAT identity login
+      console.log('📍 Navigating to DAT identity login...');
       await this.page.goto(LOGIN_URL, { waitUntil: 'networkidle2' });
       
-      this.twoFARequired = true;
-      return 'needs_2fa';
+      // Step 2: Enter email
+      console.log('📧 Entering email address...');
+      await this.page.waitForSelector('input[name="Email"]', { timeout: 10000 });
+      await this.page.type('input[name="Email"]', DAT_EMAIL);
+      
+      // Step 3: Click submit for email
+      console.log('▶️ Submitting email...');
+      await this.page.click('button[type="submit"]');
+      
+      // Step 4: Wait for password field and enter password
+      console.log('🔐 Entering password...');
+      await this.page.waitForSelector('input[name="Password"]', { timeout: 10000 });
+      await this.page.type('input[name="Password"]', DAT_PASSWORD);
+      
+      // Step 5: Submit password
+      console.log('▶️ Submitting password...');
+      await this.page.click('button[type="submit"]');
+      
+      // Step 6: Wait for 2FA or successful login
+      console.log('🛡️ Checking for 2FA requirement...');
+      
+      // Wait to see if we get to the 2FA page or successful login
+      try {
+        await this.page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 5000 });
+        const currentUrl = this.page.url();
+        
+        if (currentUrl.includes('mfa') || currentUrl.includes('2fa') || currentUrl.includes('verify')) {
+          console.log('🛡️ 2FA required - waiting for manual completion...');
+          this.twoFARequired = true;
+          return 'needs_2fa';
+        } else if (currentUrl.includes('one.dat.com') || currentUrl.includes('dashboard') || !currentUrl.includes('login')) {
+          console.log('✅ Login successful - no 2FA required');
+          this.isLoggedIn = true;
+          return 'success';
+        } else {
+          console.log('⏳ Waiting for 2FA completion...');
+          this.twoFARequired = true;
+          return 'needs_2fa';
+        }
+        
+      } catch (timeoutError) {
+        console.log('⏳ Navigation timeout - likely waiting for 2FA...');
+        this.twoFARequired = true;
+        return 'needs_2fa';
+      }
       
     } catch (error) {
-      console.error('❌ DAT login initialization failed:', error);
+      console.error('❌ Automated DAT login failed:', error);
       throw error;
     }
   }
