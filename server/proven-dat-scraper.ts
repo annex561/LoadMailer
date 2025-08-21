@@ -14,15 +14,26 @@ export class ProvenDATScraper {
 
   async initialize() {
     try {
+      console.log('🚀 Launching browser window for manual DAT login...');
       this.browser = await puppeteer.launch({ 
         headless: false,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+          '--no-sandbox', 
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--no-first-run',
+          '--disable-default-apps',
+          '--disable-features=TranslateUI'
+        ],
+        defaultViewport: null,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
       });
       this.page = await this.browser.newPage();
-      console.log('✅ Proven DAT scraper initialized');
+      await this.page.setViewport({ width: 1280, height: 800 });
+      console.log('✅ Browser window opened successfully');
       return true;
     } catch (error) {
-      console.error('❌ Failed to initialize proven DAT scraper:', error);
+      console.error('❌ Failed to open browser window:', error);
       return false;
     }
   }

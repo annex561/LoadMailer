@@ -13,6 +13,9 @@ export function TwoFAInput() {
 
   const handleStartLogin = async () => {
     setIsStartingLogin(true);
+    
+    // Open DAT login in new tab
+    window.open('https://www.dat.com/login', '_blank');
 
     try {
       const response = await fetch('/api/dat/start-login', {
@@ -25,8 +28,8 @@ export function TwoFAInput() {
       if (result.status === 'needs_2fa') {
         setNeedsCode(true);
         toast({
-          title: "2FA Required",
-          description: "Browser window opened. Enter your email/password, then complete 2FA verification. Click 'Check Authentication' when done.",
+          title: "DAT Login Tab Opened",
+          description: "Complete your DAT authentication in the new tab, then click 'Check Authentication'.",
           variant: "default",
         });
         
