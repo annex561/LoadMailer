@@ -4616,6 +4616,40 @@ Safe travels! 🚛`;
     }
   });
 
+  // LoadMailer Puppeteer DAT scraping endpoints
+  app.post('/api/loadmailer-dat/start', async (req, res) => {
+    try {
+      const { loadMailerPuppeteerService } = await import('./loadmailer-puppeteer-service');
+      await loadMailerPuppeteerService.runScraper();
+      res.json({ 
+        success: true, 
+        message: 'LoadMailer DAT scraping session started - manual 2FA required'
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'LoadMailer scraping failed' 
+      });
+    }
+  });
+
+  app.post('/api/loadmailer-dat/init', async (req, res) => {
+    try {
+      const { loadMailerPuppeteerService } = await import('./loadmailer-puppeteer-service');
+      await loadMailerPuppeteerService.initialize();
+      await loadMailerPuppeteerService.startAutoScraping();
+      res.json({ 
+        success: true, 
+        message: 'LoadMailer Puppeteer service initialized with auto-scraping (8 AM - 6 PM)'
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to initialize LoadMailer service' 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   // AUTO-RESTART MECHANISM: Use session-based DAT scraping for manual authentication

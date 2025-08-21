@@ -1,0 +1,109 @@
+const puppeteer = require("puppeteer");
+const TelegramBot = require("node-telegram-bot-api");
+require("dotenv").config();
+
+const token = process.env.TELEGRAM_BOT_TOKEN;
+const dispatcherId = process.env.TELEGRAM_DISPATCHER_ID;
+const bot = new TelegramBot(token, { polling: true });
+
+const drivers = [
+  { id: 5908383693, name: "Alex Liberty", city: "Orlando, FL", zip: "32801" },
+  // Add more drivers here if needed
+];
+
+const bookingFlow = {};
+const hoursActive = { start: 8, end: 18 }; // 8 AM to 6 PM
+
+function formatLoad(load) {
+  return `📦 *New Load Available!*\n\n🚛 *From:* ${load.origin}\n📍 *To:* ${load.destination}\n📅 *Pickup:* ${load.pickup}\n📦 *Weight:* ${load.weight}\n💵 *Rate:* $${load.rate}\n🛣️ *Miles:* ${load.miles}\n\n📲 *Reply with:* YES to Book or NO to Decline`;
+}
+
+async function scrapeDATLoads(page) {
+  await page.goto("https://www.dat.com/login");
+  await page.type("#email", process.env.DAT_EMAIL);
+  await page.type("#password", process.env.DAT_PASSWORD);
+  await page.click("button[type=submit]");
+
+  console.log("Waiting for 2FA...");
+  await page.waitForSelector("input[name='verificationCode']", { timeout: 0 });
+
+  // Wait for user to enter code manually
+  await page.waitForTimeout(20000);
+
+  await page.waitForNavigation({ waitUntil: "networkidle2" });
+
+  // Go to load board page
+  await page.goto("https://app.dat.com/loadboard", { waitUntil: "networkidle2" });
+
+  // Replace with real scraping logic:
+  return [
+    {
+      origin: "Orlando, FL",
+      destination: "Mobile, AL",
+      pickup: "Aug 22",
+      weight: "3,500 lbs",
+      rate: "725",
+      miles: "497",
+      email: "JPowers@tql.com",
+      phone: "800-580-3101",
+    },
+  ];
+}
+
+async function runScraper() {
+  const now = new Date();
+  const currentHour = now.getHours();
+  if (currentHour < hoursActive.start || currentHour >= hoursActive.end) {
+    console.log("Outside active hours. Skipping.");
+    return;
+  }
+
+  const browser = await puppeteer.launch({ headless: false });
+  const page = await browser.newPage();
+  const loads = await scrapeDATLoads(page);
+
+  for (let load of loads) {
+    for (let driver of drivers) {
+      const msg = formatLoad(load);
+      await bot.sendMessage(driver.id, msg, { parse_mode: "Markdown" });
+      bookingFlow[driver.id] = { load, timestamp: Date.now(), responded: false };
+      await new Promise((resolve) => setTimeout(resolve, 30000)); // 30 sec pause
+    }
+  }
+
+  setTimeout(() => {
+    for (let driver of drivers) {
+      const flow = bookingFlow[driver.id];
+      if (flow && !flow.responded) {
+        bot.sendMessage(dispatcherId, `⚠️ Driver ${driver.name} did not respond to load offer.`);
+      }
+    }
+  }, 3 * 60 * 1000); // 3 min timeout
+
+  await browser.close();
+}
+
+bot.on("message", (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text.trim().toUpperCase();
+
+  if (bookingFlow[chatId]) {
+    bookingFlow[chatId].responded = true;
+
+    if (text === "YES") {
+      const load = bookingFlow[chatId].load;
+      bot.sendMessage(chatId, "✅ Booking in progress. Dispatcher will contact the carrier.");
+
+      const info = `📞 *BOOK THIS LOAD NOW*\n\n📦 ${load.origin} ➡️ ${load.destination}\n💵 $${load.rate} | ${load.weight} | ${load.miles} mi\n\n📧 ${load.email}\n📱 ${load.phone}`;
+      bot.sendMessage(dispatcherId, info, { parse_mode: "Markdown" });
+    } else if (text === "NO") {
+      bot.sendMessage(chatId, "❌ Load declined.");
+    } else {
+      bot.sendMessage(chatId, "Please reply YES or NO.");
+    }
+  }
+});
+
+// Auto-run scraper every 5 minutes
+setInterval(runScraper, 5 * 60 * 1000);
+runScraper();
