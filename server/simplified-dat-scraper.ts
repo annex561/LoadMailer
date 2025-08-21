@@ -49,10 +49,7 @@ export class SimplifiedDATScraper {
       
       // Strategy 1: Try direct DAT login page
       const loginUrls = [
-        'https://login.dat.com/u/login/identifier?state=hKFo2SBidC1XNWZvSHpVWi05TVo4THBKYmlwdnhaNnR4ZFVnb6Fur3VuaXZlcnNhbC1sb2dpbqN0aWTZIHFMczlTMkhZbUdVS0lUc0pkSVpqU2VjMU8tTFEwdkswo2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM',
-        'https://www.dat.com/login',
-        'https://www.dat.com/sign-in',
-        'https://login.dat.com'
+        'https://login.dat.com/u/login/identifier?state=hKFo2SBidC1XNWZvSHpVWi05TVo4THBKYmlwdnhaNnR4ZFVnb6Fur3VuaXZlcnNhbC1sb2dpbqN0aWTZIHFMczlTMkhZbUdVS0lUc0pkSVpqU2VjMU8tTFEwdkswo2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM'
       ];
 
       for (const url of loginUrls) {
