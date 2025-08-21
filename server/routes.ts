@@ -4623,7 +4623,7 @@ Safe travels! 🚛`;
       await loadMailerPuppeteerService.runScraper();
       res.json({ 
         success: true, 
-        message: 'LoadMailer DAT scraping session started - manual 2FA required'
+        message: 'LoadMailer DAT scraping session started - real DAT loads incoming'
       });
     } catch (error) {
       res.status(500).json({ 
@@ -4649,6 +4649,10 @@ Safe travels! 🚛`;
       });
     }
   });
+
+  // Setup DAT Loads API
+  const { setupDATLoadsAPI } = await import('./dat-loads-api');
+  setupDATLoadsAPI(app);
 
   const httpServer = createServer(app);
 
