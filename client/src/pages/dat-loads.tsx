@@ -394,90 +394,105 @@ function DATLoads() {
                   <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase text-xs">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white">
                 {datLoads.map((datLoad: any) => (
-                  <tr key={datLoad.id} className="hover:bg-blue-50 transition-colors border-l-4 border-l-blue-500">
-                    <td className="px-3 py-2">
-                      <input type="checkbox" className="rounded" />
-                    </td>
-                    {/* Origin/Dest */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs">
+                  <React.Fragment key={datLoad.id}>
+                    {/* Main Load Row */}
+                    <tr className="hover:bg-blue-50 transition-colors border-l-4 border-l-blue-500 border-b border-gray-100">
+                      <td className="px-3 py-2">
+                        <input type="checkbox" className="rounded" />
+                      </td>
+                      {/* Origin/Dest */}
+                      <td className="px-3 py-2">
+                        <div className="text-xs">
+                          <div className="flex items-center">
+                            <MapPin className="w-3 h-3 text-green-600 mr-1" />
+                            <span className="font-medium">{datLoad.origin}</span>
+                          </div>
+                          <div className="flex items-center mt-1">
+                            <MapPin className="w-3 h-3 text-red-600 mr-1" />
+                            <span className="font-medium">{datLoad.destination}</span>
+                          </div>
+                          <div className="text-gray-500 mt-1">{datLoad.age}</div>
+                        </div>
+                      </td>
+                      {/* Load Details */}
+                      <td className="px-3 py-2">
+                        <div className="text-xs">
+                          <div className="font-medium text-blue-600">{datLoad.weight}</div>
+                          <div className="text-gray-600">{datLoad.length}</div>
+                          <div className="text-gray-500">#{datLoad.id.split('-')[2]}</div>
+                        </div>
+                      </td>
+                      {/* Rate */}
+                      <td className="px-3 py-2">
                         <div className="flex items-center">
-                          <MapPin className="w-3 h-3 text-green-600 mr-1" />
-                          <span className="font-medium">{datLoad.origin}</span>
+                          <DollarSign className="w-3 h-3 text-green-600 mr-1" />
+                          <span className="font-bold text-green-600 text-sm">
+                            ${parseInt(datLoad.rate).toLocaleString()}
+                          </span>
                         </div>
-                        <div className="flex items-center mt-1">
-                          <MapPin className="w-3 h-3 text-red-600 mr-1" />
-                          <span className="font-medium">{datLoad.destination}</span>
+                      </td>
+                      {/* Miles */}
+                      <td className="px-3 py-2">
+                        <div className="text-xs font-medium">{datLoad.miles}</div>
+                      </td>
+                      {/* Deadhead */}
+                      <td className="px-3 py-2">
+                        <div className="text-xs font-medium text-orange-600">{datLoad.deadhead}</div>
+                      </td>
+                      {/* Equipment */}
+                      <td className="px-3 py-2">
+                        <Badge variant="outline" className="text-xs">
+                          {datLoad.equipment}
+                        </Badge>
+                      </td>
+                      {/* Dates */}
+                      <td className="px-3 py-2">
+                        <div className="text-xs">
+                          <div><strong>PU:</strong> {datLoad.pickup}</div>
+                          <div><strong>DEL:</strong> {datLoad.delivery}</div>
                         </div>
-                        <div className="text-gray-500 mt-1">{datLoad.age}</div>
-                      </div>
-                    </td>
-                    {/* Load Details */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs">
-                        <div className="font-medium text-blue-600">{datLoad.weight}</div>
-                        <div className="text-gray-600">{datLoad.length}</div>
-                        <div className="text-gray-500">#{datLoad.id.split('-')[2]}</div>
-                      </div>
-                    </td>
-                    {/* Rate */}
-                    <td className="px-3 py-2">
-                      <div className="flex items-center">
-                        <DollarSign className="w-3 h-3 text-green-600 mr-1" />
-                        <span className="font-bold text-green-600 text-sm">
-                          ${parseInt(datLoad.rate).toLocaleString()}
-                        </span>
-                      </div>
-                    </td>
-                    {/* Miles */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs font-medium">{datLoad.miles}</div>
-                    </td>
-                    {/* Deadhead */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs font-medium text-orange-600">{datLoad.deadhead}</div>
-                    </td>
-                    {/* Equipment */}
-                    <td className="px-3 py-2">
-                      <Badge variant="outline" className="text-xs">
-                        {datLoad.equipment}
-                      </Badge>
-                    </td>
-                    {/* Dates */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs">
-                        <div><strong>PU:</strong> {datLoad.pickup}</div>
-                        <div><strong>DEL:</strong> {datLoad.delivery}</div>
-                      </div>
-                    </td>
-                    {/* Broker */}
-                    <td className="px-3 py-2">
-                      <div className="text-xs">
-                        <div className="font-medium text-gray-900">{datLoad.broker}</div>
-                        <div className="text-gray-600">{datLoad.phone}</div>
-                        <div className="text-gray-500 truncate">{datLoad.email}</div>
-                      </div>
-                    </td>
-                    {/* Comments */}
-                    <td className="px-3 py-2 max-w-32">
-                      <div className="text-xs text-gray-700 truncate" title={datLoad.comments}>
-                        {datLoad.comments || 'No special requirements'}
-                      </div>
-                    </td>
-                    {/* Actions */}
-                    <td className="px-3 py-2">
-                      <div className="flex items-center space-x-1">
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="Call Broker">
-                          <Phone className="w-3 h-3" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-green-600" title="Book Load">
-                          <Truck className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      {/* Broker */}
+                      <td className="px-3 py-2">
+                        <div className="text-xs">
+                          <div className="font-medium text-gray-900">{datLoad.broker}</div>
+                          <div className="text-gray-600">{datLoad.phone}</div>
+                          <div className="text-gray-500 truncate">{datLoad.email}</div>
+                        </div>
+                      </td>
+                      {/* Comments - removed from main row */}
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-gray-400">See below</span>
+                      </td>
+                      {/* Actions */}
+                      <td className="px-3 py-2">
+                        <div className="flex items-center space-x-1">
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600" title="Call Broker">
+                            <Phone className="w-3 h-3" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-green-600" title="Book Load">
+                            <Truck className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                    
+                    {/* Comments Row - Full width under each load */}
+                    <tr className="bg-yellow-50 border-l-4 border-l-blue-500">
+                      <td></td>
+                      <td colSpan={10} className="px-3 py-2 border-b border-gray-200">
+                        <div className="flex items-start">
+                          <MessageSquare className="w-4 h-4 text-amber-600 mr-2 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <span className="text-xs font-medium text-amber-700">Load Requirements: </span>
+                            <span className="text-xs text-gray-800">{datLoad.comments || 'No special requirements'}</span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </React.Fragment>
                 ))}
                 
                 {datLoads.length === 0 && (
