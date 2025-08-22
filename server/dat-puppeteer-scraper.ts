@@ -22,6 +22,7 @@ export class DATScraperService {
   private page: Page | null = null;
   private isLoggedIn = false;
   private isLoggingIn = false;
+  private loginAttempts = 0;
 
   async initialize() {
     if (this.browser) return;
@@ -55,63 +56,196 @@ export class DATScraperService {
     if (this.isLoggedIn || this.isLoggingIn || !this.page) return;
     
     this.isLoggingIn = true;
-    console.log('🔐 Starting DAT login process...');
+    this.loginAttempts++;
+    console.log(`🔐 Starting DAT login process (attempt ${this.loginAttempts})...`);
 
     try {
       // Step 1: Navigate to DAT.com homepage
       console.log('📍 Navigating to DAT.com...');
-      await this.page.goto('https://www.dat.com', { waitUntil: 'networkidle2' });
+      await this.page.goto('https://www.dat.com', { waitUntil: 'networkidle2', timeout: 30000 });
 
-      // Step 2: Click on "Carriers"
-      console.log('🔗 Clicking Carriers menu...');
-      await this.page.waitForSelector('a[href="#carriers"]', { timeout: 15000 });
-      await this.page.click('a[href="#carriers"]');
-
-      // Step 3: Click on "DAT One Web"
-      console.log('🔗 Navigating to DAT One Web...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await this.page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('a'));
-        const targetLink = links.find(link => link.textContent?.includes('DAT One Web'));
-        if (targetLink) (targetLink as HTMLElement).click();
-      });
-
-      // Step 4: Wait for login redirect
-      console.log('⏳ Waiting for login page...');
-      await this.page.waitForNavigation({ waitUntil: 'networkidle2' });
-
-      // Step 5: Enter email
-      console.log('📧 Entering email...');
-      await this.page.waitForSelector('input[type="email"]', { timeout: 15000 });
-      await this.page.type('input[type="email"]', 'dispatch@lampslogistics.com');
-      await this.page.keyboard.press('Enter');
-
-      // Step 6: Enter password
-      console.log('🔑 Entering password...');
-      await this.page.waitForSelector('input[type="password"]', { timeout: 15000 });
-      await this.page.type('input[type="password"]', 'Anonymous#56111');
-      await this.page.keyboard.press('Enter');
-
-      // Step 7: Wait for 2FA or successful login
-      console.log('🛑 Awaiting manual 2FA entry or login completion...');
-      console.log('💡 Please complete 2FA in the browser window if prompted');
+      // Step 2: Look for and click login/carriers button
+      console.log('🔗 Looking for login access...');
       
-      // Wait for navigation to complete (either 2FA page or dashboard)
-      await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 300000 }); // 5 minute timeout for 2FA
-
-      // Check if we're on the dashboard/main page
-      const currentUrl = this.page.url();
-      if (currentUrl.includes('dat.com') && !currentUrl.includes('login')) {
-        this.isLoggedIn = true;
-        console.log('✅ Successfully logged into DAT!');
-        console.log(`📍 Current URL: ${currentUrl}`);
-      } else {
-        throw new Error('Login may have failed - not on expected DAT page');
+      // Try multiple approaches to get to login
+      const loginSelectors = [
+        'a[href*="login"]',
+        'a[href="#carriers"]', 
+        'button:contains("Log In")',
+        'a:contains("Log In")',
+        '.login-btn',
+        '#login-button'
+      ];
+      
+      let loginClicked = false;
+      for (const selector of loginSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 5000 });
+          await this.page.click(selector);
+          console.log(`✅ Clicked login element: ${selector}`);
+          loginClicked = true;
+          break;
+        } catch (e) {
+          continue;
+        }
       }
+
+      if (!loginClicked) {
+        // Try direct navigation to login page
+        console.log('🔗 Direct navigation to login page...');
+        await this.page.goto('https://www.dat.com/login', { waitUntil: 'networkidle2' });
+      }
+
+      // Give time for any redirects or modals
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Step 3: Look for DAT One Web link if needed
+      try {
+        const datOneLink = await this.page.$$eval('a', links => 
+          links.filter(link => link.textContent?.includes('DAT One Web') || link.textContent?.includes('DAT One'))
+        );
+        if (datOneLink.length > 0) {
+          console.log('🔗 Found DAT One Web link, clicking...');
+          await this.page.click('a:has-text("DAT One Web"), a:has-text("DAT One")').catch(() => {});
+          await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
+        }
+      } catch (e) {
+        console.log('⚠️ No DAT One Web link found, continuing...');
+      }
+
+      // Step 4: Enter credentials
+      console.log('📧 Looking for login form...');
+      
+      // Wait for login form to appear
+      const emailSelectors = [
+        'input[type="email"]',
+        'input[name="email"]',
+        'input[name="username"]',
+        'input[id*="email"]',
+        'input[placeholder*="email"]'
+      ];
+      
+      let emailInput = null;
+      for (const selector of emailSelectors) {
+        try {
+          await this.page.waitForSelector(selector, { timeout: 5000 });
+          emailInput = await this.page.$(selector);
+          if (emailInput) {
+            console.log(`✅ Found email input: ${selector}`);
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      if (!emailInput) {
+        throw new Error('Could not find email input field');
+      }
+
+      // Clear and enter email
+      const emailSelector = emailSelectors.find(sel => emailInput);
+      if (emailSelector) {
+        await this.page.evaluate((sel) => {
+          const element = document.querySelector(sel) as HTMLInputElement;
+          if (element) element.value = '';
+        }, emailSelector);
+      }
+      
+      await emailInput.type('dispatch@lampslogistics.com', { delay: 100 });
+      console.log('📧 Email entered');
+
+      // Look for password field
+      const passwordSelectors = [
+        'input[type="password"]',
+        'input[name="password"]',
+        'input[id*="password"]'
+      ];
+      
+      let passwordInput = null;
+      for (const selector of passwordSelectors) {
+        try {
+          passwordInput = await this.page.$(selector);
+          if (passwordInput) {
+            console.log(`✅ Found password input: ${selector}`);
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      if (passwordInput) {
+        await passwordInput.type('Anonymous#56111', { delay: 100 });
+        console.log('🔑 Password entered');
+      }
+
+      // Submit the form
+      const submitSelectors = [
+        'button[type="submit"]',
+        'input[type="submit"]',
+        'button:contains("Log In")',
+        'button:contains("Sign In")',
+        '.login-btn',
+        '.submit-btn'
+      ];
+      
+      for (const selector of submitSelectors) {
+        try {
+          const submitBtn = await this.page.$(selector);
+          if (submitBtn) {
+            console.log(`🚀 Submitting login form with: ${selector}`);
+            await submitBtn.click();
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      // Wait for login to process
+      console.log('⏳ Waiting for login to process...');
+      console.log('💡 Complete 2FA in the browser window if prompted');
+      
+      // Monitor for successful login or 2FA
+      const maxWaitTime = 300000; // 5 minutes
+      const startTime = Date.now();
+      
+      while (Date.now() - startTime < maxWaitTime) {
+        const currentUrl = this.page.url();
+        
+        if (currentUrl.includes('one.dat.com') || 
+            (currentUrl.includes('dat.com') && !currentUrl.includes('login'))) {
+          this.isLoggedIn = true;
+          console.log('✅ Successfully logged into DAT!');
+          console.log(`📍 Current URL: ${currentUrl}`);
+          return;
+        }
+        
+        // Check if 2FA is required
+        if (this.page) {
+          const pageContent = await this.page.content();
+          if (pageContent.includes('verification') || pageContent.includes('2FA') || pageContent.includes('authenticator')) {
+            console.log('🛑 2FA detected - please complete in browser window');
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      throw new Error('Login timeout - please check browser window for issues');
 
     } catch (error) {
       console.error('❌ DAT login failed:', error);
       this.isLoggedIn = false;
+      
+      // Debug information
+      if (this.page) {
+        const currentUrl = this.page.url();
+        const title = await this.page.title();
+        console.log(`📍 Current URL: ${currentUrl}`);
+        console.log(`📄 Page Title: ${title}`);
+      }
     } finally {
       this.isLoggingIn = false;
     }

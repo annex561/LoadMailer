@@ -27,6 +27,7 @@ import { MoodTracker } from "@/pages/mood-tracker";
 import GPSTracking from "@/pages/gps-tracking";
 import PredictiveMaintenance from "@/pages/predictive-maintenance";
 import { TaskMagicStatusPage } from "@/pages/taskmagic-status";
+import DATScraper from "@/pages/DATScraper";
 import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import SmartLoadMatching from "@/pages/smart-load-matching";
 import PredictionConfidence from "@/pages/prediction-confidence";
@@ -66,6 +67,7 @@ function Router() {
       <Route path="/smart-load-matching" component={SmartLoadMatching} />
       <Route path="/prediction-confidence" component={PredictionConfidence} />
       <Route path="/taskmagic-status" component={TaskMagicStatusPage} />
+      <Route path="/dat-scraper" component={DATScraper} />
       <Route component={NotFound} />
     </Switch>
   );
