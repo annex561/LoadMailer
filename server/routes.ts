@@ -25,6 +25,7 @@ import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
 import { realDriverLocationService } from "./real-driver-location-service";
 import { taskMagicIntegration } from './taskmagic-integration';
+import { datScraperService } from './dat-puppeteer-scraper';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -261,6 +262,14 @@ async function sendAutomatedEmails(load: LoadWithRelations, trigger: string) {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize services
   const predictiveMaintenanceService = new PredictiveMaintenanceService();
+  
+  // Initialize DAT Puppeteer scraper
+  try {
+    await datScraperService.initialize();
+    console.log('DAT Puppeteer Scraper initialized');
+  } catch (error) {
+    console.error('Failed to initialize DAT Puppeteer Scraper:', error);
+  }
   
   // Check SMS service configuration on startup
   console.log(`SMS Service status: ${smsService.isServiceConfigured() ? 'CONFIGURED ✓' : 'NOT CONFIGURED ✗'}`);
@@ -3639,6 +3648,115 @@ Safe travels! 🚛`;
 
   app.get('/api/taskmagic/status', (req, res) => {
     taskMagicIntegration.getStatus(req, res);
+  });
+
+  // DAT Puppeteer Scraper endpoints - Direct DAT integration with your login script
+  app.post("/api/dat-puppeteer/login", async (req, res) => {
+    try {
+      await datScraperService.login();
+      const status = await datScraperService.getLoginStatus();
+      res.json({ 
+        message: 'DAT login initiated - complete 2FA in browser window',
+        ...status
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to login to DAT', details: error.message });
+    }
+  });
+
+  app.get("/api/dat-puppeteer/status", async (req, res) => {
+    try {
+      const status = await datScraperService.getLoginStatus();
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to get DAT status' });
+    }
+  });
+
+  app.post("/api/dat-puppeteer/scrape", async (req, res) => {
+    try {
+      const loads = await datScraperService.scrapeLoads();
+      
+      // Process each load through LoadMaster
+      let processedCount = 0;
+      for (const load of loads) {
+        try {
+          // Create customer if doesn't exist
+          const existingCustomer = await storage.getCustomerByName(load.company);
+          let customerId;
+          
+          if (!existingCustomer) {
+            const customer = await storage.createCustomer({
+              name: load.company,
+              contactPerson: 'Dispatch',
+              phone: load.phone,
+              email: `dispatch@${load.company.toLowerCase().replace(/\s+/g, '')}.com`,
+              address: `${load.origin_city}, ${load.origin_state}`
+            });
+            customerId = customer.id;
+            console.log(`✅ Created customer: ${load.company}`);
+          } else {
+            customerId = existingCustomer.id;
+          }
+
+          // Create the load
+          const loadData = {
+            customerId,
+            loadNumber: `DAT-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            description: `[DAT REAL] ${load.commodity} - ${load.company} (${load.phone})`,
+            pickupAddress: `${load.origin_city}, ${load.origin_state}`,
+            deliveryAddress: `${load.destination_city}, ${load.destination_state}`,
+            pickupDate: new Date(load.pickup_date),
+            deliveryDate: new Date(load.pickup_date),
+            pickupTime: '08:00',
+            deliveryTime: '17:00',
+            weight: load.weight || 0,
+            rate: load.rate,
+            miles: load.miles || 0,
+            equipmentType: load.equipment_type,
+            status: 'available' as const,
+            priority: 'medium' as const,
+            specialInstructions: `DAT Load ID: ${load.dat_load_id}`
+          };
+
+          const createdLoad = await storage.createLoad(loadData);
+          
+          // Dispatch to eligible drivers
+          if (telegramLoadService && telegramLoadService.isServiceRunning()) {
+            await telegramLoadService.offerLoadToEligibleDrivers(createdLoad);
+          }
+          
+          processedCount++;
+          console.log(`✅ Processed DAT load: ${load.company} - ${load.origin_city}, ${load.origin_state} → ${load.destination_city}, ${load.destination_state} ($${load.rate})`);
+          
+        } catch (loadError) {
+          console.error(`❌ Error processing load from ${load.company}:`, loadError);
+        }
+      }
+
+      res.json({ 
+        message: `Successfully scraped and processed ${processedCount} loads from DAT`,
+        totalScraped: loads.length,
+        totalProcessed: processedCount,
+        loads: loads.map(load => ({
+          company: load.company,
+          route: `${load.origin_city}, ${load.origin_state} → ${load.destination_city}, ${load.destination_state}`,
+          rate: load.rate,
+          equipment: load.equipment_type
+        }))
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to scrape DAT loads', details: error.message });
+    }
+  });
+
+  app.post("/api/dat-puppeteer/close", async (req, res) => {
+    try {
+      await datScraperService.close();
+      res.json({ message: 'DAT scraper browser closed' });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to close DAT scraper' });
+    }
   });
 
   // Predictive Maintenance Routes
