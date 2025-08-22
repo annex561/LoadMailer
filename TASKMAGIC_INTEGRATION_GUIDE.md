@@ -1,214 +1,166 @@
-# TaskMagic Integration Guide
+# TaskMagic DAT Load Integration - Step by Step
 
-## Overview
-Your LoadMaster system now includes complete TaskMagic integration for automated DAT load scraping. TaskMagic handles the complex browser automation while LoadMaster processes the scraped data and dispatches loads to drivers.
+## Your Current Setup ✅
+- **TaskMagic Webhook**: `https://webhooks.taskmagic.com/hook/i7BFrUC4Yk7ubrLYIkSW` (TESTED & WORKING)
+- **LoadMaster Ready**: All endpoints configured and tested
+- **DAT Credentials**: `dispatch@lampslogistics.com` / `Anonymous#56111`
 
-## Webhook Endpoints
+## Step 1: Create DAT Scraping Automation in TaskMagic
 
-### 1. Single Load Processing
-**Endpoint:** `POST /api/taskmagic/webhook/single-load`
-**Purpose:** Receives individual DAT loads from TaskMagic automations
+### 1.1 Start New Automation
+1. Open TaskMagic dashboard
+2. Click "Add new automation"
+3. Name: "DAT Load Scraper for LoadMaster"
 
-**Example Payload:**
+### 1.2 Configure DAT Login
+1. **Starting URL**: `https://www.dat.com/login`
+2. **Add login steps**:
+   - Click email field, enter: `dispatch@lampslogistics.com`
+   - Click password field, enter: `Anonymous#56111`
+   - Click "Sign In" button
+   - Handle 2FA if prompted (check email for code)
+
+### 1.3 Navigate to Load Search
+After successful login:
+1. Navigate to: `https://www.dat.com/?s=loads`
+2. Set equipment filters for: Box trucks, Sprinter vans, Straight trucks
+3. Set weight limit: Under 26,000 lbs
+4. Set geography: TN, KY, GA, AL, NC, SC, FL
+
+## Step 2: Configure Data Extraction
+
+### 2.1 Set Up Load Scraping Loop
+Create a loop to extract each load with these fields:
+
+**Company Information:**
+- `company` → Extract company name from load listing
+- `contact_name` → Extract contact person (if available)
+- `phone` → Extract phone number in format: 555-123-4567
+- `email` → Extract email if shown
+
+**Route Information:**
+- `origin_city` → Extract pickup city (e.g., "Nashville")
+- `origin_state` → Extract pickup state (e.g., "TN")
+- `destination_city` → Extract delivery city (e.g., "Atlanta")
+- `destination_state` → Extract delivery state (e.g., "GA")
+- `miles` → Extract distance as number only (e.g., 248)
+
+**Load Details:**
+- `rate` → Extract rate as number only (e.g., 1350, not $1,350)
+- `weight` → Extract weight in pounds (e.g., 15000)
+- `commodity` → Extract cargo description (e.g., "Electronics")
+- `equipment_type` → Map to: "dry_van", "reefer", "flatbed", "box_truck", "sprinter_van"
+
+**Dates:**
+- `pickup_date` → Format as: "2025-08-23T08:00:00Z"
+- `delivery_date` → Format as: "2025-08-24T17:00:00Z" (optional)
+
+**Additional:**
+- `special_requirements` → Extract special instructions
+- `hazmat` → Set to true/false for hazmat loads
+- `dat_load_id` → Extract DAT's load ID number
+
+## Step 3: Configure Webhook Output
+
+### 3.1 Webhook Settings
+For each scraped load, configure TaskMagic to send:
+
+**Method**: POST
+**URL**: Your LoadMaster endpoint (see Step 3.2)
+**Headers**:
+```
+Content-Type: application/json
+x-taskmagic-secret: taskmagic-webhook-secret-2025
+```
+
+### 3.2 Choose Integration Method
+
+**Option A: Direct to LoadMaster (Recommended)**
+Send directly to your LoadMaster system:
+```
+URL: https://your-replit-domain.replit.app/api/taskmagic/webhook/single-load
+```
+
+**Option B: Via TaskMagic Webhook**
+Send to your TaskMagic webhook first:
+```
+URL: https://webhooks.taskmagic.com/hook/i7BFrUC4Yk7ubrLYIkSW
+```
+
+### 3.3 Payload Structure
+Configure TaskMagic to send this JSON structure:
+
 ```json
 {
-  "company": "ABC Freight Solutions",
-  "contact_name": "John Dispatcher",
-  "phone": "555-123-4567",
-  "email": "dispatch@abcfreight.com",
-  "origin_city": "Nashville",
-  "origin_state": "TN",
-  "destination_city": "Atlanta",
-  "destination_state": "GA",
-  "rate": 1250,
-  "equipment_type": "dry_van",
-  "weight": 15000,
-  "commodity": "Electronics",
-  "pickup_date": "2025-08-23T08:00:00Z",
-  "miles": 248,
-  "special_requirements": "Appointment required",
-  "hazmat": false,
-  "dat_load_id": "DAT123456",
-  "automation_run_id": "tm_run_789",
+  "company": "{{extracted_company}}",
+  "contact_name": "{{extracted_contact}}",
+  "phone": "{{extracted_phone}}",
+  "email": "{{extracted_email}}",
+  "origin_city": "{{extracted_origin_city}}",
+  "origin_state": "{{extracted_origin_state}}",
+  "destination_city": "{{extracted_dest_city}}",
+  "destination_state": "{{extracted_dest_state}}",
+  "rate": {{extracted_rate}},
+  "equipment_type": "{{mapped_equipment}}",
+  "weight": {{extracted_weight}},
+  "commodity": "{{extracted_commodity}}",
+  "pickup_date": "{{formatted_pickup_date}}",
+  "delivery_date": "{{formatted_delivery_date}}",
+  "miles": {{extracted_miles}},
+  "special_requirements": "{{extracted_special}}",
+  "hazmat": {{extracted_hazmat}},
+  "dat_load_id": "{{extracted_load_id}}",
+  "automation_run_id": "{{taskmagic_run_id}}",
   "webhook_secret": "taskmagic-webhook-secret-2025"
 }
 ```
 
-### 2. Batch Load Processing
-**Endpoint:** `POST /api/taskmagic/webhook/batch-loads`
-**Purpose:** Receives multiple DAT loads in a single batch
+## Step 4: Equipment Type Mapping
 
-**Example Payload:**
-```json
-{
-  "loads": [
-    {
-      "company": "First Load Company",
-      "phone": "555-111-2222",
-      "origin_city": "Memphis",
-      "origin_state": "TN",
-      "destination_city": "Birmingham",
-      "destination_state": "AL",
-      "rate": 980,
-      "equipment_type": "reefer",
-      "weight": 12000,
-      "commodity": "Frozen Foods",
-      "pickup_date": "2025-08-23T06:00:00Z",
-      "miles": 340
-    },
-    {
-      "company": "Second Load Company",
-      "phone": "555-333-4444",
-      "origin_city": "Knoxville",
-      "origin_state": "TN",
-      "destination_city": "Charlotte",
-      "destination_state": "NC",
-      "rate": 1450,
-      "equipment_type": "flatbed",
-      "weight": 25000,
-      "commodity": "Steel Coils",
-      "pickup_date": "2025-08-24T07:00:00Z",
-      "miles": 425
-    }
-  ],
-  "webhook_secret": "taskmagic-webhook-secret-2025"
-}
-```
+Map DAT equipment types to LoadMaster types:
+- **Van** or **Dry Van** → `"dry_van"`
+- **Reefer** or **Refrigerated** → `"reefer"`
+- **Flatbed** → `"flatbed"`
+- **Box Truck** → `"box_truck"`
+- **Sprinter** → `"sprinter_van"`
+- **Straight Truck** → `"straight_truck"`
 
-### 3. Integration Status
-**Endpoint:** `GET /api/taskmagic/status`
-**Purpose:** Check TaskMagic integration health and statistics
+## Step 5: Configure Automation Schedule
 
-**Example Response:**
-```json
-{
-  "integration": "TaskMagic",
-  "status": "active",
-  "webhookEndpoints": {
-    "singleLoad": "/api/taskmagic/webhook/single-load",
-    "batchLoads": "/api/taskmagic/webhook/batch-loads"
-  },
-  "totalTaskMagicLoads": 45,
-  "availableLoads": 12,
-  "assignedLoads": 8,
-  "inTransitLoads": 20,
-  "deliveredLoads": 5,
-  "lastUpdated": "2025-08-22T12:14:00Z"
-}
-```
+### 5.1 Recommended Schedule
+- **Business Hours**: Every 10-15 minutes (Mon-Fri 6AM-8PM EST)
+- **Off Hours**: Every 30 minutes
+- **Weekends**: Every 20 minutes (Sat 8AM-6PM, Sun 10AM-4PM)
 
-## Required Load Fields
+### 5.2 Load Targeting
+Focus on loads that match your drivers:
+- **Minimum Rate**: $800+
+- **Maximum Weight**: 26,000 lbs
+- **Distance**: Under 500 miles preferred
+- **Target States**: TN, KY, GA, AL, NC, SC, FL
 
-### Essential Fields (Required)
-- `company`: Company name
-- `phone`: Contact phone number (10+ digits)
-- `origin_city`: Pickup city
-- `origin_state`: Pickup state (2-letter code)
-- `destination_city`: Delivery city
-- `destination_state`: Delivery state (2-letter code)
-- `rate`: Load rate (positive number)
-- `equipment_type`: Equipment type (dry_van, reefer, flatbed, etc.)
-- `commodity`: Cargo description
-- `pickup_date`: Pickup date (ISO format)
-- `miles`: Distance in miles
+## Step 6: Test Your Integration
 
-### Optional Fields
-- `contact_name`: Contact person name
-- `email`: Contact email address
-- `pickup_time`: Specific pickup time
-- `delivery_date`: Delivery date
-- `delivery_time`: Specific delivery time
-- `weight`: Load weight in pounds
-- `length`: Load length
-- `special_requirements`: Special instructions
-- `hazmat`: Hazardous materials flag (boolean)
-- `dat_load_id`: Original DAT load ID for tracking
-- `automation_run_id`: TaskMagic automation run ID
-- `scraped_at`: When the load was scraped
+### 6.1 Manual Test
+1. Run your TaskMagic automation manually
+2. Scrape 1-2 test loads from DAT
+3. Send them to LoadMaster via webhook
+4. Check results in LoadMaster `/taskmagic-status` page
 
-## Equipment Types Supported
-- `dry_van`: Standard dry van
-- `reefer`: Refrigerated trailer
-- `flatbed`: Flatbed trailer
-- `step_deck`: Step deck trailer
-- `lowboy`: Lowboy trailer
-- `tanker`: Tanker trailer
-- `box_truck`: Box truck
-- `sprinter_van`: Sprinter van
-- `straight_truck`: Straight truck
-- `container`: Container
+### 6.2 Verify Results
+Check that loads appear in:
+- **TaskMagic Status**: `/taskmagic-status` in LoadMaster
+- **DAT Loads Tab**: `/dat-loads` to see processed loads
+- **Driver Notifications**: Eligible drivers receive Telegram alerts
 
-## Authentication
-Use the webhook secret for security:
-- **Header:** `x-taskmagic-secret: taskmagic-webhook-secret-2025`
-- **Body Field:** `"webhook_secret": "taskmagic-webhook-secret-2025"`
-- **Query Parameter:** `?secret=taskmagic-webhook-secret-2025`
-
-## TaskMagic Automation Setup
-
-### 1. DAT Login Automation
-Create a TaskMagic automation to:
-1. Navigate to DAT login page
-2. Enter credentials: `dispatch@lampslogistics.com` / `Anonymous#56111`
-3. Handle 2FA if required
-4. Navigate to load search page
-
-### 2. Load Scraping Automation
-Configure TaskMagic to extract:
-- Company name and contact details
-- Origin and destination cities/states
-- Rate and equipment type
-- Pickup dates and special requirements
-- Load weight and commodity
-
-### 3. Webhook Configuration
-Set TaskMagic to send scraped data to:
-- **Single Load:** `https://your-replit-app.replit.app/api/taskmagic/webhook/single-load`
-- **Batch Loads:** `https://your-replit-app.replit.app/api/taskmagic/webhook/batch-loads`
-
-## What Happens After Load Import
-
-### 1. Automatic Processing
-- ✅ Load validated and stored in database
-- ✅ Customer created if not exists
-- ✅ Load priority calculated based on rate and requirements
-- ✅ Load appears in DAT Loads tab immediately
-
-### 2. Driver Notification
-- ✅ System evaluates eligible drivers (150-mile radius)
-- ✅ Checks equipment compatibility
-- ✅ Sends Telegram notifications to available drivers
-- ✅ Manages driver responses and load assignments
-
-### 3. Load Management
-- ✅ Full lifecycle tracking (available → assigned → in_transit → delivered)
-- ✅ Real-time status updates
-- ✅ Document management and GPS tracking
-- ✅ Automated payments generation
-
-## Integration Benefits
-
-### vs. Direct Puppeteer Automation
-✅ **Reliability:** TaskMagic handles website changes automatically  
-✅ **Anti-Detection:** Built-in bot detection avoidance  
-✅ **Maintenance:** No need to update selectors when DAT changes  
-✅ **Stability:** Professional automation platform vs. custom scripts  
-
-### vs. Manual Load Entry
-✅ **Speed:** Automated processing vs. manual VA input  
-✅ **Volume:** Handle hundreds of loads vs. manual one-by-one entry  
-✅ **Cost:** Automation vs. paying VA for data entry  
-✅ **Accuracy:** Consistent data extraction vs. human error risk  
-
-## Testing the Integration
-
-### 1. Test Single Load
+### 6.3 Sample Test Data
+You can also test with this sample payload:
 ```bash
-curl -X POST https://your-app.replit.app/api/taskmagic/webhook/single-load \
+curl -X POST https://your-replit.app/api/taskmagic/webhook/single-load \
   -H "Content-Type: application/json" \
   -H "x-taskmagic-secret: taskmagic-webhook-secret-2025" \
   -d '{
-    "company": "Test Freight Co",
+    "company": "Test DAT Company",
     "phone": "555-123-4567",
     "origin_city": "Nashville",
     "origin_state": "TN",
@@ -223,16 +175,27 @@ curl -X POST https://your-app.replit.app/api/taskmagic/webhook/single-load \
   }'
 ```
 
-### 2. Check Status
-```bash
-curl https://your-app.replit.app/api/taskmagic/status
-```
+## Step 7: Monitor and Scale
 
-## Next Steps
-1. **Set up TaskMagic automations** for DAT login and scraping
-2. **Configure webhook endpoints** with your Replit app URL
-3. **Test with sample data** to ensure proper integration
-4. **Monitor load processing** through the LoadMaster dashboard
-5. **Scale automation** to handle your target load volume
+### 7.1 Performance Monitoring
+- Check LoadMaster `/taskmagic-status` for integration health
+- Monitor load processing rates and success ratios
+- Watch for any webhook failures or errors
 
-Your system now provides a complete solution combining TaskMagic's automation power with LoadMaster's driver management and dispatch capabilities.
+### 7.2 Scale Up
+Once testing successfully:
+1. Increase scraping frequency during peak hours
+2. Add more equipment types if needed
+3. Expand geographic coverage
+4. Monitor driver capacity and load volume
+
+## Expected Results
+
+Once configured correctly:
+- **Automated Load Flow**: DAT loads appear in LoadMaster within 30 seconds
+- **Driver Notifications**: Eligible drivers receive Telegram alerts automatically
+- **Customer Creation**: New freight companies added to database
+- **Load Tracking**: Full lifecycle from available → assigned → delivered
+- **Payment Processing**: Automatic payment generation when loads complete
+
+Your TaskMagic webhook is confirmed working - follow these steps to scrape real DAT loads and send them to LoadMaster!
