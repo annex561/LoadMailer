@@ -26,6 +26,7 @@ import LoadMailerControl from "@/pages/loadmailer-control";
 import { MoodTracker } from "@/pages/mood-tracker";
 import GPSTracking from "@/pages/gps-tracking";
 import PredictiveMaintenance from "@/pages/predictive-maintenance";
+import { TaskMagicStatusPage } from "@/pages/taskmagic-status";
 import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import SmartLoadMatching from "@/pages/smart-load-matching";
 import PredictionConfidence from "@/pages/prediction-confidence";
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/analytics" component={AnalyticsDashboard} />
       <Route path="/smart-load-matching" component={SmartLoadMatching} />
       <Route path="/prediction-confidence" component={PredictionConfidence} />
+      <Route path="/taskmagic-status" component={TaskMagicStatusPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
-import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile, Upload, MapPin, Wrench, Brain, ChevronLeft, ChevronRight, Menu, X, TrendingUp } from "lucide-react";
+import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile, Upload, MapPin, Wrench, Brain, ChevronLeft, ChevronRight, Menu, X, TrendingUp, Webhook } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -12,6 +12,7 @@ const navigation = [
   { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "main" },
   { name: "Manual Load Entry", href: "/manual-load-entry", icon: UserPlus, section: "main" },
   { name: "DAT Login", href: "/dat-login", icon: Bot, section: "main" },
+  { name: "TaskMagic Status", href: "/taskmagic-status", icon: Webhook, section: "main" },
   { name: "Telegram Dispatching", href: "/telegram-dispatching", icon: MessageSquare, section: "main" },
   { name: "Contacts", href: "/contacts", icon: Users, section: "main" },
   { name: "Driver Management", href: "/driver-management", icon: UserPlus, section: "main" },
