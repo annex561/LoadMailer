@@ -29,27 +29,54 @@ export class DATScraperService {
 
     console.log('🚀 Initializing DAT scraper with Puppeteer...');
     
-    this.browser = await puppeteer.launch({
-      headless: false, // Keep visible for 2FA entry
-      defaultViewport: null,
-      args: [
-        '--start-maximized',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu'
-      ]
-    });
+    try {
+      // Try to connect to existing browser first
+      try {
+        console.log('🔄 Attempting to connect to existing browser session...');
+        this.browser = await puppeteer.connect({
+          browserURL: 'http://localhost:9222'
+        });
+        const pages = await this.browser.pages();
+        this.page = pages.find(p => p.url().includes('dat.com')) || pages[0];
+        if (this.page) {
+          console.log('✅ Connected to existing DAT session');
+          return;
+        }
+      } catch (connectError) {
+        console.log('⚠️ No existing browser session found, launching new one...');
+      }
 
-    this.page = await this.browser.newPage();
-    
-    // Set user agent
-    await this.page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    
-    console.log('✅ DAT scraper initialized');
+      // Launch new browser instance
+      this.browser = await puppeteer.launch({
+        headless: false, // Keep visible for 2FA entry
+        defaultViewport: null,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium-browser',
+        args: [
+          '--start-maximized',
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu',
+          '--remote-debugging-port=9222',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding'
+        ]
+      });
+
+      this.page = await this.browser.newPage();
+      
+      // Set user agent
+      await this.page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      
+      console.log('✅ DAT scraper initialized with new browser');
+    } catch (error) {
+      console.error('❌ Failed to initialize DAT scraper:', error);
+      throw new Error(`Failed to initialize DAT scraper: ${error.message}`);
+    }
   }
 
   async login() {
