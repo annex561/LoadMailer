@@ -108,23 +108,21 @@ Extract these fields for each load:
 
 ### Configure TaskMagic Webhooks:
 
-#### For Single Loads:
-- **Webhook URL:** `https://your-replit-app.replit.app/api/taskmagic/webhook/single-load`
-- **Method:** POST
-- **Headers:** 
-  ```
-  Content-Type: application/json
-  x-taskmagic-secret: taskmagic-webhook-secret-2025
-  ```
+**Your TaskMagic Webhook URL:** `https://webhooks.taskmagic.com/hook/i7BFrUC4Yk7ubrLYIkSW`
 
-#### For Batch Processing:
-- **Webhook URL:** `https://your-replit-app.replit.app/api/taskmagic/webhook/batch-loads`
-- **Method:** POST
-- **Headers:**
-  ```
-  Content-Type: application/json
-  x-taskmagic-secret: taskmagic-webhook-secret-2025
-  ```
+#### LoadMaster Endpoints (TaskMagic sends TO these):
+- **Single Load Processing:** `${window.location.origin}/api/taskmagic/webhook/single-load`
+- **Batch Load Processing:** `${window.location.origin}/api/taskmagic/webhook/batch-loads`
+
+#### TaskMagic Configuration:
+1. **Use your provided webhook URL:** `https://webhooks.taskmagic.com/hook/i7BFrUC4Yk7ubrLYIkSW`
+2. **Method:** POST
+3. **Headers:** 
+   ```
+   Content-Type: application/json
+   x-taskmagic-secret: taskmagic-webhook-secret-2025
+   ```
+4. **Forward scraped data to LoadMaster endpoints above**
 - **Payload Format:**
   ```json
   {
