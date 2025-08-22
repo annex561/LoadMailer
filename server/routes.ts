@@ -25,7 +25,7 @@ import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
 import { realDriverLocationService } from "./real-driver-location-service";
 import { taskMagicIntegration } from './taskmagic-integration';
-import { datScraperService } from './dat-puppeteer-scraper';
+import { datScraperService as puppeteerDATService } from './dat-puppeteer-scraper';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -3650,11 +3650,11 @@ Safe travels! 🚛`;
     taskMagicIntegration.getStatus(req, res);
   });
 
-  // DAT Puppeteer Scraper endpoints - Direct DAT integration with your login script
+  // DAT Puppeteer Scraper endpoints - Direct DAT integration with your exact login flow
   app.post("/api/dat-puppeteer/login", async (req, res) => {
     try {
-      await datScraperService.login();
-      const status = await datScraperService.getLoginStatus();
+      await puppeteerDATService.login();
+      const status = await puppeteerDATService.getLoginStatus();
       res.json({ 
         message: 'DAT login initiated - complete 2FA in browser window',
         ...status
@@ -3666,7 +3666,7 @@ Safe travels! 🚛`;
 
   app.get("/api/dat-puppeteer/status", async (req, res) => {
     try {
-      const status = await datScraperService.getLoginStatus();
+      const status = await puppeteerDATService.getLoginStatus();
       res.json(status);
     } catch (error) {
       res.status(500).json({ error: 'Failed to get DAT status' });
@@ -3675,7 +3675,7 @@ Safe travels! 🚛`;
 
   app.post("/api/dat-puppeteer/scrape", async (req, res) => {
     try {
-      const loads = await datScraperService.scrapeLoads();
+      const loads = await puppeteerDATService.scrapeLoads();
       
       // Process each load through LoadMaster
       let processedCount = 0;
@@ -3752,7 +3752,7 @@ Safe travels! 🚛`;
 
   app.post("/api/dat-puppeteer/close", async (req, res) => {
     try {
-      await datScraperService.close();
+      await puppeteerDATService.close();
       res.json({ message: 'DAT scraper browser closed' });
     } catch (error) {
       res.status(500).json({ error: 'Failed to close DAT scraper' });

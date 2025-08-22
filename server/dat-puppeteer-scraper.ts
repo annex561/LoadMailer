@@ -57,72 +57,65 @@ export class DATScraperService {
     
     this.isLoggingIn = true;
     this.loginAttempts++;
-    console.log(`🔐 Starting DAT login process (attempt ${this.loginAttempts})...`);
+    console.log(`🔐 Starting DAT login process (attempt ${this.loginAttempts}) - following your exact working flow...`);
 
     try {
-      // Step 1: Navigate to DAT.com homepage
-      console.log('📍 Navigating to DAT.com...');
-      await this.page.goto('https://www.dat.com', { waitUntil: 'networkidle2', timeout: 30000 });
+      // Step 1: Go to DAT login page with ISS parameter (from your working flow)
+      console.log('📍 Step 1: Navigating to DAT login page...');
+      await this.page.goto('https://www.dat.com/login?iss=https%3A%2F%2Flogin.dat.com%2F', { 
+        waitUntil: 'networkidle2', 
+        timeout: 30000 
+      });
 
-      // Step 2: Look for and click login/carriers button
-      console.log('🔗 Looking for login access...');
-      
-      // Try multiple approaches to get to login
-      const loginSelectors = [
-        'a[href*="login"]',
-        'a[href="#carriers"]', 
-        'button:contains("Log In")',
-        'a:contains("Log In")',
-        '.login-btn',
-        '#login-button'
-      ];
-      
-      let loginClicked = false;
-      for (const selector of loginSelectors) {
-        try {
-          await this.page.waitForSelector(selector, { timeout: 5000 });
-          await this.page.click(selector);
-          console.log(`✅ Clicked login element: ${selector}`);
-          loginClicked = true;
-          break;
-        } catch (e) {
-          continue;
-        }
+      // Step 2: Click "Carriers"
+      console.log('🔗 Step 2: Clicking Carriers...');
+      try {
+        await this.page.waitForSelector('text="Carriers"', { timeout: 10000 });
+        await this.page.click('text="Carriers"');
+        console.log('✅ Clicked Carriers');
+      } catch (e) {
+        console.log('⚠️ Carriers button not found, trying alternative...');
+        await this.page.click('a[href="#carriers"]').catch(() => {});
       }
 
-      if (!loginClicked) {
-        // Try direct navigation to login page
-        console.log('🔗 Direct navigation to login page...');
-        await this.page.goto('https://www.dat.com/login', { waitUntil: 'networkidle2' });
+      // Step 3: Click "DAT One Web" 
+      console.log('🔗 Step 3: Clicking DAT One Web...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      try {
+        await this.page.waitForSelector('text="DAT One Web"', { timeout: 10000 });
+        await this.page.click('text="DAT One Web"');
+        console.log('✅ Clicked DAT One Web');
+      } catch (e) {
+        console.log('⚠️ DAT One Web not found, trying navigation...');
       }
 
-      // Give time for any redirects or modals
+      // Step 4: Go to DAT One search-loads page (your working flow)
+      console.log('🔗 Step 4: Navigating to DAT One search-loads...');
+      await this.page.goto('https://one.dat.com/search-loads', { 
+        waitUntil: 'networkidle2', 
+        timeout: 30000 
+      });
+
+      // Wait for login form or redirect
       await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Step 3: Look for DAT One Web link if needed
-      try {
-        const datOneLink = await this.page.$$eval('a', links => 
-          links.filter(link => link.textContent?.includes('DAT One Web') || link.textContent?.includes('DAT One'))
-        );
-        if (datOneLink.length > 0) {
-          console.log('🔗 Found DAT One Web link, clicking...');
-          await this.page.click('a:has-text("DAT One Web"), a:has-text("DAT One")').catch(() => {});
-          await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
-        }
-      } catch (e) {
-        console.log('⚠️ No DAT One Web link found, continuing...');
+      // Check if we need to log in or if already logged in
+      const currentUrl = this.page.url();
+      if (currentUrl.includes('one.dat.com') && !currentUrl.includes('login')) {
+        this.isLoggedIn = true;
+        console.log('✅ Already logged in to DAT!');
+        return;
       }
 
-      // Step 4: Enter credentials
+      // Step 5: Enter credentials if login form appears
       console.log('📧 Looking for login form...');
       
-      // Wait for login form to appear
       const emailSelectors = [
         'input[type="email"]',
         'input[name="email"]',
         'input[name="username"]',
         'input[id*="email"]',
-        'input[placeholder*="email"]'
+        '#email'
       ];
       
       let emailInput = null;
@@ -139,67 +132,57 @@ export class DATScraperService {
         }
       }
 
-      if (!emailInput) {
-        throw new Error('Could not find email input field');
-      }
+      if (emailInput) {
+        // Clear and enter email
+        await emailInput.click({ clickCount: 3 }); // Select all
+        await emailInput.type('dispatch@lampslogistics.com', { delay: 100 });
+        console.log('📧 Email entered');
 
-      // Clear and enter email
-      const emailSelector = emailSelectors.find(sel => emailInput);
-      if (emailSelector) {
-        await this.page.evaluate((sel) => {
-          const element = document.querySelector(sel) as HTMLInputElement;
-          if (element) element.value = '';
-        }, emailSelector);
-      }
-      
-      await emailInput.type('dispatch@lampslogistics.com', { delay: 100 });
-      console.log('📧 Email entered');
-
-      // Look for password field
-      const passwordSelectors = [
-        'input[type="password"]',
-        'input[name="password"]',
-        'input[id*="password"]'
-      ];
-      
-      let passwordInput = null;
-      for (const selector of passwordSelectors) {
-        try {
-          passwordInput = await this.page.$(selector);
-          if (passwordInput) {
-            console.log(`✅ Found password input: ${selector}`);
-            break;
+        // Look for password field
+        const passwordSelectors = [
+          'input[type="password"]',
+          'input[name="password"]',
+          '#password'
+        ];
+        
+        let passwordInput = null;
+        for (const selector of passwordSelectors) {
+          try {
+            passwordInput = await this.page.$(selector);
+            if (passwordInput) {
+              console.log(`✅ Found password input: ${selector}`);
+              break;
+            }
+          } catch (e) {
+            continue;
           }
-        } catch (e) {
-          continue;
         }
-      }
 
-      if (passwordInput) {
-        await passwordInput.type('Anonymous#56111', { delay: 100 });
-        console.log('🔑 Password entered');
-      }
+        if (passwordInput) {
+          await passwordInput.type('Anonymous#56111', { delay: 100 });
+          console.log('🔑 Password entered');
+        }
 
-      // Submit the form
-      const submitSelectors = [
-        'button[type="submit"]',
-        'input[type="submit"]',
-        'button:contains("Log In")',
-        'button:contains("Sign In")',
-        '.login-btn',
-        '.submit-btn'
-      ];
-      
-      for (const selector of submitSelectors) {
-        try {
-          const submitBtn = await this.page.$(selector);
-          if (submitBtn) {
-            console.log(`🚀 Submitting login form with: ${selector}`);
-            await submitBtn.click();
-            break;
+        // Submit the form
+        const submitSelectors = [
+          'button[type="submit"]',
+          'input[type="submit"]',
+          'button:has-text("Log In")',
+          'button:has-text("Sign In")',
+          '.btn-primary'
+        ];
+        
+        for (const selector of submitSelectors) {
+          try {
+            const submitBtn = await this.page.$(selector);
+            if (submitBtn) {
+              console.log(`🚀 Submitting login form`);
+              await submitBtn.click();
+              break;
+            }
+          } catch (e) {
+            continue;
           }
-        } catch (e) {
-          continue;
         }
       }
 
@@ -214,8 +197,7 @@ export class DATScraperService {
       while (Date.now() - startTime < maxWaitTime) {
         const currentUrl = this.page.url();
         
-        if (currentUrl.includes('one.dat.com') || 
-            (currentUrl.includes('dat.com') && !currentUrl.includes('login'))) {
+        if (currentUrl.includes('one.dat.com') && !currentUrl.includes('login')) {
           this.isLoggedIn = true;
           console.log('✅ Successfully logged into DAT!');
           console.log(`📍 Current URL: ${currentUrl}`);
