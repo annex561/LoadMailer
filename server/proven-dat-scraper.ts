@@ -50,47 +50,149 @@ export class ProvenDATScraper {
     try {
       console.log('🚀 Starting automated DAT login with proven method...');
       
-      // Step 1: Navigate to DAT main page first
-      console.log('📍 Navigating to DAT main page...');
+      // Alternative approach: Try direct login access since DAT structure changed
+      console.log('📍 DAT website structure has changed, trying direct login approach...');
+      
+      // First try to find login links on main page
       await this.page.goto(DAT_MAIN_URL, { waitUntil: 'networkidle2', timeout: 30000 });
       
-      // Step 2: Click on Carriers using your proven selector
-      console.log('🔗 Clicking Carriers dropdown...');
-      await this.page.waitForSelector('a[href="#carriers"]');
-      await this.page.click('a[href="#carriers"]');
-      console.log('✅ Clicked Carriers dropdown');
-      
-      // Step 3: Click on DAT One Web using your proven method
-      console.log('🔗 Looking for DAT One Web in dropdown...');
-      await this.page.waitForTimeout(1000); // wait for dropdown
-      await this.page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('a'));
-        const target = links.find(link => link.textContent.includes('DAT One Web'));
-        if (target) target.click();
+      const loginClicked = await this.page.evaluate(() => {
+        // Look for login or sign in links
+        const allLinks = Array.from(document.querySelectorAll('a'));
+        const loginLink = allLinks.find(link => {
+          const text = link.textContent?.toLowerCase().trim() || '';
+          const href = link.getAttribute('href') || '';
+          return (text.includes('login') || text.includes('sign in') || text.includes('log in')) &&
+                 (href.includes('login') || href.includes('signin') || href.includes('auth'));
+        });
+        
+        if (loginLink) {
+          loginLink.click();
+          return true;
+        }
+        return false;
       });
-      console.log('✅ Clicked DAT One Web in dropdown');
       
-      // Wait for navigation to login page
-      console.log('⏳ Waiting for navigation to login page...');
-      await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
+      if (loginClicked) {
+        console.log('✅ Found and clicked login link');
+        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
+      } else {
+        // Direct navigation to known DAT login URL
+        console.log('📍 Trying direct navigation to DAT login...');
+        await this.page.goto('https://www.dat.com/login', { waitUntil: 'networkidle2', timeout: 30000 });
+      }
       
       const currentUrl = this.page.url();
-      console.log(`📍 Current URL after navigation: ${currentUrl}`);
+      console.log(`📍 Current URL: ${currentUrl}`);
       
-      // Step 5: Input email using your proven method
-      console.log('📧 Entering email...');
-      await this.page.waitForSelector('input[type="email"]');
-      await this.page.type('input[type="email"]', DAT_EMAIL);
-      await this.page.keyboard.press('Enter');
-      console.log('✅ Email entered and submitted');
+      // Now try to find and use login form - try multiple approaches
+      console.log('📧 Looking for login form...');
       
-      // Step 6: Input password after navigation
-      console.log('🔐 Waiting for password field...');
-      await this.page.waitForNavigation({ waitUntil: 'networkidle2' });
-      await this.page.waitForSelector('input[type="password"]');
-      await this.page.type('input[type="password"]', DAT_PASSWORD);
-      await this.page.keyboard.press('Enter');
-      console.log('✅ Password entered and submitted');
+      try {
+        // Method 1: Try email field first (your proven approach)
+        console.log('🔍 Trying email field approach...');
+        await this.page.waitForSelector('input[type="email"]', { timeout: 10000 });
+        await this.page.type('input[type="email"]', DAT_EMAIL);
+        await this.page.keyboard.press('Enter');
+        console.log('✅ Email entered using type="email"');
+        
+        // Wait for navigation and password field
+        await this.page.waitForNavigation({ waitUntil: 'networkidle2' });
+        await this.page.waitForSelector('input[type="password"]');
+        await this.page.type('input[type="password"]', DAT_PASSWORD);
+        await this.page.keyboard.press('Enter');
+        console.log('✅ Password entered using type="password"');
+        
+      } catch (emailError) {
+        console.log('⚠️ Email field approach failed, trying username/password approach...');
+        
+        try {
+          // Method 2: Try username/password fields (fallback)
+          await this.page.waitForSelector('input[name="username"]', { timeout: 10000 });
+          await this.page.type('input[name="username"]', DAT_EMAIL);
+          await this.page.click('button[type="submit"]');
+          console.log('✅ Username entered using name="username"');
+          
+          await this.page.waitForSelector('input[name="password"]', { timeout: 15000 });
+          await this.page.type('input[name="password"]', DAT_PASSWORD);
+          await this.page.click('button[type="submit"]');
+          console.log('✅ Password entered using name="password"');
+          
+        } catch (usernameError) {
+          console.log('❌ Both login approaches failed');
+          
+          // Debug what's actually on the page
+          const debugInfo = await this.page.evaluate(() => {
+            const inputs = Array.from(document.querySelectorAll('input'));
+            return {
+              title: document.title,
+              url: window.location.href,
+              inputs: inputs.map(input => ({
+                type: input.type,
+                name: input.name,
+                id: input.id,
+                placeholder: input.placeholder,
+                visible: input.offsetParent !== null
+              }))
+            };
+          });
+          console.log('Login page debug:', JSON.stringify(debugInfo, null, 2));
+          
+          // Method 3: Look for login buttons or links that might trigger Auth0
+          console.log('🔍 Looking for login buttons or Auth0 triggers...');
+          const loginTriggered = await this.page.evaluate(() => {
+            // Look for buttons with login-related text
+            const buttons = Array.from(document.querySelectorAll('button, a, .btn, [role="button"]'));
+            const loginButton = buttons.find(btn => {
+              const text = btn.textContent?.toLowerCase().trim() || '';
+              return text.includes('log in') || text.includes('login') || text.includes('sign in') || 
+                     text.includes('continue') || text.includes('access') || text.includes('enter');
+            });
+            
+            if (loginButton) {
+              loginButton.click();
+              return true;
+            }
+            
+            // Look for iframes that might contain login form
+            const iframes = document.querySelectorAll('iframe');
+            return iframes.length > 0;
+          });
+          
+          if (loginTriggered) {
+            console.log('✅ Found and clicked login trigger, waiting for form...');
+            await this.page.waitForTimeout(3000);
+            
+            // Try again to find login fields after trigger
+            try {
+              await this.page.waitForSelector('input[type="email"], input[name="username"]', { timeout: 10000 });
+              console.log('✅ Login form appeared after trigger');
+              
+              // Retry login with email field
+              if (await this.page.$('input[type="email"]')) {
+                await this.page.type('input[type="email"]', DAT_EMAIL);
+                await this.page.keyboard.press('Enter');
+                await this.page.waitForNavigation({ waitUntil: 'networkidle2' });
+                await this.page.waitForSelector('input[type="password"]');
+                await this.page.type('input[type="password"]', DAT_PASSWORD);
+                await this.page.keyboard.press('Enter');
+              } else {
+                await this.page.type('input[name="username"]', DAT_EMAIL);
+                await this.page.click('button[type="submit"]');
+                await this.page.waitForSelector('input[name="password"]');
+                await this.page.type('input[name="password"]', DAT_PASSWORD);
+                await this.page.click('button[type="submit"]');
+              }
+              
+            } catch (retryError) {
+              console.log('❌ Login form still not found after trigger');
+              throw new Error('DAT login page structure has changed - no accessible login form found');
+            }
+          } else {
+            throw new Error('DAT login page structure has changed - no accessible login form found');
+          }
+        }
+      }
       
       // Step 7: Handle 2FA detection and waiting
       console.log('🛡️ Credentials entered. Checking for 2FA requirement...');
