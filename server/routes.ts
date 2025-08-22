@@ -24,6 +24,7 @@ import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
 import { realDriverLocationService } from "./real-driver-location-service";
+import { taskMagicIntegration } from './taskmagic-integration';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -3625,6 +3626,19 @@ Safe travels! 🚛`;
       console.error('Error generating payment:', error);
       res.status(500).json({ error: 'Failed to generate payment' });
     }
+  });
+
+  // TaskMagic Integration Routes
+  app.post('/api/taskmagic/webhook/single-load', (req, res) => {
+    taskMagicIntegration.processSingleLoad(req, res);
+  });
+
+  app.post('/api/taskmagic/webhook/batch-loads', (req, res) => {
+    taskMagicIntegration.processBatchLoads(req, res);
+  });
+
+  app.get('/api/taskmagic/status', (req, res) => {
+    taskMagicIntegration.getStatus(req, res);
   });
 
   // Predictive Maintenance Routes
