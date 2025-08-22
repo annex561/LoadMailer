@@ -23,6 +23,8 @@ export class DATScraperService {
   private isLoggedIn = false;
   private isLoggingIn = false;
   private loginAttempts = 0;
+  private isWaitingFor2FA = false;
+  private verificationCode: string | null = null;
 
   async initialize() {
     if (this.browser) return;
@@ -227,7 +229,7 @@ export class DATScraperService {
 
       // Wait for login to process
       console.log('⏳ Waiting for login to process...');
-      console.log('💡 Complete 2FA in the browser window if prompted');
+      console.log('🔍 Monitoring for 2FA requirements...');
       
       // Monitor for successful login or 2FA
       const maxWaitTime = 300000; // 5 minutes
@@ -246,8 +248,11 @@ export class DATScraperService {
         // Check if 2FA is required
         if (this.page) {
           const pageContent = await this.page.content();
-          if (pageContent.includes('verification') || pageContent.includes('2FA') || pageContent.includes('authenticator')) {
-            console.log('🛑 2FA detected - please complete in browser window');
+          if (pageContent.includes('verification') || pageContent.includes('2FA') || pageContent.includes('authenticator') || 
+              pageContent.includes('code') || pageContent.includes('verify') || pageContent.includes('auth')) {
+            console.log('🛑 2FA detected - waiting for verification code input');
+            this.isWaitingFor2FA = true;
+            return; // Exit and wait for code input
           }
         }
         
@@ -524,11 +529,92 @@ export class DATScraperService {
     return loads;
   }
 
-  async getLoginStatus(): Promise<{ isLoggedIn: boolean; isLoggingIn: boolean }> {
+  getLoginStatus() {
     return {
       isLoggedIn: this.isLoggedIn,
-      isLoggingIn: this.isLoggingIn
+      isLoggingIn: this.isLoggingIn,
+      loginAttempts: this.loginAttempts,
+      isWaitingFor2FA: this.isWaitingFor2FA
     };
+  }
+
+  async submitVerificationCode(code: string): Promise<boolean> {
+    if (!this.page || !this.isWaitingFor2FA) {
+      throw new Error('Not in 2FA verification state');
+    }
+
+    console.log('🔐 Submitting verification code...');
+    this.verificationCode = code;
+
+    try {
+      // Look for verification code input fields
+      const codeSelectors = [
+        'input[name*="code"]',
+        'input[name*="verification"]',
+        'input[name*="token"]',
+        'input[id*="code"]',
+        'input[id*="verification"]',
+        'input[type="text"]',
+        'input[placeholder*="code"]',
+        'input[placeholder*="verify"]'
+      ];
+
+      let codeInput = null;
+      for (const selector of codeSelectors) {
+        try {
+          codeInput = await this.page.$(selector);
+          if (codeInput) {
+            console.log(`✅ Found verification input: ${selector}`);
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      if (codeInput) {
+        // Enter the verification code
+        await codeInput.click({ clickCount: 3 }); // Select all
+        await codeInput.type(code, { delay: 100 });
+        console.log('📱 Verification code entered');
+
+        // Submit the verification
+        const submitSelectors = [
+          'button[type="submit"]',
+          'button:has-text("Verify")',
+          'button:has-text("Submit")',
+          'button:has-text("Continue")',
+          '.verify-btn',
+          '.submit-btn'
+        ];
+
+        for (const selector of submitSelectors) {
+          try {
+            await this.page.click(selector);
+            console.log('🚀 Submitted verification code');
+            break;
+          } catch (e) {
+            continue;
+          }
+        }
+
+        // Wait for verification to complete
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        const currentUrl = this.page.url();
+        if (currentUrl.includes('one.dat.com') && !currentUrl.includes('login')) {
+          this.isLoggedIn = true;
+          this.isWaitingFor2FA = false;
+          console.log('✅ 2FA verification successful!');
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error('❌ Error submitting verification code:', error);
+      return false;
+    }
   }
 
   async close() {
@@ -537,6 +623,8 @@ export class DATScraperService {
       this.browser = null;
       this.page = null;
       this.isLoggedIn = false;
+      this.isLoggingIn = false;
+      this.isWaitingFor2FA = false;
       console.log('🔒 DAT scraper browser closed');
     }
   }

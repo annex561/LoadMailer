@@ -3750,6 +3750,24 @@ Safe travels! 🚛`;
     }
   });
 
+  app.post("/api/dat-puppeteer/verify", async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code) {
+        return res.status(400).json({ error: 'Verification code is required' });
+      }
+
+      const success = await puppeteerDATService.submitVerificationCode(code);
+      if (success) {
+        res.json({ message: '2FA verification successful', isLoggedIn: true });
+      } else {
+        res.status(400).json({ error: 'Invalid verification code' });
+      }
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to submit verification code', details: error.message });
+    }
+  });
+
   app.post("/api/dat-puppeteer/close", async (req, res) => {
     try {
       await puppeteerDATService.close();

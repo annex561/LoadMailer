@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, CheckCircle, Loader2, Play, Square, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, Play, Square, RefreshCw, Shield } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface DATStatus {
   isLoggedIn: boolean;
   isLoggingIn: boolean;
+  loginAttempts: number;
+  isWaitingFor2FA: boolean;
 }
 
 interface ScrapedLoad {
@@ -27,6 +30,7 @@ interface ScrapeResult {
 export function DATScraperControl() {
   const queryClient = useQueryClient();
   const [lastScrapeResult, setLastScrapeResult] = useState<ScrapeResult | null>(null);
+  const [verificationCode, setVerificationCode] = useState('');
 
   // Get DAT status
   const { data: status, isLoading: statusLoading } = useQuery<DATStatus>({
@@ -65,6 +69,23 @@ export function DATScraperControl() {
     },
   });
 
+  // 2FA verification mutation
+  const verifyMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const response = await fetch('/api/dat-puppeteer/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      if (!response.ok) throw new Error('Verification failed');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/dat-puppeteer/status'] });
+      setVerificationCode('');
+    },
+  });
+
   // Close mutation
   const closeMutation = useMutation({
     mutationFn: async () => {
@@ -80,6 +101,12 @@ export function DATScraperControl() {
       setLastScrapeResult(null);
     },
   });
+
+  const handleVerificationSubmit = () => {
+    if (verificationCode.length === 6) {
+      verifyMutation.mutate(verificationCode);
+    }
+  };
 
   const getStatusBadge = () => {
     if (statusLoading) {
@@ -110,11 +137,43 @@ export function DATScraperControl() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* 2FA Section */}
+          {status?.isWaitingFor2FA && (
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Shield className="w-4 h-4 text-blue-600" />
+                <h3 className="font-medium text-blue-900 dark:text-blue-100">2FA Verification Required</h3>
+              </div>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                Enter the 6-digit verification code from your authenticator app
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="123456"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.slice(0, 6))}
+                  maxLength={6}
+                  className="font-mono text-center text-lg tracking-wider"
+                  data-testid="input-2fa-code"
+                />
+                <Button
+                  onClick={handleVerificationSubmit}
+                  disabled={verificationCode.length !== 6 || verifyMutation.isPending}
+                  className="px-6"
+                  data-testid="button-submit-2fa"
+                >
+                  {verifyMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verify'}
+                </Button>
+              </div>
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Button
               onClick={() => loginMutation.mutate()}
               disabled={loginMutation.isPending || status?.isLoggingIn || status?.isLoggedIn}
               className="w-full"
+              data-testid="button-dat-login"
             >
               {loginMutation.isPending ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
