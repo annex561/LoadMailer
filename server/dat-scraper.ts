@@ -108,7 +108,7 @@ export class DATScraper {
       await this.page.goto(this.config.loginUrl, { waitUntil: 'networkidle2', timeout: 30000 });
       
       // Wait a moment for the page to fully load
-      await this.page.waitForTimeout(2000);
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Try multiple common selectors for email/username field
       const emailSelectors = [
@@ -183,7 +183,7 @@ export class DATScraper {
       console.log('Entered password');
       
       // Wait a moment before clicking submit
-      await this.page.waitForTimeout(1000);
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Try multiple selectors for submit button
       const submitSelectors = [
@@ -246,7 +246,7 @@ export class DATScraper {
       }
       
       // Wait a moment for the page to settle
-      await this.page.waitForTimeout(3000);
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
       // Check for error messages
       const errorSelectors = ['.error', '.alert', '[role="alert"]', '.login-error', '.error-message'];
@@ -315,7 +315,7 @@ export class DATScraper {
       await this.page.goto(this.config.searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
       
       // Wait for page to load
-      await this.page.waitForTimeout(3000);
+      await new Promise(resolve => setTimeout(resolve, 3000));
       
       // Apply search criteria if needed
       await this.applySearchCriteria();
@@ -699,7 +699,7 @@ export class DATScraper {
           company: loadData.company,
           contactPhone: loadData.contactPhone,
           sourceBoard: 'dat',
-          expiresAt: loadData.expiresAt,
+          expiresAt: loadData.expiresAt ? new Date(loadData.expiresAt) : null,
           isExpired: false
         });
         
