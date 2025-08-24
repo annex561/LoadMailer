@@ -3,9 +3,20 @@
     "name": "Alex Liberty",
     "chatId": "5908383693",
     "phone": "+1-561-xxx-xxxx",
-    "vehicle": { "type": "SB", "feet": 26, "maxWeight": 10000 },
+    "vehicle": {
+      "type": "SB",
+      "feet": 26,
+      "maxWeight": 10000,
+      "interiorWidthFt": 7.8
+    },
+    "reserves": {
+      "doorClearanceFt": 0.5,
+      "palletJackReserveFt": 3.0,
+      "carryPalletJack": true,
+      "weightBufferPct": 0.05
+    },
     "home": { "city": "Atlanta, GA", "lat": 33.749, "lon": -84.388 },
     "status": "available",
-    "remaining": { "feet": 26, "weight": 10000 }
+    "used": { "feet": 0, "weight": 0 }
   }
 ]
