@@ -206,27 +206,28 @@ export default function GoogleSheetsImport() {
         </div>
       </div>
 
-      {!isConfigured && (
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardHeader>
-            <CardTitle className="text-yellow-800 flex items-center">
-              <Settings className="w-5 h-5 mr-2" />
-              Setup Required
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-yellow-700 space-y-2">
-              <p>Google Sheets integration requires service account credentials:</p>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>Create a Google Cloud service account</li>
-                <li>Enable Google Sheets API</li>
-                <li>Add environment variables: GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_SERVICE_ACCOUNT_KEY, GOOGLE_PROJECT_ID</li>
-                <li>Share your Google Sheet with the service account email</li>
-              </ul>
+      <Card className="border-blue-200 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="text-blue-800 flex items-center">
+            <ExternalLink className="w-5 h-5 mr-2" />
+            Easy Setup Options
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-blue-700 space-y-3">
+            <div>
+              <h4 className="font-medium">📋 Option 1: Public Sheet (Recommended)</h4>
+              <p className="text-sm">Just make your Google Sheet "Anyone with link can view" and paste the URL below!</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            {!isConfigured && (
+              <div>
+                <h4 className="font-medium">🔐 Option 2: Private Sheet (Advanced)</h4>
+                <p className="text-sm">Set up Google Cloud service account for private sheets (credentials required)</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="import" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
@@ -280,7 +281,7 @@ export default function GoogleSheetsImport() {
                   variant="outline"
                   size="sm"
                   onClick={handleTestConnection}
-                  disabled={testConnectionMutation.isPending || !isConfigured}
+                  disabled={testConnectionMutation.isPending}
                 >
                   <CheckCircle className="w-4 h-4 mr-2" />
                   {testConnectionMutation.isPending ? 'Testing...' : 'Test Connection'}
@@ -290,7 +291,7 @@ export default function GoogleSheetsImport() {
                   variant="outline"
                   size="sm"
                   onClick={handleGetSheetInfo}
-                  disabled={getSheetInfoMutation.isPending || !isConfigured}
+                  disabled={getSheetInfoMutation.isPending}
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   {getSheetInfoMutation.isPending ? 'Loading...' : 'Get Sheet Info'}
@@ -324,7 +325,7 @@ export default function GoogleSheetsImport() {
             <CardContent>
               <Button
                 onClick={handleImportLoads}
-                disabled={importLoadsMutation.isPending || !isConfigured}
+                disabled={importLoadsMutation.isPending}
                 className="w-full"
                 size="lg"
               >

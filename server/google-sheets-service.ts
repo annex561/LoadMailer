@@ -42,26 +42,94 @@ export class GoogleSheetsService {
   }
 
   async getSheetData(spreadsheetId: string, range: string = 'Sheet1!A:Z') {
-    if (!this.sheets) {
-      throw new Error('Google Sheets not configured. Please add service account credentials.');
-    }
-
+    // Try simple CSV export first (for publicly shared sheets)
     try {
-      console.log(`📊 Fetching data from sheet: ${spreadsheetId}, range: ${range}`);
+      return await this.getSheetDataSimple(spreadsheetId);
+    } catch (simpleError) {
+      console.log('📊 Simple method failed, trying authenticated method...');
       
-      const response = await this.sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range,
-      });
+      if (!this.sheets) {
+        throw new Error('Google Sheets not configured. Please either:\n1. Make your sheet publicly viewable, OR\n2. Add service account credentials.');
+      }
 
-      const rows = response.data.values || [];
-      console.log(`✅ Retrieved ${rows.length} rows from Google Sheets`);
+      try {
+        console.log(`📊 Fetching data from sheet: ${spreadsheetId}, range: ${range}`);
+        
+        const response = await this.sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range,
+        });
+
+        const rows = response.data.values || [];
+        console.log(`✅ Retrieved ${rows.length} rows from Google Sheets`);
+        
+        return rows;
+      } catch (error) {
+        console.error('❌ Error fetching sheet data:', error);
+        throw error;
+      }
+    }
+  }
+
+  // Simple method for publicly shared sheets
+  async getSheetDataSimple(spreadsheetId: string) {
+    try {
+      // Use the CSV export URL for publicly shared sheets
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
+      
+      console.log(`📊 Fetching public sheet data: ${spreadsheetId}`);
+      
+      const response = await fetch(csvUrl);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Sheet not publicly accessible or doesn't exist`);
+      }
+      
+      const csvText = await response.text();
+      
+      // Parse CSV into rows
+      const rows = this.parseCSV(csvText);
+      
+      console.log(`✅ Retrieved ${rows.length} rows from public Google Sheet`);
       
       return rows;
     } catch (error) {
-      console.error('❌ Error fetching sheet data:', error);
+      console.error('❌ Error fetching public sheet data:', error);
       throw error;
     }
+  }
+
+  // Simple CSV parser
+  parseCSV(csvText: string): string[][] {
+    const lines = csvText.trim().split('\n');
+    const rows: string[][] = [];
+    
+    for (const line of lines) {
+      // Basic CSV parsing (handles quoted fields)
+      const row: string[] = [];
+      let field = '';
+      let inQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"' && (i === 0 || line[i-1] === ',')) {
+          inQuotes = true;
+        } else if (char === '"' && inQuotes && (i === line.length - 1 || line[i+1] === ',')) {
+          inQuotes = false;
+        } else if (char === ',' && !inQuotes) {
+          row.push(field.trim());
+          field = '';
+        } else {
+          field += char;
+        }
+      }
+      
+      row.push(field.trim()); // Add the last field
+      rows.push(row);
+    }
+    
+    return rows;
   }
 
   // Convert Google Sheets rows to load format
@@ -227,11 +295,17 @@ export class GoogleSheetsService {
   // Test connection
   async testConnection(spreadsheetId: string): Promise<boolean> {
     try {
-      await this.getSheetInfo(spreadsheetId);
+      await this.getSheetData(spreadsheetId);
       return true;
     } catch {
       return false;
     }
+  }
+
+  // Extract sheet ID from URL
+  extractSheetId(urlOrId: string): string {
+    const match = urlOrId.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : urlOrId;
   }
 }
 
