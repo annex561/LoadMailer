@@ -162,7 +162,7 @@ function AdminOverview() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {drivers.map((driver) => {
+            {drivers.map((driver, index) => {
               const usableFeet = effectiveUsableFeet(driver);
               const usedFeet = driver.used?.feet || 0;
               const remainingFeet = Math.max(0, usableFeet - usedFeet);
@@ -220,7 +220,7 @@ function AdminOverview() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {activeLoads.map((load) => {
+            {activeLoads.map((load, index) => {
               const assignedDriver = drivers.find(d => String(d.chatId) === String(load.assignedDriverChatId));
               const rpm = calculateRPM(load);
               

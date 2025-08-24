@@ -61,6 +61,7 @@ import DispatcherVehicleDashboard from './dispatcher-vehicle-dashboard';
 import DocumentManagement from './DocumentManagement';
 import DATScraper from './DATScraper';
 import DatLogin from './dat-login';
+import AdminOverview from './admin-overview';
 import NotFound from './not-found';
 
 interface FinanceMetric {
@@ -148,6 +149,8 @@ export default function LoadOpsDashboard() {
         return <DATScraper />;
       case '/dat-login':
         return <DatLogin />;
+      case '/admin-overview':
+        return <AdminOverview />;
       default:
         return <NotFound />;
     }
@@ -415,6 +418,7 @@ export default function LoadOpsDashboard() {
     { name: 'Prediction Confidence', href: '/prediction-confidence', icon: Brain, section: 'smart' },
     
     // System & Reports
+    { name: 'Admin Overview', href: '/admin-overview', icon: Settings, section: 'system' },
     { name: 'Payment Workflow', href: '/payment-workflow', icon: DollarSign, section: 'system' },
     { name: 'Templates', href: '/templates', icon: FileText, section: 'system' },
     { name: 'Scraper Management', href: '/scraper-management', icon: Bot, section: 'system' },
