@@ -329,6 +329,25 @@ bot.on("callback_query", async (q) => {
         chat_id: q.message.chat.id, message_id: msgId, parse_mode: "HTML"
       });
       await bot.sendMessage(DISPATCHER_CHAT_ID, `⚠️ ${driverName} declined load <b>${loadId}</b>.`, { parse_mode: "HTML" });
+    } else if (action === "confirmdims") {
+      // finalize: update driver used feet/weight
+      const rec = loads.get(loadId);
+      if (rec) {
+        const drv = DRIVERS.find(d => String(d.chatId) === String(driverChat));
+        if (drv) {
+          drv.used = drv.used || { feet: 0, weight: 0 };
+          drv.used.feet = Math.round((drv.used.feet + (rec.effectiveFeet || 0)) * 100) / 100;
+          drv.used.weight = (drv.used.weight + (Number(rec.weight) || 0));
+          saveDrivers(DRIVERS);
+          await bot.sendMessage(driverChat, "✅ Dimensions confirmed. Capacity updated.");
+          await bot.sendMessage(DISPATCHER_CHAT_ID, `✅ ${drv.name} confirmed load <b>${loadId}</b>. Capacity updated.`, { parse_mode: "HTML" });
+        }
+      }
+      await bot.answerCallbackQuery(q.id, { text: "Confirmed" });
+    } else if (action === "misdim") {
+      const drv = DRIVERS.find(d => String(d.chatId) === String(driverChat));
+      await bot.answerCallbackQuery(q.id, { text: "Dispatcher notified" });
+      await bot.sendMessage(DISPATCHER_CHAT_ID, `⚠️ ${drv?.name || "Driver"} reported a dimension mismatch on <b>${loadId}</b>. Please review.`, { parse_mode: "HTML" });
     }
   } catch (e) {
     console.error("callback error", e);
@@ -463,60 +482,63 @@ app.get("/book-dims", (req, res) => {
 app.post("/api/dispatch/load-dims", async (req, res) => {
   try {
     if (req.body.secret !== FORM_SECRET) return res.status(401).send("Unauthorized");
-    
-    const { loadId } = req.body;
-    const loadRecord = loads.get(loadId);
-    if (!loadRecord) return res.status(404).send("Load not found");
+    const loadId = String(req.body.loadId || "");
+    const rec = loads.get(loadId);
+    if (!rec) return res.status(404).send("Load not found.");
 
+    // gather dims
     const dims = {
-      palletCount: Number(req.body.palletCount) || 0,
-      palletLenIn: Number(req.body.palletLenIn) || 48,
-      palletWidIn: Number(req.body.palletWidIn) || 40,
+      palletCount: Number(req.body.palletCount || 0),
+      palletLenIn: Number(req.body.palletLenIn || 48),
+      palletWidIn: Number(req.body.palletWidIn || 40),
       stackable: !!req.body.stackable,
-      customFeet: Number(req.body.customFeet) || 0,
-      weight: Number(req.body.weight) || 0
+      customFeet: Number(req.body.customFeet || 0),
+      items: [] // (kept for future)
+    };
+    const weight = Number(req.body.weight || 0);
+
+    rec.dims = dims;
+    rec.weight = weight;
+
+    // assigned driver (from BOOK action)
+    const driverChatId = rec.assignedDriverChatId;
+    const drv = DRIVERS.find(d => String(d.chatId) === String(driverChatId));
+    if (!drv) return res.status(400).send("Assigned driver not found.");
+
+    // compute effective LF
+    const effFeet = computeLoadFeet(drv, dims);
+    rec.effectiveFeet = effFeet;
+
+    // check fit (but do not finalize until driver confirms)
+    const check = checkFitAndUpdate(drv, { effectiveFeet: effFeet, weight });
+
+    // Notify driver to confirm
+    const explain =
+      `📦 <b>Load Dimensions Entered</b>\n` +
+      `<b>Effective LF:</b> ${effFeet} ft\n` +
+      `<b>Weight:</b> ${weight} lbs\n` +
+      `<b>Reserves:</b> door ${getReserves(drv).doorClearanceFt} ft` +
+      (getReserves(drv).carryPalletJack ? ` + pallet jack ${getReserves(drv).palletJackReserveFt} ft` : ``) + `\n` +
+      `<b>Usable LF:</b> ${check.usableFeet} ft\n` +
+      `<b>After load:</b> ~${check.nextFeet.toFixed(2)} ft used, ~${check.remainingFeet.toFixed(2)} ft left\n` +
+      `<b>Weight safe limit:</b> ${check.safeWeight} lbs\n` +
+      `<b>After load:</b> ${check.nextWeight} lbs used, ~${check.remainingWeight} lbs left\n` +
+      `<b>Fit check:</b> ${check.fits ? "✅ OK" : "❌ OVER CAPACITY"}`;
+
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "✅ Confirm Loaded Correct", callback_data: `confirmdims:${loadId}:${driverChatId}` }],
+        [{ text: "⚠️ Report Mismatch", callback_data: `misdim:${loadId}:${driverChatId}` }]
+      ]
     };
 
-    // Find assigned driver
-    const driverChatId = loadRecord.assignedDriverChatId;
-    const driver = DRIVERS.find(d => String(d.chatId) === driverChatId);
-    
-    if (driver) {
-      // Calculate effective feet using our new helpers
-      const effectiveFeet = computeLoadFeet(driver, dims);
-      
-      // Update load record
-      loadRecord.dims = dims;
-      loadRecord.effectiveFeet = effectiveFeet;
-      loadRecord.weight = dims.weight;
-      loads.set(loadId, loadRecord);
+    await bot.sendMessage(driverChatId, explain, { parse_mode: "HTML", reply_markup: keyboard });
+    await bot.sendMessage(DISPATCHER_CHAT_ID, `📨 Asked ${drv.name} to confirm dimensions for <b>${loadId}</b>.`, { parse_mode: "HTML" });
 
-      // Notify driver with dimensions
-      const msg = `🎯 <b>Load Dimensions Confirmed</b>\n\n` +
-        `Load: <b>${loadId}</b>\n` +
-        `Pallets: ${dims.palletCount}\n` +
-        `Custom Feet: ${dims.customFeet}\n` +
-        `Total Weight: ${dims.weight} lbs\n` +
-        `Calculated Feet: ${effectiveFeet} ft\n\n` +
-        `✅ You're all set! Proceed to pickup.`;
-
-      await bot.sendMessage(driverChatId, msg, { parse_mode: "HTML" });
-      
-      // Update driver capacity
-      const fitCheck = checkFitAndUpdate(driver, { effectiveFeet, weight: dims.weight });
-      if (fitCheck.fits) {
-        driver.used = driver.used || { feet: 0, weight: 0 };
-        driver.used.feet += effectiveFeet;
-        driver.used.weight += dims.weight;
-        saveDrivers(DRIVERS);
-      }
-
-      res.send(`✅ Dimensions saved and driver notified!<br><br>Calculated: ${effectiveFeet} ft`);
-    } else {
-      res.status(400).send("Driver not found");
-    }
+    loads.set(loadId, rec);
+    res.send("OK");
   } catch (e) {
-    console.error("dims error", e);
+    console.error("load-dims error", e);
     res.status(500).send("Server error");
   }
 });
