@@ -442,7 +442,7 @@ export default function LoadOpsDashboard() {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           {!sidebarCollapsed && (
-            <h2 className="text-xl font-semibold text-gray-900">LoadMaster</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Load Signal</h2>
           )}
           <Button
             variant="ghost"

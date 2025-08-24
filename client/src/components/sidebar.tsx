@@ -62,8 +62,8 @@ export default function Sidebar() {
             </div>
             {!isCollapsed && (
               <div>
-                <h1 className="text-xl font-bold text-gray-900">LoadMaster</h1>
-                <p className="text-xs text-gray-500">Fleet Management</p>
+                <h1 className="text-xl font-bold text-gray-900">Load Signal</h1>
+                <p className="text-xs text-gray-500">Signal in. Load booked out</p>
               </div>
             )}
           </div>

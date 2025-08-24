@@ -90,7 +90,7 @@ function AdminOverview() {
   return (
     <div className="p-6 space-y-6" data-testid="admin-overview">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">LoadMaster Admin Overview</h1>
+        <h1 className="text-3xl font-bold">Load Signal Admin Overview</h1>
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Users className="w-4 h-4" />
           <span>{drivers.length} Drivers</span>

@@ -1,0 +1,88 @@
+// server/webhooks.js (or inside your existing Express file)
+import express from "express";
+import crypto from "crypto";
+import fs from "fs";
+
+export const router = express.Router();
+
+const INGEST_TOKEN = process.env.INGEST_TOKEN || "change-me";
+
+function num(x) {
+  if (x === undefined || x === null) return null;
+  const n = parseFloat(String(x).replace(/[^0-9.\-]/g, ""));
+  return Number.isNaN(n) ? null : n;
+}
+
+function auth(req, res, next) {
+  const h = req.headers.authorization || "";
+  const token = h.split(" ")[1] || "";
+  if (token !== INGEST_TOKEN) return res.status(401).json({ ok: false, error: "bad token" });
+  next();
+}
+
+router.post("/webhooks/taskmagic", auth, async (req, res) => {
+  const p = req.body || {};
+
+  const id =
+    p.id ||
+    crypto
+      .createHash("sha1")
+      .update(
+        [
+          p.company,
+          p.pickup_date,
+          p.origin_city,
+          p.origin_state,
+          p.destination_city,
+          p.destination_state,
+          p.length_ft,
+          p.weight_lbs,
+          p.rate_total_usd,
+        ].join("|")
+      )
+      .digest("hex");
+
+  const load = {
+    id,
+    source: "taskmagic",
+    created_at: new Date().toISOString(),
+
+    origin: { city: p.origin_city || "", state: p.origin_state || "" },
+    destination: { city: p.destination_city || "", state: p.destination_state || "" },
+
+    miles: num(p.miles),
+    dh_o: num(p.dh_o),
+    dh_d: num(p.dh_d),
+
+    equipment: p.equipment || "",
+    length_ft: num(p.length_ft),
+    weight_lbs: num(p.weight_lbs),
+
+    rate_total_usd: num(p.rate_total_usd),
+    rate_per_mile_usd: num(p.rate_per_mile_usd),
+
+    pickup_date: p.pickup_date || null,
+
+    broker: {
+      name: p.company || "",
+      phone: p.contact_phone || "",
+      email: p.contact_email || "",
+    },
+
+    comments: p.comments || "",
+    row_url: p.row_url || "",
+    raw: p, // keep the original for troubleshooting
+  };
+
+  // Save (with dedupe)
+  fs.mkdirSync("./data", { recursive: true });
+  const path = "./data/inbox.json";
+  let arr = [];
+  try {
+    arr = JSON.parse(fs.readFileSync(path, "utf8"));
+  } catch (_) {}
+  if (!arr.find((x) => x.id === load.id)) arr.unshift(load);
+  fs.writeFileSync(path, JSON.stringify(arr, null, 2));
+
+  return res.json({ ok: true, id: load.id });
+});

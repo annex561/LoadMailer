@@ -1,6 +1,6 @@
 # Overview
 
-LoadMaster is a comprehensive fleet management system for truck load tracking and logistics coordination. It enables users to manage drivers, customers, loads, and automated email communications through a modern web interface. Key capabilities include real-time tracking of load statuses, automated email notifications for load lifecycle events, and comprehensive contact management.
+Load Signal is a comprehensive fleet management system for truck load tracking and logistics coordination. It enables users to manage drivers, customers, loads, and automated email communications through a modern web interface. Key capabilities include real-time tracking of load statuses, automated email notifications for load lifecycle events, and comprehensive contact management.
 
 **ACTIVE FEATURE**: Real Tennessee Load Feed - The system now successfully generates authentic Tennessee regional freight loads every 30 seconds from real logistics companies (Smoky Mountain Transport, Delta Freight Solutions, Border State Freight, Music City Logistics, Lookout Logistics). This replaces the planned DAT scraper due to browser dependency issues. The dashboard displays real freight data with authentic company names, contact phone numbers, and Tennessee routes (Nashville-Atlanta, Memphis-Birmingham, Knoxville-Charlotte, Clarksville-Louisville). Auto-start functionality ensures load generation resumes after system restarts.
 
