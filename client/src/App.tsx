@@ -86,17 +86,9 @@ function App() {
           <Route path="/sms-status" component={SMSStatus} />
           <Route path="/debug-token" component={DebugToken} />
           
-          {/* Main app with sidebar layout */}
+          {/* All routes use LoadOps dashboard layout */}
           <Route>
-            <div className="flex min-h-screen bg-gray-50">
-              <Sidebar />
-              <div className="flex-1 ml-64">
-                <Header />
-                <main>
-                  <Router />
-                </main>
-              </div>
-            </div>
+            <LoadOpsDashboard />
           </Route>
         </Switch>
         <DATVerificationDialog />
