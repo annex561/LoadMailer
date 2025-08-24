@@ -43,6 +43,7 @@ app.use(express.static("public"));
 
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 const pending = new Map(); // messageId -> { timeoutId, driverName, loadId }
+const loads = new Map(); // loadId -> { base fields..., assignedDriverChatId?, dims?, effectiveFeet? }
 
 // ---------- Utilities ----------
 const toStr = (v) => (v == null ? "" : String(v).trim());
@@ -298,13 +299,28 @@ bot.on("callback_query", async (q) => {
         chat_id: q.message.chat.id, message_id: msgId, parse_mode: "HTML"
       });
 
+      const host = process.env.PUBLIC_URL || ""; // set PUBLIC_URL in Replit (e.g., https://your-repl-name.your-user.repl.co)
+      const dimsUrl = host
+        ? `${host}/book-dims?loadId=${encodeURIComponent(loadId)}`
+        : undefined;
+
       const phoneMatch = q.message.text.match(/Phone:<\/b>\s*([+0-9()\- ]+)/i);
       const tel = phoneMatch ? phoneMatch[1].replace(/\s+/g, "") : "";
-      const kb = tel ? { inline_keyboard: [[{ text: "📞 Call Carrier", url: `tel:${tel}` }]] } : undefined;
+      const kb = {
+        inline_keyboard: [
+          ...(tel ? [[{ text: "📞 Call Carrier", url: `tel:${tel}` }]] : []),
+          ...(dimsUrl ? [[{ text: "🔧 Enter Load Dimensions", url: dimsUrl }]] : [])
+        ]
+      };
+
+      // remember who accepted (to bind dims to the right driver)
+      const rec = loads.get(loadId) || {};
+      rec.assignedDriverChatId = String(q.from.id || "");
+      loads.set(loadId, rec);
 
       await bot.sendMessage(
         DISPATCHER_CHAT_ID,
-        `📣 <b>${driverName}</b> accepted load <b>${loadId}</b>.`,
+        `📣 <b>${driverName}</b> accepted load <b>${loadId}</b>.\nTap <b>Enter Load Dimensions</b> to complete booking.`,
         { parse_mode: "HTML", reply_markup: kb }
       );
     } else if (action === "decline") {
@@ -367,6 +383,9 @@ app.post("/api/load-intake", async (req, res) => {
     // Broadcast to ties within 10 pts
     const targets = scored.filter(x => x.s.score >= top.s.score - 10).slice(0, 3);
 
+    // Save the load so we can attach dims later
+    loads.set(loadId, { ...base, loadId, status: "new" });
+
     await Promise.all(targets.map(t => sendToDriver(t.d, base, loadId, t.s)));
 
     // Dispatcher heads-up
@@ -402,6 +421,104 @@ app.post("/api/driver-remaining", (req, res) => {
   });
   if (found) saveDrivers(DRIVERS);
   res.json({ ok: found });
+});
+
+// ---------- Dispatcher dimensions page ----------
+app.get("/book-dims", (req, res) => {
+  const { loadId } = req.query;
+  if (!loadId || !loads.get(loadId)) {
+    return res.status(404).send("Load not found.");
+  }
+  // Simple inline HTML for dispatcher to enter dims
+  res.send(`
+<!doctype html><meta charset="utf-8"><title>Enter Load Dimensions</title>
+<style>body{font-family:system-ui;max-width:720px;margin:24px auto;padding:8px}</style>
+<h2>Enter Load Dimensions for Load ${loadId}</h2>
+<form method="post" action="/api/dispatch/load-dims">
+  <input type="hidden" name="loadId" value="${loadId}">
+  <label>Secret <input name="secret" required placeholder="FORM_SECRET"></label><br><br>
+
+  <fieldset>
+    <legend>Standard Pallets</legend>
+    <label>Count <input name="palletCount" type="number" min="0" step="1" value="0"></label>
+    <label>Length (in) <input name="palletLenIn" type="number" min="1" value="48"></label>
+    <label>Width (in) <input name="palletWidIn" type="number" min="1" value="40"></label>
+    <label>Stackable <input name="stackable" type="checkbox"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Custom Items (optional)</legend>
+    <small>Linear feet per item × quantity (for awkward pieces)</small><br>
+    <label>Custom Feet <input name="customFeet" type="number" min="0" step="0.1" value="0"></label>
+  </fieldset>
+
+  <label>Total Weight (lbs) <input name="weight" type="number" min="0" step="1" required></label><br><br>
+
+  <button type="submit">Save & Notify Driver</button>
+</form>
+  `);
+});
+
+// ---------- API: Dispatcher load dimensions ----------
+app.post("/api/dispatch/load-dims", async (req, res) => {
+  try {
+    if (req.body.secret !== FORM_SECRET) return res.status(401).send("Unauthorized");
+    
+    const { loadId } = req.body;
+    const loadRecord = loads.get(loadId);
+    if (!loadRecord) return res.status(404).send("Load not found");
+
+    const dims = {
+      palletCount: Number(req.body.palletCount) || 0,
+      palletLenIn: Number(req.body.palletLenIn) || 48,
+      palletWidIn: Number(req.body.palletWidIn) || 40,
+      stackable: !!req.body.stackable,
+      customFeet: Number(req.body.customFeet) || 0,
+      weight: Number(req.body.weight) || 0
+    };
+
+    // Find assigned driver
+    const driverChatId = loadRecord.assignedDriverChatId;
+    const driver = DRIVERS.find(d => String(d.chatId) === driverChatId);
+    
+    if (driver) {
+      // Calculate effective feet using our new helpers
+      const effectiveFeet = computeLoadFeet(driver, dims);
+      
+      // Update load record
+      loadRecord.dims = dims;
+      loadRecord.effectiveFeet = effectiveFeet;
+      loadRecord.weight = dims.weight;
+      loads.set(loadId, loadRecord);
+
+      // Notify driver with dimensions
+      const msg = `🎯 <b>Load Dimensions Confirmed</b>\n\n` +
+        `Load: <b>${loadId}</b>\n` +
+        `Pallets: ${dims.palletCount}\n` +
+        `Custom Feet: ${dims.customFeet}\n` +
+        `Total Weight: ${dims.weight} lbs\n` +
+        `Calculated Feet: ${effectiveFeet} ft\n\n` +
+        `✅ You're all set! Proceed to pickup.`;
+
+      await bot.sendMessage(driverChatId, msg, { parse_mode: "HTML" });
+      
+      // Update driver capacity
+      const fitCheck = checkFitAndUpdate(driver, { effectiveFeet, weight: dims.weight });
+      if (fitCheck.fits) {
+        driver.used = driver.used || { feet: 0, weight: 0 };
+        driver.used.feet += effectiveFeet;
+        driver.used.weight += dims.weight;
+        saveDrivers(DRIVERS);
+      }
+
+      res.send(`✅ Dimensions saved and driver notified!<br><br>Calculated: ${effectiveFeet} ft`);
+    } else {
+      res.status(400).send("Driver not found");
+    }
+  } catch (e) {
+    console.error("dims error", e);
+    res.status(500).send("Server error");
+  }
 });
 
 app.get("/health", (_, res) => res.send("ok"));
