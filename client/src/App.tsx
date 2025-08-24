@@ -34,6 +34,7 @@ import PredictionConfidence from "@/pages/prediction-confidence";
 import AdminOverview from "@/pages/admin-overview";
 import SMSStatus from "@/pages/sms-status";
 import DebugToken from "@/pages/debug-token";
+import GoogleSheetsImport from "@/pages/google-sheets-import";
 
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
@@ -70,6 +71,7 @@ function Router() {
       <Route path="/admin-overview" component={AdminOverview} />
       <Route path="/taskmagic-status" component={TaskMagicStatusPage} />
       <Route path="/dat-scraper" component={DATScraper} />
+      <Route path="/google-sheets-import" component={GoogleSheetsImport} />
       <Route component={NotFound} />
     </Switch>
   );

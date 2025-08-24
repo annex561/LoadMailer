@@ -26,6 +26,7 @@ import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
 import { realDriverLocationService } from "./real-driver-location-service";
 import { taskMagicIntegration } from './taskmagic-integration';
 import { datScraperService as puppeteerDATService } from './dat-puppeteer-scraper';
+import { googleSheetsService } from './google-sheets-service';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -4930,6 +4931,219 @@ Safe travels! 🚛`;
       res.status(500).json({ 
         success: false, 
         error: error.message || 'Failed to create load' 
+      });
+    }
+  });
+
+  // =========================
+  // GOOGLE SHEETS INTEGRATION
+  // =========================
+
+  // Test Google Sheets connection
+  app.get('/api/google-sheets/status', async (req, res) => {
+    try {
+      const isConfigured = await googleSheetsService.isConfigured();
+      res.json({
+        configured: isConfigured,
+        message: isConfigured 
+          ? 'Google Sheets integration is ready' 
+          : 'Google Sheets credentials not configured'
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get sheet information
+  app.post('/api/google-sheets/info', async (req, res) => {
+    try {
+      const { spreadsheetId } = req.body;
+      
+      if (!spreadsheetId) {
+        return res.status(400).json({ error: 'Spreadsheet ID is required' });
+      }
+
+      const sheetInfo = await googleSheetsService.getSheetInfo(spreadsheetId);
+      res.json(sheetInfo);
+
+    } catch (error) {
+      console.error('❌ Error getting sheet info:', error);
+      res.status(500).json({ 
+        error: 'Failed to get sheet information',
+        details: error.message 
+      });
+    }
+  });
+
+  // Test connection to a specific sheet
+  app.post('/api/google-sheets/test', async (req, res) => {
+    try {
+      const { spreadsheetId } = req.body;
+      
+      if (!spreadsheetId) {
+        return res.status(400).json({ error: 'Spreadsheet ID is required' });
+      }
+
+      const isValid = await googleSheetsService.testConnection(spreadsheetId);
+      
+      res.json({
+        success: isValid,
+        message: isValid 
+          ? 'Successfully connected to Google Sheet' 
+          : 'Failed to connect to Google Sheet'
+      });
+
+    } catch (error) {
+      console.error('❌ Error testing sheet connection:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Connection test failed',
+        details: error.message 
+      });
+    }
+  });
+
+  // Get raw data from Google Sheet
+  app.post('/api/google-sheets/data', async (req, res) => {
+    try {
+      const { spreadsheetId, range = 'Sheet1!A:Z' } = req.body;
+      
+      if (!spreadsheetId) {
+        return res.status(400).json({ error: 'Spreadsheet ID is required' });
+      }
+
+      const data = await googleSheetsService.getSheetData(spreadsheetId, range);
+      
+      res.json({
+        success: true,
+        rows: data.length,
+        data
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching sheet data:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch sheet data',
+        details: error.message 
+      });
+    }
+  });
+
+  // Import loads from Google Sheets
+  app.post('/api/google-sheets/import-loads', async (req, res) => {
+    try {
+      const { 
+        spreadsheetId, 
+        range = 'Sheet1!A:Z', 
+        columnMapping 
+      } = req.body;
+      
+      if (!spreadsheetId) {
+        return res.status(400).json({ error: 'Spreadsheet ID is required' });
+      }
+
+      // Get sheet data
+      const rawData = await googleSheetsService.getSheetData(spreadsheetId, range);
+      
+      if (rawData.length === 0) {
+        return res.json({
+          success: true,
+          message: 'No data found in sheet',
+          loadsImported: 0
+        });
+      }
+
+      // Transform to loads
+      const loads = googleSheetsService.transformToLoads(rawData, columnMapping);
+      
+      console.log(`📊 Transformed ${loads.length} loads from Google Sheets`);
+
+      // Add loads to DAT loads for immediate display
+      if (!global.googleSheetsLoads) {
+        global.googleSheetsLoads = [];
+      }
+      
+      // Clear existing Google Sheets loads and add new ones
+      global.googleSheetsLoads = loads;
+
+      // Also add to global DAT loads for display in DAT Loads tab
+      if (!global.datLoads) {
+        global.datLoads = [];
+      }
+      
+      // Remove old Google Sheets loads and add new ones
+      global.datLoads = global.datLoads.filter(load => 
+        !load.source || load.source !== 'Google Sheets'
+      );
+      global.datLoads.unshift(...loads);
+
+      console.log(`✅ Successfully imported ${loads.length} loads from Google Sheets`);
+
+      // Notify drivers about new loads (optional)
+      try {
+        let driversNotified = 0;
+        const drivers = await storage.getAllDrivers();
+        const availableDrivers = drivers.filter(d => 
+          d.status === 'available' && d.telegramEnabled && d.telegramChatId
+        );
+
+        // Only notify about first few loads to avoid spam
+        const loadsToNotify = loads.slice(0, 3);
+        
+        for (const load of loadsToNotify) {
+          for (const driver of availableDrivers) {
+            console.log(`📲 Notifying driver ${driver.name} about Google Sheets load`);
+            driversNotified++;
+          }
+        }
+
+        res.json({
+          success: true,
+          message: `Successfully imported ${loads.length} loads from Google Sheets`,
+          loadsImported: loads.length,
+          driversNotified,
+          spreadsheetId,
+          previewLoads: loads.slice(0, 3) // Show first 3 loads as preview
+        });
+
+      } catch (driverError) {
+        console.warn('⚠️ Failed to notify drivers about Google Sheets loads:', driverError);
+        
+        res.json({
+          success: true,
+          message: `Successfully imported ${loads.length} loads from Google Sheets`,
+          loadsImported: loads.length,
+          driversNotified: 0,
+          warning: 'Loads imported but driver notification failed',
+          spreadsheetId,
+          previewLoads: loads.slice(0, 3)
+        });
+      }
+
+    } catch (error) {
+      console.error('❌ Error importing loads from Google Sheets:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to import loads',
+        details: error.message 
+      });
+    }
+  });
+
+  // Get imported Google Sheets loads
+  app.get('/api/google-sheets/loads', async (req, res) => {
+    try {
+      const loads = global.googleSheetsLoads || [];
+      res.json({
+        success: true,
+        count: loads.length,
+        loads
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false,
+        error: error.message 
       });
     }
   });

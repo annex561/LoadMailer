@@ -1,6 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
-import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile, Upload, MapPin, Wrench, Brain, ChevronLeft, ChevronRight, Menu, X, TrendingUp, Webhook } from "lucide-react";
+import { Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile, Upload, MapPin, Wrench, Brain, ChevronLeft, ChevronRight, Menu, X, TrendingUp, Webhook, Sheet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -14,6 +14,7 @@ const navigation = [
   { name: "Manage Loads", href: "/loads", icon: Package, section: "loads" },
   { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "loads" },
   { name: "Manual Load Entry", href: "/manual-load-entry", icon: UserPlus, section: "loads" },
+  { name: "Google Sheets Import", href: "/google-sheets-import", icon: Sheet, section: "loads" },
   { name: "DAT Login", href: "/dat-login", icon: Bot, section: "loads" },
   { name: "DAT Scrapers", href: "/scrapers", icon: Bot, section: "loads" },
   

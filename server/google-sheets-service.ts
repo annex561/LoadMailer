@@ -1,0 +1,238 @@
+import { google } from 'googleapis';
+import { JWT } from 'google-auth-library';
+
+export class GoogleSheetsService {
+  private sheets: any;
+  private auth: JWT | null = null;
+
+  constructor() {
+    this.initializeAuth();
+  }
+
+  private async initializeAuth() {
+    try {
+      // Use service account credentials from environment variables
+      const credentials = {
+        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.replace(/\\n/g, '\n'),
+        project_id: process.env.GOOGLE_PROJECT_ID
+      };
+
+      if (!credentials.client_email || !credentials.private_key) {
+        console.log('⚠️ Google Sheets credentials not provided - service disabled');
+        return;
+      }
+
+      this.auth = new JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+      });
+
+      this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+      console.log('✅ Google Sheets service initialized');
+      
+    } catch (error) {
+      console.error('❌ Failed to initialize Google Sheets:', error);
+    }
+  }
+
+  async isConfigured(): Promise<boolean> {
+    return this.auth !== null && this.sheets !== null;
+  }
+
+  async getSheetData(spreadsheetId: string, range: string = 'Sheet1!A:Z') {
+    if (!this.sheets) {
+      throw new Error('Google Sheets not configured. Please add service account credentials.');
+    }
+
+    try {
+      console.log(`📊 Fetching data from sheet: ${spreadsheetId}, range: ${range}`);
+      
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range,
+      });
+
+      const rows = response.data.values || [];
+      console.log(`✅ Retrieved ${rows.length} rows from Google Sheets`);
+      
+      return rows;
+    } catch (error) {
+      console.error('❌ Error fetching sheet data:', error);
+      throw error;
+    }
+  }
+
+  // Convert Google Sheets rows to load format
+  transformToLoads(rows: any[][], columnMapping?: { [key: string]: number }) {
+    if (rows.length === 0) return [];
+
+    // Default column mapping (can be customized)
+    const defaultMapping = {
+      origin: 0,           // Column A
+      destination: 1,      // Column B  
+      rate: 2,            // Column C
+      miles: 3,           // Column D
+      equipment: 4,       // Column E
+      company: 5,         // Column F
+      phone: 6,           // Column G
+      pickup_date: 7,     // Column H
+      delivery_date: 8,   // Column I
+      weight: 9,          // Column J
+      commodity: 10,      // Column K
+      special_requirements: 11 // Column L
+    };
+
+    const mapping = columnMapping || defaultMapping;
+    
+    // Skip header row if it exists
+    const dataRows = rows.length > 1 && this.isHeaderRow(rows[0]) ? rows.slice(1) : rows;
+
+    return dataRows.map((row, index) => {
+      const load = {
+        id: `gsheet_${Date.now()}_${index}`,
+        source: 'Google Sheets',
+        status: 'available',
+        scrapedAt: new Date().toISOString(),
+        
+        // Map columns to load fields
+        origin: this.getColumnValue(row, mapping.origin),
+        destination: this.getColumnValue(row, mapping.destination),
+        rate: this.parseRate(this.getColumnValue(row, mapping.rate)),
+        miles: this.parseNumber(this.getColumnValue(row, mapping.miles)),
+        equipmentType: this.normalizeEquipment(this.getColumnValue(row, mapping.equipment)),
+        company: this.getColumnValue(row, mapping.company),
+        phone: this.getColumnValue(row, mapping.phone),
+        pickupDate: this.parseDate(this.getColumnValue(row, mapping.pickup_date)),
+        deliveryDate: this.parseDate(this.getColumnValue(row, mapping.delivery_date)),
+        weight: this.parseWeight(this.getColumnValue(row, mapping.weight)),
+        commodity: this.getColumnValue(row, mapping.commodity),
+        specialRequirements: this.getColumnValue(row, mapping.special_requirements),
+
+        // Parse origin/destination into city/state
+        originCity: this.parseCity(this.getColumnValue(row, mapping.origin)),
+        originState: this.parseState(this.getColumnValue(row, mapping.origin)),
+        destinationCity: this.parseCity(this.getColumnValue(row, mapping.destination)),
+        destinationState: this.parseState(this.getColumnValue(row, mapping.destination)),
+
+        // Additional fields
+        description: `[GOOGLE SHEETS] ${this.getColumnValue(row, mapping.company)} load`,
+        loadNumber: `GS${String(index + 1).padStart(4, '0')}`,
+        priority: 'normal',
+        ratePer: 'total'
+      };
+
+      // Clean up undefined/null values
+      Object.keys(load).forEach(key => {
+        if (load[key as keyof typeof load] === undefined || load[key as keyof typeof load] === null) {
+          delete load[key as keyof typeof load];
+        }
+      });
+
+      return load;
+    }).filter(load => load.origin && load.destination); // Only include loads with basic info
+  }
+
+  private getColumnValue(row: any[], columnIndex: number): string {
+    return row[columnIndex]?.toString().trim() || '';
+  }
+
+  private isHeaderRow(row: any[]): boolean {
+    const firstCell = row[0]?.toString().toLowerCase() || '';
+    return firstCell.includes('origin') || 
+           firstCell.includes('pickup') || 
+           firstCell.includes('from') ||
+           firstCell.includes('load');
+  }
+
+  private parseRate(value: string): number {
+    if (!value) return 0;
+    const cleaned = value.replace(/[$,]/g, '');
+    return parseInt(cleaned) || 0;
+  }
+
+  private parseNumber(value: string): number {
+    if (!value) return 0;
+    const cleaned = value.replace(/[^\d]/g, '');
+    return parseInt(cleaned) || 0;
+  }
+
+  private parseWeight(value: string): number {
+    if (!value) return 0;
+    const match = value.match(/(\d+)/);
+    return match ? parseInt(match[1]) : 0;
+  }
+
+  private parseDate(value: string): string {
+    if (!value) return new Date().toISOString();
+    
+    try {
+      // Try to parse various date formats
+      const date = new Date(value);
+      return isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+    } catch {
+      return new Date().toISOString();
+    }
+  }
+
+  private parseCity(location: string): string {
+    if (!location) return '';
+    const parts = location.split(',');
+    return parts[0]?.trim() || '';
+  }
+
+  private parseState(location: string): string {
+    if (!location) return '';
+    const parts = location.split(',');
+    return parts[parts.length - 1]?.trim().slice(0, 2) || '';
+  }
+
+  private normalizeEquipment(equipment: string): string {
+    if (!equipment) return 'dry_van';
+    
+    const type = equipment.toLowerCase();
+    if (type.includes('box') || type.includes('straight')) return 'straight_box_truck';
+    if (type.includes('reefer') || type.includes('refrigerated')) return 'refrigerated_truck';
+    if (type.includes('flat') || type.includes('flatbed')) return 'flatbed_truck';
+    if (type.includes('van') || type.includes('dry')) return 'dry_van';
+    return 'dry_van';
+  }
+
+  // Get sheet metadata
+  async getSheetInfo(spreadsheetId: string) {
+    if (!this.sheets) {
+      throw new Error('Google Sheets not configured');
+    }
+
+    try {
+      const response = await this.sheets.spreadsheets.get({
+        spreadsheetId,
+      });
+
+      return {
+        title: response.data.properties.title,
+        sheets: response.data.sheets.map((sheet: any) => ({
+          title: sheet.properties.title,
+          sheetId: sheet.properties.sheetId,
+          gridProperties: sheet.properties.gridProperties
+        }))
+      };
+    } catch (error) {
+      console.error('❌ Error getting sheet info:', error);
+      throw error;
+    }
+  }
+
+  // Test connection
+  async testConnection(spreadsheetId: string): Promise<boolean> {
+    try {
+      await this.getSheetInfo(spreadsheetId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export const googleSheetsService = new GoogleSheetsService();
