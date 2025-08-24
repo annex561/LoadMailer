@@ -18,7 +18,18 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  User
+  User,
+  Headphones,
+  Bot,
+  MessageSquare,
+  UserPlus,
+  Brain,
+  Wrench,
+  Smile,
+  Mail,
+  Webhook,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -154,14 +165,40 @@ export default function LoadOpsDashboard() {
     }
   ];
 
-  const sidebarItems = [
-    { icon: Home, label: 'Dashboard', path: '/', active: true },
-    { icon: Truck, label: 'Loads', path: '/loads' },
-    { icon: Users, label: 'Drivers', path: '/driver-management' },
-    { icon: FileText, label: 'Dispatcher', path: '/dispatcher-dashboard' },
-    { icon: BarChart3, label: 'Analytics', path: '/analytics' },
-    { icon: MapPin, label: 'GPS Tracking', path: '/gps-tracking' },
-    { icon: Settings, label: 'Settings', path: '/settings' }
+  const navigation = [
+    // Dashboards & Operations
+    { name: "LoadOps Dashboard", href: "/loadops-dashboard", icon: TrendingUp, section: "dashboards" },
+    { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Settings, section: "dashboards" },
+    
+    // Load Management
+    { name: "Manage Loads", href: "/loads", icon: Truck, section: "loads" },
+    { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "loads" },
+    { name: "Manual Load Entry", href: "/manual-load-entry", icon: UserPlus, section: "loads" },
+    { name: "DAT Login", href: "/dat-login", icon: Settings, section: "loads" },
+    { name: "DAT Scrapers", href: "/scrapers", icon: Settings, section: "loads" },
+    
+    // Communication & Dispatch
+    { name: "Telegram Dispatching", href: "/telegram-dispatching", icon: MessageSquare, section: "communication" },
+    { name: "LoadMailer Bot", href: "/loadmailer-control", icon: Settings, section: "communication" },
+    { name: "Email Templates", href: "/templates", icon: Mail, section: "communication" },
+    
+    // Fleet Management
+    { name: "Driver Management", href: "/driver-management", icon: Users, section: "fleet" },
+    { name: "Vehicle Management", href: "/dispatcher-vehicle-dashboard", icon: Truck, section: "fleet" },
+    { name: "Contacts", href: "/contacts", icon: Users, section: "fleet" },
+    { name: "GPS Tracking", href: "/gps-tracking", icon: MapPin, section: "fleet" },
+    
+    // Smart Operations
+    { name: "Smart Load Matching", href: "/smart-load-matching", icon: TrendingUp, section: "smart" },
+    { name: "Prediction Confidence", href: "/prediction-confidence", icon: TrendingUp, section: "smart" },
+    { name: "Predictive Maintenance", href: "/predictive-maintenance", icon: Wrench, section: "smart" },
+    { name: "Mood Tracker", href: "/mood-tracker", icon: Smile, section: "smart" },
+    { name: "Payment Workflow", href: "/payments", icon: DollarSign, section: "smart" },
+    
+    // System & Reports
+    { name: "TaskMagic Status", href: "/taskmagic-status", icon: Settings, section: "system" },
+    { name: "Analytics", href: "/analytics", icon: BarChart3, section: "system" },
+    { name: "Email Logs", href: "/email-logs", icon: FileText, section: "system" },
   ];
 
   const invoiceStats = {
@@ -174,56 +211,269 @@ export default function LoadOpsDashboard() {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
-      <div className={cn(
-        "bg-white border-r border-gray-200 transition-all duration-300 flex flex-col",
+      <aside className={cn(
+        "bg-white shadow-lg min-h-screen fixed left-0 top-0 z-40 transition-all duration-300 ease-in-out flex flex-col",
         sidebarCollapsed ? "w-16" : "w-64"
       )}>
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-          {!sidebarCollapsed && (
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Truck className="w-5 h-5 text-white" />
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className={cn(
+              "flex items-center space-x-3 transition-all duration-300",
+              sidebarCollapsed && "justify-center"
+            )}>
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                <Truck className="text-white w-5 h-5" />
               </div>
-              <span className="font-semibold text-gray-900">LoadOps</span>
+              {!sidebarCollapsed && (
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">LoadMaster</h1>
+                  <p className="text-xs text-gray-500">Fleet Management</p>
+                </div>
+              )}
             </div>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-1"
-          >
-            {sidebarCollapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
-          </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className={cn(
+                "hover:bg-gray-100",
+                sidebarCollapsed && "absolute top-6 right-2"
+              )}
+            >
+              {sidebarCollapsed ? <Menu className="w-4 h-4" /> : <X className="w-4 h-4" />}
+            </Button>
+          </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-2">
-          <ul className="space-y-1">
-            {sidebarItems.map((item, index) => (
-              <li key={index}>
-                <a
-                  href={item.path}
-                  className={cn(
-                    "flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                    item.active 
-                      ? "bg-blue-100 text-blue-700" 
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                  )}
-                  data-testid={`nav-${item.label.toLowerCase()}`}
-                >
-                  <item.icon className={cn("flex-shrink-0", sidebarCollapsed ? "w-5 h-5" : "w-5 h-5 mr-3")} />
-                  {!sidebarCollapsed && <span>{item.label}</span>}
-                </a>
-              </li>
-            ))}
+        <nav className="mt-6 flex-1">
+          {/* Dashboards Section */}
+          {!sidebarCollapsed && (
+            <div className="px-6 py-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Dashboards</p>
+            </div>
+          )}
+          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
+            {navigation.filter(item => item.section === "dashboards").map((item) => {
+              const Icon = item.icon;
+              const isActive = window.location.pathname === item.href;
+              
+              return (
+                <li key={item.name}>
+                  <a
+                    href={item.href}
+                    className={cn(
+                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      sidebarCollapsed 
+                        ? "px-2 justify-center" 
+                        : "px-6",
+                      isActive
+                        ? "text-primary bg-blue-50 border-r-3 border-primary"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                    )}
+                    title={sidebarCollapsed ? item.name : undefined}
+                  >
+                    <Icon className={cn(
+                      "w-5 h-5", 
+                      !sidebarCollapsed && "mr-3"
+                    )} />
+                    {!sidebarCollapsed && <span>{item.name}</span>}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Load Management Section */}
+          {!sidebarCollapsed && (
+            <div className="px-6 py-2 mt-6">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Load Management</p>
+            </div>
+          )}
+          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
+            {navigation.filter(item => item.section === "loads").map((item) => {
+              const Icon = item.icon;
+              const isActive = window.location.pathname === item.href;
+              
+              return (
+                <li key={item.name}>
+                  <a
+                    href={item.href}
+                    className={cn(
+                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      sidebarCollapsed 
+                        ? "px-2 justify-center" 
+                        : "px-6",
+                      isActive
+                        ? "text-primary bg-blue-50 border-r-3 border-primary"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                    )}
+                    title={sidebarCollapsed ? item.name : undefined}
+                  >
+                    <Icon className={cn(
+                      "w-5 h-5", 
+                      !sidebarCollapsed && "mr-3"
+                    )} />
+                    {!sidebarCollapsed && <span>{item.name}</span>}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Communication Section */}
+          {!sidebarCollapsed && (
+            <div className="px-6 py-2 mt-6">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Communication</p>
+            </div>
+          )}
+          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
+            {navigation.filter(item => item.section === "communication").map((item) => {
+              const Icon = item.icon;
+              const isActive = window.location.pathname === item.href;
+              
+              return (
+                <li key={item.name}>
+                  <a
+                    href={item.href}
+                    className={cn(
+                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      sidebarCollapsed 
+                        ? "px-2 justify-center" 
+                        : "px-6",
+                      isActive
+                        ? "text-primary bg-blue-50 border-r-3 border-primary"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                    )}
+                    title={sidebarCollapsed ? item.name : undefined}
+                  >
+                    <Icon className={cn(
+                      "w-5 h-5", 
+                      !sidebarCollapsed && "mr-3"
+                    )} />
+                    {!sidebarCollapsed && <span>{item.name}</span>}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Fleet Management Section */}
+          {!sidebarCollapsed && (
+            <div className="px-6 py-2 mt-6">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Fleet Management</p>
+            </div>
+          )}
+          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
+            {navigation.filter(item => item.section === "fleet").map((item) => {
+              const Icon = item.icon;
+              const isActive = window.location.pathname === item.href;
+              
+              return (
+                <li key={item.name}>
+                  <a
+                    href={item.href}
+                    className={cn(
+                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      sidebarCollapsed 
+                        ? "px-2 justify-center" 
+                        : "px-6",
+                      isActive
+                        ? "text-primary bg-blue-50 border-r-3 border-primary"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                    )}
+                    title={sidebarCollapsed ? item.name : undefined}
+                  >
+                    <Icon className={cn(
+                      "w-5 h-5", 
+                      !sidebarCollapsed && "mr-3"
+                    )} />
+                    {!sidebarCollapsed && <span>{item.name}</span>}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Smart Operations Section */}
+          {!sidebarCollapsed && (
+            <div className="px-6 py-2 mt-6">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Smart Operations</p>
+            </div>
+          )}
+          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
+            {navigation.filter(item => item.section === "smart").map((item) => {
+              const Icon = item.icon;
+              const isActive = window.location.pathname === item.href;
+              
+              return (
+                <li key={item.name}>
+                  <a
+                    href={item.href}
+                    className={cn(
+                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      sidebarCollapsed 
+                        ? "px-2 justify-center" 
+                        : "px-6",
+                      isActive
+                        ? "text-primary bg-blue-50 border-r-3 border-primary"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                    )}
+                    title={sidebarCollapsed ? item.name : undefined}
+                  >
+                    <Icon className={cn(
+                      "w-5 h-5", 
+                      !sidebarCollapsed && "mr-3"
+                    )} />
+                    {!sidebarCollapsed && <span>{item.name}</span>}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* System & Reports Section */}
+          {!sidebarCollapsed && (
+            <div className="px-6 py-2 mt-6">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">System & Reports</p>
+            </div>
+          )}
+          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
+            {navigation.filter(item => item.section === "system").map((item) => {
+              const Icon = item.icon;
+              const isActive = window.location.pathname === item.href;
+              
+              return (
+                <li key={item.name}>
+                  <a
+                    href={item.href}
+                    className={cn(
+                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      sidebarCollapsed 
+                        ? "px-2 justify-center" 
+                        : "px-6",
+                      isActive
+                        ? "text-primary bg-blue-50 border-r-3 border-primary"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                    )}
+                    title={sidebarCollapsed ? item.name : undefined}
+                  >
+                    <Icon className={cn(
+                      "w-5 h-5", 
+                      !sidebarCollapsed && "mr-3"
+                    )} />
+                    {!sidebarCollapsed && <span>{item.name}</span>}
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </nav>
-      </div>
+      </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={cn("flex-1 flex flex-col overflow-hidden", sidebarCollapsed ? "ml-16" : "ml-64")}>
         {/* Top Header */}
         <header className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">

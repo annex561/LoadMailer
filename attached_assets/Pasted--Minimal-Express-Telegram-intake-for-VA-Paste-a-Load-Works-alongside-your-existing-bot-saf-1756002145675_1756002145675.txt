@@ -1,0 +1,202 @@
+// Minimal Express + Telegram intake for VA “Paste-a-Load”
+// Works alongside your existing bot; safe defaults; BOOK/DECLINE + 3-min ping
+
+const express = require("express");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const TelegramBot = require("node-telegram-bot-api");
+
+const {
+  TELEGRAM_BOT_TOKEN,
+  DISPATCHER_CHAT_ID,
+  DRIVER_A_CHAT_ID,        // e.g. 5908383693
+  DRIVER_B_CHAT_ID,        // optional
+  FORM_SECRET              // simple shared secret to protect the form
+} = process.env;
+
+if (!TELEGRAM_BOT_TOKEN || !DISPATCHER_CHAT_ID || !FORM_SECRET) {
+  console.error("❌ Missing required env vars: TELEGRAM_BOT_TOKEN, DISPATCHER_CHAT_ID, FORM_SECRET");
+  process.exit(1);
+}
+
+const app = express();
+app.use(helmet());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// Basic rate limit (tune if needed)
+app.use("/api/", rateLimit({ windowMs: 60_000, max: 120 }));
+
+// Serve the form
+app.use(express.static("public"));
+
+// Telegram bot
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+
+// In-memory pending tracker for 3-min no-response ping
+const pending = new Map(); // key: msgId -> { timeoutId, driverName, loadSummary }
+
+function sanitizeStr(s = "") {
+  return String(s).trim().slice(0, 500);
+}
+function numOrNull(x) {
+  const n = Number(String(x || "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function buildLoadMessage(load) {
+  const {
+    broker, brokerPhone, brokerEmail, link,
+    origin, destination, pickupDate,
+    miles, deadhead, equipment, feet, weight,
+    rate, rpm, notes
+  } = load;
+
+  const fmt = (label, v) => v ? `<b>${label}:</b> ${v}<br/>` : "";
+
+  return (
+    `🚚 <b>NEW LOAD</b><br/>` +
+    fmt("Broker", broker) +
+    fmt("Phone", brokerPhone) +
+    fmt("Email", brokerEmail) +
+    fmt("Link", link) +
+    `<hr/>` +
+    fmt("Origin → Dest", `${origin} → ${destination}`) +
+    fmt("Pickup", pickupDate) +
+    fmt("Miles", miles) + fmt("Deadhead", deadhead) +
+    fmt("Equip/Feet/Weight", `${equipment || "-"} / ${feet || "-"} ft / ${weight || "-"} lbs`) +
+    fmt("Rate / RPM", rate && rpm ? `$${rate} / $${rpm}/mi` : rate ? `$${rate}` : rpm ? `$${rpm}/mi` : "") +
+    fmt("Notes", notes)
+  );
+}
+
+function sendToDriver(telegramId, driverName, load, loadId) {
+  const msg = buildLoadMessage(load);
+  const keyboard = {
+    inline_keyboard: [[
+      { text: "✅ BOOK", callback_data: `book:${loadId}` },
+      { text: "❌ DECLINE", callback_data: `decline:${loadId}` }
+    ]]
+  };
+
+  return bot.sendMessage(telegramId, msg, { parse_mode: "HTML", reply_markup: keyboard })
+    .then(sent => {
+      // 3-minute no-response ping to dispatcher
+      const timeoutId = setTimeout(() => {
+        if (pending.has(sent.message_id)) {
+          bot.sendMessage(
+            DISPATCHER_CHAT_ID,
+            `⏰ No response in 3 min from <b>${driverName}</b> for load <b>${loadId}</b>.`,
+            { parse_mode: "HTML" }
+          );
+          pending.delete(sent.message_id);
+        }
+      }, 180_000);
+
+      pending.set(sent.message_id, {
+        timeoutId,
+        driverName,
+        loadSummary: `${load.origin} → ${load.destination} ${load.miles ? `(${load.miles} mi)` : ""}`
+      });
+    });
+}
+
+// Callback handler for BOOK/DECLINE
+bot.on("callback_query", async (q) => {
+  try {
+    const data = q.data || "";
+    const msgId = q.message?.message_id;
+    if (!msgId) return;
+
+    const p = pending.get(msgId);
+    if (p) { clearTimeout(p.timeoutId); pending.delete(msgId); }
+
+    const [action, loadId] = data.split(":");
+    const driverName = q.from?.first_name ? `${q.from.first_name} ${q.from.last_name || ""}`.trim() : "Driver";
+
+    if (action === "book") {
+      await bot.answerCallbackQuery(q.id, { text: "Booked. Dispatcher notified!" });
+      await bot.editMessageText(`✅ <b>BOOKED</b> by ${driverName}\n\n${q.message.text}`, {
+        chat_id: q.message.chat.id, message_id: msgId, parse_mode: "HTML"
+      });
+      // Notify dispatcher with a call button (if phone present in message)
+      const phoneMatch = q.message.text.match(/Phone:<\/b>\s*([+0-9()\-\s]+)/i);
+      const tel = phoneMatch ? phoneMatch[1].trim() : "";
+      const kb = tel ? { inline_keyboard: [[{ text: "📞 Call Carrier", url: `tel:${tel.replace(/\s+/g, "")}` }]] } : undefined;
+
+      await bot.sendMessage(
+        DISPATCHER_CHAT_ID,
+        `📣 <b>${driverName}</b> accepted load <b>${loadId}</b>.\n\n${q.message.text}`,
+        { parse_mode: "HTML", reply_markup: kb }
+      );
+    } else if (action === "decline") {
+      await bot.answerCallbackQuery(q.id, { text: "Declined. Thanks!" });
+      await bot.editMessageText(`❌ <b>DECLINED</b> by ${driverName}\n\n${q.message.text}`, {
+        chat_id: q.message.chat.id, message_id: msgId, parse_mode: "HTML"
+      });
+      await bot.sendMessage(
+        DISPATCHER_CHAT_ID,
+        `⚠️ <b>${driverName}</b> declined load <b>${loadId}</b>.`,
+        { parse_mode: "HTML" }
+      );
+    }
+  } catch (e) {
+    console.error("callback error", e);
+  }
+});
+
+// Intake endpoint (VA posts here)
+app.post("/api/load-intake", async (req, res) => {
+  try {
+    if (req.body.secret !== FORM_SECRET) return res.status(401).json({ ok: false, error: "Unauthorized" });
+
+    const loadId = sanitizeStr(req.body.loadId || Date.now().toString());
+    const load = {
+      broker: sanitizeStr(req.body.broker),
+      brokerPhone: sanitizeStr(req.body.brokerPhone),
+      brokerEmail: sanitizeStr(req.body.brokerEmail),
+      link: sanitizeStr(req.body.link),
+      origin: sanitizeStr(req.body.origin),
+      destination: sanitizeStr(req.body.destination),
+      pickupDate: sanitizeStr(req.body.pickupDate),
+      miles: numOrNull(req.body.miles),
+      deadhead: numOrNull(req.body.deadhead),
+      equipment: sanitizeStr(req.body.equipment),
+      feet: numOrNull(req.body.feet),
+      weight: numOrNull(req.body.weight),
+      rate: numOrNull(req.body.rate),
+      rpm: numOrNull(req.body.rpm),
+      notes: sanitizeStr(req.body.notes)
+    };
+
+    // if RPM not provided, compute if possible
+    if (!load.rpm && load.rate && load.miles) {
+      load.rpm = Math.round((load.rate / load.miles) * 100) / 100;
+    }
+
+    // Route logic: send to driver specified, else broadcast
+    const target = (req.body.driver || "").toLowerCase();
+    const sends = [];
+
+    if (target === "a" && DRIVER_A_CHAT_ID) {
+      sends.push(sendToDriver(DRIVER_A_CHAT_ID, "Driver A", load, loadId));
+    } else if (target === "b" && DRIVER_B_CHAT_ID) {
+      sends.push(sendToDriver(DRIVER_B_CHAT_ID, "Driver B", load, loadId));
+    } else {
+      if (DRIVER_A_CHAT_ID) sends.push(sendToDriver(DRIVER_A_CHAT_ID, "Driver A", load, loadId));
+      if (DRIVER_B_CHAT_ID) sends.push(sendToDriver(DRIVER_B_CHAT_ID, "Driver B", load, loadId));
+    }
+
+    await Promise.all(sends);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("intake error", e);
+    res.status(500).json({ ok: false, error: "Server error" });
+  }
+});
+
+// Health
+app.get("/health", (_, res) => res.send("ok"));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`✅ Intake listening on :${PORT}`));
