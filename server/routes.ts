@@ -5094,21 +5094,22 @@ Safe travels! 🚛`;
         try {
           const loadData = {
             customerId: defaultCustomer.id,
-            description: `[GOOGLE SHEETS] ${rawLoad.company || 'Import'} - ${rawLoad.commodity || 'General Freight'}`,
+            description: `[GOOGLE SHEETS] ${rawLoad.company || rawLoad.origin || 'Import'} - ${rawLoad.commodity || 'General Freight'}`,
             pickupAddress: rawLoad.origin || 'Unknown Origin',
-            pickupDate: rawLoad.pickupDate || new Date().toISOString(),
+            pickupDate: rawLoad.pickupDate ? new Date(rawLoad.pickupDate).toISOString() : null,
             pickupTime: '08:00',
             deliveryAddress: rawLoad.destination || 'Unknown Destination',
-            deliveryDate: rawLoad.deliveryDate || new Date().toISOString(),
+            deliveryDate: rawLoad.deliveryDate ? new Date(rawLoad.deliveryDate).toISOString() : null,
             deliveryTime: '17:00',
             equipmentType: rawLoad.equipmentType || 'dry_van',
             rate: rawLoad.rate || 0,
             miles: rawLoad.miles || 0,
+            weight: rawLoad.weight || null,
             company: rawLoad.company || '',
             contactPhone: rawLoad.phone || '',
             sourceBoard: 'google_sheets',
             priority: 'standard',
-            status: 'scheduled'
+            status: 'available'
           };
 
           const savedLoad = await storage.createLoad(loadData);
