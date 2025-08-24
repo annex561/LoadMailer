@@ -239,8 +239,6 @@ function DATLoads() {
           </Button>
           <Button 
             onClick={async () => {
-              console.log('🔄 DAT Loads refresh button clicked!');
-              alert('🔄 DAT Loads refresh clicked! Watch for updates.');
               setIsManualRefreshing(true);
               try {
                 await refetch();

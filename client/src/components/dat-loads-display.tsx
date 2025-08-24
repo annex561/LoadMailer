@@ -42,8 +42,6 @@ export function DATLoadsDisplay() {
   });
 
   const handleRefresh = async () => {
-    console.log('🔄 Refresh button clicked - fetching latest data...');
-    alert('🔄 Refresh button clicked! Check the console and watch for changes.');
     setIsManualRefreshing(true);
     try {
       await refetch();
