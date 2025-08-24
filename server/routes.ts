@@ -4812,7 +4812,84 @@ Safe travels! 🚛`;
   const { setupDirectDATLoads } = await import('./dat-loads-direct');
   setupDirectDATLoads(app);
 
+  // Initialize Google Sheets Auto-Import Service
+  const { createGoogleSheetsAutoImportService } = await import('./google-sheets-auto-import-service');
+  const googleSheetsAutoImporter = createGoogleSheetsAutoImportService(storage);
+
+  // Google Sheets Auto-Import API endpoints
+  app.post('/api/google-sheets/auto-import/start', async (req, res) => {
+    try {
+      await googleSheetsAutoImporter.start();
+      res.json({ 
+        success: true, 
+        message: 'Google Sheets auto-import started - checking every 10 seconds',
+        status: googleSheetsAutoImporter.getStatus()
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to start auto-import' 
+      });
+    }
+  });
+
+  app.post('/api/google-sheets/auto-import/stop', async (req, res) => {
+    try {
+      await googleSheetsAutoImporter.stop();
+      res.json({ 
+        success: true, 
+        message: 'Google Sheets auto-import stopped',
+        status: googleSheetsAutoImporter.getStatus()
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to stop auto-import' 
+      });
+    }
+  });
+
+  app.get('/api/google-sheets/auto-import/status', async (req, res) => {
+    try {
+      const status = googleSheetsAutoImporter.getStatus();
+      res.json({ success: true, ...status });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to get status' 
+      });
+    }
+  });
+
+  app.post('/api/google-sheets/auto-import/config', async (req, res) => {
+    try {
+      const { spreadsheetId, range, intervalSeconds } = req.body;
+      googleSheetsAutoImporter.updateConfig({ spreadsheetId, range, intervalSeconds });
+      res.json({ 
+        success: true, 
+        message: 'Configuration updated',
+        status: googleSheetsAutoImporter.getStatus()
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to update config' 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
+
+  // AUTO-START Google Sheets Import Service
+  setTimeout(async () => {
+    try {
+      console.log('🚀 AUTO-START: Starting Google Sheets auto-import service...');
+      await googleSheetsAutoImporter.start();
+      console.log('✅ Google Sheets auto-import running every 10 seconds');
+    } catch (error) {
+      console.error('❌ Failed to auto-start Google Sheets import service:', error);
+    }
+  }, 2000); // Start after 2 seconds
 
   // AUTO-RESTART MECHANISM: Use session-based DAT scraping for manual authentication
   setTimeout(async () => {
