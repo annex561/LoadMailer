@@ -41,6 +41,7 @@ export function DATLoadsDisplay() {
   });
 
   const handleRefresh = () => {
+    console.log('🔄 Refresh button clicked - fetching latest data...');
     refetch();
     setLastRefresh(new Date());
   };
