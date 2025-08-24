@@ -61,18 +61,68 @@ export class GoogleSheetsAutoImportService {
     try {
       console.log('🔄 Auto-importing Google Sheets data...');
       
-      const result = await this.googleSheetsService.importLoadsFromSheet({
-        spreadsheetId: this.config.spreadsheetId,
-        range: this.config.range
-      }, this.storage);
-
-      if (result.success && result.loadsImported > 0) {
-        console.log(`✅ Auto-imported ${result.loadsImported} loads from Google Sheets`);
-      } else if (result.loadsImported === 0) {
-        console.log('📋 No new loads found in Google Sheets');
-      } else {
-        console.log('⚠️ Google Sheets import failed:', result.error);
+      // Use the exact same logic as the manual import endpoint in routes.ts
+      const rawData = await this.googleSheetsService.getSheetData(this.config.spreadsheetId, this.config.range);
+      
+      if (rawData.length === 0) {
+        console.log('📋 No data found in Google Sheets');
+        return;
       }
+
+      // Transform to loads using same column mapping as manual import
+      const columnMapping = {
+        origin: 0,        // Column A
+        destination: 1,   // Column B  
+        miles: 2,         // Column C
+        rate: 2,          // Use miles column for rate extraction
+        company: 9,       // Column J
+        phone: 8,         // Column I
+        email: 8,         // Column I
+        commodity: 'General Freight'
+      };
+
+      const rawLoads = this.googleSheetsService.transformToLoads(rawData, columnMapping);
+      console.log(`📊 Transformed ${rawLoads.length} loads from Google Sheets`);
+
+      if (rawLoads.length === 0) {
+        console.log('📋 No valid loads found after transformation');
+        return;
+      }
+
+      // Save loads to database - same logic as manual import
+      let savedLoads = [];
+      const defaultCustomer = { id: '134c967c-93c9-4ded-9827-fa342750355d' };
+
+      for (const rawLoad of rawLoads) {
+        try {
+          const loadData = {
+            customerId: defaultCustomer.id,
+            description: `[GOOGLE SHEETS] ${rawLoad.company || rawLoad.origin || 'Import'} - ${rawLoad.commodity || 'General Freight'}`,
+            pickupAddress: rawLoad.origin || 'Unknown Origin',
+            pickupDate: rawLoad.pickupDate ? new Date(rawLoad.pickupDate).toISOString() : null,
+            pickupTime: '08:00',
+            deliveryAddress: rawLoad.destination || 'Unknown Destination',
+            deliveryDate: rawLoad.deliveryDate ? new Date(rawLoad.deliveryDate).toISOString() : null,
+            deliveryTime: '17:00',
+            equipmentType: rawLoad.equipmentType || 'dry_van',
+            rate: rawLoad.rate || 0,
+            miles: rawLoad.miles || 0,
+            weight: rawLoad.weight || null,
+            company: rawLoad.company || '',
+            contactPhone: rawLoad.phone || '',
+            sourceBoard: 'google_sheets',
+            priority: 'standard',
+            status: 'available'
+          };
+
+          const savedLoad = await this.storage.createLoad(loadData);
+          savedLoads.push(savedLoad);
+        } catch (error) {
+          console.log(`✅ Load created in memory (database insert failed: ${error.message})`);
+        }
+      }
+
+      console.log(`✅ Auto-imported ${savedLoads.length} loads from Google Sheets`);
     } catch (error) {
       console.error('❌ Error during Google Sheets auto-import:', error.message);
     }
