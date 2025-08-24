@@ -58,6 +58,7 @@ function DATLoads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [equipmentFilter, setEquipmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const [selectedLoad, setSelectedLoad] = useState<DATLoad | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showManualLogin, setShowManualLogin] = useState(false);
@@ -237,14 +238,24 @@ function DATLoads() {
             Quick Login
           </Button>
           <Button 
-            onClick={() => refetch()} 
+            onClick={async () => {
+              console.log('🔄 DAT Loads refresh button clicked!');
+              alert('🔄 DAT Loads refresh clicked! Watch for updates.');
+              setIsManualRefreshing(true);
+              try {
+                await refetch();
+              } finally {
+                setTimeout(() => setIsManualRefreshing(false), 1000);
+              }
+            }} 
             variant="outline" 
             size="sm"
-            disabled={isLoading}
+            disabled={isLoading || isManualRefreshing}
             data-testid="button-refresh-dat-loads"
+            className={`transition-all duration-200 ${isManualRefreshing ? 'bg-blue-50 border-blue-200' : ''}`}
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCw className={`w-4 h-4 mr-2 transition-transform duration-300 ${(isLoading || isManualRefreshing) ? 'animate-spin' : ''}`} />
+            {isManualRefreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
         </div>
       </div>
