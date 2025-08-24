@@ -111,10 +111,12 @@ function DATLoads() {
     }
   };
 
-  // Filter loads based on search and filters - ONLY DAT LoadLink loads
+  // Filter loads based on search and filters - DAT LoadLink and Google Sheets loads
   const filteredLoads = loads.filter((load: DATLoad) => {
-    // CRITICAL: Only show loads from DAT LoadLink with [DAT REAL] marker
-    const isDATLoad = load.description && load.description.includes('[DAT REAL]') && load.source === 'DAT LoadLink';
+    // Show loads from DAT LoadLink ([DAT REAL]) AND Google Sheets ([GOOGLE SHEETS])
+    const isDATLoad = load.description && 
+      (load.description.includes('[DAT REAL]') || load.description.includes('[GOOGLE SHEETS]')) && 
+      load.source === 'DAT LoadLink';
     
     if (!isDATLoad) return false;
 
