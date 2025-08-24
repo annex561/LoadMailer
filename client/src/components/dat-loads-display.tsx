@@ -43,12 +43,13 @@ export function DATLoadsDisplay() {
 
   const handleRefresh = async () => {
     console.log('🔄 Refresh button clicked - fetching latest data...');
+    alert('🔄 Refresh button clicked! Check the console and watch for changes.');
     setIsManualRefreshing(true);
     try {
       await refetch();
       setLastRefresh(new Date());
     } finally {
-      setTimeout(() => setIsManualRefreshing(false), 500); // Show loading for at least 500ms
+      setTimeout(() => setIsManualRefreshing(false), 1000); // Show loading for at least 1 second
     }
   };
 
@@ -74,8 +75,8 @@ export function DATLoadsDisplay() {
             Real DAT LoadLink Freight
           </CardTitle>
           <div className="flex items-center space-x-2">
-            <Badge variant={datLoads.length > 0 ? "default" : "outline"}>
-              {datLoads.length} Active Loads
+            <Badge variant={datLoads.length > 0 ? "default" : "outline"} className={isManualRefreshing ? "animate-pulse bg-blue-500 text-white" : ""}>
+              {datLoads.length} Active Loads {isManualRefreshing ? "⟳" : ""}
             </Badge>
             <Button
               variant="outline"
