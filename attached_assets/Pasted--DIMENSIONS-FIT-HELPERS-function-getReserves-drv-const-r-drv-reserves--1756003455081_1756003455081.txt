@@ -1,0 +1,83 @@
+// ---- DIMENSIONS & FIT HELPERS ----
+function getReserves(drv) {
+  const r = drv.reserves || {};
+  return {
+    doorClearanceFt: r.doorClearanceFt ?? 0.5,
+    palletJackReserveFt: r.palletJackReserveFt ?? 3.0,
+    carryPalletJack: !!r.carryPalletJack,
+    weightBufferPct: r.weightBufferPct ?? 0.05
+  };
+}
+
+function effectiveUsableFeet(drv) {
+  const total = drv.vehicle?.feet || 0;
+  const { doorClearanceFt, palletJackReserveFt, carryPalletJack } = getReserves(drv);
+  const reserve = doorClearanceFt + (carryPalletJack ? palletJackReserveFt : 0);
+  return Math.max(0, total - reserve);
+}
+
+// Standard pallet math (48x40 default). We place up to floor(width/40in) per row.
+// If stackable, we count 2 layers.
+function linearFeetFromPallets({ palletCount, palletLenIn = 48, palletWidIn = 40, truckWidthFt = 7.8, stackable = false }) {
+  const widthIn = Math.floor(truckWidthFt * 12);
+  const perRow = Math.max(1, Math.floor(widthIn / palletWidIn));
+  const perLayer = perRow;
+  const layers = stackable ? 2 : 1;
+  const perRowAll = perLayer * layers;
+  const rows = Math.ceil(palletCount / perRowAll);
+  const feetPerRow = palletLenIn / 12;
+  return rows * feetPerRow;
+}
+
+// Generic linear-feet calc for non-pallet items (each item occupies its length along truck)
+function linearFeetFromItems(items = []) {
+  // items: [{lenFt: number, qty: number}]
+  return items.reduce((sum, it) => sum + (Number(it.lenFt) || 0) * (Number(it.qty) || 0), 0);
+}
+
+function computeLoadFeet(drv, dims) {
+  const widthFt = drv.vehicle?.interiorWidthFt ?? 7.8;
+
+  const fromPallets = dims.palletCount
+    ? linearFeetFromPallets({
+        palletCount: Number(dims.palletCount) || 0,
+        palletLenIn: Number(dims.palletLenIn) || 48,
+        palletWidIn: Number(dims.palletWidIn) || 40,
+        truckWidthFt: widthFt,
+        stackable: !!dims.stackable
+      })
+    : 0;
+
+  const fromItems = dims.items?.length ? linearFeetFromItems(dims.items) : 0;
+
+  const fromCustomFeet = Number(dims.customFeet) || 0;
+
+  return Math.round((fromPallets + fromItems + fromCustomFeet) * 100) / 100;
+}
+
+function checkFitAndUpdate(drv, load) {
+  // drv.used.feet/weight track cumulative used
+  drv.used = drv.used || { feet: 0, weight: 0 };
+
+  const usableFeet = effectiveUsableFeet(drv);
+  const maxWeight = drv.vehicle?.maxWeight || 0;
+  const { weightBufferPct } = getReserves(drv);
+  const safeWeight = Math.floor(maxWeight * (1 - weightBufferPct));
+
+  const nextFeet = drv.used.feet + (load.effectiveFeet || 0);
+  const nextWeight = drv.used.weight + (Number(load.weight) || 0);
+
+  const fitsFeet = nextFeet <= usableFeet + 1e-6;
+  const fitsWeight = nextWeight <= safeWeight + 1e-6;
+
+  return {
+    fits: fitsFeet && fitsWeight,
+    fitsFeet, fitsWeight,
+    remainingFeet: Math.max(0, Math.round((usableFeet - nextFeet) * 100) / 100),
+    remainingWeight: Math.max(0, safeWeight - nextWeight),
+    usableFeet,
+    safeWeight,
+    nextFeet,
+    nextWeight
+  };
+}
