@@ -31,6 +31,7 @@ import DATScraper from "@/pages/DATScraper";
 import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import SmartLoadMatching from "@/pages/smart-load-matching";
 import PredictionConfidence from "@/pages/prediction-confidence";
+import AdminOverview from "@/pages/admin-overview";
 import SMSStatus from "@/pages/sms-status";
 import DebugToken from "@/pages/debug-token";
 
@@ -66,6 +67,7 @@ function Router() {
       <Route path="/analytics" component={AnalyticsDashboard} />
       <Route path="/smart-load-matching" component={SmartLoadMatching} />
       <Route path="/prediction-confidence" component={PredictionConfidence} />
+      <Route path="/admin-overview" component={AdminOverview} />
       <Route path="/taskmagic-status" component={TaskMagicStatusPage} />
       <Route path="/dat-scraper" component={DATScraper} />
       <Route component={NotFound} />

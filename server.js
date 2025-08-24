@@ -46,6 +46,87 @@ const pending = new Map(); // messageId -> { timeoutId, driverName, loadId }
 const loads = new Map(); // loadId -> { base fields..., assignedDriverChatId?, dims?, effectiveFeet? }
 const loadPhotos = new Map(); // loadId -> [photo urls]
 
+// Handle driver commands
+bot.onText(/\/delivered/, async (msg) => {
+  try {
+    const chatId = msg.chat.id;
+    const driver = DRIVERS.find(d => String(d.chatId) === String(chatId));
+    
+    if (!driver) {
+      await bot.sendMessage(chatId, "⚠️ Driver not found. Please contact dispatch.");
+      return;
+    }
+    
+    // Reset driver capacity
+    driver.used = { feet: 0, weight: 0 };
+    driver.status = "available";
+    driver.currentLocation = null;
+    driver.destination = null;
+    saveDrivers(DRIVERS);
+    
+    await bot.sendMessage(chatId, 
+      `✅ <b>Load Delivered!</b>\n\n` +
+      `Your truck capacity has been reset:\n` +
+      `📏 Available Space: ${effectiveUsableFeet(driver)} feet\n` +
+      `⚖️ Available Weight: ${driver.vehicle?.maxWeight || 0} lbs\n\n` +
+      `You're now available for new loads!`,
+      { parse_mode: "HTML" }
+    );
+    
+    await bot.sendMessage(DISPATCHER_CHAT_ID, 
+      `🏁 ${driver.name} completed delivery. Truck capacity reset and available for new loads.`,
+      { parse_mode: "HTML" }
+    );
+    
+    // Trigger AI to find next loads
+    findNextLoads(driver);
+    
+  } catch (e) {
+    console.error("Delivered command error:", e);
+  }
+});
+
+bot.onText(/\/setloc (.+)/, async (msg, match) => {
+  try {
+    const chatId = msg.chat.id;
+    const location = match[1];
+    const driver = DRIVERS.find(d => String(d.chatId) === String(chatId));
+    
+    if (!driver) {
+      await bot.sendMessage(chatId, "⚠️ Driver not found. Please contact dispatch.");
+      return;
+    }
+    
+    // For now, store location as text. Later can geocode to lat/lon
+    driver.currentLocation = {
+      address: location,
+      timestamp: new Date().toISOString(),
+      manual: true
+    };
+    
+    saveDrivers(DRIVERS);
+    
+    await bot.sendMessage(chatId, 
+      `📍 <b>Location Updated</b>\n\n` +
+      `Current Location: ${location}\n` +
+      `Time: ${new Date().toLocaleTimeString()}\n\n` +
+      `AI is now scanning for loads along your route!`,
+      { parse_mode: "HTML" }
+    );
+    
+    await bot.sendMessage(DISPATCHER_CHAT_ID, 
+      `📍 ${driver.name} updated location: ${location}`,
+      { parse_mode: "HTML" }
+    );
+    
+    // Trigger route-aware load matching
+    findRouteLoads(driver);
+    
+  } catch (e) {
+    console.error("Set location command error:", e);
+  }
+});
+
 // Handle photo uploads from drivers
 bot.on("photo", async (msg) => {
   try {
@@ -254,6 +335,92 @@ async function findNextLoads(driver) {
   }
 }
 
+// Route-aware load matching for drivers en route
+async function findRouteLoads(driver) {
+  try {
+    if (!driver.currentLocation || !driver.destination) return;
+    
+    const availableLoads = Array.from(loads.values()).filter(load => 
+      load.status === "new" && !load.assignedDriverChatId
+    );
+    
+    if (availableLoads.length === 0) return;
+    
+    // Find loads along the route or near destination
+    const routeLoads = availableLoads.filter(load => {
+      // Check if load pickup is along the route to destination
+      const pickupNearRoute = isAlongRoute(driver.currentLocation.address, driver.destination, load.origin);
+      const deliveryViable = isReasonableDetour(driver.destination, load.destination);
+      
+      return (pickupNearRoute && deliveryViable) || isNearDestination(driver.destination, load.origin, 50);
+    });
+    
+    // Find best combination considering remaining capacity
+    const routeCombinations = findLoadCombinations(routeLoads, driver);
+    
+    if (routeCombinations.length > 0) {
+      const bestRoute = routeCombinations[0];
+      
+      const routeMsg = bestRoute.loads.length === 1 
+        ? `🛣️ <b>Route Load for ${driver.name}</b>\n\n` +
+          `📍 From your route: ${bestRoute.loads[0].origin}\n` +
+          `📍 To: ${bestRoute.loads[0].destination}\n` +
+          `💰 Rate: $${bestRoute.totalRevenue} • RPM: $${bestRoute.combinedRPM.toFixed(2)}\n` +
+          `📦 Space: ${bestRoute.capacity.feetUsed}ft (+remaining ${bestRoute.capacity.feetRemaining}ft)\n\n` +
+          `🎯 Perfect backhaul opportunity!`
+        : `🛣️ <b>Multi-Route Combo for ${driver.name}</b>\n\n` +
+          `Route Load 1: ${bestRoute.loads[0].origin} → ${bestRoute.loads[0].destination}\n` +
+          `Route Load 2: ${bestRoute.loads[1].origin} → ${bestRoute.loads[1].destination}\n` +
+          `💰 Combined: $${bestRoute.totalRevenue} • RPM: $${bestRoute.combinedRPM.toFixed(2)}\n` +
+          `📦 Total Space: ${bestRoute.capacity.feetUsed}ft (${bestRoute.capacity.feetRemaining}ft remaining)\n\n` +
+          `🎯 Maximum route utilization!`;
+      
+      await bot.sendMessage(DISPATCHER_CHAT_ID, routeMsg, { parse_mode: "HTML" });
+    }
+  } catch (e) {
+    console.error("Route load matching error:", e);
+  }
+}
+
+// Helper functions for route matching
+function isAlongRoute(origin, destination, pickupLocation) {
+  // Simple text matching for now - can enhance with geocoding later
+  const originState = extractState(origin);
+  const destState = extractState(destination);
+  const pickupState = extractState(pickupLocation);
+  
+  // If pickup is in same state as origin or destination, consider it "along route"
+  return pickupState === originState || pickupState === destState;
+}
+
+function isReasonableDetour(driverDestination, loadDestination) {
+  // For now, allow deliveries within 100 miles of driver destination
+  // Can enhance with actual distance calculation later
+  const driverState = extractState(driverDestination);
+  const loadState = extractState(loadDestination);
+  
+  return driverState === loadState; // Same state = reasonable detour
+}
+
+function isNearDestination(driverDestination, loadOrigin, maxMiles = 50) {
+  // Simple proximity check - enhance with geocoding later
+  const driverCity = extractCity(driverDestination);
+  const loadCity = extractCity(loadOrigin);
+  
+  return driverCity === loadCity;
+}
+
+function extractState(location) {
+  if (!location) return "";
+  const parts = location.split(",");
+  return parts.length > 1 ? parts[parts.length - 1].trim().toUpperCase() : "";
+}
+
+function extractCity(location) {
+  if (!location) return "";
+  return location.split(",")[0].trim().toUpperCase();
+}
+
 // Start continuous load scanning
 setInterval(async () => {
   try {
@@ -262,6 +429,11 @@ setInterval(async () => {
     
     for (const driver of availableDrivers) {
       await findNextLoads(driver);
+      
+      // Also check for route-specific loads if driver has location/destination
+      if (driver.currentLocation && driver.destination) {
+        await findRouteLoads(driver);
+      }
     }
   } catch (e) {
     console.error("Continuous load scanning error:", e);
@@ -531,6 +703,14 @@ bot.on("callback_query", async (q) => {
       const rec = loads.get(loadId) || {};
       rec.assignedDriverChatId = String(q.from.id || "");
       loads.set(loadId, rec);
+      
+      // Set driver destination for route planning
+      const assignedDriver = DRIVERS.find(d => String(d.chatId) === String(q.from.id));
+      if (assignedDriver && rec.destination) {
+        assignedDriver.destination = rec.destination;
+        assignedDriver.status = "on_route";
+        saveDrivers(DRIVERS);
+      }
 
       await bot.sendMessage(
         DISPATCHER_CHAT_ID,
