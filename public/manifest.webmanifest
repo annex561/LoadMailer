@@ -1,0 +1,9 @@
+{
+  "name": "LAMP Paste-a-Load",
+  "short_name": "PasteLoad",
+  "start_url": "/load-form.html",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": []
+}

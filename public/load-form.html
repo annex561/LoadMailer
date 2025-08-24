@@ -4,6 +4,8 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Paste-a-Load</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0b1220">
   <style>
     body { font-family: system-ui, Arial, sans-serif; background:#0b1220; color:#e8eefc; padding:24px; }
     form { max-width: 980px; margin:auto; display:grid; gap:12px; grid-template-columns: repeat(12, 1fr); }
@@ -127,6 +129,11 @@
       if (j.ok) alert(`Sent to: ${j.routed?.join(', ') || 'drivers'}`);
       else alert('Error: ' + (j.error || 'unknown'));
     });
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(()=>{});
+    }
   </script>
 </body>
 </html>
