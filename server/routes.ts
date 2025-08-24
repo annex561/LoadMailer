@@ -5057,6 +5057,9 @@ Safe travels! 🚛`;
         });
       }
 
+      // Debug: Log raw data
+      console.log('📊 Raw data from Google Sheets:', JSON.stringify(rawData.slice(0, 5), null, 2));
+      
       // Transform to loads
       const rawLoads = googleSheetsService.transformToLoads(rawData, columnMapping);
       
