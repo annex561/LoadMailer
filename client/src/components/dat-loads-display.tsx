@@ -34,16 +34,22 @@ interface DATLoad {
 
 export function DATLoadsDisplay() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   const { data: datLoads = [], isLoading, refetch } = useQuery<DATLoad[]>({
     queryKey: ['/api/dat-loads-direct'],
     refetchInterval: 10000, // Refresh every 10 seconds
   });
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     console.log('🔄 Refresh button clicked - fetching latest data...');
-    refetch();
-    setLastRefresh(new Date());
+    setIsManualRefreshing(true);
+    try {
+      await refetch();
+      setLastRefresh(new Date());
+    } finally {
+      setTimeout(() => setIsManualRefreshing(false), 500); // Show loading for at least 500ms
+    }
   };
 
   const formatRate = (rate: string) => {
@@ -75,10 +81,11 @@ export function DATLoadsDisplay() {
               variant="outline"
               size="sm"
               onClick={handleRefresh}
-              disabled={isLoading}
+              disabled={isLoading || isManualRefreshing}
+              className={`transition-all duration-200 ${isManualRefreshing ? 'bg-blue-50 border-blue-200' : ''}`}
             >
-              <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
+              <RefreshCw className={`w-4 h-4 mr-1 transition-transform duration-300 ${(isLoading || isManualRefreshing) ? 'animate-spin' : ''}`} />
+              {isManualRefreshing ? 'Refreshing...' : 'Refresh'}
             </Button>
           </div>
         </div>
@@ -87,10 +94,10 @@ export function DATLoadsDisplay() {
         </p>
       </CardHeader>
       <CardContent>
-        {isLoading && datLoads.length === 0 ? (
+        {(isLoading || isManualRefreshing) && datLoads.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <RefreshCw className="w-6 h-6 animate-spin text-gray-400 mr-2" />
-            <span className="text-gray-600">Loading DAT loads...</span>
+            <RefreshCw className="w-6 h-6 animate-spin text-blue-500 mr-2" />
+            <span className="text-gray-600">{isManualRefreshing ? 'Refreshing DAT loads...' : 'Loading DAT loads...'}</span>
           </div>
         ) : datLoads.length === 0 ? (
           <div className="text-center py-8">
@@ -103,7 +110,10 @@ export function DATLoadsDisplay() {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between text-sm text-gray-600">
-              <span>Last updated: {lastRefresh.toLocaleTimeString()}</span>
+              <span className={`transition-colors duration-200 ${isManualRefreshing ? 'text-blue-600 font-medium' : ''}`}>
+                Last updated: {lastRefresh.toLocaleTimeString()}
+                {isManualRefreshing && <span className="ml-2 text-blue-500">• Updating...</span>}
+              </span>
               <span>Auto-refresh: 10s</span>
             </div>
             
