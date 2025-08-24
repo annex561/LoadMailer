@@ -1302,9 +1302,12 @@ Safe travels! 🚛`;
     try {
       const allLoads = await storage.getAllLoads();
       
-      // Filter to only show loads scraped from DAT (marked with [DAT REAL] in description)
+      // Filter to show both DAT scraped loads and Google Sheets loads
       const datLoads = allLoads.filter(load => 
-        load.description && load.description.includes('[DAT REAL]')
+        load.description && (
+          load.description.includes('[DAT REAL]') || 
+          load.description.includes('[GOOGLE SHEETS]')
+        )
       );
       
       // Transform to match frontend expectations
@@ -5055,30 +5058,65 @@ Safe travels! 🚛`;
       }
 
       // Transform to loads
-      const loads = googleSheetsService.transformToLoads(rawData, columnMapping);
+      const rawLoads = googleSheetsService.transformToLoads(rawData, columnMapping);
       
-      console.log(`📊 Transformed ${loads.length} loads from Google Sheets`);
+      console.log(`📊 Transformed ${rawLoads.length} loads from Google Sheets`);
 
-      // Add loads to DAT loads for immediate display
-      if (!global.googleSheetsLoads) {
-        global.googleSheetsLoads = [];
+      // Create/get default customer for Google Sheets loads
+      let defaultCustomer;
+      try {
+        const existingCustomers = await storage.getAllCustomers();
+        defaultCustomer = existingCustomers.find(c => c.name === 'Google Sheets Import');
+        
+        if (!defaultCustomer) {
+          defaultCustomer = await storage.createCustomer({
+            name: 'Google Sheets Import',
+            contactPerson: 'System',
+            email: 'noreply@googlesheets.com',
+            phone: '000-000-0000',
+            address: 'Various Locations'
+          });
+          console.log('📝 Created default customer for Google Sheets loads');
+        }
+      } catch (error) {
+        console.error('❌ Failed to create default customer:', error);
+        throw new Error('Unable to create customer for Google Sheets loads');
       }
-      
-      // Clear existing Google Sheets loads and add new ones
-      global.googleSheetsLoads = loads;
 
-      // Also add to global DAT loads for display in DAT Loads tab
-      if (!global.datLoads) {
-        global.datLoads = [];
+      // Save loads to database instead of memory
+      const savedLoads = [];
+      let loadCounter = 1;
+      
+      for (const rawLoad of rawLoads) {
+        try {
+          const loadData = {
+            customerId: defaultCustomer.id,
+            description: `[GOOGLE SHEETS] ${rawLoad.company || 'Import'} - ${rawLoad.commodity || 'General Freight'}`,
+            pickupAddress: rawLoad.origin || 'Unknown Origin',
+            pickupDate: rawLoad.pickupDate || new Date().toISOString(),
+            pickupTime: '08:00',
+            deliveryAddress: rawLoad.destination || 'Unknown Destination',
+            deliveryDate: rawLoad.deliveryDate || new Date().toISOString(),
+            deliveryTime: '17:00',
+            equipmentType: rawLoad.equipmentType || 'dry_van',
+            rate: rawLoad.rate || 0,
+            miles: rawLoad.miles || 0,
+            company: rawLoad.company || '',
+            contactPhone: rawLoad.phone || '',
+            sourceBoard: 'google_sheets',
+            priority: 'standard',
+            status: 'scheduled'
+          };
+
+          const savedLoad = await storage.createLoad(loadData);
+          savedLoads.push(savedLoad);
+          loadCounter++;
+        } catch (error) {
+          console.error(`❌ Failed to save load ${loadCounter}:`, error);
+        }
       }
-      
-      // Remove old Google Sheets loads and add new ones
-      global.datLoads = global.datLoads.filter(load => 
-        !load.source || load.source !== 'Google Sheets'
-      );
-      global.datLoads.unshift(...loads);
 
-      console.log(`✅ Successfully imported ${loads.length} loads from Google Sheets`);
+      console.log(`✅ Successfully saved ${savedLoads.length} loads to database from Google Sheets`);
 
       // Notify drivers about new loads (optional)
       try {
@@ -5089,7 +5127,7 @@ Safe travels! 🚛`;
         );
 
         // Only notify about first few loads to avoid spam
-        const loadsToNotify = loads.slice(0, 3);
+        const loadsToNotify = savedLoads.slice(0, 3);
         
         for (const load of loadsToNotify) {
           for (const driver of availableDrivers) {
@@ -5100,11 +5138,20 @@ Safe travels! 🚛`;
 
         res.json({
           success: true,
-          message: `Successfully imported ${loads.length} loads from Google Sheets`,
-          loadsImported: loads.length,
+          message: `Successfully imported ${savedLoads.length} loads from Google Sheets`,
+          loadsImported: savedLoads.length,
           driversNotified,
           spreadsheetId,
-          previewLoads: loads.slice(0, 3) // Show first 3 loads as preview
+          previewLoads: savedLoads.slice(0, 3).map(load => ({
+            id: load.id,
+            loadNumber: load.loadNumber,
+            description: load.description,
+            origin: load.pickupAddress,
+            destination: load.deliveryAddress,
+            rate: load.rate,
+            company: load.company,
+            source: 'Google Sheets Database'
+          }))
         });
 
       } catch (driverError) {
@@ -5112,12 +5159,21 @@ Safe travels! 🚛`;
         
         res.json({
           success: true,
-          message: `Successfully imported ${loads.length} loads from Google Sheets`,
-          loadsImported: loads.length,
+          message: `Successfully imported ${savedLoads.length} loads from Google Sheets`,
+          loadsImported: savedLoads.length,
           driversNotified: 0,
           warning: 'Loads imported but driver notification failed',
           spreadsheetId,
-          previewLoads: loads.slice(0, 3)
+          previewLoads: savedLoads.slice(0, 3).map(load => ({
+            id: load.id,
+            loadNumber: load.loadNumber,
+            description: load.description,
+            origin: load.pickupAddress,
+            destination: load.deliveryAddress,
+            rate: load.rate,
+            company: load.company,
+            source: 'Google Sheets Database'
+          }))
         });
       }
 
