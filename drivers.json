@@ -1,0 +1,11 @@
+[
+  {
+    "name": "Alex Liberty",
+    "chatId": "5908383693",
+    "phone": "+1-561-xxx-xxxx",
+    "vehicle": { "type": "SB", "feet": 26, "maxWeight": 10000 },
+    "home": { "city": "Atlanta, GA", "lat": 33.749, "lon": -84.388 },
+    "status": "available",
+    "remaining": { "feet": 26, "weight": 10000 }
+  }
+]

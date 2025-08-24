@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Paste-a-Load</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; background:#0b1220; color:#e8eefc; padding:24px; }
+    form { max-width: 900px; margin:auto; display:grid; gap:12px; grid-template-columns: repeat(12, 1fr); }
+    h1 { grid-column: 1 / -1; font-size: 20px; margin: 0 0 8px; }
+    label { font-size: 12px; color:#b7c4e0; }
+    input, select, textarea {
+      width: 100%; padding:10px; border-radius:10px; border:1px solid #1f2a44; background:#0f1730; color:#e8eefc;
+    }
+    .col-6 { grid-column: span 6; }
+    .col-4 { grid-column: span 4; }
+    .col-3 { grid-column: span 3; }
+    .col-12{ grid-column: 1 / -1; }
+    button {
+      grid-column: 1 / -1; padding:12px 16px; border:0; border-radius:12px;
+      background:#3b82f6; color:#fff; font-weight:700; cursor:pointer;
+    }
+    .row { display: contents; }
+  </style>
+</head>
+<body>
+  <form id="f">
+    <h1>Paste-a-Load</h1>
+
+    <div class="row col-4">
+      <label>Secret</label>
+      <input name="secret" required placeholder="FORM_SECRET"/>
+    </div>
+    <div class="row col-4">
+      <label>Driver</label>
+      <select name="driver">
+        <option value="">Broadcast</option>
+        <option value="A">Driver A</option>
+        <option value="B">Driver B</option>
+      </select>
+    </div>
+    <div class="row col-4">
+      <label>Load ID (optional)</label>
+      <input name="loadId" placeholder="e.g. TQL 33061848"/>
+    </div>
+
+    <div class="row col-6">
+      <label>Broker</label>
+      <input name="broker" required/>
+    </div>
+    <div class="row col-3">
+      <label>Broker Phone</label>
+      <input name="brokerPhone" placeholder="(555) 555-5555"/>
+    </div>
+    <div class="row col-3">
+      <label>Broker Email</label>
+      <input name="brokerEmail" type="email" placeholder="load@broker.com"/>
+    </div>
+
+    <div class="row col-12">
+      <label>Load Link (optional)</label>
+      <input name="link" placeholder="https://…"/>
+    </div>
+
+    <div class="row col-6">
+      <label>Origin (City, ST)</label>
+      <input name="origin" required/>
+    </div>
+    <div class="row col-6">
+      <label>Destination (City, ST)</label>
+      <input name="destination" required/>
+    </div>
+
+    <div class="row col-4">
+      <label>Pickup Date</label>
+      <input name="pickupDate" placeholder="Aug 22, 2025"/>
+    </div>
+    <div class="row col-4">
+      <label>Miles</label>
+      <input name="miles" inputmode="numeric" />
+    </div>
+    <div class="row col-4">
+      <label>Deadhead (mi)</label>
+      <input name="deadhead" inputmode="numeric" />
+    </div>
+
+    <div class="row col-4">
+      <label>Equipment</label>
+      <select name="equipment">
+        <option>Straight Box Truck</option>
+        <option>Sprinter</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="row col-4">
+      <label>Feet</label>
+      <input name="feet" inputmode="numeric" />
+    </div>
+    <div class="row col-4">
+      <label>Weight (lbs)</label>
+      <input name="weight" inputmode="numeric" />
+    </div>
+
+    <div class="row col-4">
+      <label>Rate ($)</label>
+      <input name="rate" inputmode="numeric" />
+    </div>
+    <div class="row col-4">
+      <label>RPM ($/mi)</label>
+      <input name="rpm" inputmode="numeric" />
+    </div>
+
+    <div class="row col-12">
+      <label>Notes (accessorials, time window, etc.)</label>
+      <textarea name="notes" rows="3"></textarea>
+    </div>
+
+    <button type="submit">Send to Telegram</button>
+  </form>
+
+  <script>
+    const form = document.getElementById('f');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(form).entries());
+      const r = await fetch('/api/load-intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const j = await r.json();
+      if (j.ok) alert('Sent!');
+      else alert('Error: ' + (j.error || 'unknown'));
+    });
+  </script>
+</body>
+</html>

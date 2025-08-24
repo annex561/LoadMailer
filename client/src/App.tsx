@@ -86,10 +86,16 @@ function App() {
           <Route path="/sms-status" component={SMSStatus} />
           <Route path="/debug-token" component={DebugToken} />
           
-          {/* Main app layout */}
+          {/* Main app with sidebar layout */}
           <Route>
-            <div className="min-h-screen bg-gray-50">
-              <Router />
+            <div className="flex min-h-screen bg-gray-50">
+              <Sidebar />
+              <div className="flex-1 ml-64">
+                <Header />
+                <main>
+                  <Router />
+                </main>
+              </div>
             </div>
           </Route>
         </Switch>
