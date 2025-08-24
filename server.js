@@ -44,6 +44,49 @@ app.use(express.static("public"));
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 const pending = new Map(); // messageId -> { timeoutId, driverName, loadId }
 const loads = new Map(); // loadId -> { base fields..., assignedDriverChatId?, dims?, effectiveFeet? }
+const loadPhotos = new Map(); // loadId -> [photo urls]
+
+// Handle photo uploads from drivers
+bot.on("photo", async (msg) => {
+  try {
+    const chatId = msg.chat.id;
+    const photos = msg.photo;
+    const largestPhoto = photos[photos.length - 1]; // Get highest resolution
+    
+    // Find active load for this driver
+    const activeLoad = Array.from(loads.values()).find(load => 
+      String(load.assignedDriverChatId) === String(chatId) && 
+      load.status === "pickup_phase"
+    );
+    
+    if (activeLoad) {
+      // Store photo reference
+      if (!loadPhotos.has(activeLoad.loadId)) {
+        loadPhotos.set(activeLoad.loadId, []);
+      }
+      
+      const photoArray = loadPhotos.get(activeLoad.loadId);
+      photoArray.push({
+        fileId: largestPhoto.file_id,
+        uploadTime: new Date().toISOString(),
+        caption: msg.caption || ""
+      });
+      
+      await bot.sendMessage(chatId, 
+        `📸 Photo received! Total photos: ${photoArray.length}\n` +
+        `Upload more photos or tap "Confirm Pickup Complete" when ready.`
+      );
+      
+      // Notify dispatcher
+      await bot.sendMessage(DISPATCHER_CHAT_ID, 
+        `📸 ${DRIVERS.find(d => String(d.chatId) === String(chatId))?.name || "Driver"} uploaded photo for load <b>${activeLoad.loadId}</b>. Total: ${photoArray.length} photos.`, 
+        { parse_mode: "HTML" }
+      );
+    }
+  } catch (e) {
+    console.error("Photo upload error:", e);
+  }
+});
 
 // ---------- Utilities ----------
 const toStr = (v) => (v == null ? "" : String(v).trim());
@@ -53,6 +96,177 @@ const num = (s) => {
   return Number.isFinite(n) ? n : null;
 };
 const has = (v) => v != null && String(v).trim() !== "";
+
+// ---------- AI LOAD MATCHING SERVICE ----------
+function calculateRPM(load) {
+  if (!load.rate || !load.miles) return 0;
+  return load.rate / load.miles;
+}
+
+function meetsFinancialCriteria(load) {
+  const rpm = calculateRPM(load);
+  const equipment = (load.equipment || "").toLowerCase();
+  
+  // Car shoes: $1.40-$2.00 per mile
+  if (equipment.includes("car") || equipment.includes("auto")) {
+    return rpm >= 1.40 && rpm <= 2.00;
+  }
+  
+  // Full loads: $1.90+ per mile
+  return rpm >= 1.90;
+}
+
+function canCombineLoads(load1, load2, driver) {
+  if (!load1 || !load2 || !driver) return false;
+  
+  // Check if loads are compatible for combining
+  const totalFeet = (load1.effectiveFeet || load1.feet || 0) + (load2.effectiveFeet || load2.feet || 0);
+  const totalWeight = (load1.weight || 0) + (load2.weight || 0);
+  
+  const usableFeet = effectiveUsableFeet(driver);
+  const maxWeight = driver.vehicle?.maxWeight || 0;
+  const { weightBufferPct } = getReserves(driver);
+  const safeWeight = Math.floor(maxWeight * (1 - weightBufferPct));
+  
+  // Check capacity fit
+  if (totalFeet > usableFeet || totalWeight > safeWeight) return false;
+  
+  // Check route compatibility (pickup/delivery sequence)
+  const pickupDistance = haversineMiles(
+    { lat: load1.originLat, lon: load1.originLon },
+    { lat: load2.originLat, lon: load2.originLon }
+  );
+  
+  const deliveryDistance = haversineMiles(
+    { lat: load1.destLat, lon: load1.destLon },
+    { lat: load2.destLat, lon: load2.destLon }
+  );
+  
+  // Loads should be within reasonable pickup/delivery radius (100 miles)
+  return pickupDistance <= 100 && deliveryDistance <= 100;
+}
+
+function findLoadCombinations(availableLoads, driver) {
+  const combinations = [];
+  const validLoads = availableLoads.filter(load => 
+    meetsFinancialCriteria(load) && 
+    load.status === "new"
+  );
+  
+  // Single loads that meet criteria
+  for (const load of validLoads) {
+    const fitCheck = checkFitAndUpdate(driver, { 
+      effectiveFeet: load.effectiveFeet || load.feet || 0, 
+      weight: load.weight || 0 
+    });
+    
+    if (fitCheck.fits) {
+      combinations.push({
+        loads: [load],
+        totalRevenue: load.rate || 0,
+        totalMiles: load.miles || 0,
+        combinedRPM: calculateRPM(load),
+        capacity: {
+          feetUsed: load.effectiveFeet || load.feet || 0,
+          weightUsed: load.weight || 0,
+          feetRemaining: fitCheck.remainingFeet,
+          weightRemaining: fitCheck.remainingWeight
+        }
+      });
+    }
+  }
+  
+  // Two-load combinations
+  for (let i = 0; i < validLoads.length; i++) {
+    for (let j = i + 1; j < validLoads.length; j++) {
+      const load1 = validLoads[i];
+      const load2 = validLoads[j];
+      
+      if (canCombineLoads(load1, load2, driver)) {
+        const totalRevenue = (load1.rate || 0) + (load2.rate || 0);
+        const totalMiles = Math.max(load1.miles || 0, load2.miles || 0); // Use longer route
+        const combinedRPM = totalRevenue / totalMiles;
+        
+        // Combined load should still meet RPM criteria
+        if (combinedRPM >= 1.90) {
+          const totalFeet = (load1.effectiveFeet || load1.feet || 0) + (load2.effectiveFeet || load2.feet || 0);
+          const totalWeight = (load1.weight || 0) + (load2.weight || 0);
+          
+          const fitCheck = checkFitAndUpdate(driver, { 
+            effectiveFeet: totalFeet, 
+            weight: totalWeight 
+          });
+          
+          if (fitCheck.fits) {
+            combinations.push({
+              loads: [load1, load2],
+              totalRevenue,
+              totalMiles,
+              combinedRPM,
+              capacity: {
+                feetUsed: totalFeet,
+                weightUsed: totalWeight,
+                feetRemaining: fitCheck.remainingFeet,
+                weightRemaining: fitCheck.remainingWeight
+              }
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  // Sort by combined RPM descending
+  return combinations.sort((a, b) => b.combinedRPM - a.combinedRPM);
+}
+
+async function findNextLoads(driver) {
+  try {
+    // Get all available loads from our load store
+    const availableLoads = Array.from(loads.values()).filter(load => 
+      load.status === "new" && !load.assignedDriverChatId
+    );
+    
+    if (availableLoads.length === 0) return;
+    
+    // Find best load combinations for this driver
+    const combinations = findLoadCombinations(availableLoads, driver);
+    
+    if (combinations.length > 0) {
+      const bestCombo = combinations[0];
+      
+      // Send recommendation to dispatcher
+      const comboMsg = bestCombo.loads.length === 1 
+        ? `🎯 <b>Next Load Recommendation for ${driver.name}</b>\n\n` +
+          `Load: ${bestCombo.loads[0].origin} → ${bestCombo.loads[0].destination}\n` +
+          `Rate: $${bestCombo.totalRevenue} • RPM: $${bestCombo.combinedRPM.toFixed(2)}\n` +
+          `Capacity: ${bestCombo.capacity.feetUsed}ft used, ${bestCombo.capacity.feetRemaining}ft remaining`
+        : `🎯 <b>Multi-Load Combo for ${driver.name}</b>\n\n` +
+          `Load 1: ${bestCombo.loads[0].origin} → ${bestCombo.loads[0].destination}\n` +
+          `Load 2: ${bestCombo.loads[1].origin} → ${bestCombo.loads[1].destination}\n` +
+          `Combined Rate: $${bestCombo.totalRevenue} • RPM: $${bestCombo.combinedRPM.toFixed(2)}\n` +
+          `Total Capacity: ${bestCombo.capacity.feetUsed}ft used, ${bestCombo.capacity.feetRemaining}ft remaining`;
+      
+      await bot.sendMessage(DISPATCHER_CHAT_ID, comboMsg, { parse_mode: "HTML" });
+    }
+  } catch (e) {
+    console.error("AI load matching error:", e);
+  }
+}
+
+// Start continuous load scanning
+setInterval(async () => {
+  try {
+    // Scan for all available drivers
+    const availableDrivers = DRIVERS.filter(d => d.status === "available" && d.chatId);
+    
+    for (const driver of availableDrivers) {
+      await findNextLoads(driver);
+    }
+  } catch (e) {
+    console.error("Continuous load scanning error:", e);
+  }
+}, 60000); // Every minute
 
 function haversineMiles(a, b) {
   if (!a?.lat || !a?.lon || !b?.lat || !b?.lon) return null;
@@ -330,7 +544,41 @@ bot.on("callback_query", async (q) => {
       });
       await bot.sendMessage(DISPATCHER_CHAT_ID, `⚠️ ${driverName} declined load <b>${loadId}</b>.`, { parse_mode: "HTML" });
     } else if (action === "confirmdims") {
-      // finalize: update driver used feet/weight
+      // Move to pickup phase - request photos
+      const rec = loads.get(loadId);
+      if (rec) {
+        const drv = DRIVERS.find(d => String(d.chatId) === String(driverChat));
+        if (drv) {
+          // Update load status to pickup phase
+          rec.status = "pickup_phase";
+          loads.set(loadId, rec);
+          
+          const pickupMsg = 
+            `📸 <b>Load Pickup Confirmation</b>\n\n` +
+            `Load: <b>${loadId}</b>\n` +
+            `Please upload photos showing:\n` +
+            `• Load secured in truck\n` +
+            `• BOL/paperwork\n` +
+            `• Any special handling\n\n` +
+            `Send photos then tap <b>Confirm Pickup</b>`;
+          
+          const keyboard = {
+            inline_keyboard: [
+              [{ text: "✅ Confirm Pickup Complete", callback_data: `confirmpickup:${loadId}:${driverChat}` }]
+            ]
+          };
+          
+          await bot.sendMessage(driverChat, pickupMsg, { parse_mode: "HTML", reply_markup: keyboard });
+          await bot.sendMessage(DISPATCHER_CHAT_ID, `📸 ${drv.name} is uploading pickup photos for <b>${loadId}</b>.`, { parse_mode: "HTML" });
+        }
+      }
+      await bot.answerCallbackQuery(q.id, { text: "Ready for pickup photos" });
+    } else if (action === "misdim") {
+      const drv = DRIVERS.find(d => String(d.chatId) === String(driverChat));
+      await bot.answerCallbackQuery(q.id, { text: "Dispatcher notified" });
+      await bot.sendMessage(DISPATCHER_CHAT_ID, `⚠️ ${drv?.name || "Driver"} reported a dimension mismatch on <b>${loadId}</b>. Please review.`, { parse_mode: "HTML" });
+    } else if (action === "confirmpickup") {
+      // finalize: update driver used feet/weight after photos uploaded
       const rec = loads.get(loadId);
       if (rec) {
         const drv = DRIVERS.find(d => String(d.chatId) === String(driverChat));
@@ -338,16 +586,19 @@ bot.on("callback_query", async (q) => {
           drv.used = drv.used || { feet: 0, weight: 0 };
           drv.used.feet = Math.round((drv.used.feet + (rec.effectiveFeet || 0)) * 100) / 100;
           drv.used.weight = (drv.used.weight + (Number(rec.weight) || 0));
+          rec.status = "in_transit";
+          rec.pickupTime = new Date().toISOString();
+          loads.set(loadId, rec);
           saveDrivers(DRIVERS);
-          await bot.sendMessage(driverChat, "✅ Dimensions confirmed. Capacity updated.");
-          await bot.sendMessage(DISPATCHER_CHAT_ID, `✅ ${drv.name} confirmed load <b>${loadId}</b>. Capacity updated.`, { parse_mode: "HTML" });
+          
+          await bot.sendMessage(driverChat, "🚛 Load confirmed! You're en route. Drive safely!");
+          await bot.sendMessage(DISPATCHER_CHAT_ID, `🚛 ${drv.name} confirmed pickup of <b>${loadId}</b>. Now en route.`, { parse_mode: "HTML" });
+          
+          // Trigger AI load matching for next available loads
+          findNextLoads(drv);
         }
       }
-      await bot.answerCallbackQuery(q.id, { text: "Confirmed" });
-    } else if (action === "misdim") {
-      const drv = DRIVERS.find(d => String(d.chatId) === String(driverChat));
-      await bot.answerCallbackQuery(q.id, { text: "Dispatcher notified" });
-      await bot.sendMessage(DISPATCHER_CHAT_ID, `⚠️ ${drv?.name || "Driver"} reported a dimension mismatch on <b>${loadId}</b>. Please review.`, { parse_mode: "HTML" });
+      await bot.answerCallbackQuery(q.id, { text: "Pickup confirmed!" });
     }
   } catch (e) {
     console.error("callback error", e);
