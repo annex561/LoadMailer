@@ -728,19 +728,6 @@ export class PredictiveMaintenanceService {
     return this.metrics.get(vehicleId) || [];
   }
 
-  // Update vehicle mileage (from GPS or manual input)
-  public async updateVehicleMileage(vehicleId: string, newMileage: number): Promise<void> {
-    const vehicle = this.vehicles.get(vehicleId);
-    if (vehicle) {
-      vehicle.currentMileage = newMileage;
-      vehicle.updatedAt = new Date();
-      
-      // Recalculate health score
-      vehicle.healthScore = this.calculateOverallHealthScore(vehicle);
-      
-      this.vehicles.set(vehicleId, vehicle);
-    }
-  }
 
   // Calculate overall health score
   private calculateOverallHealthScore(vehicle: Vehicle): number {

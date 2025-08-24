@@ -329,8 +329,6 @@ export class DatabaseStorage implements IStorage {
   async markTokenAsUsed(token: string): Promise<boolean> { return false; }
 
   // Add stub implementations for all remaining methods required by IStorage interface
-  async createDriverLocation(location: schema.InsertDriverLocation): Promise<schema.DriverLocation> { throw new Error('Not implemented'); }
-  async updateDriverLocation(id: string, location: Partial<schema.InsertDriverLocation>): Promise<schema.DriverLocation | undefined> { return undefined; }
   async getDriverLocationsByDriver(driverId: string): Promise<schema.DriverLocation[]> { return []; }
   async getLatestDriverLocation(driverId: string): Promise<schema.DriverLocation | undefined> { return undefined; }
   async getAllDriverLocations(): Promise<schema.DriverLocation[]> { return []; }

@@ -422,16 +422,16 @@ export class DATScraper {
                 'td:nth-child(5)', '.cell-equipment'
               ];
               
-              const origin = dataOrigin || getTextByPatterns(originPatterns) || 
+              let origin = dataOrigin || getTextByPatterns(originPatterns) || 
                            element.textContent?.match(/([A-Z]{2})\s*,\s*([A-Z]{2})/)?.[0] || '';
               
-              const destination = dataDestination || getTextByPatterns(destPatterns) || '';
+              let destination = dataDestination || getTextByPatterns(destPatterns) || '';
               
               // If we still don't have origin/destination, try to parse from full text
               if ((!origin || !destination) && element.textContent) {
                 const text = element.textContent;
                 const cityStatePattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*),\s*([A-Z]{2})/g;
-                const matches = [...text.matchAll(cityStatePattern)];
+                const matches = Array.from(text.matchAll(cityStatePattern));
                 
                 if (matches.length >= 2) {
                   const extractedOrigin = matches[0][0];
