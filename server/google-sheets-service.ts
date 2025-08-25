@@ -136,20 +136,20 @@ export class GoogleSheetsService {
   transformToLoads(rows: any[][], columnMapping?: { [key: string]: number }) {
     if (rows.length === 0) return [];
 
-    // Default column mapping (can be customized)
+    // Column mapping based on user's exact sheet structure
     const defaultMapping = {
-      origin: 0,           // Column A
-      destination: 1,      // Column B  
-      rate: 2,            // Column C
-      miles: 3,           // Column D
-      equipment: 4,       // Column E
-      company: 5,         // Column F
-      phone: 6,           // Column G
-      pickup_date: 7,     // Column H
-      delivery_date: 8,   // Column I
-      weight: 9,          // Column J
-      commodity: 10,      // Column K
-      special_requirements: 11 // Column L
+      rate: 0,             // Column A - Pay
+      miles: 1,            // Column B - Total miles  
+      origin: 2,           // Column C - Pick up address
+      destination: 3,      // Column D - Delivery address
+      pickup_date: 4,      // Column E - pick up date
+      deadhead: 5,         // Column F - Deadhead
+      weight: 6,           // Column G - Weight
+      contact: 7,          // Column H - Contact info
+      company: 8,          // Column I - Company
+      phone: 7,            // Column H - Contact info (same as contact)
+      equipment: 'dry_van', // Default since not in sheet
+      commodity: 'General Freight'
     };
 
     const mapping = columnMapping || defaultMapping;
@@ -164,19 +164,19 @@ export class GoogleSheetsService {
         status: 'available',
         scrapedAt: new Date().toISOString(),
         
-        // Map columns to load fields
+        // Map columns to load fields using correct sheet structure
         origin: this.getColumnValue(row, mapping.origin),
         destination: this.getColumnValue(row, mapping.destination),
         rate: this.parseRate(this.getColumnValue(row, mapping.rate)),
         miles: this.parseNumber(this.getColumnValue(row, mapping.miles)),
-        equipmentType: this.normalizeEquipment(this.getColumnValue(row, mapping.equipment)),
+        equipmentType: typeof mapping.equipment === 'string' ? mapping.equipment : this.normalizeEquipment(this.getColumnValue(row, mapping.equipment)),
         company: this.getColumnValue(row, mapping.company),
-        phone: this.getColumnValue(row, mapping.phone),
+        phone: this.getColumnValue(row, mapping.contact),
         pickupDate: this.parseDate(this.getColumnValue(row, mapping.pickup_date)),
-        deliveryDate: this.parseDate(this.getColumnValue(row, mapping.delivery_date)),
+        deliveryDate: null, // Not in user's sheet
         weight: this.parseWeight(this.getColumnValue(row, mapping.weight)),
-        commodity: this.getColumnValue(row, mapping.commodity),
-        specialRequirements: this.getColumnValue(row, mapping.special_requirements),
+        commodity: typeof mapping.commodity === 'string' ? mapping.commodity : this.getColumnValue(row, mapping.commodity),
+        deadhead: this.getColumnValue(row, mapping.deadhead),
 
         // Parse origin/destination into city/state
         originCity: this.parseCity(this.getColumnValue(row, mapping.origin)),
@@ -185,8 +185,8 @@ export class GoogleSheetsService {
         destinationState: this.parseState(this.getColumnValue(row, mapping.destination)),
 
         // Additional fields
-        description: `[GOOGLE SHEETS] ${this.getColumnValue(row, mapping.company)} load`,
-        loadNumber: `GS${String(index + 1).padStart(4, '0')}`,
+        description: `${this.getColumnValue(row, mapping.company) || 'Freight'} - ${this.getColumnValue(row, mapping.origin)} to ${this.getColumnValue(row, mapping.destination)}`,
+        loadNumber: `LOAD-${Date.now()}${String(index).padStart(3, '0')}`,
         priority: 'normal',
         ratePer: 'total'
       };
