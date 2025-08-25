@@ -81,26 +81,17 @@ class GoogleSheetsSimple {
         
         if (values.length < 5) continue;
 
-        // Debug: Log the values to see the actual mapping
-        if (i < 3) {
-          console.log(`📋 Row ${i} values:`, values.slice(0, 10));
-        }
-
-        // Fix mapping - data shows equipment is in position 8, contact in position 9
-        const pay = values[0] || '';
-        const miles = values[1] || '';  
-        const origin = values[2] || '';
-        const destination = values[3] || '';
-        const pickupDate = values[4] || '';
-        const deadhead = values[5] || '';
-        const weight = values[6] || '';
-        const loadType = values[8] || '';  // Equipment is actually in position 8
-        const contact = values[9] || '';   // Contact is actually in position 9
-        const company = values[10] || '';  // Company shifted too
-        
-        if (i < 3) {
-          console.log(`📋 Fixed mapping - equipment: "${loadType}", phone: "${contact}"`);
-        }
+        // Based on the exact array output from debug logs, the actual mapping is:
+        const pay = values[0] || '';        // '$361'
+        const miles = values[1] || '';      // '837'
+        const origin = values[2] || '';     // 'Woodstock, GA'
+        const destination = values[3] || '';// 'Waco, TX'
+        const pickupDate = values[4] || ''; // '8/24 - 8/27'
+        const deadhead = values[5] || '';   // '-93'
+        const weight = values[6] || '';     // '2,500 lbs'
+        const loadType = values[7] || '';   // '8 ft - Partial' (EQUIPMENT)
+        const contact = values[8] || '';    // '(224) 515-7265' (PHONE)
+        const company = values[9] || '';    // 'Globaltranz/Afn' (COMPANY)
 
         if (!origin || !destination) continue;
 
