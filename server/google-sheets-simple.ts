@@ -49,6 +49,8 @@ class GoogleSheetsSimple {
       
       // Fetch CSV data
       const csvUrl = `https://docs.google.com/spreadsheets/d/${this.spreadsheetId}/export?format=csv&gid=0`;
+      console.log(`📡 Fetching CSV from: ${csvUrl}`);
+      
       const response = await fetch(csvUrl);
       
       if (!response.ok) {
@@ -56,7 +58,10 @@ class GoogleSheetsSimple {
       }
       
       const csvText = await response.text();
+      console.log(`📊 CSV data length: ${csvText.length} chars, first 200 chars: ${csvText.substring(0, 200)}`);
+      
       const lines = csvText.trim().split('\n');
+      console.log(`📋 Found ${lines.length} lines total`);
       
       if (lines.length < 2) {
         console.log('📋 No data found in Google Sheets');
@@ -110,6 +115,7 @@ class GoogleSheetsSimple {
 
       // Store loads directly in memory
       googleSheetsLoads = googleSheetsLoadArray;
+      console.log(`📋 Stored ${googleSheetsLoads.length} loads in memory for API serving`);
 
       console.log(`✅ Google Sheets import complete: ${newLoadsCount} loads added`);
       
@@ -154,5 +160,6 @@ export const googleSheetsSimple = new GoogleSheetsSimple();
 
 // Export function to get current loads
 export function getGoogleSheetsLoads() {
+  console.log(`🔍 getGoogleSheetsLoads() called - returning ${googleSheetsLoads.length} loads`);
   return googleSheetsLoads;
 }

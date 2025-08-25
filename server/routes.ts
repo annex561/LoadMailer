@@ -1297,47 +1297,7 @@ Safe travels! 🚛`;
     }
   });
 
-  // Get DAT scraped loads endpoint
-  app.get("/api/dat-loads", async (req, res) => {
-    try {
-      const allLoads = await storage.getAllLoads();
-      
-      // Filter to show both DAT scraped loads and Google Sheets loads
-      const datLoads = allLoads.filter(load => 
-        load.description && (
-          load.description.includes('[DAT REAL]') || 
-          load.description.includes('[GOOGLE SHEETS]')
-        )
-      );
-      
-      // Transform to match frontend expectations
-      const transformedLoads = datLoads.map(load => ({
-        id: load.id,
-        loadNumber: load.loadNumber,
-        description: load.description,
-        origin: load.pickupAddress,
-        destination: load.deliveryAddress,
-        pickupDate: load.pickupDate,
-        deliveryDate: load.deliveryDate,
-        rate: load.rate,
-        miles: load.miles,
-        weight: load.weight,
-        equipmentType: load.equipmentType,
-        status: load.status,
-        priority: load.priority,
-        company: load.description?.match(/- ([^(]+) \(/)?.[1] || 'Unknown',
-        contact: load.description?.match(/\(([^)]+)\)/)?.[1] || 'Unknown',
-        commodity: load.description?.split(' - ')[0]?.replace('[DAT REAL] ', '') || 'General freight',
-        createdAt: load.createdAt,
-        source: 'DAT LoadLink'
-      }));
-      
-      res.json(transformedLoads);
-    } catch (error) {
-      console.error('Error fetching DAT loads:', error);
-      res.status(500).json({ error: 'Failed to fetch DAT loads' });
-    }
-  });
+  // DISABLED: Old DAT loads endpoint (conflicted with Google Sheets endpoint)
 
   // DAT Load Posting endpoints
   app.post("/api/dat-poster/set-credentials", async (req, res) => {
@@ -4805,12 +4765,17 @@ Safe travels! 🚛`;
   });
 
   
-  // Setup simple DAT loads endpoint
-  app.get('/api/dat-loads', (req, res) => {
-    const { getGoogleSheetsLoads } = require('./google-sheets-simple.js');
-    const loads = getGoogleSheetsLoads();
-    console.log(`📋 Serving ${loads.length} Google Sheets loads`);
-    res.json(loads);
+  // Setup simple DAT loads endpoint - FORCE use Google Sheets loads only
+  app.get('/api/dat-loads', async (req, res) => {
+    try {
+      const { getGoogleSheetsLoads } = await import('./google-sheets-simple.js');
+      const loads = getGoogleSheetsLoads();
+      console.log(`📋 DIRECT API serving ${loads.length} Google Sheets loads (bypassing db-storage)`);
+      res.json(loads);
+    } catch (error) {
+      console.error('❌ Error getting Google Sheets loads:', error);
+      res.json([]);
+    }
   });
 
   // Initialize Simple Google Sheets Integration
