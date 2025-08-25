@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { 
   Search, 
@@ -7,7 +7,8 @@ import {
   DollarSign, 
   Truck, 
   Phone,
-  Clock
+  Clock,
+  Timer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,11 +30,31 @@ interface GoogleSheetsLoad {
 
 function DATLoads() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [countdown, setCountdown] = useState(10);
 
   const { data: loads = [], isLoading, refetch } = useQuery<GoogleSheetsLoad[]>({
     queryKey: ["/api/dat-loads"],
     refetchInterval: 10000, // Refresh every 10 seconds
   });
+
+  // Countdown timer for next refresh
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          return 10; // Reset to 10 seconds
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Reset countdown when data is refetched
+  useEffect(() => {
+    setCountdown(10);
+  }, [loads]);
 
   // Filter loads based on search
   const filteredLoads = loads.filter((load: GoogleSheetsLoad) => {
@@ -57,9 +78,17 @@ function DATLoads() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">DAT LoadLink Loads</h1>
-          <p className="text-gray-600 mt-1">
-            ✅ Google Sheets loads auto-imported every 10 seconds
-          </p>
+          <div className="flex items-center gap-4 mt-1">
+            <p className="text-gray-600">
+              ✅ Google Sheets loads auto-imported every 10 seconds
+            </p>
+            <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
+              <Timer className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-700">
+                Next update in {countdown}s
+              </span>
+            </div>
+          </div>
         </div>
         <Button onClick={() => refetch()} variant="outline" size="sm">
           <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
