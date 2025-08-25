@@ -308,5 +308,12 @@ export const googleSheetsSimple = new GoogleSheetsSimple();
 // Export function to get current loads
 export function getGoogleSheetsLoads() {
   console.log(`🔍 getGoogleSheetsLoads() called - returning ${googleSheetsLoads.length} loads`);
-  return googleSheetsLoads;
+  
+  // If no loads, return empty array but log the issue
+  if (!googleSheetsLoads || googleSheetsLoads.length === 0) {
+    console.log('⚠️ No loads found in memory, returning empty array');
+    return [];
+  }
+  
+  return [...googleSheetsLoads]; // Return a copy to prevent mutations
 }
