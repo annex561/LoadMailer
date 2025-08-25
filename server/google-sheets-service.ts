@@ -73,13 +73,13 @@ export class GoogleSheetsService {
     }
   }
 
-  // Simple method for publicly shared sheets
+  // Simple method for publicly shared sheets with CSV processing
   async getSheetDataSimple(spreadsheetId: string) {
     try {
       // Use the CSV export URL for publicly shared sheets
       const csvUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
       
-      console.log(`📊 Fetching public sheet data: ${spreadsheetId}`);
+      console.log(`📊 Fetching CSV data from: ${csvUrl}`);
       
       const response = await fetch(csvUrl);
       
@@ -89,16 +89,62 @@ export class GoogleSheetsService {
       
       const csvText = await response.text();
       
-      // Parse CSV into rows
-      const rows = this.parseCSV(csvText);
+      // Parse CSV using PapaParse for better reliability
+      const result = Papa.parse(csvText, { 
+        header: true, 
+        skipEmptyLines: true,
+        transformHeader: (header: string) => header.trim()
+      });
       
-      console.log(`✅ Retrieved ${rows.length} rows from public Google Sheet`);
+      if (result.errors?.length) {
+        console.warn('CSV parse warnings:', result.errors.slice(0, 3));
+      }
       
-      return rows;
+      // Return normalized objects instead of arrays
+      const normalizedData = this.normalizeSheetData(result.data);
+      console.log(`✅ Retrieved ${normalizedData.length} normalized rows from CSV`);
+      
+      return normalizedData;
     } catch (error) {
-      console.error('❌ Error fetching public sheet data:', error);
+      console.error('❌ Error fetching CSV data:', error);
       throw error;
     }
+  }
+
+  // Normalize CSV data to consistent column names
+  private normalizeSheetData(rows: any[]): any[] {
+    return rows.map(r => ({
+      Pay: this.getColumnValue(r, 'Pay'),
+      'Total miles': this.getColumnValue(r, 'Total miles'),
+      'Pick Up': this.getColumnValue(r, 'Pick Up') || this.getColumnValue(r, 'Pick up address'),
+      Delivery: this.getColumnValue(r, 'Delivery') || this.getColumnValue(r, 'Delivery address'),
+      'pick up date': this.getColumnValue(r, 'pick up date'),
+      Deadhead: this.getColumnValue(r, 'Deadhead'),
+      Weight: this.getColumnValue(r, 'Weight'),
+      'Load Type': this.getColumnValue(r, 'Load Type'),
+      'Contact Info': this.getColumnValue(r, 'Contact Info'),
+      Company: this.getColumnValue(r, 'Company')
+    }));
+  }
+
+  // Get column value with case-insensitive matching
+  private getColumnValue(row: any, columnName: string): string {
+    if (!row) return '';
+    
+    // Try exact match first
+    if (row[columnName] !== undefined) {
+      return String(row[columnName] || '').trim();
+    }
+    
+    // Try case-insensitive match
+    const lowerName = columnName.toLowerCase();
+    for (const [key, value] of Object.entries(row)) {
+      if (key.toLowerCase() === lowerName) {
+        return String(value || '').trim();
+      }
+    }
+    
+    return '';
   }
 
   // Simple CSV parser

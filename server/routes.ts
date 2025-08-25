@@ -5111,6 +5111,98 @@ Safe travels! 🚛`;
   });
 
   // Import loads from Google Sheets
+  // Helper functions for Google Sheets transformation
+  function transformNormalizedDataToLoads(normalizedData: any[]): any[] {
+    if (!normalizedData || normalizedData.length === 0) return [];
+
+    return normalizedData.map((row, index) => ({
+      id: `csv_${Date.now()}_${index}`,
+      source: 'Google Sheets CSV',
+      status: 'available',
+      scrapedAt: new Date().toISOString(),
+      
+      // Map normalized columns to load fields
+      origin: row['Pick Up'] || '',
+      destination: row['Delivery'] || '',
+      rate: parseSheetRate(row['Pay']),
+      miles: parseSheetNumber(row['Total miles']),
+      equipmentType: normalizeSheetEquipment(row['Load Type']),
+      company: row['Company'] || '',
+      phone: row['Contact Info'] || '',
+      pickupDate: parseSheetDate(row['pick up date']),
+      deliveryDate: null,
+      weight: parseSheetWeight(row['Weight']),
+      commodity: 'General Freight',
+      deadhead: row['Deadhead'] || '',
+
+      // Parse origin/destination into city/state
+      originCity: parseSheetCity(row['Pick Up']),
+      originState: parseSheetState(row['Pick Up']),
+      destinationCity: parseSheetCity(row['Delivery']),
+      destinationState: parseSheetState(row['Delivery']),
+
+      // Additional fields
+      description: `${row['Company'] || 'Freight'} - ${row['Pick Up']} to ${row['Delivery']}`,
+      loadNumber: `CSV-${Date.now()}${String(index).padStart(3, '0')}`,
+      priority: 'normal',
+      ratePer: 'total'
+    }));
+  }
+
+  function parseSheetRate(value: string): number {
+    if (!value) return 0;
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    return parseFloat(cleanValue) || 0;
+  }
+
+  function parseSheetNumber(value: string): number {
+    if (!value) return 0;
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    return parseFloat(cleanValue) || 0;
+  }
+
+  function parseSheetWeight(value: string): number | null {
+    if (!value) return null;
+    const cleanValue = value.replace(/[^0-9.]/g, '');
+    const weight = parseFloat(cleanValue);
+    return isNaN(weight) ? null : weight;
+  }
+
+  function parseSheetDate(value: string): string | null {
+    if (!value) return null;
+    try {
+      const date = new Date(value);
+      return isNaN(date.getTime()) ? null : date.toISOString();
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeSheetEquipment(value: string): string {
+    if (!value) return 'dry_van';
+    const lower = value.toLowerCase();
+    if (lower.includes('dry') || lower.includes('van')) return 'dry_van';
+    if (lower.includes('refrigerated') || lower.includes('reefer')) return 'refrigerated';
+    if (lower.includes('flatbed') || lower.includes('flat')) return 'flatbed';
+    return 'dry_van';
+  }
+
+  function parseSheetCity(address: string): string {
+    if (!address) return '';
+    const parts = address.split(',');
+    return parts[0]?.trim() || '';
+  }
+
+  function parseSheetState(address: string): string {
+    if (!address) return '';
+    const parts = address.split(',');
+    if (parts.length >= 2) {
+      const stateZip = parts[1].trim();
+      return stateZip.split(' ')[0] || '';
+    }
+    return '';
+  }
+
   app.post('/api/google-sheets/import-loads', async (req, res) => {
     try {
       const { 
@@ -5137,16 +5229,15 @@ Safe travels! 🚛`;
       // Debug: Log raw data
       console.log('📊 Raw data from Google Sheets:', JSON.stringify(rawData.slice(0, 5), null, 2));
       
-      // Use new CSV-based service for better reliability
-      const csvService = new (require('./google-sheets-csv-service').GoogleSheetsCsvService)();
-      const csvRows = await csvService.getCsvData(spreadsheetId);
+      // Get normalized data directly from the updated Google Sheets service
+      const normalizedData = await googleSheetsService.getSheetDataSimple(spreadsheetId);
       
-      console.log(`🔍 CSV IMPORT - Retrieved ${csvRows.length} normalized rows from CSV`);
+      console.log(`🔍 NORMALIZED IMPORT - Retrieved ${normalizedData.length} normalized rows`);
       
-      // Transform CSV rows to loads with deduplication
-      const rawLoads = csvService.transformCsvToLoads(csvRows);
+      // Transform normalized data to loads 
+      const rawLoads = transformNormalizedDataToLoads(normalizedData);
       
-      console.log(`📊 Transformed ${rawLoads.length} loads from Google Sheets`);
+      console.log(`📊 Transformed ${rawLoads.length} loads from normalized Google Sheets data`);
 
       // Create/get default customer for Google Sheets loads
       let defaultCustomer;
@@ -5190,7 +5281,7 @@ Safe travels! 🚛`;
             weight: rawLoad.weight || null,
             company: rawLoad.company || '',
             contactPhone: rawLoad.phone || '',
-            sourceBoard: 'google_sheets',
+            sourceBoard: 'google_sheets_csv',
             priority: 'standard',
             status: 'available'
           };

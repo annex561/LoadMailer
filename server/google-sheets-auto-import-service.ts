@@ -59,37 +59,22 @@ export class GoogleSheetsAutoImportService {
 
   private async performImport(): Promise<void> {
     try {
-      console.log('🔄 Auto-importing Google Sheets data...');
+      console.log('🔄 Auto-importing Google Sheets CSV data...');
       
-      // Use the exact same logic as the manual import endpoint in routes.ts
-      const rawData = await this.googleSheetsService.getSheetData(this.config.spreadsheetId, this.config.range);
+      // Use CSV method for more reliable data fetching and deduplication
+      const csvRows = await this.csvService.getCsvData(this.config.spreadsheetId);
       
-      if (rawData.length === 0) {
-        console.log('📋 No data found in Google Sheets');
+      if (csvRows.length === 0) {
+        console.log('📋 No data found in Google Sheets CSV');
         return;
       }
 
-      // Transform to loads using correct column mapping from your sheet headers
-      const columnMapping = {
-        rate: 0,          // Column A - Pay
-        miles: 1,         // Column B - Total miles
-        origin: 2,        // Column C - Pick up address
-        destination: 3,   // Column D - Delivery address
-        pickupDate: 4,    // Column E - pick up date
-        deadhead: 5,      // Column F - Deadhead
-        weight: 6,        // Column G - Weight
-        contact: 7,       // Column H - Contact info
-        company: 8,       // Column I - Company
-        phone: 7,         // Column H - Contact info (same as contact)
-        email: 7,         // Column H - Contact info (same as contact)
-        commodity: 'General Freight'
-      };
-
-      const rawLoads = this.googleSheetsService.transformToLoads(rawData, columnMapping);
-      console.log(`📊 Transformed ${rawLoads.length} loads from Google Sheets`);
+      // Transform CSV rows to loads with deduplication and expiration handling
+      const rawLoads = this.csvService.transformCsvToLoads(csvRows);
+      console.log(`📊 Transformed ${rawLoads.length} new loads from CSV data`);
 
       if (rawLoads.length === 0) {
-        console.log('📋 No valid loads found after transformation');
+        console.log('📋 No new valid loads found after CSV transformation');
         return;
       }
 
