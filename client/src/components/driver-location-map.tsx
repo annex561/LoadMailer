@@ -110,22 +110,23 @@ export default function DriverLocationMap() {
                 const mapWidth = 100;
                 const mapHeight = 100;
                 
-                // Tennessee/Georgia region bounds (approximate)
+                // Tennessee/Georgia region bounds (more accurate)
                 const regionBounds = {
-                  minLat: 33.0, maxLat: 37.0,
-                  minLng: -90.0, maxLng: -82.0
+                  minLat: 32.0, maxLat: 37.0,
+                  minLng: -91.0, maxLng: -82.0
                 };
                 
-                const x = ((location.longitude - regionBounds.minLng) / (regionBounds.maxLng - regionBounds.minLng)) * mapWidth;
-                const y = ((regionBounds.maxLat - location.latitude) / (regionBounds.maxLat - regionBounds.minLat)) * mapHeight;
+                // Calculate map positions based on actual coordinates
+                const x = ((location.longitude - regionBounds.minLng) / (regionBounds.maxLng - regionBounds.minLng)) * 100;
+                const y = ((regionBounds.maxLat - location.latitude) / (regionBounds.maxLat - regionBounds.minLat)) * 100;
                 
                 return (
                   <div
                     key={location.driverId}
                     className="absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer"
                     style={{ 
-                      left: `${Math.max(5, Math.min(95, x))}%`, 
-                      top: `${Math.max(5, Math.min(95, y))}%` 
+                      left: `${Math.max(2, Math.min(98, x))}%`, 
+                      top: `${Math.max(2, Math.min(98, y))}%` 
                     }}
                     data-testid={`driver-marker-${location.driverId}`}
                   >
