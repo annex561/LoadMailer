@@ -107,8 +107,8 @@ export default function DriverLocationMap() {
           <div className="space-y-4">
             {/* Real OpenStreetMap with tiles */}
             <div className="relative h-96 rounded-lg overflow-hidden border-2 border-gray-200">
-              {/* Driver Status Dropdown */}
-              <div className="absolute top-4 left-4 z-10">
+              {/* Driver Status Dropdown - positioned to not block zoom */}
+              <div className="absolute bottom-4 right-4 z-10">
                 <select className="bg-white border border-gray-300 rounded px-3 py-1 text-sm shadow-sm">
                   <option>Unlocated Drivers ({5 - locations.length})</option>
                   <option>All Drivers ({5})</option>
@@ -132,14 +132,21 @@ export default function DriverLocationMap() {
               {/* Driver markers overlay */}
               <div className="absolute inset-0 pointer-events-none">
                 {locations.map((location) => {
-                  // Convert lat/lng to approximate pixel position for overlay
-                  // This is a simplified conversion for demo purposes
+                  // Convert lat/lng to accurate pixel position for overlay
                   const lat = location.latitude;
                   const lng = location.longitude;
                   
-                  // Simple mercator projection approximation
-                  const x = ((lng + 125) / 60) * 100; // Convert to percentage
-                  const y = ((50 - lat) / 25) * 100; // Convert to percentage
+                  // More accurate mercator projection for US map bounds
+                  // Map bounds: -125.0 to -65.0 longitude, 25.0 to 50.0 latitude
+                  const mapBounds = {
+                    west: -125.0,
+                    east: -65.0,
+                    north: 50.0,
+                    south: 25.0
+                  };
+                  
+                  const x = ((lng - mapBounds.west) / (mapBounds.east - mapBounds.west)) * 100;
+                  const y = ((mapBounds.north - lat) / (mapBounds.north - mapBounds.south)) * 100;
                   
                   return (
                     <div
@@ -201,7 +208,7 @@ export default function DriverLocationMap() {
               </div>
 
               {/* Instructions */}
-              <div className="absolute bottom-4 left-4 text-xs text-gray-600 bg-white/90 px-2 py-1 rounded shadow pointer-events-none">
+              <div className="absolute top-4 left-4 text-xs text-gray-600 bg-white/90 px-2 py-1 rounded shadow pointer-events-none">
                 Real OpenStreetMap • Click truck markers for driver details
               </div>
             </div>
