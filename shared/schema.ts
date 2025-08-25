@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, timestamp, boolean, integer, real, jsonb } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1502,3 +1503,127 @@ export type InsertAiAnalytics = z.infer<typeof insertAiAnalyticsSchema>;
 
 export type CostCalculations = typeof costCalculations.$inferSelect;
 export type InsertCostCalculations = z.infer<typeof insertCostCalculationsSchema>;
+
+// Define Drizzle Relations
+export const driversRelations = relations(drivers, ({ many }) => ({
+  loads: many(loads),
+  locations: many(driverLocations),
+  loadOffers: many(loadOffers),
+  bidResponses: many(bidResponses),
+}));
+
+export const customersRelations = relations(customers, ({ many }) => ({
+  loads: many(loads),
+  geofences: many(geofences),
+}));
+
+export const loadsRelations = relations(loads, ({ one, many }) => ({
+  driver: one(drivers, {
+    fields: [loads.driverId],
+    references: [drivers.id],
+  }),
+  customer: one(customers, {
+    fields: [loads.customerId],
+    references: [customers.id],
+  }),
+  documents: many(loadDocuments),
+  offers: many(loadOffers),
+  routes: many(routes),
+}));
+
+export const driverLocationsRelations = relations(driverLocations, ({ one }) => ({
+  driver: one(drivers, {
+    fields: [driverLocations.driverId],
+    references: [drivers.id],
+  }),
+  load: one(loads, {
+    fields: [driverLocations.loadId],
+    references: [loads.id],
+  }),
+}));
+
+export const geofencesRelations = relations(geofences, ({ one, many }) => ({
+  load: one(loads, {
+    fields: [geofences.loadId],
+    references: [loads.id],
+  }),
+  customer: one(customers, {
+    fields: [geofences.customerId],
+    references: [customers.id],
+  }),
+  events: many(geofenceEvents),
+}));
+
+export const geofenceEventsRelations = relations(geofenceEvents, ({ one }) => ({
+  geofence: one(geofences, {
+    fields: [geofenceEvents.geofenceId],
+    references: [geofences.id],
+  }),
+  driver: one(drivers, {
+    fields: [geofenceEvents.driverId],
+    references: [drivers.id],
+  }),
+  load: one(loads, {
+    fields: [geofenceEvents.loadId],
+    references: [loads.id],
+  }),
+}));
+
+export const routesRelations = relations(routes, ({ one }) => ({
+  load: one(loads, {
+    fields: [routes.loadId],
+    references: [loads.id],
+  }),
+  driver: one(drivers, {
+    fields: [routes.driverId],
+    references: [drivers.id],
+  }),
+}));
+
+export const loadOffersRelations = relations(loadOffers, ({ one }) => ({
+  load: one(loads, {
+    fields: [loadOffers.loadId],
+    references: [loads.id],
+  }),
+  driver: one(drivers, {
+    fields: [loadOffers.driverId],
+    references: [drivers.id],
+  }),
+}));
+
+export const loadDocumentsRelations = relations(loadDocuments, ({ one }) => ({
+  load: one(loads, {
+    fields: [loadDocuments.loadId],
+    references: [loads.id],
+  }),
+  driver: one(drivers, {
+    fields: [loadDocuments.driverId],
+    references: [drivers.id],
+  }),
+}));
+
+export const emailLogsRelations = relations(emailLogs, ({ one }) => ({
+  load: one(loads, {
+    fields: [emailLogs.loadId],
+    references: [loads.id],
+  }),
+  template: one(emailTemplates, {
+    fields: [emailLogs.templateId],
+    references: [emailTemplates.id],
+  }),
+}));
+
+export const scraperConfigsRelations = relations(scraperConfigs, ({ one, many }) => ({
+  customer: one(customers, {
+    fields: [scraperConfigs.defaultCustomerId],
+    references: [customers.id],
+  }),
+  logs: many(scraperLogs),
+}));
+
+export const scraperLogsRelations = relations(scraperLogs, ({ one }) => ({
+  config: one(scraperConfigs, {
+    fields: [scraperLogs.configId],
+    references: [scraperConfigs.id],
+  }),
+}));
