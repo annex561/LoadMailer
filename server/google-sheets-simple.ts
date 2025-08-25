@@ -1,4 +1,6 @@
 // Simple Google Sheets CSV integration
+// In-memory storage for Google Sheets loads
+let googleSheetsLoads: any[] = [];
 
 interface GoogleSheetsLoad {
   pay: string;
@@ -66,7 +68,7 @@ class GoogleSheetsSimple {
       let newLoadsCount = 0;
 
       // Parse CSV and create loads array
-      const googleSheetsLoads = [];
+      const googleSheetsLoadArray = [];
       
       for (let i = 0; i < Math.min(dataRows.length, 50); i++) {
         const row = dataRows[i];
@@ -102,28 +104,12 @@ class GoogleSheetsSimple {
           scrapedAt: new Date()
         };
 
-        googleSheetsLoads.push(load);
+        googleSheetsLoadArray.push(load);
         newLoadsCount++;
       }
 
-      // Send loads to the Google Sheets DAT API endpoint
-      if (googleSheetsLoads.length > 0) {
-        try {
-          const response = await fetch('http://localhost:5000/api/dat-loads/google-sheets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ loads: googleSheetsLoads })
-          });
-          
-          if (response.ok) {
-            console.log(`📋 Successfully posted ${googleSheetsLoads.length} Google Sheets loads to DAT API`);
-          } else {
-            console.error('❌ Failed to post loads to DAT API:', response.status);
-          }
-        } catch (error) {
-          console.error('❌ Error posting loads to DAT API:', error.message);
-        }
-      }
+      // Store loads directly in memory
+      googleSheetsLoads = googleSheetsLoadArray;
 
       console.log(`✅ Google Sheets import complete: ${newLoadsCount} loads added`);
       
@@ -165,3 +151,8 @@ class GoogleSheetsSimple {
 
 // Export singleton instance
 export const googleSheetsSimple = new GoogleSheetsSimple();
+
+// Export function to get current loads
+export function getGoogleSheetsLoads() {
+  return googleSheetsLoads;
+}

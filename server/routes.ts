@@ -4805,9 +4805,13 @@ Safe travels! 🚛`;
   });
 
   
-  // Setup Google Sheets DAT Loads API
-  const { setupGoogleSheetsDATAPI } = await import('./google-sheets-dat-api');
-  setupGoogleSheetsDATAPI(app);
+  // Setup simple DAT loads endpoint
+  app.get('/api/dat-loads', (req, res) => {
+    const { getGoogleSheetsLoads } = require('./google-sheets-simple.js');
+    const loads = getGoogleSheetsLoads();
+    console.log(`📋 Serving ${loads.length} Google Sheets loads`);
+    res.json(loads);
+  });
 
   // Initialize Simple Google Sheets Integration
   const { googleSheetsSimple } = await import('./google-sheets-simple.js');
