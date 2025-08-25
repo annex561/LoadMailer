@@ -157,57 +157,198 @@ export default function DriverLocationMap() {
                 data-testid="openstreet-map-container"
                 style={{
                   backgroundImage: `url("data:image/svg+xml;base64,${btoa(`
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
-                      <rect width="800" height="600" fill="#a7dbf0"/>
-                      <g fill="#f0f0f0" stroke="#d0d0d0" stroke-width="1">
-                        <!-- Simplified US landmass -->
-                        <path d="M 100 380 L 100 180 L 180 160 L 280 170 L 400 180 L 520 190 L 620 220 L 700 250 L 720 280 L 710 380 L 650 420 L 500 450 L 350 460 L 200 440 Z"/>
-                        <!-- Florida -->
-                        <path d="M 600 420 L 650 450 L 680 480 L 670 500 L 640 490 L 610 460 Z"/>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500">
+                      <!-- Ocean background -->
+                      <rect width="900" height="500" fill="#b8dbed"/>
+                      
+                      <!-- United States with detailed state boundaries -->
+                      <g fill="#ffffff" stroke="#d0d0d0" stroke-width="0.8">
+                        <!-- Washington -->
+                        <path d="M30 60 L170 60 L170 130 L30 130 Z"/>
+                        <!-- Oregon -->
+                        <path d="M30 130 L170 130 L170 200 L30 200 Z"/>
                         <!-- California -->
-                        <path d="M 80 200 L 100 180 L 120 250 L 110 350 L 90 380 L 80 350 Z"/>
+                        <path d="M30 200 L170 200 L170 350 L30 350 Z"/>
+                        <!-- Nevada -->
+                        <path d="M170 130 L220 130 L220 290 L170 290 Z"/>
+                        <!-- Idaho -->
+                        <path d="M170 60 L240 60 L240 200 L170 200 Z"/>
+                        <!-- Montana -->
+                        <path d="M240 60 L400 60 L400 140 L240 140 Z"/>
+                        <!-- Wyoming -->
+                        <path d="M240 140 L400 140 L400 200 L240 200 Z"/>
+                        <!-- Utah -->
+                        <path d="M220 200 L320 200 L320 290 L220 290 Z"/>
+                        <!-- Colorado -->
+                        <path d="M320 200 L420 200 L420 290 L320 290 Z"/>
+                        <!-- Arizona -->
+                        <path d="M170 290 L320 290 L320 380 L170 380 Z"/>
+                        <!-- New Mexico -->
+                        <path d="M320 290 L420 290 L420 380 L320 380 Z"/>
+                        <!-- North Dakota -->
+                        <path d="M400 60 L500 60 L500 140 L400 140 Z"/>
+                        <!-- South Dakota -->
+                        <path d="M400 140 L500 140 L500 200 L400 200 Z"/>
+                        <!-- Nebraska -->
+                        <path d="M420 200 L520 200 L520 260 L420 260 Z"/>
+                        <!-- Kansas -->
+                        <path d="M420 260 L520 260 L520 320 L420 320 Z"/>
+                        <!-- Oklahoma -->
+                        <path d="M420 320 L600 320 L600 380 L420 380 Z"/>
                         <!-- Texas -->
-                        <path d="M 300 350 L 400 340 L 450 380 L 420 420 L 350 410 L 300 380 Z"/>
-                        <!-- Great Lakes -->
-                        <ellipse cx="450" cy="250" rx="40" ry="15" fill="#a7dbf0"/>
-                        <ellipse cx="500" cy="230" rx="25" ry="12" fill="#a7dbf0"/>
-                        <ellipse cx="520" cy="260" rx="20" ry="10" fill="#a7dbf0"/>
+                        <path d="M420 380 L600 380 L600 460 L420 460 Z"/>
+                        <!-- Minnesota -->
+                        <path d="M500 60 L580 60 L580 180 L500 180 Z"/>
+                        <!-- Iowa -->
+                        <path d="M520 180 L600 180 L600 240 L520 240 Z"/>
+                        <!-- Missouri -->
+                        <path d="M520 240 L620 240 L620 320 L520 320 Z"/>
+                        <!-- Arkansas -->
+                        <path d="M600 320 L680 320 L680 380 L600 380 Z"/>
+                        <!-- Louisiana -->
+                        <path d="M600 380 L680 380 L680 440 L600 440 Z"/>
+                        <!-- Wisconsin -->
+                        <path d="M580 60 L640 60 L640 180 L580 180 Z"/>
+                        <!-- Illinois -->
+                        <path d="M600 180 L650 180 L650 280 L600 280 Z"/>
+                        <!-- Mississippi -->
+                        <path d="M680 300 L720 300 L720 400 L680 400 Z"/>
+                        <!-- Alabama -->
+                        <path d="M720 300 L760 300 L760 400 L720 400 Z"/>
+                        <!-- Tennessee -->
+                        <path d="M650 280 L780 280 L780 320 L650 320 Z"/>
+                        <!-- Kentucky -->
+                        <path d="M650 240 L780 240 L780 280 L650 280 Z"/>
+                        <!-- Indiana -->
+                        <path d="M650 180 L700 180 L700 280 L650 280 Z"/>
+                        <!-- Ohio -->
+                        <path d="M700 180 L760 180 L760 280 L700 280 Z"/>
+                        <!-- Michigan -->
+                        <path d="M640 80 L720 80 L720 180 L640 180 Z"/>
+                        <!-- West Virginia -->
+                        <path d="M760 200 L800 200 L800 260 L760 260 Z"/>
+                        <!-- Virginia -->
+                        <path d="M780 240 L840 240 L840 300 L780 300 Z"/>
+                        <!-- North Carolina -->
+                        <path d="M780 300 L860 300 L860 340 L780 340 Z"/>
+                        <!-- South Carolina -->
+                        <path d="M780 340 L830 340 L830 380 L780 380 Z"/>
+                        <!-- Georgia -->
+                        <path d="M760 340 L820 340 L820 420 L760 420 Z"/>
+                        <!-- Florida -->
+                        <path d="M760 420 L860 420 L870 460 L760 460 Z"/>
+                        <!-- Pennsylvania -->
+                        <path d="M760 160 L840 160 L840 220 L760 220 Z"/>
+                        <!-- New York -->
+                        <path d="M760 100 L840 100 L840 180 L760 180 Z"/>
+                        <!-- Vermont -->
+                        <path d="M840 100 L860 100 L860 160 L840 160 Z"/>
+                        <!-- New Hampshire -->
+                        <path d="M860 100 L880 100 L880 160 L860 160 Z"/>
+                        <!-- Maine -->
+                        <path d="M860 60 L900 60 L900 140 L860 140 Z"/>
+                        <!-- Massachusetts -->
+                        <path d="M840 160 L900 160 L900 180 L840 180 Z"/>
+                        <!-- Rhode Island -->
+                        <path d="M880 180 L890 180 L890 190 L880 190 Z"/>
+                        <!-- Connecticut -->
+                        <path d="M840 180 L880 180 L880 200 L840 200 Z"/>
+                        <!-- New Jersey -->
+                        <path d="M820 200 L840 200 L840 240 L820 240 Z"/>
+                        <!-- Delaware -->
+                        <path d="M830 220 L840 220 L840 240 L830 240 Z"/>
+                        <!-- Maryland -->
+                        <path d="M800 220 L840 220 L840 240 L800 240 Z"/>
+                        <!-- Alaska (simplified, positioned separately) -->
+                        <path d="M30 400 L150 400 L150 480 L30 480 Z"/>
+                        <!-- Hawaii (simplified, positioned separately) -->
+                        <circle cx="200" cy="440" r="8"/>
+                        <circle cx="210" cy="445" r="6"/>
+                        <circle cx="220" cy="450" r="4"/>
                       </g>
-                      <!-- State boundaries -->
-                      <g stroke="#c0c0c0" stroke-width="0.5" fill="none">
-                        <line x1="200" y1="160" x2="200" y2="440"/>
-                        <line x1="300" y1="170" x2="300" y2="460"/>
-                        <line x1="400" y1="180" x2="400" y2="450"/>
-                        <line x1="500" y1="190" x2="500" y2="420"/>
-                        <line x1="600" y1="220" x2="600" y2="420"/>
-                        <line x1="100" y1="240" x2="720" y2="240"/>
-                        <line x1="100" y1="320" x2="710" y2="320"/>
+                      
+                      <!-- State labels -->
+                      <g fill="#666666" font-family="Arial, sans-serif" font-size="10" text-anchor="middle">
+                        <text x="100" y="95">WA</text>
+                        <text x="100" y="165">OR</text>
+                        <text x="100" y="275">CA</text>
+                        <text x="195" y="210">NV</text>
+                        <text x="205" y="130">ID</text>
+                        <text x="320" y="100">MT</text>
+                        <text x="320" y="170">WY</text>
+                        <text x="270" y="245">UT</text>
+                        <text x="370" y="245">CO</text>
+                        <text x="245" y="335">AZ</text>
+                        <text x="370" y="335">NM</text>
+                        <text x="450" y="100">ND</text>
+                        <text x="450" y="170">SD</text>
+                        <text x="470" y="230">NE</text>
+                        <text x="470" y="290">KS</text>
+                        <text x="510" y="350">OK</text>
+                        <text x="510" y="420">TX</text>
+                        <text x="540" y="120">MN</text>
+                        <text x="560" y="210">IA</text>
+                        <text x="570" y="280">MO</text>
+                        <text x="640" y="350">AR</text>
+                        <text x="640" y="410">LA</text>
+                        <text x="610" y="120">WI</text>
+                        <text x="625" y="230">IL</text>
+                        <text x="700" y="350">MS</text>
+                        <text x="740" y="350">AL</text>
+                        <text x="715" y="300">TN</text>
+                        <text x="715" y="260">KY</text>
+                        <text x="675" y="230">IN</text>
+                        <text x="730" y="230">OH</text>
+                        <text x="680" y="130">MI</text>
+                        <text x="780" y="230">WV</text>
+                        <text x="810" y="270">VA</text>
+                        <text x="820" y="320">NC</text>
+                        <text x="805" y="360">SC</text>
+                        <text x="790" y="380">GA</text>
+                        <text x="815" y="440">FL</text>
+                        <text x="800" y="190">PA</text>
+                        <text x="800" y="140">NY</text>
+                        <text x="850" y="130">VT</text>
+                        <text x="870" y="130">NH</text>
+                        <text x="880" y="100">ME</text>
+                        <text x="870" y="170">MA</text>
+                        <text x="885" y="185">RI</text>
+                        <text x="860" y="190">CT</text>
+                        <text x="830" y="220">NJ</text>
+                        <text x="835" y="230">DE</text>
+                        <text x="820" y="230">MD</text>
+                        <text x="90" y="440">AK</text>
+                        <text x="215" y="455">HI</text>
                       </g>
                     </svg>
                   `)}")`
                 }}
               >
+                {/* Driver Status Dropdown */}
+                <div className="absolute top-4 left-4 z-10">
+                  <select className="bg-white border border-gray-300 rounded px-3 py-1 text-sm shadow-sm">
+                    <option>Unlocated Drivers ({5 - locations.length})</option>
+                    <option>All Drivers ({5})</option>
+                    <option>Active Drivers ({locations.length})</option>
+                  </select>
+                </div>
+
                 {/* Zoom Controls */}
-                <div className="absolute top-4 left-4 z-10 flex flex-col gap-1 bg-white rounded shadow-lg">
+                <div className="absolute top-4 right-4 z-10 flex flex-col gap-1 bg-white rounded shadow-lg border border-gray-300">
                   <button
                     onClick={(e) => { e.stopPropagation(); handleZoomIn(); }}
-                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 text-lg font-bold"
+                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 text-lg font-bold"
                     title="Zoom In"
                   >
                     +
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleZoomOut(); }}
-                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 text-lg font-bold border-t"
+                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 text-lg font-bold border-t border-gray-300"
                     title="Zoom Out"
                   >
                     −
                   </button>
-                </div>
-
-                {/* Map Info */}
-                <div className="absolute top-4 right-4 z-10 bg-white/90 px-3 py-2 rounded text-sm font-semibold shadow-lg">
-                  USA Map - Zoom: {zoom}
                 </div>
 
                 {/* Driver Markers */}
