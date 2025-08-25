@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Navigation, Zap, Clock } from "lucide-react";
+import { MapPin, Navigation, Zap, Clock, ZoomIn, ZoomOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 
 type DriverLocation = {
   driverId: string;
@@ -48,6 +50,61 @@ export default function DriverLocationMap() {
   const formatSpeed = (speed?: number) => speed ? `${speed.toFixed(0)} mph` : "N/A";
   const formatBattery = (level?: number) => level ? `${Math.round(level)}%` : "N/A";
 
+  // Map zoom and center state
+  const [zoomLevel, setZoomLevel] = useState(4); // US view
+  const [mapCenter, setMapCenter] = useState({ lat: 39.8283, lng: -98.5795 }); // Geographic center of US
+
+  // Convert coordinates to map pixels
+  const coordToPixel = (lat: number, lng: number, zoom: number) => {
+    // Simplified web mercator projection
+    const mapWidth = 800;
+    const mapHeight = 600;
+    
+    // US bounds: roughly 24.7°N to 49.4°N, -125°W to -66.9°W
+    const bounds = {
+      north: 49.4,
+      south: 24.7,
+      west: -125.0,
+      east: -66.9
+    };
+
+    // Scale based on zoom level
+    const scale = Math.pow(2, zoom - 4);
+    
+    // Center the view on mapCenter
+    const centerOffsetLat = (lat - mapCenter.lat) * scale;
+    const centerOffsetLng = (lng - mapCenter.lng) * scale;
+    
+    const x = (mapWidth / 2) + (centerOffsetLng * mapWidth / (bounds.east - bounds.west));
+    const y = (mapHeight / 2) - (centerOffsetLat * mapHeight / (bounds.north - bounds.south));
+    
+    return { x: Math.max(0, Math.min(mapWidth, x)), y: Math.max(0, Math.min(mapHeight, y)) };
+  };
+
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 1, 10));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 1, 2));
+
+  const handleMapClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    // Convert pixel coordinates back to lat/lng for map centering
+    const mapWidth = 800;
+    const mapHeight = 600;
+    const bounds = {
+      north: 49.4,
+      south: 24.7,
+      west: -125.0,
+      east: -66.9
+    };
+    
+    const lng = bounds.west + (x / mapWidth) * (bounds.east - bounds.west);
+    const lat = bounds.north - (y / mapHeight) * (bounds.north - bounds.south);
+    
+    setMapCenter({ lat, lng });
+  };
+
   if (isLoading) {
     return (
       <Card data-testid="card-driver-map">
@@ -88,72 +145,131 @@ export default function DriverLocationMap() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Simple coordinate-based map representation */}
-            <div className="relative bg-gradient-to-br from-blue-50 to-green-50 rounded-lg p-6 h-64 overflow-hidden border-2 border-gray-200">
-              {/* Map background grid */}
-              <div className="absolute inset-0 opacity-20">
-                <div className="grid grid-cols-8 grid-rows-6 h-full w-full">
-                  {Array.from({ length: 48 }).map((_, i) => (
-                    <div key={i} className="border border-gray-300"></div>
-                  ))}
-                </div>
+            {/* Interactive US Map */}
+            <div className="relative h-96 rounded-lg overflow-hidden border-2 border-gray-200 bg-gradient-to-br from-blue-50 to-green-50">
+              {/* Map Controls */}
+              <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="bg-white/90 hover:bg-white"
+                  onClick={handleZoomIn}
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="bg-white/90 hover:bg-white"
+                  onClick={handleZoomOut}
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </Button>
               </div>
-              
-              {/* Map title */}
-              <div className="absolute top-2 left-2 bg-white/90 px-2 py-1 rounded text-xs font-semibold">
-                Tennessee/Georgia Region
+
+              {/* Map Info */}
+              <div className="absolute top-4 right-4 z-10 bg-white/90 px-3 py-2 rounded text-sm font-semibold">
+                United States - Zoom: {zoomLevel}
               </div>
-              
-              {/* Driver markers */}
-              {locations.map((location, index) => {
-                // Convert GPS coordinates to map position (simple projection)
-                const mapWidth = 100;
-                const mapHeight = 100;
-                
-                // Tennessee/Georgia region bounds (more accurate)
-                const regionBounds = {
-                  minLat: 32.0, maxLat: 37.0,
-                  minLng: -91.0, maxLng: -82.0
-                };
-                
-                // Calculate map positions based on actual coordinates
-                const x = ((location.longitude - regionBounds.minLng) / (regionBounds.maxLng - regionBounds.minLng)) * 100;
-                const y = ((regionBounds.maxLat - location.latitude) / (regionBounds.maxLat - regionBounds.minLat)) * 100;
-                
-                return (
-                  <div
-                    key={location.driverId}
-                    className="absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer"
-                    style={{ 
-                      left: `${Math.max(2, Math.min(98, x))}%`, 
-                      top: `${Math.max(2, Math.min(98, y))}%` 
-                    }}
-                    data-testid={`driver-marker-${location.driverId}`}
-                  >
-                    {/* Driver marker */}
-                    <div className="relative">
-                      <div className="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg animate-pulse"></div>
-                      <Navigation 
-                        className="absolute top-0 left-0 w-4 h-4 text-white" 
-                        style={{ transform: 'translate(-50%, -50%)' }}
-                      />
-                    </div>
-                    
-                    {/* Tooltip on hover */}
-                    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-black/90 text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                      <div className="font-semibold">{location.driverName}</div>
-                      <div>{location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}</div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span>{formatSpeed(location.speed)}</span>
-                        <span className="flex items-center gap-1">
-                          <Zap className="w-3 h-3" />
-                          {formatBattery(location.batteryLevel)}
-                        </span>
+
+              {/* Interactive Map Area */}
+              <div 
+                className="relative w-full h-full cursor-crosshair"
+                onClick={handleMapClick}
+                style={{
+                  backgroundImage: `url("data:image/svg+xml;base64,${btoa(`
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+                      <!-- US States outline -->
+                      <rect width="800" height="600" fill="#f0f9ff"/>
+                      <!-- Grid lines for reference -->
+                      <defs>
+                        <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                          <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#e5e7eb" stroke-width="0.5"/>
+                        </pattern>
+                      </defs>
+                      <rect width="800" height="600" fill="url(#grid)" opacity="0.3"/>
+                      
+                      <!-- Simplified US outline -->
+                      <path d="M 150 400 L 150 200 L 250 150 L 400 180 L 550 200 L 650 250 L 700 300 L 680 400 L 600 450 L 400 480 L 200 450 Z" 
+                            fill="#bfdbfe" stroke="#1e40af" stroke-width="2"/>
+                      
+                      <!-- State boundaries (simplified) -->
+                      <g stroke="#6b7280" stroke-width="1" fill="none" opacity="0.5">
+                        <line x1="200" y1="150" x2="200" y2="450"/>
+                        <line x1="300" y1="180" x2="300" y2="480"/>
+                        <line x1="400" y1="180" x2="400" y2="480"/>
+                        <line x1="500" y1="200" x2="500" y2="450"/>
+                        <line x1="600" y1="250" x2="600" y2="450"/>
+                        <line x1="150" y1="250" x2="680" y2="250"/>
+                        <line x1="150" y1="350" x2="680" y2="350"/>
+                      </g>
+                      
+                      <!-- Major cities dots -->
+                      <circle cx="250" cy="380" r="3" fill="#ef4444"/>
+                      <circle cx="450" cy="320" r="3" fill="#ef4444"/>
+                      <circle cx="180" cy="300" r="3" fill="#ef4444"/>
+                      <circle cx="600" cy="280" r="3" fill="#ef4444"/>
+                    </svg>
+                  `)}")`
+                }}
+              >
+                {/* Driver markers */}
+                {locations.map((location) => {
+                  const { x, y } = coordToPixel(location.latitude, location.longitude, zoomLevel);
+                  
+                  return (
+                    <div
+                      key={location.driverId}
+                      className="absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer z-20"
+                      style={{ 
+                        left: `${(x / 800) * 100}%`, 
+                        top: `${(y / 600) * 100}%`,
+                        transform: `scale(${Math.min(zoomLevel / 4, 2)}) translate(-50%, -50%)`
+                      }}
+                      data-testid={`driver-marker-${location.driverId}`}
+                    >
+                      {/* Truck icon marker */}
+                      <div className="relative">
+                        <div className="w-8 h-8 bg-blue-600 rounded-full border-3 border-white shadow-lg flex items-center justify-center animate-pulse">
+                          <Navigation className="w-4 h-4 text-white" />
+                        </div>
+                        
+                        {/* Driver info tooltip */}
+                        <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 bg-black/90 text-white text-xs rounded px-3 py-2 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-30 min-w-[180px]">
+                          <div className="font-semibold">{location.driverName}</div>
+                          <div className="flex items-center gap-1 mt-1">
+                            <MapPin className="w-3 h-3" />
+                            <span>{location.address}</span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="flex items-center gap-1">
+                              <Navigation className="w-3 h-3 text-blue-400" />
+                              {formatSpeed(location.speed)}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Zap className="w-3 h-3 text-green-400" />
+                              {formatBattery(location.batteryLevel)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <Badge variant={location.isMoving ? "default" : "secondary"} className="text-xs">
+                              {location.isMoving ? 'Moving' : 'Stopped'}
+                            </Badge>
+                            <span className="text-xs opacity-75">
+                              {new Date(location.lastUpdate).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+
+                {/* Zoom level indicator */}
+                <div className="absolute bottom-4 left-4 text-xs text-gray-600 bg-white/80 px-2 py-1 rounded">
+                  Click to center • Use zoom controls
+                </div>
+              </div>
             </div>
             
             {/* Driver list below map */}
