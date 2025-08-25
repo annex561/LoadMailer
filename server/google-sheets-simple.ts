@@ -81,7 +81,12 @@ class GoogleSheetsSimple {
         
         if (values.length < 5) continue;
 
-        // Map your columns: A(Pay), B(Total miles), C(Pick up address), D(Delivery address), E(pick up date), etc.
+        // Debug: Log the values to see the actual mapping
+        if (i < 3) {
+          console.log(`📋 Row ${i} values:`, values.slice(0, 10));
+        }
+
+        // Fix mapping - data shows equipment is in position 8, contact in position 9
         const pay = values[0] || '';
         const miles = values[1] || '';  
         const origin = values[2] || '';
@@ -89,8 +94,13 @@ class GoogleSheetsSimple {
         const pickupDate = values[4] || '';
         const deadhead = values[5] || '';
         const weight = values[6] || '';
-        const contact = values[7] || '';
-        const company = values[8] || '';
+        const loadType = values[8] || '';  // Equipment is actually in position 8
+        const contact = values[9] || '';   // Contact is actually in position 9
+        const company = values[10] || '';  // Company shifted too
+        
+        if (i < 3) {
+          console.log(`📋 Fixed mapping - equipment: "${loadType}", phone: "${contact}"`);
+        }
 
         if (!origin || !destination) continue;
 
@@ -102,10 +112,10 @@ class GoogleSheetsSimple {
           weight: weight || 'N/A',
           rate: this.cleanNumber(pay),
           miles: this.cleanNumber(miles),
-          equipment: 'Van',
+          equipment: loadType || 'Van',  // Use Load Type column for equipment
           broker: 'Google Sheets',
           email: 'dispatch@lampslogistics.com',
-          phone: contact || 'N/A',
+          phone: contact || 'N/A',      // Use Contact Info column for phone
           scrapedAt: new Date()
         };
 
