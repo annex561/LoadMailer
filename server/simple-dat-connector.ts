@@ -102,16 +102,17 @@ export class SimpleDATConnector {
       );
 
       if (!loadExists) {
+        const description = `${selectedLoad.commodity} - ${selectedLoad.company}`;
         const loadData = {
           customerId: customers[0].id,
-          description: `${selectedLoad.commodity} - ${selectedLoad.company}`,
+          description: description || 'General Freight',
           pickupAddress: selectedLoad.origin,
           pickupDate: new Date(),
           pickupTime: "08:00",
           deliveryAddress: selectedLoad.destination,
           deliveryDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
           deliveryTime: "17:00", 
-          equipmentType: 'straight_box_truck' as const,
+          equipmentType: 'dry_van' as const,
           rate: selectedLoad.rate,
           miles: selectedLoad.miles,
           weight: Math.floor(Math.random() * 20000) + 5000,

@@ -201,12 +201,48 @@ export class DatabaseStorage implements IStorage {
     // Get customer for relations
     const customer = await this.getCustomer(insertLoad.customerId);
     
+    // Safely parse dates
+    let pickupDate: Date;
+    let deliveryDate: Date;
+    
+    try {
+      if (insertLoad.pickupDate instanceof Date) {
+        pickupDate = insertLoad.pickupDate;
+      } else if (typeof insertLoad.pickupDate === 'string') {
+        pickupDate = new Date(insertLoad.pickupDate);
+      } else {
+        pickupDate = new Date();
+      }
+      
+      if (isNaN(pickupDate.getTime())) {
+        pickupDate = new Date();
+      }
+    } catch {
+      pickupDate = new Date();
+    }
+    
+    try {
+      if (insertLoad.deliveryDate instanceof Date) {
+        deliveryDate = insertLoad.deliveryDate;
+      } else if (typeof insertLoad.deliveryDate === 'string') {
+        deliveryDate = new Date(insertLoad.deliveryDate);
+      } else {
+        deliveryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      }
+      
+      if (isNaN(deliveryDate.getTime())) {
+        deliveryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      }
+    } catch {
+      deliveryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
+    
     const load: schema.LoadWithRelations = {
       ...insertLoad,
       id,
       loadNumber,
-      pickupDate: new Date(insertLoad.pickupDate),
-      deliveryDate: new Date(insertLoad.deliveryDate),
+      pickupDate,
+      deliveryDate,
       createdAt: new Date(),
       updatedAt: new Date(),
       driver: null,
@@ -217,22 +253,6 @@ export class DatabaseStorage implements IStorage {
     this.temporaryLoads.set(id, load);
     
     try {
-      // Create proper date objects from string dates
-      let pickupDate: Date;
-      let deliveryDate: Date;
-      
-      if (typeof insertLoad.pickupDate === 'string') {
-        pickupDate = new Date(insertLoad.pickupDate + 'T00:00:00.000Z');
-      } else {
-        pickupDate = new Date(insertLoad.pickupDate);
-      }
-      
-      if (typeof insertLoad.deliveryDate === 'string') {
-        deliveryDate = new Date(insertLoad.deliveryDate + 'T00:00:00.000Z');
-      } else {
-        deliveryDate = new Date(insertLoad.deliveryDate);
-      }
-
       const dbLoad: schema.Load = {
         ...insertLoad,
         id,
@@ -243,14 +263,10 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       };
       
-      // Update the memory load with proper dates too
-      load.pickupDate = pickupDate;
-      load.deliveryDate = deliveryDate;
-      
       await db.insert(schema.loads).values(dbLoad);
       console.log(`✅ Load ${loadNumber} created successfully - ${load.description}`);
     } catch (error) {
-      console.log(`✅ Load ${loadNumber} created in memory (database insert failed: ${error.message})`);
+      console.log(`✅ Load ${loadNumber} created in memory (database insert failed: ${error?.message})`);
     }
     
     return load;

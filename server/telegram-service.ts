@@ -12,6 +12,10 @@ export class TelegramLoadService {
   private bot: TelegramBot | null = null;
   private config: TelegramBotConfig | null = null;
   private isRunning = false;
+  private messageQueue: Array<() => Promise<any>> = [];
+  private isProcessingQueue = false;
+  private lastMessageTime = 0;
+  private readonly MESSAGE_DELAY = 1500; // 1.5 seconds between messages to avoid rate limiting
 
   async initialize(): Promise<void> {
     try {
@@ -31,11 +35,16 @@ export class TelegramLoadService {
       // Add error handling for bot
       this.bot.on('error', (error) => {
         console.error('Telegram bot error:', error);
+        // Don't throw error - just log it to prevent app from crashing
       });
       
       this.bot.on('polling_error', (error) => {
         console.error('Telegram polling error:', error);
+        // Don't throw error - just log it to prevent app from crashing
       });
+      
+      // Start message queue processor
+      this.startQueueProcessor();
       
       // Set up command handlers
       this.setupCommandHandlers();
@@ -47,7 +56,55 @@ export class TelegramLoadService {
       console.log('Telegram Load Dispatcher initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Telegram service:', error);
-      throw error;
+      // Don't throw error - just log it to prevent app from failing to start
+    }
+  }
+
+  private startQueueProcessor(): void {
+    if (this.isProcessingQueue) return;
+    
+    this.isProcessingQueue = true;
+    const processQueue = async () => {
+      while (this.messageQueue.length > 0 && this.isRunning) {
+        const now = Date.now();
+        const timeSinceLastMessage = now - this.lastMessageTime;
+        
+        if (timeSinceLastMessage < this.MESSAGE_DELAY) {
+          const delay = this.MESSAGE_DELAY - timeSinceLastMessage;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
+        const messageFunction = this.messageQueue.shift();
+        if (messageFunction) {
+          try {
+            await messageFunction();
+            this.lastMessageTime = Date.now();
+          } catch (error: any) {
+            console.error('Error sending Telegram message:', error);
+            // Skip rate limited messages to prevent getting stuck
+            if (error?.code === 429) {
+              console.log('Rate limit hit, waiting longer...');
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+          }
+        }
+      }
+      
+      this.isProcessingQueue = false;
+      
+      // Restart queue processor if there are more messages
+      if (this.messageQueue.length > 0) {
+        setTimeout(() => this.startQueueProcessor(), 100);
+      }
+    };
+    
+    processQueue();
+  }
+
+  private queueMessage(messageFunction: () => Promise<any>): void {
+    this.messageQueue.push(messageFunction);
+    if (!this.isProcessingQueue) {
+      this.startQueueProcessor();
     }
   }
 
@@ -1063,7 +1120,9 @@ ${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n
         }
       };
 
-      await this.bot.sendMessage(load.driver.telegramId, confirmationMessage, options);
+      this.queueMessage(async () => {
+        await this.bot?.sendMessage(load.driver.telegramId, confirmationMessage, options);
+      });
       console.log(`Pickup confirmation sent to driver ${load.driver.name} for load ${load.loadNumber}`);
       return true;
     } catch (error) {
@@ -1098,9 +1157,11 @@ ${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n
 
 *IMPORTANT: Don't leave the shipper without my good to go.*`;
 
-      await this.bot.sendMessage(driver.telegramId, instructionsMessage, {
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true
+      this.queueMessage(async () => {
+        await this.bot?.sendMessage(driver.telegramId, instructionsMessage, {
+          parse_mode: 'Markdown',
+          disable_web_page_preview: true
+        });
       });
       
       console.log(`Pickup instructions sent to driver ${driver.name} for load ${load.loadNumber}`);
@@ -1344,17 +1405,21 @@ Safe travels! 🛣️`;
       return null;
     }
 
-    try {
-      const sentMessage = await this.bot.sendMessage(chatId, message, {
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true
+    return new Promise((resolve) => {
+      this.queueMessage(async () => {
+        try {
+          const sentMessage = await this.bot?.sendMessage(chatId, message, {
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true
+          });
+          console.log(`Sent dispatcher notification to chat: ${chatId}`);
+          resolve(sentMessage?.message_id || null);
+        } catch (error) {
+          console.error('Error sending dispatcher notification via Telegram:', error);
+          resolve(null);
+        }
       });
-      console.log(`Sent dispatcher notification to chat: ${chatId}`);
-      return sentMessage.message_id;
-    } catch (error) {
-      console.error('Error sending dispatcher notification via Telegram:', error);
-      return null;
-    }
+    });
   }
 
   /**
@@ -1366,24 +1431,27 @@ Safe travels! 🛣️`;
       return null;
     }
 
-    try {
-      const sentMessage = await this.bot.sendMessage(chatId, message, {
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true
+    return new Promise((resolve) => {
+      this.queueMessage(async () => {
+        try {
+          const sentMessage = await this.bot?.sendMessage(chatId, message, {
+            parse_mode: 'Markdown',
+            disable_web_page_preview: true
+          });
+          console.log(`Sent message to chat ${chatId}: ${message.substring(0, 100)}...`);
+          resolve(sentMessage?.message_id || null);
+        } catch (error) {
+          console.error(`Error sending message to chat ${chatId}:`, error);
+          
+          // If chat not found, handle gracefully
+          if (error instanceof Error && error.message.includes('chat not found')) {
+            console.log(`❌ Chat ${chatId} not found - likely invalid or blocked chat ID`);
+          }
+          
+          resolve(null);
+        }
       });
-      console.log(`Sent message to chat ${chatId}: ${message.substring(0, 100)}...`);
-      return sentMessage.message_id;
-    } catch (error) {
-      console.error(`Error sending message to chat ${chatId}:`, error);
-      
-      // If chat not found, handle gracefully
-      if (error instanceof Error && error.message.includes('chat not found')) {
-        console.log(`❌ Chat ${chatId} not found - likely invalid or blocked chat ID`);
-        return null;
-      }
-      
-      return null;
-    }
+    });
   }
 
   private async handleBookLoad(loadId: string, telegramId: string, chatId: number): Promise<void> {
