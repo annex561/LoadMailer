@@ -1,5 +1,4 @@
 // Simple Google Sheets CSV integration
-import { datLoads } from './dat-loads-api.js';
 
 interface GoogleSheetsLoad {
   pay: string;
@@ -66,15 +65,9 @@ class GoogleSheetsSimple {
       const dataRows = lines.slice(1); // Skip header row
       let newLoadsCount = 0;
 
-      // Clear existing Google Sheets loads from datLoads array
-      const existingLoadCount = datLoads.length;
-      for (let i = datLoads.length - 1; i >= 0; i--) {
-        if (datLoads[i].broker === 'Google Sheets') {
-          datLoads.splice(i, 1);
-        }
-      }
-
-      // Add new Google Sheets loads
+      // Parse CSV and create loads array
+      const googleSheetsLoads = [];
+      
       for (let i = 0; i < Math.min(dataRows.length, 50); i++) {
         const row = dataRows[i];
         const values = this.parseCSVRow(row);
@@ -109,8 +102,27 @@ class GoogleSheetsSimple {
           scrapedAt: new Date()
         };
 
-        datLoads.push(load);
+        googleSheetsLoads.push(load);
         newLoadsCount++;
+      }
+
+      // Send loads to the DAT loads API endpoint
+      if (googleSheetsLoads.length > 0) {
+        try {
+          const response = await fetch('http://localhost:5000/api/dat-loads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ loads: googleSheetsLoads })
+          });
+          
+          if (response.ok) {
+            console.log(`📋 Successfully posted ${googleSheetsLoads.length} Google Sheets loads to DAT API`);
+          } else {
+            console.error('❌ Failed to post loads to DAT API:', response.status);
+          }
+        } catch (error) {
+          console.error('❌ Error posting loads to DAT API:', error.message);
+        }
       }
 
       console.log(`✅ Google Sheets import complete: ${newLoadsCount} loads added`);
