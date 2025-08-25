@@ -325,6 +325,90 @@ export class TelegramLoadService {
       }
     });
 
+    // Add location command
+    this.bot.onText(/\/location/, async (msg: any) => {
+      const chatId = msg.chat.id;
+      const telegramId = msg.from?.id.toString();
+      
+      try {
+        const driver = await storage.getDriverByTelegramId(telegramId);
+        if (!driver) {
+          await this.bot?.sendMessage(chatId, 'Driver not found. Please register first.');
+          return;
+        }
+
+        await this.bot?.sendMessage(chatId, 
+          `📍 *Share Your Location*\n\n` +
+          `To get loads along your route, please share your current GPS location:\n\n` +
+          `1️⃣ Tap the 📎 attachment button\n` +
+          `2️⃣ Select "📍 Location"\n` +
+          `3️⃣ Choose "Share Live Location" or "Send My Current Location"\n\n` +
+          `This helps us match you with loads that are on your route!`,
+          { 
+            parse_mode: 'Markdown',
+            reply_markup: {
+              keyboard: [
+                [{ text: '📍 Share Location', request_location: true }]
+              ],
+              resize_keyboard: true,
+              one_time_keyboard: true
+            }
+          }
+        );
+      } catch (error) {
+        console.error('Error handling location command:', error);
+        await this.bot?.sendMessage(chatId, 'Error requesting location. Please try again.');
+      }
+    });
+
+    // Handle location messages for GPS tracking
+    this.bot.on('location', async (msg: any) => {
+      const chatId = msg.chat.id;
+      const telegramId = msg.from?.id.toString();
+      const location = msg.location;
+      
+      if (!location || !telegramId) return;
+      
+      try {
+        const driver = await storage.getDriverByTelegramId(telegramId);
+        if (!driver) {
+          await this.bot?.sendMessage(chatId, 'Driver not found. Please register first.');
+          return;
+        }
+
+        // Update driver location
+        await storage.createDriverLocation({
+          driverId: driver.id,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timestamp: new Date(),
+          accuracy: location.horizontal_accuracy || 10,
+          speed: null,
+          heading: null,
+          altitude: null,
+          address: null,
+          loadId: null,
+          isActive: true,
+          batteryLevel: null,
+          signalStrength: null
+        });
+
+        console.log(`📍 GPS location updated for driver ${driver.name}: ${location.latitude}, ${location.longitude}`);
+        
+        await this.bot?.sendMessage(chatId, 
+          `📍 *Location Updated*\n\n` +
+          `Your GPS coordinates have been recorded.\n` +
+          `We'll now match you with loads along your route!\n\n` +
+          `📍 Lat: ${location.latitude.toFixed(4)}\n` +
+          `📍 Lng: ${location.longitude.toFixed(4)}`,
+          { parse_mode: 'Markdown' }
+        );
+      } catch (error) {
+        console.error('Error handling location update:', error);
+        await this.bot?.sendMessage(chatId, 'Error updating location. Please try again.');
+      }
+    });
+
     // Handle callback queries from inline keyboard buttons
     this.bot.on('callback_query', async (callbackQuery: any) => {
       if (!this.bot || !callbackQuery.data) return;
@@ -615,10 +699,33 @@ export class TelegramLoadService {
     }
   }
 
-  // Calculate driver proximity to pickup location
+  // Calculate driver proximity to pickup location using GPS data when available
   private async calculateDriverProximity(driver: Driver, load: LoadWithRelations): Promise<{distance: number, isNearby: boolean}> {
     try {
-      // Use city-based proximity calculation with coordinates when possible
+      // First, try to get driver's current GPS location
+      const driverLocations = await storage.getDriverLocationHistory(driver.id);
+      const currentLocation = driverLocations.find(loc => loc.isActive && loc.timestamp > new Date(Date.now() - 24 * 60 * 60 * 1000)); // Last 24 hours
+      
+      if (currentLocation) {
+        console.log(`📍 Using GPS location for driver ${driver.name}: ${currentLocation.latitude}, ${currentLocation.longitude}`);
+        
+        // Get pickup coordinates
+        const pickupCoords = await this.geocodeAddress(load.pickupAddress);
+        
+        if (pickupCoords) {
+          // Calculate actual distance using GPS coordinates
+          const distance = this.calculateDistance(
+            currentLocation.latitude,
+            currentLocation.longitude,
+            pickupCoords.latitude,
+            pickupCoords.longitude
+          );
+          console.log(`📏 GPS-based distance for ${driver.name}: ${distance} miles to ${load.pickupAddress}`);
+          return { distance, isNearby: distance <= 150 }; // Within 150 miles
+        }
+      }
+      
+      // Fallback to city-based proximity calculation
       const driverCity = driver.city?.split(',')[0]?.trim().toLowerCase();
       const pickupCity = load.pickupAddress.split(',')[0]?.trim().toLowerCase();
       
@@ -635,7 +742,7 @@ export class TelegramLoadService {
             pickupCoords.latitude,
             pickupCoords.longitude
           );
-          return { distance, isNearby: distance <= 100 };
+          return { distance, isNearby: distance <= 150 };
         }
         
         // Fallback to simple city matching - be more generous with proximity

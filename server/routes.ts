@@ -23,7 +23,7 @@ import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmail
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
-// import { realDriverLocationService } from "./real-driver-location-service"; // Temporarily disabled
+import { realDriverLocationService } from "./real-driver-location-service";
 import { taskMagicIntegration } from './taskmagic-integration';
 import { datScraperService as puppeteerDATService } from './dat-puppeteer-scraper';
 import { googleSheetsService } from './google-sheets-service';
@@ -282,7 +282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize real driver location service on startup
   try {
-    // await realDriverLocationService.initialize(); // Temporarily disabled
+    await realDriverLocationService.initialize();
     console.log('Real Driver Location Service initialized');
   } catch (error) {
     console.error('Failed to initialize real driver location service:', error);
