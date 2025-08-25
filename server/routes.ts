@@ -4804,20 +4804,17 @@ Safe travels! 🚛`;
     }
   });
 
-  // Setup DAT Loads API
-  const { setupDATLoadsAPI } = await import('./dat-loads-api');
-  setupDATLoadsAPI(app);
   
-  // Setup Direct DAT Loads (bypassing cache issues)
-  const { setupDirectDATLoads } = await import('./dat-loads-direct');
-  setupDirectDATLoads(app);
+  // Setup Google Sheets DAT Loads API
+  const { setupGoogleSheetsDATAPI } = await import('./google-sheets-dat-api');
+  setupGoogleSheetsDATAPI(app);
 
   // Initialize Simple Google Sheets Integration
   const { googleSheetsSimple } = await import('./google-sheets-simple.js');
   await googleSheetsSimple.start();
 
-  // Google Sheets Auto-Import API endpoints
-  app.post('/api/google-sheets/auto-import/start', async (req, res) => {
+  // Simple Google Sheets API endpoints
+  app.post('/api/google-sheets/start', async (req, res) => {
     try {
       await googleSheetsAutoImporter.start();
       res.json({ 

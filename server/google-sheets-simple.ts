@@ -106,10 +106,10 @@ class GoogleSheetsSimple {
         newLoadsCount++;
       }
 
-      // Send loads to the DAT loads API endpoint
+      // Send loads to the Google Sheets DAT API endpoint
       if (googleSheetsLoads.length > 0) {
         try {
-          const response = await fetch('http://localhost:5000/api/dat-loads', {
+          const response = await fetch('http://localhost:5000/api/dat-loads/google-sheets', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ loads: googleSheetsLoads })
