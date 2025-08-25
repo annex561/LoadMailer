@@ -259,14 +259,25 @@ export class DatabaseStorage implements IStorage {
         loadNumber,
         pickupDate,
         deliveryDate,
+        description: insertLoad.description || 'General Freight', // Ensure description is never null
+        status: insertLoad.status || 'scheduled',
+        priority: insertLoad.priority || 'standard',
+        equipmentType: insertLoad.equipmentType || 'dry_van',
+        temperatureRequired: insertLoad.temperatureRequired || false,
+        isExpired: insertLoad.isExpired || false,
+        sourceBoard: insertLoad.sourceBoard || 'manual',
+        weight: insertLoad.weight || 25000, // Ensure weight has a default value
+        pickupTime: insertLoad.pickupTime || '08:00', // Ensure pickup time has a default
+        deliveryTime: insertLoad.deliveryTime || '17:00', // Ensure delivery time has a default
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       
       await db.insert(schema.loads).values(dbLoad);
-      console.log(`✅ Load ${loadNumber} created successfully - ${load.description}`);
+      console.log(`✅ Load ${loadNumber} created successfully in database - ${dbLoad.description}`);
     } catch (error) {
-      console.log(`✅ Load ${loadNumber} created in memory (database insert failed: ${error?.message})`);
+      console.log(`❌ Load ${loadNumber} database insert failed: ${error?.message}`);
+      console.log(`✅ Load ${loadNumber} available in memory - ${load.description}`);
     }
     
     return load;

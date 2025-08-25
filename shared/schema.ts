@@ -92,6 +92,7 @@ export const loads = pgTable("loads", {
   // DAT-style fields
   rate: real("rate"), // Rate in dollars
   miles: integer("miles"), // Distance in miles
+  weight: integer("weight"), // Weight in pounds
   company: text("company"), // Shipping company
   contactPhone: text("contact_phone"), // Contact phone number
   sourceBoard: text("source_board").default("manual"), // manual, dat, loadboard
