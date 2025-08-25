@@ -218,14 +218,14 @@ class GoogleSheetsSimple {
           origin: origin,
           destination: destination,
           pickup: pickupDate || 'ASAP',
-          weight: weight || 'N/A',
+          weight: this.cleanNumber(weight) || 0,
           rate: this.cleanNumber(pay),
           miles: this.cleanNumber(miles),
           equipment: loadType || 'Van',  // Use Load Type column for equipment
           broker: 'Google Sheets',
           email: 'dispatch@lampslogistics.com',
           phone: contact || 'N/A',      // Use Contact Info column for phone
-          deadhead: deadhead || 'N/A',  // Add deadhead from column F
+          deadhead: this.cleanNumber(deadhead) || 0,  // Add deadhead from column F
           company: company || 'Unknown',  // Add company from column J
           scrapedAt: new Date()
         };
