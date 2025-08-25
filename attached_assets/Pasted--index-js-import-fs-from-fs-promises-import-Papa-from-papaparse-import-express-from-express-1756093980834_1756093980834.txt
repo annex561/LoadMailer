@@ -1,0 +1,193 @@
+// index.js
+import fs from 'fs/promises';
+import Papa from 'papaparse';
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ====== CONFIG ======
+const SHEET_CSV_URL = process.env.SHEET_CSV_URL;               // <- set in Replit Secrets
+const POLL_MS       = Number(process.env.POLL_MS || 180000);   // 3 minutes
+const DATA_FILE     = 'data/loads.json';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+
+// ---------- helpers ----------
+const col = (r, name) => (r?.[name] ?? r?.[name?.toLowerCase?.()] ?? '').toString().trim();
+
+// Make a reasonably-stable unique key per row (adjust if you like)
+const keyOf = r => (
+  `${col(r,'Pick Up')}→${col(r,'Delivery')}|${col(r,'pick up date')}|${col(r,'Company')}|${col(r,'Contact Info')}`
+).toLowerCase();
+
+// Parse delivery date from a few common formats
+// - "8/24 - 8/27"  -> 8/27 (current year by default)
+// - "8/25"         -> 8/25
+// - "8/25–8/31"    -> 8/31 (handles en dash)
+// If there is a "Delivery Date" / "drop off date" column, prefer that.
+function parseDeliveryDate(row) {
+  const now = new Date();
+  const thisYear = now.getFullYear();
+
+  const explicit = col(row, 'Delivery Date') || col(row, 'drop off date') || col(row, 'Drop Date');
+  const rangeOrPick = explicit || col(row, 'pick up date'); // your sheet uses "pick up date" ranges
+
+  if (!rangeOrPick) return null;
+
+  const text = rangeOrPick.replace(/\s+/g, ' ').trim();
+
+  // If a single M/D[/YYYY]
+  const single = text.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if (single) {
+    const [, m, d, y] = single;
+    return safeDate(+m, +d, y ? normalizeYear(y) : thisYear, now);
+  }
+
+  // If a range like "8/24 - 8/27" or "8/24–8/27"
+  const range = text.match(/(\d{1,2})\/(\d{1,2})\s*[–\-]\s*(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+  if (range) {
+    const [, m1, d1, m2, d2, y] = range;
+    const year = y ? normalizeYear(y) : thisYear;
+    return safeDate(+m2, +d2, year, now, { startM:+m1, startD:+d1 });
+  }
+
+  return null;
+}
+
+function normalizeYear(y) {
+  const yy = +y;
+  if (yy < 100) return 2000 + yy; // "25" -> 2025
+  return yy;
+}
+
+// Builds a Date safely and handles cross-year spans like "12/30 - 1/3".
+function safeDate(m, d, y, now, start) {
+  let dt = new Date(y, m - 1, d);
+  if (start) {
+    const startDate = new Date(y, start.startM - 1, start.startD);
+    // If end appears earlier in the calendar than start, assume it crossed New Year
+    if (dt < startDate) dt = new Date(y + 1, m - 1, d);
+  }
+  // If it's absurdly old (> 370 days behind), bump to next year (helps around New Year)
+  if ((now - dt) > 370 * 864e5) dt = new Date(y + 1, m - 1, d);
+  return dt;
+}
+
+function isExpired(row) {
+  const last = parseDeliveryDate(row);
+  if (!last) return false; // keep if unknown
+  const midnightToday = new Date(); midnightToday.setHours(0,0,0,0);
+  return last < midnightToday;
+}
+
+let cache = new Set();
+
+async function loadExisting() {
+  try {
+    const raw = await fs.readFile(DATA_FILE, 'utf8');
+    const arr = JSON.parse(raw);
+    cache = new Set(arr.map(keyOf));
+  } catch {
+    await fs.mkdir('data', { recursive: true });
+    await fs.writeFile(DATA_FILE, '[]');
+  }
+}
+
+async function fetchSheet() {
+  if (!SHEET_CSV_URL) throw new Error('Missing SHEET_CSV_URL env var');
+  const res = await fetch(SHEET_CSV_URL);
+  if (!res.ok) throw new Error(`CSV fetch failed: ${res.status} ${res.statusText}`);
+  return res.text();
+}
+
+function normalizeRows(rows) {
+  // Keep only the columns we care about and keep names consistent
+  return rows.map(r => ({
+    Pay: col(r,'Pay'),
+    'Total miles': col(r,'Total miles'),
+    'Pick Up': col(r,'Pick Up'),
+    Delivery: col(r,'Delivery'),
+    'pick up date': col(r,'pick up date'),
+    Deadhead: col(r,'Deadhead'),
+    Weight: col(r,'Weight'),
+    'Load Type': col(r,'Load Type'),
+    'Contact Info': col(r,'Contact Info'),
+    Company: col(r,'Company')
+  }));
+}
+
+async function parseCsv(csvText) {
+  const out = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+  if (out.errors?.length) console.warn('CSV parse warnings:', out.errors.slice(0,3));
+  return normalizeRows(out.data);
+}
+
+async function readAll() {
+  try {
+    return JSON.parse(await fs.readFile(DATA_FILE, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+async function writeAll(arr) {
+  await fs.writeFile(DATA_FILE, JSON.stringify(arr, null, 2));
+}
+
+async function saveNew(rows) {
+  const existing = await readAll();
+
+  // purge expired from existing
+  const kept = existing.filter(r => !isExpired(r));
+
+  // append only new, non-expired
+  let added = 0;
+  for (const r of rows) {
+    if (isExpired(r)) continue;
+    const k = keyOf(r);
+    if (!cache.has(k)) {
+      cache.add(k);
+      kept.push(r);
+      added++;
+    }
+  }
+  if (added || kept.length !== existing.length) {
+    await writeAll(kept);
+    console.log(`Saved ${added} new loads. Active: ${kept.length}`);
+  } else {
+    console.log('No changes this cycle.');
+  }
+}
+
+async function pollOnce() {
+  try {
+    const csv = await fetchSheet();
+    const rows = await parseCsv(csv);
+    await saveNew(rows);
+  } catch (e) {
+    console.error('Poll error:', e.message);
+  }
+}
+
+async function main() {
+  await loadExisting();
+  await pollOnce();
+  setInterval(pollOnce, POLL_MS);
+
+  const app = express();
+
+  // Serve UI
+  app.use(express.static(path.join(__dirname, 'public')));
+
+  // API: active loads only (already purged on save)
+  app.get('/api/loads', async (_req, res) => {
+    const data = await readAll();
+    res.json(data);
+  });
+
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => console.log(`LoadSignal running on ${port}`));
+}
+
+main();

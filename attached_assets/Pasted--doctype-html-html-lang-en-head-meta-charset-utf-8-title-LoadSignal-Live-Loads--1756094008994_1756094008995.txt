@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>LoadSignal — Live Loads</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg:#0b1220; --panel:#111a2b; --text:#ecf1ff; --muted:#90a0c0; --accent:#62b0ff; }
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;}
+    .wrap{max-width:1200px;margin:32px auto;padding:0 16px;}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px;}
+    header h1{font-size:18px;margin:0;}
+    .meta{color:var(--muted);font-size:12px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    input,button,select{
+      background:var(--panel);color:var(--text);border:1px solid #1f2a43;border-radius:8px;padding:8px 10px
+    }
+    button{cursor:pointer}
+    table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid #1f2a43;border-radius:12px;overflow:hidden}
+    thead th{position:sticky;top:0;background:#0f1830;color:#aecaFF;text-align:left;padding:10px;font-weight:600}
+    tbody td{border-top:1px solid #1b2440;padding:10px;vertical-align:top}
+    tbody tr:hover{background:#0e1730}
+    .pay{color:#6ffba3;font-weight:700}
+    .small{color:var(--muted);font-size:12px}
+    .pill{display:inline-block;padding:2px 8px;border:1px solid #284a77;border-radius:999px;color:#a8c3ff;font-size:12px}
+    @media (max-width:960px){
+      table{display:block;overflow:auto}
+      thead th,tbody td{white-space:nowrap}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>LoadSignal — Live Loads</h1>
+      <div class="controls">
+        <input id="q" placeholder="Search (city, company, contact…)" />
+        <select id="equip">
+          <option value="">All equipment</option>
+          <option>26 ft - Full</option>
+          <option>26 ft - Partial</option>
+          <option>16 ft - Full</option>
+          <option>16 ft - Partial</option>
+        </select>
+        <button id="refresh">Refresh</button>
+      </div>
+    </header>
+
+    <div class="meta">
+      <span id="count">0 loads</span> •
+      Last updated <span id="updated">—</span>
+    </div>
+
+    <table id="grid" aria-label="Loads">
+      <thead>
+        <tr>
+          <th>Pay</th>
+          <th>Total miles</th>
+          <th>Pick Up</th>
+          <th>Delivery</th>
+          <th>pick up date</th>
+          <th>Deadhead</th>
+          <th>Weight</th>
+          <th>Load Type</th>
+          <th>Contact Info</th>
+          <th>Company</th>
+        </tr>
+      </thead>
+      <tbody id="body"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const bodyEl    = document.getElementById('body');
+    const countEl   = document.getElementById('count');
+    const updatedEl = document.getElementById('updated');
+    const qEl       = document.getElementById('q');
+    const equipEl   = document.getElementById('equip');
+    const refreshEl = document.getElementById('refresh');
+
+    let timer;
+
+    function keyOf(r){
+      return `${(r['Pick Up']||'').trim()}→${(r['Delivery']||'').trim()}|${(r['pick up date']||'').trim()}|${(r['Company']||'').trim()}|${(r['Contact Info']||'').trim()}`.toLowerCase();
+    }
+
+    function fmtPay(x){
+      if (!x) return '';
+      const n = Number(String(x).replace(/[^0-9.]/g,'')); if (!n) return x;
+      return '$' + n.toLocaleString();
+    }
+
+    function render(rows){
+      bodyEl.innerHTML = '';
+      const q = qEl.value.trim().toLowerCase();
+      const eq = equipEl.value.trim().toLowerCase();
+
+      // client-side dedupe (server already de-dupes)
+      const seen = new Set();
+      const filtered = [];
+      for (const r of rows) {
+        const k = keyOf(r);
+        if (seen.has(k)) continue;
+        seen.add(k);
+
+        const hay = [
+          r['Pick Up'], r['Delivery'], r['Company'], r['Contact Info'], r['Load Type']
+        ].join(' ').toLowerCase();
+
+        if (q && !hay.includes(q)) continue;
+        if (eq && String(r['Load Type']||'').toLowerCase() !== eq) continue;
+
+        filtered.push(r);
+      }
+
+      countEl.textContent = `${filtered.length} load${filtered.length===1?'':'s'}`;
+
+      const frag = document.createDocumentFragment();
+      for (const r of filtered) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="pay">${fmtPay(r['Pay'])}</td>
+          <td>${r['Total miles']||''}</td>
+          <td>${r['Pick Up']||''}</td>
+          <td>${r['Delivery']||''}</td>
+          <td>${r['pick up date']||''}</td>
+          <td>${r['Deadhead']||''}</td>
+          <td>${r['Weight']||''}</td>
+          <td><span class="pill">${r['Load Type']||''}</span></td>
+          <td><div>${(r['Contact Info']||'').replace(/\\n/g,'<br>')}</div></td>
+          <td>${r['Company']||''}</td>
+        `;
+        frag.appendChild(tr);
+      }
+      bodyEl.appendChild(frag);
+      updatedEl.textContent = new Date().toLocaleTimeString();
+    }
+
+    async function load(){
+      try{
+        const res = await fetch('/api/loads');
+        const json = await res.json();
+        render(json);
+      }catch(e){
+        console.error(e);
+      }
+    }
+
+    refreshEl.addEventListener('click', load);
+    qEl.addEventListener('input', () => render(window.__rows||[]));
+    equipEl.addEventListener('change', () => render(window.__rows||[]));
+
+    async function tick(){
+      const res = await fetch('/api/loads');
+      const rows = await res.json();
+      window.__rows = rows;
+      render(rows);
+    }
+
+    // initial & auto refresh every 30s
+    tick();
+    timer = setInterval(tick, 30000);
+  </script>
+</body>
+</html>
