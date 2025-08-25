@@ -742,9 +742,8 @@ export class TelegramLoadService {
       // Format load message (from script)
       const message = this.formatLoadMessage(load, matchScore, distance, deadheadDistance);
       
-      // Send message with inline keyboard
+      // Send message with inline keyboard (removed Markdown parsing to fix format errors)
       const options = {
-        parse_mode: 'Markdown' as const,
         disable_web_page_preview: true,
         reply_markup: {
           inline_keyboard: [
