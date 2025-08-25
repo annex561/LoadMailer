@@ -63,6 +63,7 @@ import DATScraper from './DATScraper';
 import DatLogin from './dat-login';
 import AdminOverview from './admin-overview';
 import NotFound from './not-found';
+import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
   title: string;
@@ -276,6 +277,11 @@ export default function LoadOpsDashboard() {
               </div>
             </CardContent>
           </Card>
+        </div>
+        
+        {/* Driver Location Map */}
+        <div className="mt-8">
+          <DriverLocationMap />
         </div>
       </div>
     );

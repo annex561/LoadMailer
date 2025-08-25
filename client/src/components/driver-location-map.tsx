@@ -3,26 +3,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Navigation, Zap, Clock } from "lucide-react";
 
-type DriverLocationWithDriver = {
-  id: string;
+type DriverLocation = {
   driverId: string;
   driverName: string;
-  driverCity: string;
   latitude: number;
   longitude: number;
   address?: string;
-  timestamp: string;
+  lastUpdate: string;
   speed?: number;
   batteryLevel?: number;
-  isActive: boolean;
+  isMoving: boolean;
+  heading?: number;
+  routeName?: string;
+};
+
+type LocationsResponse = {
+  locations: DriverLocation[];
+  count: number;
+  serviceRunning: boolean;
+  trackedDrivers: number;
 };
 
 export default function DriverLocationMap() {
-  // Fetch driver locations with driver info
-  const { data: locations = [], isLoading } = useQuery<DriverLocationWithDriver[]>({
-    queryKey: ["/api/driver-locations-with-drivers"],
+  // Fetch real-time driver locations
+  const { data: response, isLoading } = useQuery<LocationsResponse>({
+    queryKey: ["/api/driver-locations/active"],
     refetchInterval: 15000, // Refresh every 15 seconds to match GPS tracking frequency
   });
+
+  const locations = response?.locations || [];
 
   // Center map on Tennessee/Atlanta region
   const centerLat = 35.5;
@@ -112,7 +121,7 @@ export default function DriverLocationMap() {
                 
                 return (
                   <div
-                    key={location.id}
+                    key={location.driverId}
                     className="absolute transform -translate-x-1/2 -translate-y-1/2 group cursor-pointer"
                     style={{ 
                       left: `${Math.max(5, Math.min(95, x))}%`, 
@@ -150,18 +159,18 @@ export default function DriverLocationMap() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {locations.map((location) => (
                 <div 
-                  key={location.id} 
+                  key={location.driverId} 
                   className="bg-gray-50 rounded-lg p-3 border"
                   data-testid={`driver-card-${location.driverId}`}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <div className="font-semibold text-sm">{location.driverName}</div>
-                      <div className="text-xs text-gray-500">{location.driverCity}</div>
+                      <div className="text-xs text-gray-500">{location.routeName || 'On Route'}</div>
                     </div>
                     <Badge variant="outline" className="text-xs">
                       <MapPin className="w-3 h-3 mr-1" />
-                      Active
+                      {location.isMoving ? 'Moving' : 'Stopped'}
                     </Badge>
                   </div>
                   
@@ -186,7 +195,7 @@ export default function DriverLocationMap() {
                       </div>
                       <div className="flex items-center gap-1 text-gray-400">
                         <Clock className="w-3 h-3" />
-                        {new Date(location.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                        {new Date(location.lastUpdate).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
                       </div>
                     </div>
                   </div>
