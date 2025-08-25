@@ -32,29 +32,24 @@ function DATLoads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [countdown, setCountdown] = useState(10);
 
-  const { data: loads = [], isLoading, refetch } = useQuery<GoogleSheetsLoad[]>({
+  const { data: loads = [], isLoading, refetch, dataUpdatedAt } = useQuery<GoogleSheetsLoad[]>({
     queryKey: ["/api/dat-loads"],
     refetchInterval: 10000, // Refresh every 10 seconds
+    refetchIntervalInBackground: true,
   });
 
-  // Countdown timer for next refresh
+  // Countdown timer for next refresh - sync with actual query timing
   useEffect(() => {
+    let startTime = Date.now();
+    
     const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          return 10; // Reset to 10 seconds
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      const elapsed = (Date.now() - startTime) / 1000;
+      const remaining = Math.max(0, 10 - Math.floor(elapsed % 10));
+      setCountdown(remaining || 10);
+    }, 100); // Check more frequently for smoother countdown
 
     return () => clearInterval(timer);
-  }, []);
-
-  // Reset countdown when data is refetched
-  useEffect(() => {
-    setCountdown(10);
-  }, [loads]);
+  }, [dataUpdatedAt]); // Reset when data actually updates
 
   // Filter loads based on search
   const filteredLoads = loads.filter((load: GoogleSheetsLoad) => {
