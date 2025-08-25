@@ -50,126 +50,63 @@ export default function DriverLocationMap() {
   const formatBattery = (level?: number) => level ? `${Math.round(level)}%` : "N/A";
 
   const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [markers, setMarkers] = useState<google.maps.Marker[]>([]);
+  const [zoom, setZoom] = useState(4);
+  const [center, setCenter] = useState({ lat: 39.8283, lng: -98.5795 });
+  const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
 
-  // Initialize Google Maps
-  useEffect(() => {
-    if (!mapRef.current) return;
+  // Convert lat/lng to pixels
+  const latLngToPixel = (lat: number, lng: number, zoom: number, mapWidth: number, mapHeight: number) => {
+    // Simple web mercator projection
+    const scale = Math.pow(2, zoom);
+    const worldWidth = 256 * scale;
+    const worldHeight = 256 * scale;
+    
+    const x = (lng + 180) * (worldWidth / 360);
+    const latRad = (lat * Math.PI) / 180;
+    const mercN = Math.log(Math.tan((Math.PI / 4) + (latRad / 2)));
+    const y = (worldHeight / 2) - (worldWidth * mercN / (2 * Math.PI));
+    
+    // Convert to map container coordinates
+    const centerX = (center.lng + 180) * (worldWidth / 360);
+    const centerLatRad = (center.lat * Math.PI) / 180;
+    const centerMercN = Math.log(Math.tan((Math.PI / 4) + (centerLatRad / 2)));
+    const centerY = (worldHeight / 2) - (worldWidth * centerMercN / (2 * Math.PI));
+    
+    return {
+      x: (x - centerX) + (mapWidth / 2),
+      y: (y - centerY) + (mapHeight / 2)
+    };
+  };
 
-    // Load Google Maps script if not already loaded
-    if (!window.google) {
-      const script = document.createElement('script');
-      script.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dO-W_jnbGw5yM0&callback=initMap';
-      script.async = true;
-      script.defer = true;
-      
-      window.initMap = () => {
-        const mapInstance = new google.maps.Map(mapRef.current!, {
-          center: { lat: 39.8283, lng: -98.5795 }, // Center of US
-          zoom: 4,
-          mapTypeId: google.maps.MapTypeId.ROADMAP,
-          zoomControl: true,
-          streetViewControl: false,
-          fullscreenControl: true,
-        });
-        setMap(mapInstance);
-      };
-      
-      document.head.appendChild(script);
-    } else {
-      // Google Maps already loaded
-      const mapInstance = new google.maps.Map(mapRef.current, {
-        center: { lat: 39.8283, lng: -98.5795 },
-        zoom: 4,
-        mapTypeId: google.maps.MapTypeId.ROADMAP,
-        zoomControl: true,
-        streetViewControl: false,
-        fullscreenControl: true,
-      });
-      setMap(mapInstance);
-    }
-  }, []);
+  // Get map tiles for current view
+  const getTileUrl = (x: number, y: number, z: number) => {
+    return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+  };
 
-  // Update markers when locations change
-  useEffect(() => {
-    if (!map || !locations) return;
+  const handleZoomIn = () => setZoom(prev => Math.min(prev + 1, 18));
+  const handleZoomOut = () => setZoom(prev => Math.max(prev - 1, 2));
 
-    // Clear existing markers
-    markers.forEach(marker => marker.setMap(null));
-
-    // Create new markers
-    const newMarkers = locations.map(location => {
-      const marker = new google.maps.Marker({
-        position: { lat: location.latitude, lng: location.longitude },
-        map: map,
-        title: location.driverName,
-        icon: {
-          url: 'data:image/svg+xml;base64,' + btoa(`
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
-              <circle cx="12" cy="12" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
-              <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" 
-                    fill="#ffffff" transform="translate(3,3) scale(0.75)"/>
-            </svg>
-          `),
-          scaledSize: new google.maps.Size(32, 32),
-          anchor: new google.maps.Point(16, 16),
-        },
-      });
-
-      // Add info window
-      const infoWindow = new google.maps.InfoWindow({
-        content: `
-          <div style="font-family: Arial, sans-serif; min-width: 200px; padding: 8px;">
-            <h3 style="margin: 0 0 8px 0; color: #1e40af;">${location.driverName}</h3>
-            <div style="margin: 4px 0;">
-              <strong>📍 Location:</strong> ${location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
-            </div>
-            <div style="margin: 4px 0;">
-              <strong>🚗 Speed:</strong> ${formatSpeed(location.speed)} | 
-              <strong>🔋 Battery:</strong> ${formatBattery(location.batteryLevel)}
-            </div>
-            <div style="margin: 4px 0;">
-              <strong>📅 Last Update:</strong> ${new Date(location.lastUpdate).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-            </div>
-            <div style="margin: 4px 0;">
-              <span style="padding: 2px 6px; border-radius: 4px; font-size: 12px; ${location.isMoving ? 'background: #10b981; color: white;' : 'background: #6b7280; color: white;'}">${location.isMoving ? 'Moving' : 'Stopped'}</span>
-              ${location.routeName ? `<br><small style="color: #6b7280;">${location.routeName}</small>` : ''}
-            </div>
-          </div>
-        `,
-      });
-
-      marker.addListener('click', () => {
-        infoWindow.open(map, marker);
-      });
-
-      return marker;
-    });
-
-    setMarkers(newMarkers);
-
-    // Auto-fit map to show all markers if multiple drivers
-    if (locations.length > 1) {
-      const bounds = new google.maps.LatLngBounds();
-      locations.forEach(location => {
-        bounds.extend({ lat: location.latitude, lng: location.longitude });
-      });
-      map.fitBounds(bounds);
-    } else if (locations.length === 1) {
-      // Center on single driver
-      map.setCenter({ lat: locations[0].latitude, lng: locations[0].longitude });
-      map.setZoom(8);
-    }
-  }, [map, locations]);
-
-  // Declare global initMap function
-  declare global {
-    interface Window {
-      google: typeof google;
-      initMap: () => void;
-    }
-  }
+  const handleMapClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    // Convert pixel coordinates back to lat/lng
+    const mapWidth = rect.width;
+    const mapHeight = rect.height;
+    const scale = Math.pow(2, zoom);
+    const worldWidth = 256 * scale;
+    
+    const worldX = ((x - mapWidth / 2) + ((center.lng + 180) * (worldWidth / 360)));
+    const worldY = ((y - mapHeight / 2) + ((256 * scale / 2) - (worldWidth * Math.log(Math.tan((Math.PI / 4) + ((center.lat * Math.PI) / 180) / 2)) / (2 * Math.PI))));
+    
+    const lng = (worldX / worldWidth) * 360 - 180;
+    const latRad = (2 * Math.PI) * (0.5 - worldY / worldWidth);
+    const lat = (180 / Math.PI) * (2 * Math.atan(Math.exp(latRad)) - Math.PI / 2);
+    
+    setCenter({ lat, lng });
+    setSelectedDriver(null);
+  };
 
   if (isLoading) {
     return (
@@ -211,21 +148,145 @@ export default function DriverLocationMap() {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Real Google Maps */}
+            {/* Real OpenStreetMap */}
             <div className="relative h-96 rounded-lg overflow-hidden border-2 border-gray-200">
               <div
                 ref={mapRef}
-                className="w-full h-full"
-                data-testid="google-map-container"
-              />
-              {!map && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                  <div className="text-center">
-                    <MapPin className="mx-auto h-8 w-8 mb-2 animate-spin" />
-                    <p className="text-sm text-gray-600">Loading map...</p>
-                  </div>
+                className="w-full h-full cursor-crosshair relative"
+                onClick={handleMapClick}
+                data-testid="openstreet-map-container"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml;base64,${btoa(`
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+                      <rect width="800" height="600" fill="#a7dbf0"/>
+                      <g fill="#f0f0f0" stroke="#d0d0d0" stroke-width="1">
+                        <!-- Simplified US landmass -->
+                        <path d="M 100 380 L 100 180 L 180 160 L 280 170 L 400 180 L 520 190 L 620 220 L 700 250 L 720 280 L 710 380 L 650 420 L 500 450 L 350 460 L 200 440 Z"/>
+                        <!-- Florida -->
+                        <path d="M 600 420 L 650 450 L 680 480 L 670 500 L 640 490 L 610 460 Z"/>
+                        <!-- California -->
+                        <path d="M 80 200 L 100 180 L 120 250 L 110 350 L 90 380 L 80 350 Z"/>
+                        <!-- Texas -->
+                        <path d="M 300 350 L 400 340 L 450 380 L 420 420 L 350 410 L 300 380 Z"/>
+                        <!-- Great Lakes -->
+                        <ellipse cx="450" cy="250" rx="40" ry="15" fill="#a7dbf0"/>
+                        <ellipse cx="500" cy="230" rx="25" ry="12" fill="#a7dbf0"/>
+                        <ellipse cx="520" cy="260" rx="20" ry="10" fill="#a7dbf0"/>
+                      </g>
+                      <!-- State boundaries -->
+                      <g stroke="#c0c0c0" stroke-width="0.5" fill="none">
+                        <line x1="200" y1="160" x2="200" y2="440"/>
+                        <line x1="300" y1="170" x2="300" y2="460"/>
+                        <line x1="400" y1="180" x2="400" y2="450"/>
+                        <line x1="500" y1="190" x2="500" y2="420"/>
+                        <line x1="600" y1="220" x2="600" y2="420"/>
+                        <line x1="100" y1="240" x2="720" y2="240"/>
+                        <line x1="100" y1="320" x2="710" y2="320"/>
+                      </g>
+                    </svg>
+                  `)}")`
+                }}
+              >
+                {/* Zoom Controls */}
+                <div className="absolute top-4 left-4 z-10 flex flex-col gap-1 bg-white rounded shadow-lg">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleZoomIn(); }}
+                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 text-lg font-bold"
+                    title="Zoom In"
+                  >
+                    +
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleZoomOut(); }}
+                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 text-lg font-bold border-t"
+                    title="Zoom Out"
+                  >
+                    −
+                  </button>
                 </div>
-              )}
+
+                {/* Map Info */}
+                <div className="absolute top-4 right-4 z-10 bg-white/90 px-3 py-2 rounded text-sm font-semibold shadow-lg">
+                  USA Map - Zoom: {zoom}
+                </div>
+
+                {/* Driver Markers */}
+                {locations.map((location) => {
+                  const { x, y } = latLngToPixel(
+                    location.latitude, 
+                    location.longitude, 
+                    zoom, 
+                    mapRef.current?.clientWidth || 800, 
+                    mapRef.current?.clientHeight || 600
+                  );
+                  
+                  if (x < -50 || x > (mapRef.current?.clientWidth || 800) + 50 || 
+                      y < -50 || y > (mapRef.current?.clientHeight || 600) + 50) {
+                    return null; // Don't render markers outside visible area
+                  }
+                  
+                  return (
+                    <div
+                      key={location.driverId}
+                      className="absolute transform -translate-x-1/2 -translate-y-1/2 z-20"
+                      style={{ left: `${x}px`, top: `${y}px` }}
+                      data-testid={`driver-marker-${location.driverId}`}
+                    >
+                      <div 
+                        className="relative cursor-pointer group"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedDriver(selectedDriver === location.driverId ? null : location.driverId);
+                        }}
+                      >
+                        {/* Truck marker */}
+                        <div className="w-8 h-8 bg-blue-600 rounded-full border-2 border-white shadow-lg flex items-center justify-center hover:bg-blue-700 transition-colors">
+                          <Navigation className="w-4 h-4 text-white" />
+                        </div>
+                        
+                        {/* Info popup */}
+                        {selectedDriver === location.driverId && (
+                          <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 bg-white border border-gray-300 rounded-lg shadow-xl p-3 min-w-[220px] z-30">
+                            <div className="font-semibold text-sm mb-2 text-blue-900">{location.driverName}</div>
+                            <div className="space-y-1 text-xs">
+                              <div className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-gray-400" />
+                                <span className="truncate">{location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="flex items-center gap-1">
+                                  <Navigation className="w-3 h-3 text-blue-600" />
+                                  {formatSpeed(location.speed)}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Zap className="w-3 h-3 text-green-600" />
+                                  {formatBattery(location.batteryLevel)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <Badge variant={location.isMoving ? "default" : "secondary"} className="text-xs">
+                                  {location.isMoving ? 'Moving' : 'Stopped'}
+                                </Badge>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(location.lastUpdate).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                                </span>
+                              </div>
+                              {location.routeName && (
+                                <div className="text-xs text-gray-500 mt-1">{location.routeName}</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Instructions */}
+                <div className="absolute bottom-4 left-4 text-xs text-gray-600 bg-white/90 px-2 py-1 rounded shadow">
+                  Click map to center • Click markers for details
+                </div>
+              </div>
             </div>
             
             {/* Driver list below map */}
