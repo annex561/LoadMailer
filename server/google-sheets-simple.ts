@@ -193,7 +193,7 @@ class GoogleSheetsSimple {
       // Parse CSV and create loads array
       const googleSheetsLoadArray = [];
       
-      for (let i = 0; i < Math.min(dataRows.length, 50); i++) {
+      for (let i = 0; i < dataRows.length; i++) {
         const row = dataRows[i];
         const values = this.parseCSVRow(row);
         
