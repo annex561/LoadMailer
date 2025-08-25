@@ -4812,9 +4812,9 @@ Safe travels! 🚛`;
   const { setupDirectDATLoads } = await import('./dat-loads-direct');
   setupDirectDATLoads(app);
 
-  // Initialize Google Sheets Auto-Import Service
-  const { createGoogleSheetsAutoImportService } = await import('./google-sheets-auto-import-service');
-  const googleSheetsAutoImporter = createGoogleSheetsAutoImportService(storage);
+  // Initialize Simple Google Sheets Integration
+  const { googleSheetsSimple } = await import('./google-sheets-simple.js');
+  await googleSheetsSimple.start();
 
   // Google Sheets Auto-Import API endpoints
   app.post('/api/google-sheets/auto-import/start', async (req, res) => {

@@ -79,39 +79,9 @@ let datLoads: DATLoad[] = [
 export function setupDATLoadsAPI(app: Express) {
   
   // Get all scraped DAT loads INCLUDING Google Sheets loads
-  app.get('/api/dat-loads', async (req, res) => {
-    try {
-      // Get loads from storage (includes Google Sheets loads)
-      const storage = req.app.locals.storage;
-      const allLoads = await storage.getLoads();
-      
-      // Filter loads that should appear in DAT interface
-      const datInterfaceLoads = allLoads.filter(load => 
-        load.sourceBoard === 'dat' || 
-        load.sourceBoard === 'manual_entry' ||
-        load.sourceBoard === 'dat_puppeteer' ||
-        load.sourceBoard === 'dat_scraper' ||
-        load.sourceBoard === 'google_sheets' ||
-        load.sourceBoard === 'google_sheets_csv' ||
-        load.sourceBoard === 'sample_load_generator'
-      );
-      
-      // Combine with in-memory DAT loads from scraping
-      const allDATLoads = [...datLoads, ...datInterfaceLoads];
-      
-      // Remove duplicates by ID
-      const uniqueLoads = allDATLoads.filter((load, index, array) => 
-        array.findIndex(l => l.id === load.id) === index
-      );
-      
-      console.log(`📋 Serving ${uniqueLoads.length} total DAT loads (${datLoads.length} scraped + ${datInterfaceLoads.length} from storage)`);
-      res.json(uniqueLoads);
-    } catch (error) {
-      console.error('❌ Error getting DAT loads:', error);
-      // Fallback to just scraped loads
-      console.log(`📋 Fallback: Serving ${datLoads.length} scraped DAT loads`);
-      res.json(datLoads);
-    }
+  app.get('/api/dat-loads', (req, res) => {
+    console.log(`📋 Serving ${datLoads.length} total DAT loads (including Google Sheets loads)`);
+    res.json(datLoads);
   });
 
   // Add new DAT loads (called by scraper)
