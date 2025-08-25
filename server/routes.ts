@@ -4768,9 +4768,17 @@ Safe travels! 🚛`;
   // Setup simple DAT loads endpoint - FORCE use Google Sheets loads only
   app.get('/api/dat-loads', async (req, res) => {
     try {
-      const { getGoogleSheetsLoads } = await import('./google-sheets-simple.js');
+      // Use the already imported googleSheetsSimple instance
+      const { googleSheetsSimple, getGoogleSheetsLoads } = await import('./google-sheets-simple.js');
       const loads = getGoogleSheetsLoads();
       console.log(`📋 DIRECT API serving ${loads.length} Google Sheets loads (bypassing db-storage)`);
+      
+      // If no loads, try to manually check the instance
+      if (loads.length === 0) {
+        console.log('⚠️ No loads found, checking module state...');
+        console.log(`📋 Google Sheets Simple running: ${googleSheetsSimple.isRunning}`);
+      }
+      
       res.json(loads);
     } catch (error) {
       console.error('❌ Error getting Google Sheets loads:', error);
