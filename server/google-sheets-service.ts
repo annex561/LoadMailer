@@ -1,9 +1,11 @@
 import { google } from 'googleapis';
 import { JWT } from 'google-auth-library';
+import Papa from 'papaparse';
 
 export class GoogleSheetsService {
   private sheets: any;
   private auth: JWT | null = null;
+  private cache = new Set<string>();
 
   constructor() {
     this.initializeAuth();

@@ -5137,13 +5137,14 @@ Safe travels! 🚛`;
       // Debug: Log raw data
       console.log('📊 Raw data from Google Sheets:', JSON.stringify(rawData.slice(0, 5), null, 2));
       
-      // MANUAL IMPORT: Skip header row before transformation
-      const dataRowsOnly = rawData.slice(1); // Force skip first row
-      console.log(`🔍 MANUAL IMPORT DEBUG - Original rows: ${rawData.length}, after header skip: ${dataRowsOnly.length}`);
-      console.log(`🔍 MANUAL IMPORT DEBUG - First data row:`, dataRowsOnly[0]);
+      // Use new CSV-based service for better reliability
+      const csvService = new (require('./google-sheets-csv-service').GoogleSheetsCsvService)();
+      const csvRows = await csvService.getCsvData(spreadsheetId);
       
-      // Transform to loads using data rows only
-      const rawLoads = googleSheetsService.transformToLoads(dataRowsOnly, columnMapping);
+      console.log(`🔍 CSV IMPORT - Retrieved ${csvRows.length} normalized rows from CSV`);
+      
+      // Transform CSV rows to loads with deduplication
+      const rawLoads = csvService.transformCsvToLoads(csvRows);
       
       console.log(`📊 Transformed ${rawLoads.length} loads from Google Sheets`);
 

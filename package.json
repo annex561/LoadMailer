@@ -81,6 +81,7 @@
     "nodemailer": "^7.0.5",
     "openai": "^5.12.2",
     "openid-client": "^6.6.4",
+    "papaparse": "^5.5.3",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "puppeteer": "^24.17.0",

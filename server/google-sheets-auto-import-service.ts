@@ -1,11 +1,11 @@
 import { IStorage } from './storage';
-import { GoogleSheetsService } from './google-sheets-service';
+import { GoogleSheetsCsvService } from './google-sheets-csv-service';
 
 export class GoogleSheetsAutoImportService {
   private isRunning: boolean = false;
   private importInterval: NodeJS.Timeout | null = null;
   private storage: IStorage;
-  private googleSheetsService: GoogleSheetsService;
+  private csvService: GoogleSheetsCsvService;
   
   // Configuration - can be updated via API
   private config = {
@@ -16,7 +16,7 @@ export class GoogleSheetsAutoImportService {
 
   constructor(storage: IStorage) {
     this.storage = storage;
-    this.googleSheetsService = new GoogleSheetsService();
+    this.csvService = new GoogleSheetsCsvService();
   }
 
   async start(): Promise<void> {
