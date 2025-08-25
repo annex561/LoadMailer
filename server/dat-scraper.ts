@@ -458,7 +458,7 @@ export class DATScraper {
                   pickupDate: new Date().toISOString().split('T')[0],
                   deliveryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
 
-                  equipment: equipment || 'Dry Van',
+                  equipment: equipment || 'Box Truck',
                   rate: parseFloat(rate?.replace(/[$,]/g, '') || '0') || Math.floor(Math.random() * 3000) + 1000,
                   miles: Math.floor(Math.random() * 800) + 100,
                   company: 'DAT Shipper',
@@ -525,6 +525,8 @@ export class DATScraper {
       { type: 'refrigerated', needsTemp: true },
       { type: 'van_hotshot', needsTemp: false },
       { type: 'sprinter_van', needsTemp: false },
+      { type: 'straight_box_truck', needsTemp: false },
+      { type: 'straight_box_truck', needsTemp: false }, // More box truck loads for box truck drivers
       { type: 'straight_box_truck', needsTemp: false },
       { type: 'flatbed', needsTemp: false },
       { type: 'step_deck', needsTemp: false },
@@ -667,12 +669,18 @@ export class DATScraper {
         // Determine equipment type for schema
         const equipmentTypeMap: Record<string, string> = {
           'Dry Van': 'dry_van',
+          'Box Truck': 'straight_box_truck',
+          'Straight Box Truck': 'straight_box_truck',
+          'Straight Box': 'straight_box_truck',
+          'Box': 'straight_box_truck',
           'Refrigerated': 'refrigerated',
+          'Reefer': 'refrigerated',
           'Flatbed': 'flatbed',
-          'Step Deck': 'step_deck'
+          'Step Deck': 'step_deck',
+          'Van': 'dry_van'
         };
         
-        const equipmentType = equipmentTypeMap[loadData.equipment] || 'dry_van';
+        const equipmentType = equipmentTypeMap[loadData.equipment] || 'straight_box_truck';
         
         // Create load with enhanced DAT fields
         const newLoad = await storage.createLoad({
