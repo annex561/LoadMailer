@@ -17,6 +17,7 @@ import DriverManagement from "@/pages/driver-management";
 import DriverOnboarding from "@/pages/driver-onboarding";
 import SimpleDriverRegistration from "@/pages/simple-driver-registration";
 import DriverDashboard from "@/pages/driver-dashboard";
+import DriverProfile from "@/pages/driver-profile";
 import PaymentWorkflow from "@/pages/payment-workflow";
 import ScraperManagement from "@/pages/scraper-management";
 import DispatcherDashboard from "@/pages/dispatcher-dashboard";
@@ -87,6 +88,7 @@ function App() {
           <Route path="/simple-registration" component={SimpleDriverRegistration} />
           <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
           <Route path="/driver-dashboard" component={DriverDashboard} />
+          <Route path="/driver-profile" component={DriverProfile} />
           <Route path="/sms-status" component={SMSStatus} />
           <Route path="/debug-token" component={DebugToken} />
           

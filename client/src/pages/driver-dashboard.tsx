@@ -8,8 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { 
   MapPin, Clock, DollarSign, Package, Navigation, CheckCircle, 
-  AlertCircle, Phone, MessageCircle, Truck, Star 
+  AlertCircle, Phone, MessageCircle, Truck, Star, Settings 
 } from 'lucide-react';
+import { Link } from 'wouter';
 import type { LoadWithRelations, Driver } from '@shared/schema';
 
 interface LoadOffer {
@@ -184,13 +185,21 @@ export default function DriverDashboard() {
           <h1 className="text-3xl font-bold">Driver Dashboard</h1>
           <p className="text-muted-foreground">Welcome back, {driver?.name || 'Driver'}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge className={`${getStatusColor(driver?.status)} text-white`}>
-            {driver?.status || 'Unknown'}
-          </Badge>
-          <div className="text-right">
-            <div className="text-sm text-muted-foreground">Equipment</div>
-            <div className="font-medium">{driver?.equipmentType?.replace('_', ' ') || 'Not Set'}</div>
+        <div className="flex items-center gap-4">
+          <Link href="/driver-profile">
+            <Button variant="outline" className="flex items-center gap-2" data-testid="button-profile">
+              <Settings className="h-4 w-4" />
+              Profile Settings
+            </Button>
+          </Link>
+          <div className="flex items-center gap-2">
+            <Badge className={`${getStatusColor(driver?.status)} text-white`}>
+              {driver?.status || 'Unknown'}
+            </Badge>
+            <div className="text-right">
+              <div className="text-sm text-muted-foreground">Equipment</div>
+              <div className="font-medium">{driver?.equipmentType?.replace('_', ' ') || 'Not Set'}</div>
+            </div>
           </div>
         </div>
       </div>
