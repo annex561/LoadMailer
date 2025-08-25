@@ -154,8 +154,8 @@ export class GoogleSheetsService {
 
     const mapping = columnMapping || defaultMapping;
     
-    // Skip header row if it exists
-    const dataRows = rows.length > 1 && this.isHeaderRow(rows[0]) ? rows.slice(1) : rows;
+    // Always skip the first row as it contains headers (Pay, Total miles, etc.)
+    const dataRows = rows.length > 1 ? rows.slice(1) : [];
 
     return dataRows.map((row, index) => {
       const load = {
@@ -211,6 +211,7 @@ export class GoogleSheetsService {
     return firstCell.includes('origin') || 
            firstCell.includes('pickup') || 
            firstCell.includes('from') ||
+           firstCell.includes('pay') ||
            firstCell.includes('load');
   }
 

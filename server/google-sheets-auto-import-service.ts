@@ -69,15 +69,19 @@ export class GoogleSheetsAutoImportService {
         return;
       }
 
-      // Transform to loads using same column mapping as manual import
+      // Transform to loads using correct column mapping from your sheet headers
       const columnMapping = {
-        origin: 0,        // Column A
-        destination: 1,   // Column B  
-        miles: 2,         // Column C
-        rate: 2,          // Use miles column for rate extraction
-        company: 9,       // Column J
-        phone: 8,         // Column I
-        email: 8,         // Column I
+        rate: 0,          // Column A - Pay
+        miles: 1,         // Column B - Total miles
+        origin: 2,        // Column C - Pick up address
+        destination: 3,   // Column D - Delivery address
+        pickupDate: 4,    // Column E - pick up date
+        deadhead: 5,      // Column F - Deadhead
+        weight: 6,        // Column G - Weight
+        contact: 7,       // Column H - Contact info
+        company: 8,       // Column I - Company
+        phone: 7,         // Column H - Contact info (same as contact)
+        email: 7,         // Column H - Contact info (same as contact)
         commodity: 'General Freight'
       };
 
