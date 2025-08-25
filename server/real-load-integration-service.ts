@@ -1,5 +1,6 @@
 import { storage } from './storage';
 import { TelegramLoadService } from './telegram-service';
+import { DAT_EQUIPMENT_MAPPING, mapDATEquipmentType } from '../shared/equipment-types.js';
 
 interface LoadBoardAPIConfig {
   name: string;
@@ -64,15 +65,7 @@ export class RealLoadIntegrationService {
         throw new Error('No customers available');
       }
 
-      // Convert DAT equipment codes to our system
-      const equipmentMapping: Record<string, string> = {
-        'V': 'straight_box_truck',
-        'VAN': 'dry_van',
-        'R': 'refrigerated',
-        'F': 'flatbed',
-        'FSD': 'flatbed',
-        'RGN': 'flatbed'
-      };
+      // Convert DAT equipment codes to our system using synchronized mapping
 
       const realLoad = {
         customerId: customers[0].id,
@@ -83,7 +76,7 @@ export class RealLoadIntegrationService {
         deliveryAddress: loadData.destination,
         deliveryDate: loadData.pickupDate,
         deliveryTime: "17:00",
-        equipmentType: equipmentMapping[loadData.equipmentType] || 'straight_box_truck',
+        equipmentType: mapDATEquipmentType(loadData.equipmentType),
         rate: loadData.rate,
         miles: loadData.miles,
         weight: loadData.weight || 8000,

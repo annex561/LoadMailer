@@ -264,13 +264,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize services
   const predictiveMaintenanceService = new PredictiveMaintenanceService();
   
-  // Initialize DAT Puppeteer scraper
-  try {
-    await datScraperService.initialize();
-    console.log('DAT Puppeteer Scraper initialized');
-  } catch (error) {
-    console.error('Failed to initialize DAT Puppeteer Scraper:', error);
-  }
+  // Initialize DAT Puppeteer scraper (non-blocking)
+  datScraperService.initialize()
+    .then(() => console.log('DAT Puppeteer Scraper initialized'))
+    .catch((error) => console.error('Failed to initialize DAT Puppeteer Scraper:', error));
   
   // Check SMS service configuration on startup
   console.log(`SMS Service status: ${smsService.isServiceConfigured() ? 'CONFIGURED ✓' : 'NOT CONFIGURED ✗'}`);

@@ -1,5 +1,6 @@
 import { storage } from './storage';
 import { TelegramLoadService } from './telegram-service';
+import { DAT_EQUIPMENT_MAPPING, mapDATEquipmentType } from '../shared/equipment-types.js';
 
 interface ScrapedLoad {
   loadId: string;
@@ -173,14 +174,7 @@ export class DATWebsiteScraper {
       const customers = await storage.getAllCustomers();
       if (customers.length === 0) return;
 
-      // Convert equipment types
-      const equipmentMapping: Record<string, string> = {
-        'V': 'straight_box_truck',
-        'VAN': 'dry_van',
-        'R': 'refrigerated', 
-        'F': 'flatbed',
-        'FSD': 'flatbed'
-      };
+      // Convert equipment types using synchronized mapping
 
       const loadData = {
         customerId: customers[0].id,
@@ -191,7 +185,7 @@ export class DATWebsiteScraper {
         deliveryAddress: scrapedLoad.destination,
         deliveryDate: scrapedLoad.pickupDate,
         deliveryTime: "17:00",
-        equipmentType: equipmentMapping[scrapedLoad.equipmentType] || 'straight_box_truck',
+        equipmentType: mapDATEquipmentType(scrapedLoad.equipmentType),
         rate: scrapedLoad.rate,
         miles: scrapedLoad.miles,
         weight: scrapedLoad.weight || 8000,

@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { insertDriverSchema, insertCustomerSchema, type InsertDriver, type InsertCustomer, type Driver, type Customer } from "@shared/schema";
+import { EQUIPMENT_TYPES } from "@shared/equipment-types";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -46,7 +47,7 @@ export default function ContactFormModal({
           email: (contact as Driver)?.email || "",
           phone: (contact as Driver)?.phone || "",
           status: (contact as Driver)?.status || "available",
-          equipmentType: (contact as Driver)?.equipmentType || "sprinter_van",
+          equipmentType: (contact as Driver)?.equipmentType || "dry_van",
           loadType: (contact as Driver)?.loadType || "full_partial",
           maxLength: (contact as Driver)?.maxLength || 53,
           maxWeight: (contact as Driver)?.maxWeight || 26000,
@@ -183,7 +184,7 @@ export default function ContactFormModal({
           email: existingContact.email,
           phone: existingContact.phone,
           status: (existingContact as Driver).status || "available",
-          equipmentType: (existingContact as Driver).equipmentType || "sprinter_van",
+          equipmentType: (existingContact as Driver).equipmentType || "dry_van",
           loadType: (existingContact as Driver).loadType || "full_partial",
           maxLength: (existingContact as Driver).maxLength || 53,
           maxWeight: (existingContact as Driver).maxWeight || 26000,
@@ -342,19 +343,11 @@ export default function ContactFormModal({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-white border border-gray-300 shadow-lg">
-                        <SelectItem value="vans_standard">Vans (Standard)</SelectItem>
-                        <SelectItem value="dry_van">Dry Van</SelectItem>
-                        <SelectItem value="refrigerated">Refrigerated</SelectItem>
-                        <SelectItem value="flatbed">Flatbed</SelectItem>
-                        <SelectItem value="step_deck">Step Deck</SelectItem>
-                        <SelectItem value="lowboy">Lowboy</SelectItem>
-                        <SelectItem value="power_only">Power Only</SelectItem>
-                        <SelectItem value="container">Container</SelectItem>
-                        <SelectItem value="car_carrier">Car Carrier</SelectItem>
-                        <SelectItem value="tanker">Tanker</SelectItem>
-                        <SelectItem value="dump_truck">Dump Truck</SelectItem>
-                        <SelectItem value="conestoga">Conestoga</SelectItem>
-                        <SelectItem value="removable_gooseneck">Removable Gooseneck (RGN)</SelectItem>
+                        {EQUIPMENT_TYPES.map((equipment) => (
+                          <SelectItem key={equipment.value} value={equipment.value}>
+                            {equipment.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />

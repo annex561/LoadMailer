@@ -285,9 +285,9 @@ export default function DriverProfile() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-white border border-gray-300 shadow-lg">
-                          {Object.entries(EQUIPMENT_TYPES).map(([key, value]) => (
-                            <SelectItem key={key} value={key}>
-                              {value.label}
+                          {EQUIPMENT_TYPES.map((equipment) => (
+                            <SelectItem key={equipment.value} value={equipment.value}>
+                              {equipment.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
