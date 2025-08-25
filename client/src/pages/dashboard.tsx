@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
+import DriverLocationMap from "@/components/driver-location-map";
 
 type ScrapedLoad = {
   id: string;
@@ -483,6 +484,11 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
+        
+        {/* Driver Location Map */}
+        <div className="mt-8">
+          <DriverLocationMap />
+        </div>
       </div>
     </div>
   );

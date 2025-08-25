@@ -2144,6 +2144,17 @@ Safe travels! 🚛`;
     }
   });
 
+  // Driver locations with driver info for map display
+  app.get("/api/driver-locations-with-drivers", async (req, res) => {
+    try {
+      const locations = await storage.getActiveDriverLocationsWithDriverInfo();
+      res.json(locations);
+    } catch (error) {
+      console.error("Error fetching driver locations with driver info:", error);
+      res.status(500).json({ error: "Failed to fetch driver locations with driver info" });
+    }
+  });
+
   app.get("/api/driver-locations", async (req, res) => {
     try {
       const { driverId } = req.query;

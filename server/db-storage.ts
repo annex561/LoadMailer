@@ -675,6 +675,33 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getActiveDriverLocationsWithDriverInfo(): Promise<any[]> {
+    try {
+      const result = await db.select({
+        id: schema.driverLocations.id,
+        driverId: schema.driverLocations.driverId,
+        driverName: schema.drivers.name,
+        driverCity: schema.drivers.city,
+        latitude: schema.driverLocations.latitude,
+        longitude: schema.driverLocations.longitude,
+        address: schema.driverLocations.address,
+        timestamp: schema.driverLocations.timestamp,
+        speed: schema.driverLocations.speed,
+        batteryLevel: schema.driverLocations.batteryLevel,
+        isActive: schema.driverLocations.isActive,
+      })
+        .from(schema.driverLocations)
+        .innerJoin(schema.drivers, eq(schema.driverLocations.driverId, schema.drivers.id))
+        .where(eq(schema.driverLocations.isActive, true))
+        .orderBy(sql`${schema.driverLocations.timestamp} desc`);
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting active driver locations with driver info:', error);
+      return [];
+    }
+  }
+
   async cleanupOldDriverLocations(driverId: string, keepCount: number): Promise<void> {
     try {
       // Get locations to keep
