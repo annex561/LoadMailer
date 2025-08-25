@@ -36,6 +36,8 @@ function DATLoads() {
     queryKey: ["/api/dat-loads"],
     refetchInterval: 10000, // Refresh every 10 seconds
     refetchIntervalInBackground: true,
+    staleTime: 0, // Data is immediately stale
+    gcTime: 0, // Don't cache data
   });
 
   // Countdown timer for next refresh - sync with actual query timing
