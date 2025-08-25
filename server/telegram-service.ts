@@ -389,7 +389,19 @@ export class TelegramLoadService {
         // For drivers with real telegram IDs (like Annex: 8391488425)
         if (driverMatch.driver.telegramId && !driverMatch.driver.telegramId.startsWith('temp_')) {
           console.log(`📱 REAL TELEGRAM OFFER: Sending ${load.loadNumber} to ${driverMatch.driver.name} (TelegramId: ${driverMatch.driver.telegramId})`);
-          await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
+          try {
+            await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
+          } catch (error) {
+            console.error(`❌ Failed to send load ${load.loadNumber} to driver ${driverMatch.driver.name}:`, error);
+            // If chat not found, disable notifications for this driver
+            if (error instanceof Error && error.message.includes('chat not found')) {
+              await storage.updateDriver(driverMatch.driver.id, {
+                telegramId: null,
+                enableTelegramNotifications: false
+              });
+              console.log(`❌ Disabled Telegram notifications for driver ${driverMatch.driver.name} - chat not found`);
+            }
+          }
         } else if (driverMatch.driver.telegramId?.startsWith('temp_')) {
           console.log(`📱 LOAD OFFER (simulated): ${load.loadNumber} to ${driverMatch.driver.name} (${driverMatch.matchScore}% match, ${driverMatch.distance}mi away)`);
           
@@ -1362,7 +1374,14 @@ Safe travels! 🛣️`;
       console.log(`Sent message to chat ${chatId}: ${message.substring(0, 100)}...`);
       return sentMessage.message_id;
     } catch (error) {
-      console.error('Error sending message via Telegram:', error);
+      console.error(`Error sending message to chat ${chatId}:`, error);
+      
+      // If chat not found, handle gracefully
+      if (error instanceof Error && error.message.includes('chat not found')) {
+        console.log(`❌ Chat ${chatId} not found - likely invalid or blocked chat ID`);
+        return null;
+      }
+      
       return null;
     }
   }

@@ -106,12 +106,12 @@ export class SimpleDATConnector {
           customerId: customers[0].id,
           description: `${selectedLoad.commodity} - ${selectedLoad.company}`,
           pickupAddress: selectedLoad.origin,
-          pickupDate: new Date().toISOString().split('T')[0],
+          pickupDate: new Date(),
           pickupTime: "08:00",
           deliveryAddress: selectedLoad.destination,
-          deliveryDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          deliveryDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
           deliveryTime: "17:00", 
-          equipmentType: 'straight_box_truck',
+          equipmentType: 'straight_box_truck' as const,
           rate: selectedLoad.rate,
           miles: selectedLoad.miles,
           weight: Math.floor(Math.random() * 20000) + 5000,
@@ -123,11 +123,18 @@ export class SimpleDATConnector {
         const load = await storage.createLoad(loadData);
         console.log(`✅ [TN LOAD] Created ${load.loadNumber}: ${selectedLoad.origin} → ${selectedLoad.destination} ($${selectedLoad.rate}) - ${selectedLoad.company}`);
         
-        // Send Tennessee load to Telegram
+        // Send Tennessee load to Telegram only if there are drivers with valid Telegram IDs
         if (this.telegramService && load) {
           try {
-            await this.telegramService.processNewLoad(load);
-            console.log(`📱 Sent Tennessee load ${load.loadNumber} to Telegram for driver notifications`);
+            const telegramDrivers = await storage.getDriversWithTelegramEnabled();
+            const validTelegramDrivers = telegramDrivers.filter(d => d.telegramId && d.telegramId !== null && d.telegramId !== '123456789');
+            
+            if (validTelegramDrivers.length > 0) {
+              await this.telegramService.processNewLoad(load);
+              console.log(`📱 Sent Tennessee load ${load.loadNumber} to ${validTelegramDrivers.length} drivers via Telegram`);
+            } else {
+              console.log(`📱 Load ${load.loadNumber} created but no valid Telegram drivers to notify`);
+            }
           } catch (error) {
             console.error(`❌ Failed to send load ${load.loadNumber} to Telegram:`, error);
           }

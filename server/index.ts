@@ -73,11 +73,19 @@ app.use((req, res, next) => {
       try {
         const { simpleDATConnector } = await import('./simple-dat-connector.js');
         const { telegramService } = await import('./telegram-service.js');
-        await simpleDATConnector.startRealLoadGeneration(telegramService);
-        log('✅ Auto-started Tennessee load generation with Telegram notifications');
+        
+        // Check if Telegram service is properly initialized before starting load generation
+        if (telegramService.isServiceRunning()) {
+          await simpleDATConnector.startRealLoadGeneration(telegramService);
+          log('✅ Auto-started Tennessee load generation with Telegram notifications');
+        } else {
+          await simpleDATConnector.startRealLoadGeneration(null);
+          log('✅ Auto-started Tennessee load generation without Telegram (service not running)');
+        }
       } catch (error) {
         log(`❌ Failed to auto-start Tennessee load generation: ${String(error)}`);
+        // Continue anyway without auto-start
       }
-    }, 5000); // Wait 5 seconds for services to initialize
+    }, 10000); // Wait 10 seconds for all services to fully initialize
   });
 })();
