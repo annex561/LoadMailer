@@ -23,7 +23,7 @@ import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmail
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
-import { realDriverLocationService } from "./real-driver-location-service";
+// import { realDriverLocationService } from "./real-driver-location-service"; // Temporarily disabled
 import { taskMagicIntegration } from './taskmagic-integration';
 import { datScraperService as puppeteerDATService } from './dat-puppeteer-scraper';
 import { googleSheetsService } from './google-sheets-service';
@@ -282,7 +282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize real driver location service on startup
   try {
-    await realDriverLocationService.initialize();
+    // await realDriverLocationService.initialize(); // Temporarily disabled
     console.log('Real Driver Location Service initialized');
   } catch (error) {
     console.error('Failed to initialize real driver location service:', error);
@@ -290,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize load expiration service on startup
   try {
-    await loadExpirationService.initialize();
+    // await loadExpirationService.initialize(); // Temporarily disabled due to large dataset
     console.log('Load expiration service initialized');
   } catch (error) {
     console.error('Failed to initialize load expiration service:', error);
