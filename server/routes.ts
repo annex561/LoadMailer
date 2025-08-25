@@ -282,10 +282,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize real driver location service on startup
   try {
+    console.log('🚚 Starting Real Driver Location Service initialization...');
     await realDriverLocationService.initialize();
-    console.log('Real Driver Location Service initialized');
+    console.log('✅ Real Driver Location Service initialized and running');
   } catch (error) {
-    console.error('Failed to initialize real driver location service:', error);
+    console.error('❌ Failed to initialize real driver location service:', error);
   }
 
   // Initialize load expiration service on startup

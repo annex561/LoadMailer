@@ -105,10 +105,11 @@ export class RealDriverLocationService {
       console.log('🚚 Loading active drivers for location tracking...');
       const drivers = await storage.getDrivers();
       
-      // Initialize location states for active drivers
+      // Initialize location states for ALL available drivers (regardless of Telegram status)
       for (const driver of drivers) {
         if (driver.status === 'available' || driver.status === 'on_route') {
           await this.initializeDriverLocation(driver);
+          console.log(`🚚 Auto-tracking GPS for driver: ${driver.name} (${driver.city})`);
         }
       }
 
@@ -194,17 +195,17 @@ export class RealDriverLocationService {
   }
 
   private startLocationUpdates(): void {
-    // Update driver locations every 30 seconds
+    // Update driver locations every 15 seconds for more frequent tracking
     this.updateInterval = setInterval(async () => {
       await this.updateAllDriverLocations();
-    }, 30000);
+    }, 15000);
 
     // Also run cleanup and route assignment every 5 minutes
     cron.schedule('*/5 * * * *', async () => {
       await this.refreshDriverStates();
     });
 
-    console.log('🚚 Started real-time location updates (30-second intervals)');
+    console.log('🚚 Started real-time location updates (15-second intervals)');
   }
 
   private async updateAllDriverLocations(): Promise<void> {

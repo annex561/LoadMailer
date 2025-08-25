@@ -653,11 +653,13 @@ export class TelegramLoadService {
   // Find eligible drivers based on location proximity and preferences
   private async findEligibleDriversByLocation(load: LoadWithRelations): Promise<Array<{driver: Driver, matchScore: number, distance: number}>> {
     try {
-      const allDrivers = await storage.getDriversWithTelegramEnabled();
-      console.log(`Found ${allDrivers.length} drivers with telegram enabled for load ${load.loadNumber}`);
+      // Get ALL available drivers for GPS-based matching
+      const allDrivers = await storage.getDrivers();
+      const availableDrivers = allDrivers.filter(driver => driver.status === 'available');
+      console.log(`🚚 GPS MATCHING: Found ${availableDrivers.length} available drivers for load ${load.loadNumber}`);
       const eligibleDrivers: Array<{driver: Driver, matchScore: number, distance: number}> = [];
 
-      for (const driver of allDrivers) {
+      for (const driver of availableDrivers) {
         if (!driver.city) continue;
 
         // Skip unavailable drivers immediately
