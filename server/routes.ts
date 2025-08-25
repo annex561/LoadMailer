@@ -1600,6 +1600,38 @@ Safe travels! 🚛`;
     }
   });
 
+  // Manual driver location update endpoint
+  app.post('/api/driver-locations/update', async (req, res) => {
+    try {
+      const { driverId, latitude, longitude, address } = req.body;
+      
+      if (!driverId || !latitude || !longitude) {
+        return res.status(400).json({ error: 'Missing required fields: driverId, latitude, longitude' });
+      }
+
+      await storage.createDriverLocation({
+        driverId,
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        altitude: 300,
+        accuracy: 3,
+        speed: 0,
+        heading: 0,
+        timestamp: new Date(),
+        address: address || `${latitude}, ${longitude}`,
+        batteryLevel: 85,
+        signalStrength: 95,
+        isActive: true
+      });
+
+      console.log(`📍 Updated driver location: ${driverId} -> ${address || `${latitude}, ${longitude}`}`);
+      res.json({ success: true, message: 'Driver location updated successfully' });
+    } catch (error) {
+      console.error('Error updating driver location:', error);
+      res.status(500).json({ error: 'Failed to update driver location' });
+    }
+  });
+
   app.get('/api/driver-locations/status', async (req, res) => {
     try {
       res.json({
