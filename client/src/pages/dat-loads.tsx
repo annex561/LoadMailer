@@ -171,7 +171,7 @@ function DATLoads() {
                       </div>
                     </td>
                     {/* Company */}
-                    <td className="px-4 py-4 text-gray-900">{load.company || load.broker}</td>
+                    <td className="px-4 py-4 text-gray-900">{load.company || 'Unknown'}</td>
                   </tr>
                 ))
               )}

@@ -107,6 +107,8 @@ class GoogleSheetsSimple {
           broker: 'Google Sheets',
           email: 'dispatch@lampslogistics.com',
           phone: contact || 'N/A',      // Use Contact Info column for phone
+          deadhead: deadhead || 'N/A',  // Add deadhead from column F
+          company: company || 'Unknown',  // Add company from column J
           scrapedAt: new Date()
         };
 
