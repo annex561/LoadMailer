@@ -6,7 +6,7 @@ let processedLoadIds = new Set<string>(); // Track processed loads to avoid dupl
 // Import necessary services for driver notifications
 import { telegramLoadService } from './telegram-service.js';
 import { storage } from './storage.js';
-import type { LoadWithRelations, InsertLoad } from './storage.js';
+import type { LoadWithRelations, InsertLoad } from './storage';
 import { randomUUID } from 'crypto';
 
 interface GoogleSheetsLoad {
@@ -36,6 +36,7 @@ class GoogleSheetsSimple {
         if (!customer) {
           customer = await storage.createCustomer({
             name: 'Google Sheets Customer',
+            contactPerson: 'VA Dispatcher',
             email: 'dispatch@lampslogistics.com',
             phone: '(555) 000-0000',
             address: 'Various Locations'
@@ -53,14 +54,31 @@ class GoogleSheetsSimple {
         };
       }
 
-      // Parse pickup date
-      const pickupDate = googleSheetsLoad.pickup && googleSheetsLoad.pickup !== 'ASAP' 
-        ? new Date(googleSheetsLoad.pickup) 
-        : new Date();
+      // Parse pickup date - handle formats like "8/24 - 8/27", "8/24", "ASAP"
+      let pickupDate = new Date();
       
-      // Create delivery date (add 1-3 days)
-      const deliveryDate = new Date(pickupDate);
-      deliveryDate.setDate(deliveryDate.getDate() + Math.floor(Math.random() * 3) + 1);
+      if (googleSheetsLoad.pickup && googleSheetsLoad.pickup !== 'ASAP') {
+        const pickupStr = googleSheetsLoad.pickup.trim();
+        
+        // Handle date ranges like "8/24 - 8/27" by taking the first date
+        if (pickupStr.includes(' - ')) {
+          const firstDate = pickupStr.split(' - ')[0].trim();
+          const parsedDate = new Date(firstDate + '/2025'); // Add current year
+          if (!isNaN(parsedDate.getTime())) {
+            pickupDate = parsedDate;
+          }
+        } else {
+          // Handle single dates like "8/24"
+          const parsedDate = new Date(pickupStr + '/2025'); // Add current year
+          if (!isNaN(parsedDate.getTime())) {
+            pickupDate = parsedDate;
+          }
+        }
+      }
+      
+      // Create delivery date (add 2 days to pickup)
+      let deliveryDate = new Date(pickupDate);
+      deliveryDate.setDate(deliveryDate.getDate() + 2);
 
       // Parse rate and miles as numbers
       const rateNumber = parseFloat(googleSheetsLoad.rate) || 0;
@@ -78,6 +96,14 @@ class GoogleSheetsSimple {
       };
 
       const equipmentType = equipmentMapping[googleSheetsLoad.equipment?.toLowerCase()] || 'dry_van';
+
+      // Validate dates before converting to ISO string
+      if (isNaN(pickupDate.getTime())) {
+        pickupDate = new Date(); // Fallback to current date
+      }
+      if (isNaN(deliveryDate.getTime())) {
+        deliveryDate = new Date(pickupDate.getTime() + 2 * 24 * 60 * 60 * 1000); // Add 2 days
+      }
 
       const insertLoad: InsertLoad = {
         customerId: customer.id,
