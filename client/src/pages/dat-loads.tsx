@@ -23,6 +23,8 @@ interface GoogleSheetsLoad {
   equipment: string;
   broker: string;
   phone: string;
+  deadhead?: string;
+  company?: string;
 }
 
 function DATLoads() {
@@ -90,26 +92,29 @@ function DATLoads() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Origin → Destination</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Rate</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Miles</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Pay</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Total miles</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Pick Up</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Delivery</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">pick up date</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Deadhead</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Weight</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Equipment</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Pickup</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Contact</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Load Type</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Contact Info</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Company</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={10} className="px-6 py-12 text-center">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-4 text-gray-400" />
                     <p className="text-gray-500">Loading Google Sheets loads...</p>
                   </td>
                 </tr>
               ) : filteredLoads.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={10} className="px-6 py-12 text-center">
                     <Truck className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                     <p className="text-lg font-medium text-gray-500">No loads available</p>
                     <p className="text-sm text-gray-400">Check back later for new freight opportunities</p>
@@ -118,43 +123,55 @@ function DATLoads() {
               ) : (
                 filteredLoads.map((load: GoogleSheetsLoad) => (
                   <tr key={load.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-4">
-                      <div>
-                        <div className="flex items-center">
-                          <MapPin className="w-4 h-4 text-green-600 mr-2" />
-                          <span className="font-medium text-gray-900">{load.origin}</span>
-                        </div>
-                        <div className="flex items-center mt-1">
-                          <MapPin className="w-4 h-4 text-red-600 mr-2" />
-                          <span className="font-medium text-gray-900">{load.destination}</span>
-                        </div>
-                      </div>
-                    </td>
+                    {/* Pay */}
                     <td className="px-4 py-4">
                       <div className="flex items-center">
                         <DollarSign className="w-4 h-4 text-green-600 mr-1" />
                         <span className="font-bold text-green-600">{formatCurrency(load.rate)}</span>
                       </div>
                     </td>
+                    {/* Total miles */}
                     <td className="px-4 py-4 text-gray-900">{load.miles}</td>
-                    <td className="px-4 py-4 text-gray-900">{load.weight}</td>
+                    {/* Pick Up */}
                     <td className="px-4 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {load.equipment}
-                      </span>
+                      <div className="flex items-center">
+                        <MapPin className="w-4 h-4 text-green-600 mr-2" />
+                        <span className="font-medium text-gray-900">{load.origin}</span>
+                      </div>
                     </td>
+                    {/* Delivery */}
+                    <td className="px-4 py-4">
+                      <div className="flex items-center">
+                        <MapPin className="w-4 h-4 text-red-600 mr-2" />
+                        <span className="font-medium text-gray-900">{load.destination}</span>
+                      </div>
+                    </td>
+                    {/* pick up date */}
                     <td className="px-4 py-4">
                       <div className="flex items-center">
                         <Clock className="w-4 h-4 text-orange-600 mr-1" />
                         <span className="text-gray-900">{load.pickup}</span>
                       </div>
                     </td>
+                    {/* Deadhead */}
+                    <td className="px-4 py-4 text-gray-900">{load.deadhead || 'N/A'}</td>
+                    {/* Weight */}
+                    <td className="px-4 py-4 text-gray-900">{load.weight}</td>
+                    {/* Load Type */}
+                    <td className="px-4 py-4">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {load.equipment}
+                      </span>
+                    </td>
+                    {/* Contact Info */}
                     <td className="px-4 py-4">
                       <div className="flex items-center">
                         <Phone className="w-4 h-4 text-blue-600 mr-1" />
                         <span className="text-gray-900">{load.phone}</span>
                       </div>
                     </td>
+                    {/* Company */}
+                    <td className="px-4 py-4 text-gray-900">{load.company || load.broker}</td>
                   </tr>
                 ))
               )}
