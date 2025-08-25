@@ -1,6 +1,13 @@
 // Simple Google Sheets CSV integration
 // In-memory storage for Google Sheets loads
 let googleSheetsLoads: any[] = [];
+let processedLoadIds = new Set<string>(); // Track processed loads to avoid duplicates
+
+// Import necessary services for driver notifications
+import { telegramLoadService } from './telegram-service.js';
+import { storage } from './storage.js';
+import type { LoadWithRelations, InsertLoad } from './storage.js';
+import { randomUUID } from 'crypto';
 
 interface GoogleSheetsLoad {
   pay: string;
@@ -16,6 +23,91 @@ class GoogleSheetsSimple {
   private spreadsheetId = '1AQ-vAhewUVmE-86Z3D_M3KYJg3lzvK5Q-w1horGrgI4';
   private importInterval: NodeJS.Timeout | null = null;
   private isRunning = false;
+
+  // Convert Google Sheets load to proper Load format for driver notifications
+  private async convertToLoadFormat(googleSheetsLoad: any): Promise<LoadWithRelations | null> {
+    try {
+      // Create or find a default customer for Google Sheets loads
+      let customer;
+      try {
+        const customers = await storage.getAllCustomers();
+        customer = customers.find(c => c.name === 'Google Sheets Customer');
+        
+        if (!customer) {
+          customer = await storage.createCustomer({
+            name: 'Google Sheets Customer',
+            email: 'dispatch@lampslogistics.com',
+            phone: '(555) 000-0000',
+            address: 'Various Locations'
+          });
+        }
+      } catch (error) {
+        // Fallback to a simple customer object for load creation
+        customer = {
+          id: 'default-customer',
+          name: 'Google Sheets Customer',
+          email: 'dispatch@lampslogistics.com',
+          phone: '(555) 000-0000',
+          address: 'Various Locations',
+          createdAt: new Date()
+        };
+      }
+
+      // Parse pickup date
+      const pickupDate = googleSheetsLoad.pickup && googleSheetsLoad.pickup !== 'ASAP' 
+        ? new Date(googleSheetsLoad.pickup) 
+        : new Date();
+      
+      // Create delivery date (add 1-3 days)
+      const deliveryDate = new Date(pickupDate);
+      deliveryDate.setDate(deliveryDate.getDate() + Math.floor(Math.random() * 3) + 1);
+
+      // Parse rate and miles as numbers
+      const rateNumber = parseFloat(googleSheetsLoad.rate) || 0;
+      const milesNumber = parseInt(googleSheetsLoad.miles) || 0;
+
+      // Map equipment type from Google Sheets to standard types
+      const equipmentMapping: Record<string, string> = {
+        'van': 'dry_van',
+        'box truck': 'box_truck', 
+        'sprinter': 'sprinter_van',
+        'flatbed': 'flatbed',
+        'reefer': 'refrigerated',
+        'partial': 'dry_van',
+        'full': 'dry_van'
+      };
+
+      const equipmentType = equipmentMapping[googleSheetsLoad.equipment?.toLowerCase()] || 'dry_van';
+
+      const insertLoad: InsertLoad = {
+        customerId: customer.id,
+        pickupAddress: googleSheetsLoad.origin || '',
+        deliveryAddress: googleSheetsLoad.destination || '',
+        pickupDate: pickupDate.toISOString(),
+        deliveryDate: deliveryDate.toISOString(),
+        commodity: 'General Freight',
+        weight: googleSheetsLoad.weight || '2000 lbs',
+        length: '48',
+        width: '8.5',
+        height: '9',
+        equipmentType: equipmentType,
+        priority: 'standard',
+        specialInstructions: `Rate: $${rateNumber}, Miles: ${milesNumber}, Contact: ${googleSheetsLoad.phone}`,
+        rate: rateNumber,
+        miles: milesNumber,
+        company: googleSheetsLoad.company || 'Unknown',
+        contactPhone: googleSheetsLoad.phone || '',
+        sourceBoard: 'google_sheets'
+      };
+
+      // Create the load in storage
+      const load = await storage.createLoad(insertLoad);
+      return load;
+    } catch (error) {
+      console.error('Error converting Google Sheets load to Load format:', error);
+      return null;
+    }
+  }
 
   async start() {
     if (this.isRunning) return;
@@ -114,13 +206,39 @@ class GoogleSheetsSimple {
 
         googleSheetsLoadArray.push(load);
         newLoadsCount++;
+
+        // Check if this is a new load that hasn't been processed for driver notifications
+        if (!processedLoadIds.has(load.id)) {
+          processedLoadIds.add(load.id);
+          
+          // Skip header row processing for notifications
+          if (load.origin !== 'Pick Up' && load.destination !== 'Delivery') {
+            // Convert to proper Load format and send to drivers
+            try {
+              const properLoad = await this.convertToLoadFormat(load);
+              if (properLoad) {
+                console.log(`🚛 NEW LOAD FOR DRIVERS: ${properLoad.loadNumber} - ${load.origin} → ${load.destination} ($${load.rate})`);
+                
+                // Send to Telegram notification system for driver proximity matching
+                const notificationSent = await telegramLoadService.processNewLoad(properLoad);
+                if (notificationSent) {
+                  console.log(`📱 Load ${properLoad.loadNumber} sent to eligible drivers via Telegram`);
+                } else {
+                  console.log(`❌ No eligible drivers found for load ${properLoad.loadNumber}`);
+                }
+              }
+            } catch (error) {
+              console.error(`❌ Error processing load ${load.id} for driver notifications:`, error);
+            }
+          }
+        }
       }
 
-      // Store loads directly in memory
+      // Store loads directly in memory for API serving
       googleSheetsLoads = googleSheetsLoadArray;
       console.log(`📋 Stored ${googleSheetsLoads.length} loads in memory for API serving`);
 
-      console.log(`✅ Google Sheets import complete: ${newLoadsCount} loads added`);
+      console.log(`✅ Google Sheets import complete: ${newLoadsCount} loads added, ${processedLoadIds.size} total tracked for notifications`);
       
     } catch (error) {
       console.error('❌ Google Sheets import error:', error.message);
