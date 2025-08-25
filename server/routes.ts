@@ -5137,8 +5137,13 @@ Safe travels! 🚛`;
       // Debug: Log raw data
       console.log('📊 Raw data from Google Sheets:', JSON.stringify(rawData.slice(0, 5), null, 2));
       
-      // Transform to loads
-      const rawLoads = googleSheetsService.transformToLoads(rawData, columnMapping);
+      // MANUAL IMPORT: Skip header row before transformation
+      const dataRowsOnly = rawData.slice(1); // Force skip first row
+      console.log(`🔍 MANUAL IMPORT DEBUG - Original rows: ${rawData.length}, after header skip: ${dataRowsOnly.length}`);
+      console.log(`🔍 MANUAL IMPORT DEBUG - First data row:`, dataRowsOnly[0]);
+      
+      // Transform to loads using data rows only
+      const rawLoads = googleSheetsService.transformToLoads(dataRowsOnly, columnMapping);
       
       console.log(`📊 Transformed ${rawLoads.length} loads from Google Sheets`);
 
@@ -5171,7 +5176,7 @@ Safe travels! 🚛`;
         try {
           const loadData = {
             customerId: defaultCustomer.id,
-            description: `[GOOGLE SHEETS] ${rawLoad.company || rawLoad.origin || 'Import'} - ${rawLoad.commodity || 'General Freight'}`,
+            description: `${rawLoad.company || 'Freight'} - ${rawLoad.origin} to ${rawLoad.destination}`,
             pickupAddress: rawLoad.origin || 'Unknown Origin',
             pickupDate: rawLoad.pickupDate ? new Date(rawLoad.pickupDate).toISOString() : null,
             pickupTime: '08:00',

@@ -101,7 +101,7 @@ export class GoogleSheetsAutoImportService {
         try {
           const loadData = {
             customerId: defaultCustomer.id,
-            description: `[GOOGLE SHEETS] ${rawLoad.company || rawLoad.origin || 'Import'} - ${rawLoad.commodity || 'General Freight'}`,
+            description: `${rawLoad.company || 'Freight'} - ${rawLoad.origin} to ${rawLoad.destination}`,
             pickupAddress: rawLoad.origin || 'Unknown Origin',
             pickupDate: rawLoad.pickupDate ? new Date(rawLoad.pickupDate).toISOString() : null,
             pickupTime: '08:00',

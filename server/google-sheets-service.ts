@@ -154,8 +154,10 @@ export class GoogleSheetsService {
 
     const mapping = columnMapping || defaultMapping;
     
-    // Always skip the first row as it contains headers (Pay, Total miles, etc.)
-    const dataRows = rows.length > 1 ? rows.slice(1) : [];
+    // FORCE skip the first TWO rows - there might be multiple header rows
+    const dataRows = rows.slice(2); // Skip rows 0 and 1 completely
+    console.log(`📊 DEBUG - Total rows: ${rows.length}, skipping first 2 rows, processing ${dataRows.length} data rows`);
+    console.log(`📊 DEBUG - First data row after skip:`, dataRows[0]);
 
     return dataRows.map((row, index) => {
       const load = {
