@@ -533,7 +533,7 @@ export class TelegramLoadService {
         // Calculate overall match score
         const matchScore = await this.calculateDriverMatchScore(driver, load, proximity.distance);
         console.log(`Driver ${driver.name} match score for load ${load.loadNumber}: ${matchScore}% (distance: ${proximity.distance}mi, equipment: ${driver.equipmentType}/${load.equipmentType}, status: ${driver.status})`);
-        if (matchScore < 40) continue; // Reduced from 65% to 40% for better matching
+        if (matchScore < 25) continue; // Further reduced to 25% to allow more driver-load matches
 
         eligibleDrivers.push({
           driver,
