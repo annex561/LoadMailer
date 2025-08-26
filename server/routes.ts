@@ -269,93 +269,103 @@ async function initializeDependentServices() {
   }
 }
 
+// Function to initialize all services after server starts
+async function initializeAllServices() {
+  try {
+    console.log('🚀 Starting background service initialization...');
+    
+    // Initialize services
+    const predictiveMaintenanceService = new PredictiveMaintenanceService();
+    
+    // Check SMS service configuration
+    console.log(`SMS Service status: ${smsService.isServiceConfigured() ? 'CONFIGURED ✓' : 'NOT CONFIGURED ✗'}`);
+    
+    // Initialize all services asynchronously
+    Promise.resolve().then(async () => {
+      try {
+        console.log('🚚 Starting Real Driver Location Service initialization...');
+        await realDriverLocationService.initialize();
+        console.log('✅ Real Driver Location Service initialized and running');
+      } catch (error) {
+        console.error('❌ Failed to initialize real driver location service:', error);
+      }
+    });
+
+    Promise.resolve().then(async () => {
+      try {
+        await telegramLoadService.initialize();
+        console.log('✅ Telegram Load Service initialized');
+        
+        // Initialize dependent services after Telegram service is ready
+        setTimeout(() => {
+          initializeDependentServices();
+        }, 2000);
+      } catch (error) {
+        console.error('Failed to initialize Telegram Load Service:', error);
+      }
+    });
+
+    Promise.resolve().then(async () => {
+      try {
+        await gpsTrackingService.initialize();
+        console.log('✅ GPS Tracking Service initialized');
+      } catch (error) {
+        console.error('Failed to initialize GPS Tracking Service:', error);
+      }
+    });
+
+    console.log('✅ Background service initialization started');
+  } catch (error) {
+    console.error('❌ Error starting background services:', error);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize services
-  const predictiveMaintenanceService = new PredictiveMaintenanceService();
+  console.log('⚡ Ultra-fast server startup - minimal routes only...');
   
-  // DAT Puppeteer scraper will be initialized in initializeDependentServices()
-  console.log('⚠️ DAT Puppeteer Scraper initialization deferred until Telegram service is ready');
+  // Create HTTP server immediately
+  const server = createServer(app);
   
-  // Check SMS service configuration on startup
-  console.log(`SMS Service status: ${smsService.isServiceConfigured() ? 'CONFIGURED ✓' : 'NOT CONFIGURED ✗'}`);
+  // Add only the most essential routes for immediate startup
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
   
-  // Initialize scheduler service on startup
-  try {
-    // Temporarily disabled to isolate server startup issue
-    // await schedulerService.initialize();
-    console.log('⚠️ Scheduler service temporarily disabled for startup isolation');
-  } catch (error) {
-    console.error('Failed to initialize scheduler service:', error);
-  }
-
-  // Initialize real driver location service on startup
-  try {
-    console.log('🚚 Starting Real Driver Location Service initialization...');
-    await realDriverLocationService.initialize();
-    console.log('✅ Real Driver Location Service initialized and running');
-  } catch (error) {
-    console.error('❌ Failed to initialize real driver location service:', error);
-  }
-
-  // Initialize load expiration service on startup
-  try {
-    // await loadExpirationService.initialize(); // Temporarily disabled due to large dataset
-    console.log('Load expiration service initialized');
-  } catch (error) {
-    console.error('Failed to initialize load expiration service:', error);
-  }
-
-  // Initialize Telegram Load Service on startup
-  try {
-    await telegramLoadService.initialize();
-    console.log('✅ Telegram Load Service initialized');
-  } catch (error) {
-    console.error('Failed to initialize Telegram Load Service:', error);
-  }
-
-  // Initialize dependent services after Telegram service is ready (non-blocking)
+  app.get('/api/drivers', async (req, res) => {
+    try {
+      const drivers = await storage.getAllDrivers();
+      res.json(drivers);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch drivers" });
+    }
+  });
+  
+  app.get('/api/loads', async (req, res) => {
+    try {
+      const loads = await storage.getAllLoads();
+      res.json(loads);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch loads" });
+    }
+  });
+  
+  console.log('✅ Essential routes registered - server ready for startup');
+  
+  // Defer ALL service initialization and remaining routes until after server starts
   setTimeout(() => {
-    initializeDependentServices();
-  }, 2000);
+    console.log('🔄 Starting background initialization...');
+    initializeAllServices();
+    registerRemainingRoutes(app);
+  }, 5000);
+  
+  return server;
+}
 
-  // Initialize GPS Tracking Service on startup
-  try {
-    await gpsTrackingService.initialize();
-    console.log('✅ GPS Tracking Service initialized');
-  } catch (error) {
-    console.error('Failed to initialize GPS Tracking Service:', error);
-  }
-
-  // Initialize Load Board Service on startup
-  try {
-    // Temporarily disabled to isolate server startup issue
-    // await loadBoardService.initialize();
-    console.log('⚠️ Load Board Service temporarily disabled for startup isolation');
-  } catch (error) {
-    console.error('Failed to initialize Load Board Service:', error);
-  }
-
-  // Initialize Bidding Service
-  try {
-    // Temporarily disabled to isolate server startup issue
-    // await biddingService.initialize();
-    console.log('⚠️ Bidding Service temporarily disabled for startup isolation');
-  } catch (error) {
-    console.error('Failed to initialize Bidding Service:', error);
-  }
-
-  // Initialize Pickup Confirmation Service
-  try {
-    // Temporarily disabled to isolate server startup issue
-    // const { pickupConfirmationService } = await import('./pickup-confirmation-service.js');
-    // await pickupConfirmationService.initialize();
-    console.log('⚠️ Pickup Confirmation Service temporarily disabled for startup isolation');
-  } catch (error) {
-    console.error('Failed to initialize Pickup Confirmation Service:', error);
-  }
-
-  // Initialize Smart Load Matching Service
-  console.log('🧠 Smart Load Matching Service with AI-powered analytics ready');
+// Function to register all the remaining routes after server startup
+function registerRemainingRoutes(app: Express) {
+  console.log('📡 Registering remaining routes in background...');
+  // All the remaining routes will be added here later
+  // For now, just log that this is where they would go
 
   // Run initial load analysis for all available drivers
   // Temporarily disabled to isolate server startup issue
@@ -5464,5 +5474,5 @@ Safe travels! 🚛`;
     }
   });
 
-  return httpServer;
+  return server;
 }
