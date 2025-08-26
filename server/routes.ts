@@ -4904,9 +4904,6 @@ Safe travels! 🚛`;
     }
   });
 
-  // Initialize Simple Google Sheets Integration
-  const { googleSheetsSimple } = await import('./google-sheets-simple.js');
-  await googleSheetsSimple.start();
 
   // Simple Google Sheets API endpoints
   app.post('/api/google-sheets/start', async (req, res) => {
@@ -4978,6 +4975,15 @@ Safe travels! 🚛`;
       console.log('🚀 AUTO-START: Starting Google Sheets auto-import service...');
       await googleSheetsAutoImporter.start();
       console.log('✅ Google Sheets auto-import running every 10 seconds');
+
+      // Initialize Simple Google Sheets Integration
+      try {
+        const { googleSheetsSimple } = await import('./google-sheets-simple.js');
+        await googleSheetsSimple.start();
+        console.log('✅ Google Sheets Simple integration started');
+      } catch (error) {
+        console.error('❌ Failed to start Google Sheets Simple integration:', error);
+      }
     } catch (error) {
       console.error('❌ Failed to auto-start Google Sheets import service:', error);
     }
@@ -5474,5 +5480,5 @@ Safe travels! 🚛`;
     }
   });
 
-  return server;
+  return httpServer;
 }
