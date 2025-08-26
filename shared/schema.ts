@@ -140,17 +140,17 @@ export const driverLocations = pgTable("driver_locations", {
   driverId: varchar("driver_id").references(() => drivers.id).notNull(),
   latitude: real("latitude").notNull(),
   longitude: real("longitude").notNull(),
-  altitude: real("altitude"),
   accuracy: real("accuracy"), // in meters
   speed: real("speed"), // in mph
   heading: real("heading"), // degrees from north
   timestamp: timestamp("timestamp").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  altitude: real("altitude"),
   address: text("address"), // Reverse geocoded address
   loadId: varchar("load_id").references(() => loads.id), // Associated load if any
   isActive: boolean("is_active").notNull().default(true), // Current location vs historical
   batteryLevel: integer("battery_level"), // Device battery percentage
   signalStrength: integer("signal_strength"), // GPS signal strength
-  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const geofences = pgTable("geofences", {

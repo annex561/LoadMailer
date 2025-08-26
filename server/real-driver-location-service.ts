@@ -209,10 +209,6 @@ export class RealDriverLocationService {
   }
 
   private async updateAllDriverLocations(): Promise<void> {
-    // TEMPORARILY DISABLED to fix database type issues
-    console.log('🚧 Driver location updates temporarily disabled to fix database schema issues');
-    return;
-    
     const updatePromises = Array.from(this.driverStates.entries()).map(([driverId, state]) => 
       this.updateDriverPosition(driverId, state)
     );
@@ -268,11 +264,11 @@ export class RealDriverLocationService {
 
   private async updateDriverLocation(driverId: string, lat: number, lng: number, address?: string): Promise<void> {
     try {
-      const locationData = {
+      await storage.createDriverLocation({
         driverId,
         latitude: lat,
         longitude: lng,
-        altitude: Math.floor(300 + Math.random() * 200), // Elevation in feet
+        altitude: 300 + Math.random() * 200, // Elevation in feet
         accuracy: 3 + Math.random() * 2, // GPS accuracy in meters
         speed: this.driverStates.get(driverId)?.speed || 0,
         heading: this.driverStates.get(driverId)?.heading || 0,
@@ -281,12 +277,7 @@ export class RealDriverLocationService {
         batteryLevel: Math.floor(this.driverStates.get(driverId)?.batteryLevel || 90),
         signalStrength: Math.floor(80 + Math.random() * 20), // Signal strength 80-100%
         isActive: true
-      };
-      
-      // Debug log to see what's being passed
-      console.log('🐛 DEBUG - Location data being inserted:', JSON.stringify(locationData, null, 2));
-      
-      await storage.createDriverLocation(locationData);
+      });
 
       // Deactivate old locations
       await this.deactivateOldLocations(driverId);

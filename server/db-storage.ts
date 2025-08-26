@@ -169,11 +169,15 @@ export class DatabaseStorage implements IStorage {
           driver: true,
           customer: true,
         },
+        limit: 100, // Limit to prevent response too large error
+        orderBy: [schema.loads.createdAt]
       });
     } catch (error) {
       console.error('Database relation error, falling back to simple query:', error);
-      // Fallback to simple query without relations for now
-      const loads = await db.select().from(schema.loads);
+      // Fallback to simple query without relations, limited to recent loads
+      const loads = await db.select().from(schema.loads)
+        .orderBy(schema.loads.createdAt)
+        .limit(100);
       const result: schema.LoadWithRelations[] = [];
       
       for (const load of loads) {
