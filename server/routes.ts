@@ -274,8 +274,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Initialize scheduler service on startup
   try {
-    await schedulerService.initialize();
-    console.log('Scheduler service initialized');
+    // Temporarily disabled to isolate server startup issue
+    // await schedulerService.initialize();
+    console.log('⚠️ Scheduler service temporarily disabled for startup isolation');
   } catch (error) {
     console.error('Failed to initialize scheduler service:', error);
   }
@@ -283,8 +284,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize real driver location service on startup
   try {
     console.log('🚚 Starting Real Driver Location Service initialization...');
-    await realDriverLocationService.initialize();
-    console.log('✅ Real Driver Location Service initialized and running');
+    // Temporarily disabled to fix server startup issue with GPS coordinates
+    // await realDriverLocationService.initialize();
+    console.log('⚠️ Real Driver Location Service temporarily disabled due to GPS coordinate issue');
   } catch (error) {
     console.error('❌ Failed to initialize real driver location service:', error);
   }
@@ -299,41 +301,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize Telegram Load Service on startup
   try {
-    await telegramLoadService.initialize();
-    console.log('Telegram Load Service initialized');
+    // Temporarily disabled to isolate server startup issue
+    // await telegramLoadService.initialize();
+    console.log('⚠️ Telegram Load Service temporarily disabled for startup isolation');
   } catch (error) {
     console.error('Failed to initialize Telegram Load Service:', error);
   }
 
   // Initialize GPS Tracking Service on startup
   try {
-    await gpsTrackingService.initialize();
-    console.log('GPS Tracking Service initialized');
+    // Temporarily disabled to fix server startup issue with GPS coordinates
+    // await gpsTrackingService.initialize();
+    console.log('⚠️ GPS Tracking Service temporarily disabled due to GPS coordinate issue');
   } catch (error) {
     console.error('Failed to initialize GPS Tracking Service:', error);
   }
 
   // Initialize Load Board Service on startup
   try {
-    await loadBoardService.initialize();
-    console.log('Load Board Service initialized');
+    // Temporarily disabled to isolate server startup issue
+    // await loadBoardService.initialize();
+    console.log('⚠️ Load Board Service temporarily disabled for startup isolation');
   } catch (error) {
     console.error('Failed to initialize Load Board Service:', error);
   }
 
   // Initialize Bidding Service
   try {
-    await biddingService.initialize();
-    console.log('Bidding Service initialized');
+    // Temporarily disabled to isolate server startup issue
+    // await biddingService.initialize();
+    console.log('⚠️ Bidding Service temporarily disabled for startup isolation');
   } catch (error) {
     console.error('Failed to initialize Bidding Service:', error);
   }
 
   // Initialize Pickup Confirmation Service
   try {
-    const { pickupConfirmationService } = await import('./pickup-confirmation-service.js');
-    await pickupConfirmationService.initialize();
-    console.log('Pickup Confirmation Service initialized');
+    // Temporarily disabled to isolate server startup issue
+    // const { pickupConfirmationService } = await import('./pickup-confirmation-service.js');
+    // await pickupConfirmationService.initialize();
+    console.log('⚠️ Pickup Confirmation Service temporarily disabled for startup isolation');
   } catch (error) {
     console.error('Failed to initialize Pickup Confirmation Service:', error);
   }
@@ -342,6 +349,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   console.log('🧠 Smart Load Matching Service with AI-powered analytics ready');
 
   // Run initial load analysis for all available drivers
+  // Temporarily disabled to isolate server startup issue
+  /*
   setInterval(async () => {
     try {
       const availableDrivers = await storage.getAllDrivers();
@@ -360,6 +369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error running Smart Load Matching analysis:', error);
     }
   }, 5 * 60 * 1000); // Run every 5 minutes
+  */
 
   // Driver routes
   app.get("/api/drivers", async (req, res) => {

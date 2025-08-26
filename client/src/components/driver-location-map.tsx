@@ -45,23 +45,46 @@ export default function DriverLocationMap() {
   } : { lat: 35.5, lng: -85.0 }; // Tennessee center
 
   useEffect(() => {
+    // Check if Leaflet is already loaded
+    if (typeof window !== 'undefined' && (window as any).L) {
+      return;
+    }
+
     // Load real map tiles using vanilla JavaScript
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
     script.onload = () => {
       // Map will initialize when script loads
     };
-    document.head.appendChild(script);
+    script.onerror = () => {
+      console.error('Failed to load Leaflet script');
+    };
 
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link);
+
+    // Only append if not already present
+    if (!document.querySelector(`script[src="${script.src}"]`)) {
+      document.head.appendChild(script);
+    }
+    if (!document.querySelector(`link[href="${link.href}"]`)) {
+      document.head.appendChild(link);
+    }
 
     return () => {
-      // Cleanup
-      document.head.removeChild(script);
-      document.head.removeChild(link);
+      // Safe cleanup - only remove if they exist
+      try {
+        if (script.parentNode) {
+          document.head.removeChild(script);
+        }
+        if (link.parentNode) {
+          document.head.removeChild(link);
+        }
+      } catch (error) {
+        // Ignore cleanup errors
+        console.debug('Cleanup error (safe to ignore):', error);
+      }
     };
   }, []);
 
