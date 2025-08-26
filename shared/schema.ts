@@ -129,6 +129,7 @@ export const onboardingTokens = pgTable("onboarding_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   token: text("token").notNull().unique(),
   email: text("email").notNull(),
+  telegramChatId: text("telegram_chat_id"), // Store the Telegram chat ID for linking
   isUsed: boolean("is_used").notNull().default(false),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow(),

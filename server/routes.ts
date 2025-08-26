@@ -4273,8 +4273,8 @@ Safe travels! 🚛`;
         status: "available" as const,
         enableTelegramNotifications: true,
         telegramUsername: telegramUsername.replace('@', ''), // Remove @ if present
-        // Link to Telegram chat ID from the onboarding process - use a temporary ID for now
-        telegramId: `token_${token.substring(0, 8)}_${Date.now()}`,
+        // Link to REAL Telegram chat ID from the onboarding process
+        telegramId: onboardingToken.telegramChatId || null,
         preferredLanes: [],
         avoidAreas: []
       };

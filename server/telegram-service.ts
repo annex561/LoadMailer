@@ -220,13 +220,18 @@ export class TelegramLoadService {
             `*Ready to get started? Reply "YES" to begin registration!*`,
             { parse_mode: 'Markdown' }
           );
+        } else if (responseText.startsWith('LINK ')) {
+          // Handle linking existing driver accounts: "LINK email@example.com"
+          const email = responseText.replace('LINK ', '').trim().toLowerCase();
+          await this.linkExistingDriver(chatId, email, userInfo);
         } else {
           // General engagement response
           await this.bot?.sendMessage(chatId,
             `Thanks for your message! 👍\n\n` +
             `To get started receiving load offers:\n` +
             `• Reply "YES" to register as a driver\n` +
-            `• Reply "INFO" to learn more\n\n` +
+            `• Reply "INFO" to learn more\n` +
+            `• **Existing drivers:** Type "LINK your@email.com" to connect your account\n\n` +
             `Tennessee freight loads are waiting for you!`,
             { parse_mode: 'Markdown' }
           );
@@ -1998,6 +2003,53 @@ Please contact driver if needed.`;
   }
 
   // Handle direct driver registration when they respond "YES"
+  // NEW: Link existing driver accounts to Telegram
+  async linkExistingDriver(chatId: number, email: string, userInfo: any): Promise<void> {
+    try {
+      console.log(`🔗 Attempting to link existing driver with email: ${email} to chat: ${chatId}`);
+      
+      // Find driver by email
+      const drivers = await storage.getAllDrivers();
+      const existingDriver = drivers.find(d => d.email.toLowerCase() === email.toLowerCase());
+      
+      if (!existingDriver) {
+        await this.bot?.sendMessage(chatId,
+          `❌ *Driver Not Found*\n\n` +
+          `No driver account found with email: ${email}\n\n` +
+          `Please check the email address or contact support if you need help.`,
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+      
+      // Update driver with real Telegram chat ID
+      await storage.updateDriver(existingDriver.id, {
+        telegramId: chatId.toString(),
+        enableTelegramNotifications: true,
+        status: 'available'
+      });
+      
+      await this.bot?.sendMessage(chatId,
+        `🎉 *Account Successfully Linked!*\n\n` +
+        `Welcome back, ${existingDriver.name}!\n\n` +
+        `📍 Location: ${existingDriver.city}\n` +
+        `🚛 Equipment: ${existingDriver.equipmentType.replace('_', ' ')}\n` +
+        `📱 Status: Available for loads\n\n` +
+        `✅ You'll now receive Tennessee load offers directly in this chat!\n\n` +
+        `Happy trucking! 🚛💰`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      console.log(`✅ Successfully linked ${existingDriver.name} (${existingDriver.email}) to chat ID: ${chatId}`);
+      
+    } catch (error) {
+      console.error('Error linking existing driver:', error);
+      await this.bot?.sendMessage(chatId,
+        `❌ Error linking your account. Please try again or contact support.`
+      );
+    }
+  }
+
   async handleDriverRegistration(chatId: number, userInfo: any): Promise<void> {
     try {
       console.log(`🔗 Handling driver registration for ${userInfo?.first_name} (Chat: ${chatId})`);
@@ -2089,6 +2141,7 @@ Please contact driver if needed.`;
       const tokenData = {
         token,
         email: tempEmail,
+        telegramChatId: chatId.toString(), // Store the chat ID for later linking
         expiresAt,
         isUsed: false,
       };
