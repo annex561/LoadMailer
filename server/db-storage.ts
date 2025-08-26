@@ -1,12 +1,12 @@
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
-import { eq, and, or, sql } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 import * as schema from '@shared/schema';
 import { IStorage } from './storage';
 import { randomUUID } from 'crypto';
 
-const neonClient = neon(process.env.DATABASE_URL!);
-const db = drizzle(neonClient);
+const sql = neon(process.env.DATABASE_URL!);
+const db = drizzle(sql, { schema });
 
 export class DatabaseStorage implements IStorage {
   // Driver operations
@@ -636,23 +636,7 @@ export class DatabaseStorage implements IStorage {
 
   async getDriverLocationHistory(driverId: string): Promise<schema.DriverLocation[]> {
     try {
-      const result = await db.select({
-        id: schema.driverLocations.id,
-        driverId: schema.driverLocations.driverId,
-        latitude: schema.driverLocations.latitude,
-        longitude: schema.driverLocations.longitude,
-        altitude: schema.driverLocations.altitude,
-        accuracy: schema.driverLocations.accuracy,
-        speed: schema.driverLocations.speed,
-        heading: schema.driverLocations.heading,
-        timestamp: schema.driverLocations.timestamp,
-        address: schema.driverLocations.address,
-        loadId: schema.driverLocations.loadId,
-        isActive: schema.driverLocations.isActive,
-        batteryLevel: schema.driverLocations.batteryLevel,
-        signalStrength: schema.driverLocations.signalStrength,
-        createdAt: schema.driverLocations.createdAt,
-      })
+      const result = await db.select()
         .from(schema.driverLocations)
         .where(eq(schema.driverLocations.driverId, driverId))
         .orderBy(sql`${schema.driverLocations.timestamp} desc`)
