@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, desc, sql as drizzleSql, notInArray } from 'drizzle-orm';
 import * as schema from '@shared/schema';
 import { IStorage } from './storage';
 import { randomUUID } from 'crypto';
@@ -612,7 +612,23 @@ export class DatabaseStorage implements IStorage {
   async updateDriverLocation(id: string, location: Partial<schema.InsertDriverLocation>): Promise<schema.DriverLocation | undefined> {
     try {
       await db.update(schema.driverLocations).set(location).where(eq(schema.driverLocations.id, id));
-      const result = await db.select().from(schema.driverLocations).where(eq(schema.driverLocations.id, id));
+      const result = await db.select({
+        id: schema.driverLocations.id,
+        driverId: schema.driverLocations.driverId,
+        latitude: schema.driverLocations.latitude,
+        longitude: schema.driverLocations.longitude,
+        altitude: schema.driverLocations.altitude,
+        accuracy: schema.driverLocations.accuracy,
+        speed: schema.driverLocations.speed,
+        heading: schema.driverLocations.heading,
+        timestamp: schema.driverLocations.timestamp,
+        address: schema.driverLocations.address,
+        loadId: schema.driverLocations.loadId,
+        isActive: schema.driverLocations.isActive,
+        batteryLevel: schema.driverLocations.batteryLevel,
+        signalStrength: schema.driverLocations.signalStrength,
+        createdAt: schema.driverLocations.createdAt,
+      }).from(schema.driverLocations).where(eq(schema.driverLocations.id, id));
       return result[0];
     } catch (error) {
       console.error('Error updating driver location:', error);
@@ -622,10 +638,26 @@ export class DatabaseStorage implements IStorage {
 
   async getDriverCurrentLocation(driverId: string): Promise<schema.DriverLocation | undefined> {
     try {
-      const result = await db.select()
+      const result = await db.select({
+        id: schema.driverLocations.id,
+        driverId: schema.driverLocations.driverId,
+        latitude: schema.driverLocations.latitude,
+        longitude: schema.driverLocations.longitude,
+        altitude: schema.driverLocations.altitude,
+        accuracy: schema.driverLocations.accuracy,
+        speed: schema.driverLocations.speed,
+        heading: schema.driverLocations.heading,
+        timestamp: schema.driverLocations.timestamp,
+        address: schema.driverLocations.address,
+        loadId: schema.driverLocations.loadId,
+        isActive: schema.driverLocations.isActive,
+        batteryLevel: schema.driverLocations.batteryLevel,
+        signalStrength: schema.driverLocations.signalStrength,
+        createdAt: schema.driverLocations.createdAt,
+      })
         .from(schema.driverLocations)
         .where(and(eq(schema.driverLocations.driverId, driverId), eq(schema.driverLocations.isActive, true)))
-        .orderBy(sql`${schema.driverLocations.timestamp} desc`)
+        .orderBy(desc(schema.driverLocations.timestamp))
         .limit(1);
       return result[0];
     } catch (error) {
@@ -636,10 +668,26 @@ export class DatabaseStorage implements IStorage {
 
   async getDriverLocationHistory(driverId: string): Promise<schema.DriverLocation[]> {
     try {
-      const result = await db.select()
+      const result = await db.select({
+        id: schema.driverLocations.id,
+        driverId: schema.driverLocations.driverId,
+        latitude: schema.driverLocations.latitude,
+        longitude: schema.driverLocations.longitude,
+        altitude: schema.driverLocations.altitude,
+        accuracy: schema.driverLocations.accuracy,
+        speed: schema.driverLocations.speed,
+        heading: schema.driverLocations.heading,
+        timestamp: schema.driverLocations.timestamp,
+        address: schema.driverLocations.address,
+        loadId: schema.driverLocations.loadId,
+        isActive: schema.driverLocations.isActive,
+        batteryLevel: schema.driverLocations.batteryLevel,
+        signalStrength: schema.driverLocations.signalStrength,
+        createdAt: schema.driverLocations.createdAt,
+      })
         .from(schema.driverLocations)
         .where(eq(schema.driverLocations.driverId, driverId))
-        .orderBy(sql`${schema.driverLocations.timestamp} desc`)
+        .orderBy(desc(schema.driverLocations.timestamp))
         .limit(100);
       return result;
     } catch (error) {
@@ -650,10 +698,26 @@ export class DatabaseStorage implements IStorage {
 
   async getDriverLocations(driverId: string, limit = 10): Promise<schema.DriverLocation[]> {
     try {
-      const result = await db.select()
+      const result = await db.select({
+        id: schema.driverLocations.id,
+        driverId: schema.driverLocations.driverId,
+        latitude: schema.driverLocations.latitude,
+        longitude: schema.driverLocations.longitude,
+        altitude: schema.driverLocations.altitude,
+        accuracy: schema.driverLocations.accuracy,
+        speed: schema.driverLocations.speed,
+        heading: schema.driverLocations.heading,
+        timestamp: schema.driverLocations.timestamp,
+        address: schema.driverLocations.address,
+        loadId: schema.driverLocations.loadId,
+        isActive: schema.driverLocations.isActive,
+        batteryLevel: schema.driverLocations.batteryLevel,
+        signalStrength: schema.driverLocations.signalStrength,
+        createdAt: schema.driverLocations.createdAt,
+      })
         .from(schema.driverLocations)
         .where(eq(schema.driverLocations.driverId, driverId))
-        .orderBy(sql`${schema.driverLocations.timestamp} desc`)
+        .orderBy(desc(schema.driverLocations.timestamp))
         .limit(limit);
       return result;
     } catch (error) {
@@ -664,10 +728,26 @@ export class DatabaseStorage implements IStorage {
 
   async getAllCurrentDriverLocations(): Promise<schema.DriverLocation[]> {
     try {
-      const result = await db.select()
+      const result = await db.select({
+        id: schema.driverLocations.id,
+        driverId: schema.driverLocations.driverId,
+        latitude: schema.driverLocations.latitude,
+        longitude: schema.driverLocations.longitude,
+        altitude: schema.driverLocations.altitude,
+        accuracy: schema.driverLocations.accuracy,
+        speed: schema.driverLocations.speed,
+        heading: schema.driverLocations.heading,
+        timestamp: schema.driverLocations.timestamp,
+        address: schema.driverLocations.address,
+        loadId: schema.driverLocations.loadId,
+        isActive: schema.driverLocations.isActive,
+        batteryLevel: schema.driverLocations.batteryLevel,
+        signalStrength: schema.driverLocations.signalStrength,
+        createdAt: schema.driverLocations.createdAt,
+      })
         .from(schema.driverLocations)
         .where(eq(schema.driverLocations.isActive, true))
-        .orderBy(sql`${schema.driverLocations.timestamp} desc`);
+        .orderBy(desc(schema.driverLocations.timestamp));
       return result;
     } catch (error) {
       console.error('Error getting all current driver locations:', error);
@@ -693,7 +773,7 @@ export class DatabaseStorage implements IStorage {
         .from(schema.driverLocations)
         .innerJoin(schema.drivers, eq(schema.driverLocations.driverId, schema.drivers.id))
         .where(eq(schema.driverLocations.isActive, true))
-        .orderBy(sql`${schema.driverLocations.timestamp} desc`);
+        .orderBy(desc(schema.driverLocations.timestamp));
       
       return result;
     } catch (error) {
@@ -708,7 +788,7 @@ export class DatabaseStorage implements IStorage {
       const locationsToKeep = await db.select()
         .from(schema.driverLocations)
         .where(eq(schema.driverLocations.driverId, driverId))
-        .orderBy(sql`${schema.driverLocations.timestamp} desc`)
+        .orderBy(desc(schema.driverLocations.timestamp))
         .limit(keepCount);
 
       if (locationsToKeep.length === keepCount) {
@@ -716,7 +796,7 @@ export class DatabaseStorage implements IStorage {
         await db.delete(schema.driverLocations)
           .where(and(
             eq(schema.driverLocations.driverId, driverId),
-            sql`${schema.driverLocations.id} NOT IN (${keepIds.map(id => `'${id}'`).join(',')})`
+            notInArray(schema.driverLocations.id, keepIds)
           ));
       }
     } catch (error) {
