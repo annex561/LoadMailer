@@ -80,9 +80,9 @@ export class ContinuousLoadService {
       if (this.isRunning) {
         await this.generateLoad();
       }
-    }, 20000); // Every 20 seconds
+    }, 120000); // Every 120 seconds (2 minutes) - reduced for better performance
 
-    console.log('✅ Continuous Load Service started - generating loads every 20 seconds');
+    console.log('✅ Continuous Load Service started - generating loads every 2 minutes');
   }
 
   async stop(): Promise<void> {

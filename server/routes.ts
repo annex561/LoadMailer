@@ -284,9 +284,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize real driver location service on startup
   try {
     console.log('🚚 Starting Real Driver Location Service initialization...');
-    // Temporarily disabled to fix server startup issue with GPS coordinates
-    // await realDriverLocationService.initialize();
-    console.log('⚠️ Real Driver Location Service temporarily disabled due to GPS coordinate issue');
+    await realDriverLocationService.initialize();
+    console.log('✅ Real Driver Location Service initialized and running');
   } catch (error) {
     console.error('❌ Failed to initialize real driver location service:', error);
   }
@@ -310,9 +309,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize GPS Tracking Service on startup
   try {
-    // Temporarily disabled to fix server startup issue with GPS coordinates
-    // await gpsTrackingService.initialize();
-    console.log('⚠️ GPS Tracking Service temporarily disabled due to GPS coordinate issue');
+    await gpsTrackingService.initialize();
+    console.log('✅ GPS Tracking Service initialized');
   } catch (error) {
     console.error('Failed to initialize GPS Tracking Service:', error);
   }
