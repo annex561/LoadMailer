@@ -309,7 +309,8 @@ export default function LoadOpsDashboard() {
     queryKey: ['/api/loads'],
     queryFn: async () => {
       const response = await fetch('/api/loads');
-      return response.json();
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
     }
   });
 
