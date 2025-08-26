@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +26,8 @@ interface SimpleDriverData {
   vehicleModel: string;
   licenseNumber: string;
   licenseState: string;
+  token?: string;
+  telegramId?: string;
 }
 
 const US_STATES = [
@@ -55,13 +57,52 @@ export default function SimpleDriverRegistration() {
     vehicleMake: '',
     vehicleModel: '',
     licenseNumber: '',
-    licenseState: ''
+    licenseState: '',
+    token: undefined,
+    telegramId: undefined
   });
   
   const [isComplete, setIsComplete] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Get token from URL and validate it
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    
+    if (token) {
+      console.log('Found token in URL:', token);
+      setFormData(prev => ({ ...prev, token }));
+      
+      // Validate token and get associated data
+      fetch('/api/validate-onboarding-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.valid) {
+          setTokenError(null);
+          // Pre-fill email if available
+          if (data.email && !formData.email) {
+            setFormData(prev => ({ ...prev, email: data.email }));
+          }
+        } else {
+          setTokenError(data.error || 'Invalid or expired token');
+        }
+      })
+      .catch(err => {
+        console.error('Token validation error:', err);
+        setTokenError('Failed to validate token');
+      });
+    } else {
+      setTokenError('No invitation token found. Please use the registration link from Telegram.');
+    }
+  }, []);
 
   const registerDriverMutation = useMutation({
     mutationFn: async (data: SimpleDriverData) => {
@@ -99,7 +140,8 @@ export default function SimpleDriverRegistration() {
   };
 
   const isFormValid = () => {
-    return formData.name && formData.email && formData.phone && 
+    return !tokenError && formData.token && 
+           formData.name && formData.email && formData.phone && 
            formData.city && formData.equipmentType && formData.telegramUsername &&
            formData.vehicleYear && formData.vehicleMake && formData.vehicleModel &&
            formData.licenseNumber && formData.licenseState && 
@@ -153,6 +195,12 @@ export default function SimpleDriverRegistration() {
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {tokenError && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-600">
+              ⚠️ {tokenError}
+            </div>
+          )}
+          
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">

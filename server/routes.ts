@@ -4172,20 +4172,64 @@ Safe travels! 🚛`;
     }
   });
 
+  // Token validation endpoint
+  app.post("/api/validate-onboarding-token", async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ valid: false, error: "Token is required" });
+      }
+      
+      const onboardingToken = await storage.getOnboardingToken(token);
+      
+      if (!onboardingToken) {
+        return res.status(200).json({ valid: false, error: "Token not found" });
+      }
+      
+      if (onboardingToken.isUsed) {
+        return res.status(200).json({ valid: false, error: "Token has already been used" });
+      }
+      
+      if (onboardingToken.expiresAt < new Date()) {
+        return res.status(200).json({ valid: false, error: "Token has expired" });
+      }
+      
+      res.status(200).json({ 
+        valid: true, 
+        email: onboardingToken.email,
+        expiresAt: onboardingToken.expiresAt
+      });
+    } catch (error) {
+      console.error("Token validation error:", error);
+      res.status(500).json({ valid: false, error: "Failed to validate token" });
+    }
+  });
+
   // Simple driver registration endpoint (bypass complex token system)
   app.post("/api/simple-driver-registration", async (req, res) => {
     try {
       const { 
         name, email, phone, city, equipmentType, telegramUsername,
         maxWeight, maxLength, loadType, vehicleYear, vehicleMake, vehicleModel,
-        licenseNumber, licenseState 
+        licenseNumber, licenseState, token 
       } = req.body;
 
-      // Validate required fields
+      // Validate required fields and token
+      if (!token) {
+        return res.status(400).json({ error: "Valid onboarding token is required" });
+      }
+      
       if (!name || !email || !phone || !city || !equipmentType || !telegramUsername ||
           !vehicleYear || !vehicleMake || !vehicleModel || !licenseNumber || !licenseState ||
           !maxWeight || !maxLength || !loadType) {
         return res.status(400).json({ error: "All fields are required" });
+      }
+
+      // Validate and get onboarding token information
+      const onboardingToken = await storage.getOnboardingToken(token);
+      if (!onboardingToken || onboardingToken.isUsed || onboardingToken.expiresAt < new Date()) {
+        return res.status(400).json({ error: "Invalid or expired onboarding token" });
       }
 
       // Create driver with simplified data
@@ -4229,14 +4273,18 @@ Safe travels! 🚛`;
         status: "available" as const,
         enableTelegramNotifications: true,
         telegramUsername: telegramUsername.replace('@', ''), // Remove @ if present
-        // FIXED: Use a proper telegamId that load matching system recognizes
-        telegramId: `driver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        // Link to Telegram chat ID from the onboarding process - use a temporary ID for now
+        telegramId: `token_${token.substring(0, 8)}_${Date.now()}`,
         preferredLanes: [],
         avoidAreas: []
       };
 
       const driver = await storage.createDriver(driverData);
       console.log(`✅ Driver created successfully: ${driver.name} (ID: ${driver.id}, TelegramID: ${driver.telegramId})`);
+      
+      // Mark the onboarding token as used
+      await storage.markTokenAsUsed(token);
+      console.log(`✅ Onboarding token marked as used for ${driver.name}`);
       
       // CRITICAL FIX: Force refresh the drivers cache to include this new driver immediately
       console.log(`🔄 Refreshing driver cache to include ${driver.name} for immediate load matching`);
