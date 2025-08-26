@@ -922,7 +922,17 @@ export class TelegramLoadService {
   }
 
   private async sendLoadToDriver(load: LoadWithRelations, driver: Driver, matchScore?: number, distance?: number): Promise<void> {
-    if (!this.bot || !this.config || !driver.telegramId) return;
+    if (!this.bot || !this.config || !driver.telegramId || !driver.enableTelegramNotifications) return;
+
+    // Validate telegram ID format - should be numeric
+    if (!/^\d+$/.test(driver.telegramId)) {
+      console.log(`⚠️ Invalid telegram ID format for driver ${driver.name}: ${driver.telegramId}. Disabling notifications.`);
+      await storage.updateDriver(driver.id, {
+        telegramId: null,
+        enableTelegramNotifications: false
+      });
+      return;
+    }
 
     try {
       // Calculate deadhead distance for this driver and load
