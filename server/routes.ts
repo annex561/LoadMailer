@@ -300,9 +300,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize Telegram Load Service on startup
   try {
-    // Temporarily disabled to isolate server startup issue
-    // await telegramLoadService.initialize();
-    console.log('⚠️ Telegram Load Service temporarily disabled for startup isolation');
+    await telegramLoadService.initialize();
+    console.log('✅ Telegram Load Service initialized');
   } catch (error) {
     console.error('Failed to initialize Telegram Load Service:', error);
   }
