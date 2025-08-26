@@ -4,9 +4,9 @@ import { randomUUID } from "crypto";
 import { canHandleEquipmentType } from "@shared/equipment-types";
 import type { LoadWithRelations, Driver, LanePreference, AvoidLocation, TelegramBotConfig, LoadOffer } from "@shared/schema";
 
-// Bot configuration from the script
-const TELEGRAM_TOKEN = '8322765631:AAExgmA8q8PEAhhgdhyaIKX0mdVH8bZuN1c';
-const DISPATCHER_ID = '5908383693';
+// Bot configuration - use environment variables with fallbacks  
+const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const DISPATCHER_ID = process.env.DISPATCHER_CHAT_ID || '';
 
 export class TelegramLoadService {
   private bot: TelegramBot | null = null;
@@ -20,6 +20,12 @@ export class TelegramLoadService {
   async initialize(): Promise<void> {
     try {
       console.log('Initializing Telegram Load Dispatcher...');
+      
+      // Check if required environment variables are available
+      if (!TELEGRAM_TOKEN || !DISPATCHER_ID) {
+        console.log('⚠️ Telegram service disabled - missing TELEGRAM_BOT_TOKEN or DISPATCHER_CHAT_ID');
+        return;
+      }
       
       // Initialize bot configuration
       await this.initializeBotConfig();

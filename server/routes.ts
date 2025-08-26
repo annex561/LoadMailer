@@ -37,23 +37,13 @@ import smsService from "./sms-service";
 // Initialize prediction confidence service
 const predictionConfidenceService = new PredictionConfidenceService();
 
-// Initialize continuous load service for 24/7 operation
-const continuousLoadService = new ContinuousLoadService(telegramLoadService);
-
-// Initialize DAT scraper service for real load board data
-const datScraperService = new DATScraperService(telegramLoadService);
-
-// Initialize real load integration service
-const realLoadService = new RealLoadIntegrationService(telegramLoadService);
-
-// Initialize DAT API service for live freight data
-const datAPIService = new DATAPIService(telegramLoadService);
-
-// Initialize DAT website scraper for direct website scraping
-const datWebsiteScraper = new DATWebsiteScraper(telegramLoadService);
-
-// Initialize real DAT scraper for authentic load board scraping
-const realDATScraper = new RealDATScraper(telegramLoadService);
+// Declare services that will be initialized later
+let continuousLoadService: ContinuousLoadService | null = null;
+let datScraperService: DATScraperService | null = null;
+let realLoadService: RealLoadIntegrationService | null = null;
+let datAPIService: DATAPIService | null = null;
+let datWebsiteScraper: DATWebsiteScraper | null = null;
+let realDATScraper: RealDATScraper | null = null;
 
 // DAT load posting removed - focusing only on pulling loads from DAT
 // const datLoadPoster = new DATLoadPoster();
@@ -260,14 +250,31 @@ async function sendAutomatedEmails(load: LoadWithRelations, trigger: string) {
   }
 }
 
+// Function to initialize services that depend on Telegram service
+async function initializeDependentServices() {
+  try {
+    console.log('🚀 Initializing dependent services...');
+    
+    // Initialize services only if Telegram is running or if they can work without it
+    continuousLoadService = new ContinuousLoadService(telegramLoadService);
+    datScraperService = new DATScraperService(telegramLoadService);
+    realLoadService = new RealLoadIntegrationService(telegramLoadService);
+    datAPIService = new DATAPIService(telegramLoadService);
+    datWebsiteScraper = new DATWebsiteScraper(telegramLoadService);
+    realDATScraper = new RealDATScraper(telegramLoadService);
+    
+    console.log('✅ Dependent services initialized');
+  } catch (error) {
+    console.error('❌ Failed to initialize dependent services:', error);
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize services
   const predictiveMaintenanceService = new PredictiveMaintenanceService();
   
-  // Initialize DAT Puppeteer scraper (non-blocking)
-  datScraperService.initialize()
-    .then(() => console.log('DAT Puppeteer Scraper initialized'))
-    .catch((error) => console.error('Failed to initialize DAT Puppeteer Scraper:', error));
+  // DAT Puppeteer scraper will be initialized in initializeDependentServices()
+  console.log('⚠️ DAT Puppeteer Scraper initialization deferred until Telegram service is ready');
   
   // Check SMS service configuration on startup
   console.log(`SMS Service status: ${smsService.isServiceConfigured() ? 'CONFIGURED ✓' : 'NOT CONFIGURED ✗'}`);
@@ -305,6 +312,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   } catch (error) {
     console.error('Failed to initialize Telegram Load Service:', error);
   }
+
+  // Initialize dependent services after Telegram service is ready (non-blocking)
+  setTimeout(() => {
+    initializeDependentServices();
+  }, 2000);
 
   // Initialize GPS Tracking Service on startup
   try {
