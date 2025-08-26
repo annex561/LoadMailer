@@ -37,44 +37,52 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+  try {
+    log("Starting server initialization...");
+    const server = await registerRoutes(app);
+    log("Routes registered successfully, server created");
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
-
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, async () => {
-    log(`serving on port ${port}`);
+    // BIND TO PORT IMMEDIATELY for Replit detection
+    const port = parseInt(process.env.PORT || '5000', 10);
+    log(`Attempting to bind to port ${port}...`);
     
-    // Auto-start Tennessee load generation to ensure real data is always available
+    server.listen(port, "0.0.0.0", () => {
+      log(`✅ Server successfully listening on port ${port}`);
+    });
+    
+    server.on('error', (error: any) => {
+      log(`❌ Server error: ${error.message}`);
+      if (error.code === 'EADDRINUSE') {
+        log(`Port ${port} is already in use`);
+      }
+    });
+
+    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
+
+      res.status(status).json({ message });
+      throw err;
+    });
+
+    // Setup Vite and other services after port is bound
+    if (app.get("env") === "development") {
+      log("Setting up Vite in development mode...");
+      setupVite(app, server).then(() => {
+        log("Vite setup completed");
+      }).catch((error) => {
+        log(`Vite setup error: ${error}`);
+      });
+    } else {
+      serveStatic(app);
+    }
+
+    // Auto-start load generation after everything is set up
     setTimeout(async () => {
       try {
         const { simpleDATConnector } = await import('./simple-dat-connector.js');
         const { telegramService } = await import('./telegram-service.js');
         
-        // Check if Telegram service is properly initialized before starting load generation
         if (telegramService.isServiceRunning()) {
           await simpleDATConnector.startRealLoadGeneration(telegramService);
           log('✅ Auto-started Tennessee load generation with Telegram notifications');
@@ -84,8 +92,11 @@ app.use((req, res, next) => {
         }
       } catch (error) {
         log(`❌ Failed to auto-start Tennessee load generation: ${String(error)}`);
-        // Continue anyway without auto-start
       }
-    }, 10000); // Wait 10 seconds for all services to fully initialize
-  });
+    }, 10000);
+    
+  } catch (error) {
+    log(`❌ Failed to start server: ${error}`);
+    throw error;
+  }
 })();

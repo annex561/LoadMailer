@@ -261,6 +261,9 @@ async function sendAutomatedEmails(load: LoadWithRelations, trigger: string) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Create HTTP server first to ensure port binding happens quickly
+  const httpServer = createServer(app);
+  
   // Initialize services
   const predictiveMaintenanceService = new PredictiveMaintenanceService();
   
@@ -272,22 +275,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Check SMS service configuration on startup
   console.log(`SMS Service status: ${smsService.isServiceConfigured() ? 'CONFIGURED ✓' : 'NOT CONFIGURED ✗'}`);
   
-  // Initialize scheduler service on startup
-  try {
-    await schedulerService.initialize();
-    console.log('Scheduler service initialized');
-  } catch (error) {
-    console.error('Failed to initialize scheduler service:', error);
-  }
+  // Initialize services asynchronously (non-blocking)
+  schedulerService.initialize()
+    .then(() => console.log('Scheduler service initialized'))
+    .catch((error) => console.error('Failed to initialize scheduler service:', error));
 
-  // Initialize real driver location service on startup
-  try {
-    console.log('🚚 Starting Real Driver Location Service initialization...');
-    await realDriverLocationService.initialize();
-    console.log('✅ Real Driver Location Service initialized and running');
-  } catch (error) {
-    console.error('❌ Failed to initialize real driver location service:', error);
-  }
+  realDriverLocationService.initialize()
+    .then(() => {
+      console.log('🚚 Starting Real Driver Location Service initialization...');
+      console.log('✅ Real Driver Location Service initialized and running');
+    })
+    .catch((error) => console.error('❌ Failed to initialize real driver location service:', error));
 
   // Initialize load expiration service on startup
   try {
@@ -297,46 +295,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.error('Failed to initialize load expiration service:', error);
   }
 
-  // Initialize Telegram Load Service on startup
-  try {
-    await telegramLoadService.initialize();
-    console.log('Telegram Load Service initialized');
-  } catch (error) {
-    console.error('Failed to initialize Telegram Load Service:', error);
-  }
+  telegramLoadService.initialize()
+    .then(() => console.log('Telegram Load Service initialized'))
+    .catch((error) => console.error('Failed to initialize Telegram Load Service:', error));
 
-  // Initialize GPS Tracking Service on startup
-  try {
-    await gpsTrackingService.initialize();
-    console.log('GPS Tracking Service initialized');
-  } catch (error) {
-    console.error('Failed to initialize GPS Tracking Service:', error);
-  }
+  gpsTrackingService.initialize()
+    .then(() => console.log('GPS Tracking Service initialized'))
+    .catch((error) => console.error('Failed to initialize GPS Tracking Service:', error));
 
-  // Initialize Load Board Service on startup
-  try {
-    await loadBoardService.initialize();
-    console.log('Load Board Service initialized');
-  } catch (error) {
-    console.error('Failed to initialize Load Board Service:', error);
-  }
+  loadBoardService.initialize()
+    .then(() => console.log('Load Board Service initialized'))
+    .catch((error) => console.error('Failed to initialize Load Board Service:', error));
 
-  // Initialize Bidding Service
-  try {
-    await biddingService.initialize();
-    console.log('Bidding Service initialized');
-  } catch (error) {
-    console.error('Failed to initialize Bidding Service:', error);
-  }
+  biddingService.initialize()
+    .then(() => console.log('Bidding Service initialized'))
+    .catch((error) => console.error('Failed to initialize Bidding Service:', error));
 
-  // Initialize Pickup Confirmation Service
-  try {
-    const { pickupConfirmationService } = await import('./pickup-confirmation-service.js');
-    await pickupConfirmationService.initialize();
-    console.log('Pickup Confirmation Service initialized');
-  } catch (error) {
-    console.error('Failed to initialize Pickup Confirmation Service:', error);
-  }
+  // Initialize Pickup Confirmation Service (non-blocking)
+  import('./pickup-confirmation-service.js')
+    .then(async ({ pickupConfirmationService }) => {
+      await pickupConfirmationService.initialize();
+      console.log('Pickup Confirmation Service initialized');
+    })
+    .catch((error) => console.error('Failed to initialize Pickup Confirmation Service:', error));
 
   // Initialize Smart Load Matching Service
   console.log('🧠 Smart Load Matching Service with AI-powered analytics ready');
@@ -4892,8 +4873,6 @@ Safe travels! 🚛`;
       });
     }
   });
-
-  const httpServer = createServer(app);
 
   // AUTO-START Google Sheets Import Service
   setTimeout(async () => {
