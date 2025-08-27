@@ -230,12 +230,12 @@ class GoogleSheetsSimple {
           weight: this.cleanNumber(weight) || 0,
           rate: this.cleanNumber(pay),
           miles: this.cleanNumber(miles),
-          equipment: loadType || 'Van',  // Use Load Type column for equipment
+          equipment: 'Van',  // Default equipment type
           broker: 'Google Sheets',
           email: 'dispatch@lampslogistics.com',
-          phone: contact || 'N/A',      // Use Contact Info column for phone
+          phone: loadType || 'N/A',      // loadType actually contains phone numbers
           deadhead: this.cleanNumber(deadhead) || 0,  // Add deadhead from column F
-          company: company || 'Unknown',  // Add company from column J
+          company: contact || 'Unknown',  // contact actually contains company names
           scrapedAt: new Date()
         };
 
