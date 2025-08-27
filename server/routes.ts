@@ -348,6 +348,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch loads" });
     }
   });
+
+  // CRITICAL: Google Sheets loads endpoint - must be available immediately
+  app.get('/api/dat-loads', async (req, res) => {
+    try {
+      // Use the already imported googleSheetsSimple instance
+      const { googleSheetsSimple, getGoogleSheetsLoads } = await import('./google-sheets-simple.js');
+      const loads = getGoogleSheetsLoads();
+      console.log(`📋 DIRECT API serving ${loads.length} Google Sheets loads (bypassing db-storage)`);
+      
+      // If no loads, try to manually check the instance
+      if (loads.length === 0) {
+        console.log('⚠️ No loads found, checking module state...');
+      }
+      
+      res.json(loads);
+    } catch (error) {
+      console.error('❌ Error getting Google Sheets loads:', error);
+      res.json([]);
+    }
+  });
   
   console.log('✅ Essential routes registered - server ready for startup');
   
@@ -364,8 +384,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 // Function to register all the remaining routes after server startup
 function registerRemainingRoutes(app: Express) {
   console.log('📡 Registering remaining routes in background...');
-  // All the remaining routes will be added here later
-  // For now, just log that this is where they would go
+  
+  // Setup Google Sheets DAT loads endpoint - CRITICAL for frontend
+  app.get('/api/dat-loads', async (req, res) => {
+    try {
+      // Use the already imported googleSheetsSimple instance
+      const { googleSheetsSimple, getGoogleSheetsLoads } = await import('./google-sheets-simple.js');
+      const loads = getGoogleSheetsLoads();
+      console.log(`📋 DIRECT API serving ${loads.length} Google Sheets loads (bypassing db-storage)`);
+      
+      // If no loads, try to manually check the instance
+      if (loads.length === 0) {
+        console.log('⚠️ No loads found, checking module state...');
+        console.log(`📋 Google Sheets Simple running: ${googleSheetsSimple.isRunning}`);
+      }
+      
+      res.json(loads);
+    } catch (error) {
+      console.error('❌ Error getting Google Sheets loads:', error);
+      res.json([]);
+    }
+  });
+
+  console.log('✅ Critical API routes registered: /api/dat-loads');
 
   // Run initial load analysis for all available drivers
   // Temporarily disabled to isolate server startup issue
@@ -4882,27 +4923,7 @@ Safe travels! 🚛`;
     }
   });
 
-  
-  // Setup simple DAT loads endpoint - FORCE use Google Sheets loads only
-  app.get('/api/dat-loads', async (req, res) => {
-    try {
-      // Use the already imported googleSheetsSimple instance
-      const { googleSheetsSimple, getGoogleSheetsLoads } = await import('./google-sheets-simple.js');
-      const loads = getGoogleSheetsLoads();
-      console.log(`📋 DIRECT API serving ${loads.length} Google Sheets loads (bypassing db-storage)`);
-      
-      // If no loads, try to manually check the instance
-      if (loads.length === 0) {
-        console.log('⚠️ No loads found, checking module state...');
-        console.log(`📋 Google Sheets Simple running: ${googleSheetsSimple.isRunning}`);
-      }
-      
-      res.json(loads);
-    } catch (error) {
-      console.error('❌ Error getting Google Sheets loads:', error);
-      res.json([]);
-    }
-  });
+  // Removed duplicate /api/dat-loads endpoint - now handled in registerRemainingRoutes()
 
 
   // Simple Google Sheets API endpoints
