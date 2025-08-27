@@ -502,7 +502,7 @@ export class TelegramLoadService {
           await this.handleDeclineConfirmationShort(shortLoadId, shortDriverId, telegramId, chatId, messageId);
         } else if (data.startsWith('decline_')) {
           // This is a simple load decline
-          const loadId = data.substring(8); // Remove 'decline_' prefix
+          const loadId = data.substring(8); // Remove 'decline_' prefix (decline_ = 8 chars)
           await this.handleDeclineLoad(loadId, telegramId, chatId);
         } else if (data.startsWith('onsite_')) {
           const parts = data.substring(7).split('_');
@@ -846,10 +846,13 @@ export class TelegramLoadService {
     else if (distance <= 100) score += 15;
     else if (distance <= 150) score += 8;
 
-    // Equipment type match (25% weight)
+    // Equipment type match (25% weight) - STRICT MATCHING FOR ANNEX
     maxScore += 25;
     if (driver.equipmentType === load.equipmentType || !load.equipmentType) {
       score += 25;
+    } else if (driver.name === 'Annex Luberisse') {
+      // Annex gets EXACT equipment matching only - no cross-compatibility
+      score += 0;
     } else if (canHandleEquipmentType(driver.equipmentType, load.equipmentType)) {
       score += 15; // Partial credit for compatible equipment using comprehensive system
     }
