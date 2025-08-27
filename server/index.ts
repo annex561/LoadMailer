@@ -85,42 +85,43 @@ app.use((req, res, next) => {
     }, () => {
       log(`🎉 Server is now serving on port ${port}`);
       
-      // Initialize all background services after server is listening
-      initializeBackgroundServices();
+      // Initialize background services asynchronously without blocking
+      setImmediate(() => {
+        initializeBackgroundServices();
+      });
     });
     
     // Initialize background services without blocking server startup
     function initializeBackgroundServices() {
-      // Wait a moment for server to fully stabilize, then start services in parallel without blocking
-      setTimeout(() => {
-        log('🚀 Initializing background services...');
+      // Start services immediately in parallel without waiting for server stabilization
+      log('🚀 Initializing background services in parallel...');
+      
+      // Start each service independently with shorter timeouts and better error handling
+      
+      // 1. Auto-start Google Sheets Import Service (fire-and-forget with shorter timeout)
+      const startGoogleSheets = async () => {
+        try {
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Google Sheets startup timeout')), 8000);
+          });
+          
+          const startPromise = (async () => {
+            const { googleSheetsSimple } = await import('./google-sheets-simple.js');
+            await googleSheetsSimple.start();
+            log('✅ Google Sheets Simple integration started - pulling loads every 3 minutes');
+          })();
+          
+          await Promise.race([startPromise, timeoutPromise]);
+        } catch (error) {
+          log(`⚠️ Failed to auto-start Google Sheets import service: ${error}`);
+        }
+      };
         
-        // Start each service independently with individual timeouts to prevent blocking
-        
-        // 1. Auto-start Google Sheets Import Service (fire-and-forget with timeout)
-        const startGoogleSheets = async () => {
-          try {
-            const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Google Sheets startup timeout')), 15000);
-            });
-            
-            const startPromise = (async () => {
-              const { googleSheetsSimple } = await import('./google-sheets-simple.js');
-              await googleSheetsSimple.start();
-              log('✅ Google Sheets Simple integration started - pulling loads every 3 minutes');
-            })();
-            
-            await Promise.race([startPromise, timeoutPromise]);
-          } catch (error) {
-            log(`⚠️ Failed to auto-start Google Sheets import service: ${error}`);
-          }
-        };
-        
-        // 2. Session-based DAT scraper initialization (fire-and-forget with timeout)
+        // 2. Session-based DAT scraper initialization (fire-and-forget with shorter timeout)
         const startDATScraper = async () => {
           try {
             const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('DAT scraper startup timeout')), 10000);
+              setTimeout(() => reject(new Error('DAT scraper startup timeout')), 5000);
             });
             
             const startPromise = (async () => {
@@ -149,11 +150,11 @@ app.use((req, res, next) => {
           }
         };
         
-        // 3. Auto-start Tennessee load generation (fire-and-forget with timeout)
+        // 3. Auto-start Tennessee load generation (fire-and-forget with shorter timeout)
         const startTennesseeGeneration = async () => {
           try {
             const timeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Tennessee load generation startup timeout')), 10000);
+              setTimeout(() => reject(new Error('Tennessee load generation startup timeout')), 5000);
             });
             
             const startPromise = (async () => {
@@ -176,14 +177,19 @@ app.use((req, res, next) => {
           }
         };
         
-        // Start all services in parallel without awaiting them (fire-and-forget)
-        startGoogleSheets().finally(() => {});
-        startDATScraper().finally(() => {});
-        startTennesseeGeneration().finally(() => {});
-        
-        log('✅ Background services initialization started (running in parallel)');
-        
-      }, 1000); // Reduced from 2000ms to 1000ms for faster startup
+      // Start all services in parallel without awaiting them (fire-and-forget)
+      // Use Promise.allSettled to handle all services independently
+      Promise.allSettled([
+        startGoogleSheets(),
+        startDATScraper(),
+        startTennesseeGeneration()
+      ]).then(results => {
+        const successful = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+        log(`✅ Background services initialization complete: ${successful} started, ${failed} failed`);
+      }).catch(error => {
+        log(`⚠️ Background services initialization error: ${error}`);
+      });
     }
     
   } catch (error) {

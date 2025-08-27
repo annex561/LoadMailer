@@ -72,8 +72,12 @@ export class ContinuousLoadService {
     this.isRunning = true;
     console.log('🚛 Starting 24/7 Continuous Load Generation Service for Annex...');
 
-    // Generate initial load immediately
-    await this.generateLoad();
+    // Generate initial load asynchronously to avoid blocking startup
+    setImmediate(() => {
+      this.generateLoad().catch(error => {
+        console.error('Error generating initial load:', error);
+      });
+    });
 
     // Set up continuous generation every 20 seconds
     this.loadInterval = setInterval(async () => {
