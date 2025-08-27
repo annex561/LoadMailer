@@ -50,6 +50,12 @@ app.use((req, res, next) => {
     const server = await Promise.race([routeRegistrationPromise, timeoutPromise]);
     log('✅ Routes registered successfully');
 
+    // Add explicit API middleware to ensure API routes return JSON
+    app.use('/api/*', (req, res, next) => {
+      res.setHeader('Content-Type', 'application/json');
+      next();
+    });
+
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";

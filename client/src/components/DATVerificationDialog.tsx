@@ -26,12 +26,13 @@ export function DATVerificationDialog() {
     const checkVerificationStatus = async () => {
       try {
         const response = await fetch('/api/dat/verification-status');
-        if (response.ok) {
+        if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
           const status: VerificationStatus = await response.json();
           setIsOpen(status.isWaitingForVerification);
         }
       } catch (error) {
-        console.error('Error checking verification status:', error);
+        // Silently handle verification status errors - this is not critical
+        // Load processing works independently of this dialog
       }
     };
 
