@@ -4969,52 +4969,7 @@ Safe travels! 🚛`;
 
   const httpServer = createServer(app);
 
-  // AUTO-START Google Sheets Import Service
-  setTimeout(async () => {
-    try {
-      console.log('🚀 AUTO-START: Starting Google Sheets auto-import service...');
-      await googleSheetsAutoImporter.start();
-      console.log('✅ Google Sheets auto-import running every 10 seconds');
-
-      // Initialize Simple Google Sheets Integration
-      try {
-        const { googleSheetsSimple } = await import('./google-sheets-simple.js');
-        await googleSheetsSimple.start();
-        console.log('✅ Google Sheets Simple integration started');
-      } catch (error) {
-        console.error('❌ Failed to start Google Sheets Simple integration:', error);
-      }
-    } catch (error) {
-      console.error('❌ Failed to auto-start Google Sheets import service:', error);
-    }
-  }, 2000); // Start after 2 seconds
-
-  // AUTO-RESTART MECHANISM: Use session-based DAT scraping for manual authentication
-  setTimeout(async () => {
-    try {
-      console.log('🔄 AUTO-RESTART: Starting session-based DAT scraper for manual authentication...');
-      console.log('🚫 NO SAMPLE LOADS - Real DAT data only as requested');
-      
-      // Import session-based scraper
-      const { sessionBasedDATScraper } = await import('./session-based-dat-scraper.js');
-      
-      console.log('🔍 Checking for existing authenticated DAT session...');
-      const isAuthenticated = await sessionBasedDATScraper.checkAuthenticatedSession();
-      
-      if (isAuthenticated) {
-        console.log('✅ Authenticated DAT session detected - starting real load scraping!');
-        await sessionBasedDATScraper.startSessionBasedScraping();
-        console.log('📋 System now pulling REAL loads from your authenticated DAT session');
-      } else {
-        console.log('🔐 No authenticated session detected');
-        console.log('📋 Please log into DAT manually, then visit /dat-login to activate scraping');
-        console.log('🚫 System will show NO loads until DAT authentication is completed');
-      }
-      
-    } catch (error) {
-      console.error('AUTO-RESTART failed - session-based scraper error:', error);
-    }
-  }, 5000);
+  // Background services will be initialized after server starts listening
 
   // Manual load entry endpoint
   app.post('/api/manual-loads', async (req, res) => {
