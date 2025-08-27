@@ -16,6 +16,12 @@ export class TelegramLoadService {
   private isProcessingQueue = false;
   private lastMessageTime = 0;
   private readonly MESSAGE_DELAY = 1500; // 1.5 seconds between messages to avoid rate limiting
+  
+  // Batch processing properties
+  private loadBatchQueue: LoadWithRelations[] = [];
+  private isBatchProcessing = false;
+  private readonly BATCH_SIZE = 3;
+  private readonly BATCH_INTERVAL = 30000; // 30 seconds between batches
 
   async initialize(): Promise<void> {
     try {
@@ -111,6 +117,51 @@ export class TelegramLoadService {
     this.messageQueue.push(messageFunction);
     if (!this.isProcessingQueue) {
       this.startQueueProcessor();
+    }
+  }
+
+  private startBatchProcessor(): void {
+    if (this.isBatchProcessing) return;
+    
+    this.isBatchProcessing = true;
+    const processBatches = async () => {
+      while (this.loadBatchQueue.length > 0 && this.isRunning) {
+        // Take up to 3 loads from the queue
+        const batch = this.loadBatchQueue.splice(0, this.BATCH_SIZE);
+        
+        console.log(`🚛 PROCESSING BATCH: ${batch.length} loads - ${batch.map(l => l.loadNumber).join(', ')}`);
+        
+        // Process each load in the batch
+        for (const load of batch) {
+          await this.processSingleLoad(load);
+        }
+        
+        console.log(`✅ BATCH COMPLETE: Sent ${batch.length} loads to drivers`);
+        
+        // Wait 30 seconds before processing next batch (if there are more loads)
+        if (this.loadBatchQueue.length > 0) {
+          console.log(`⏳ BATCH DELAY: Waiting 30 seconds before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, this.BATCH_INTERVAL));
+        }
+      }
+      
+      this.isBatchProcessing = false;
+      
+      // Restart batch processor if more loads arrived
+      if (this.loadBatchQueue.length > 0) {
+        setTimeout(() => this.startBatchProcessor(), 100);
+      }
+    };
+    
+    processBatches();
+  }
+
+  private addLoadToBatch(load: LoadWithRelations): void {
+    this.loadBatchQueue.push(load);
+    console.log(`📥 BATCH QUEUE: Added ${load.loadNumber} (${this.loadBatchQueue.length}/3 in current batch)`);
+    
+    if (!this.isBatchProcessing) {
+      this.startBatchProcessor();
     }
   }
 
@@ -517,12 +568,20 @@ export class TelegramLoadService {
     });
   }
 
+  // Main entry point - adds load to batch queue instead of processing immediately
   async processNewLoad(load: LoadWithRelations): Promise<boolean> {
     if (!this.bot || !this.config || !this.isRunning) {
       console.log('Telegram service not initialized, skipping load notification');
       return false;
     }
 
+    // Add load to batch queue instead of processing immediately
+    this.addLoadToBatch(load);
+    return true;
+  }
+
+  // Process individual load (original processing logic)
+  private async processSingleLoad(load: LoadWithRelations): Promise<boolean> {
     try {
       console.log(`🔍 Processing load ${load.loadNumber}: ${load.pickupAddress} → ${load.deliveryAddress} (${load.equipmentType})`);
       
@@ -572,9 +631,10 @@ export class TelegramLoadService {
       }
 
       console.log(`✅ Processed load ${load.loadNumber} for ${eligibleDrivers.length} drivers via Telegram`);
+      console.log(`📱 Load ${load.loadNumber} sent to eligible drivers via Telegram`);
       return true;
     } catch (error) {
-      console.error('Error processing new load for Telegram:', error);
+      console.error(`Error processing load ${load.loadNumber}:`, error);
       return false;
     }
   }
