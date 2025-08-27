@@ -4690,9 +4690,17 @@ Safe travels! 🚛`;
 
   // Check DAT verification status
   app.get('/api/dat/verification-status', (req, res) => {
+    if (!realDATScraper) {
+      return res.json({
+        isWaitingForVerification: false,
+        status: 'not_initialized'
+      });
+    }
+    
+    const isWaiting = realDATScraper.isWaitingForVerification();
     res.json({
-      isWaitingForVerification: realDATScraper.isWaitingForVerification(),
-      status: realDATScraper.isWaitingForVerification() ? 'waiting_for_verification' : 'ready'
+      isWaitingForVerification: isWaiting,
+      status: isWaiting ? 'waiting_for_verification' : 'ready'
     });
   });
 
