@@ -90,68 +90,100 @@ app.use((req, res, next) => {
     });
     
     // Initialize background services without blocking server startup
-    async function initializeBackgroundServices() {
-      // Wait a moment for server to fully stabilize
-      setTimeout(async () => {
-        try {
-          log('🚀 Initializing background services...');
-          
-          // 1. Auto-start Google Sheets Import Service
+    function initializeBackgroundServices() {
+      // Wait a moment for server to fully stabilize, then start services in parallel without blocking
+      setTimeout(() => {
+        log('🚀 Initializing background services...');
+        
+        // Start each service independently with individual timeouts to prevent blocking
+        
+        // 1. Auto-start Google Sheets Import Service (fire-and-forget with timeout)
+        const startGoogleSheets = async () => {
           try {
-            const { googleSheetsSimple } = await import('./google-sheets-simple.js');
-            await googleSheetsSimple.start();
-            log('✅ Google Sheets Simple integration started - pulling loads every 3 minutes');
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Google Sheets startup timeout')), 15000);
+            });
+            
+            const startPromise = (async () => {
+              const { googleSheetsSimple } = await import('./google-sheets-simple.js');
+              await googleSheetsSimple.start();
+              log('✅ Google Sheets Simple integration started - pulling loads every 3 minutes');
+            })();
+            
+            await Promise.race([startPromise, timeoutPromise]);
           } catch (error) {
             log(`⚠️ Failed to auto-start Google Sheets import service: ${error}`);
           }
-          
-          // 2. Session-based DAT scraper initialization
+        };
+        
+        // 2. Session-based DAT scraper initialization (fire-and-forget with timeout)
+        const startDATScraper = async () => {
           try {
-            log('🔄 Starting session-based DAT scraper for manual authentication...');
-            log('🚫 NO SAMPLE LOADS - Real DAT data only as requested');
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('DAT scraper startup timeout')), 10000);
+            });
             
-            const { sessionBasedDATScraper } = await import('./session-based-dat-scraper.js');
+            const startPromise = (async () => {
+              log('🔄 Starting session-based DAT scraper for manual authentication...');
+              log('🚫 NO SAMPLE LOADS - Real DAT data only as requested');
+              
+              const { sessionBasedDATScraper } = await import('./session-based-dat-scraper.js');
+              
+              log('🔍 Checking for existing authenticated DAT session...');
+              const isAuthenticated = await sessionBasedDATScraper.checkAuthenticatedSession();
+              
+              if (isAuthenticated) {
+                log('✅ Authenticated DAT session detected - starting real load scraping!');
+                await sessionBasedDATScraper.startSessionBasedScraping();
+                log('📋 System now pulling REAL loads from your authenticated DAT session');
+              } else {
+                log('🔐 No authenticated session detected');
+                log('📋 Please log into DAT manually, then visit /dat-login to activate scraping');
+                log('🚫 System will show NO loads until DAT authentication is completed');
+              }
+            })();
             
-            log('🔍 Checking for existing authenticated DAT session...');
-            const isAuthenticated = await sessionBasedDATScraper.checkAuthenticatedSession();
-            
-            if (isAuthenticated) {
-              log('✅ Authenticated DAT session detected - starting real load scraping!');
-              await sessionBasedDATScraper.startSessionBasedScraping();
-              log('📋 System now pulling REAL loads from your authenticated DAT session');
-            } else {
-              log('🔐 No authenticated session detected');
-              log('📋 Please log into DAT manually, then visit /dat-login to activate scraping');
-              log('🚫 System will show NO loads until DAT authentication is completed');
-            }
+            await Promise.race([startPromise, timeoutPromise]);
           } catch (error) {
             log(`⚠️ Session-based DAT scraper initialization failed: ${error}`);
           }
-          
-          // 3. Auto-start Tennessee load generation
+        };
+        
+        // 3. Auto-start Tennessee load generation (fire-and-forget with timeout)
+        const startTennesseeGeneration = async () => {
           try {
-            const { simpleDATConnector } = await import('./simple-dat-connector.js');
-            const { telegramService } = await import('./telegram-service.js');
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Tennessee load generation startup timeout')), 10000);
+            });
             
-            // Check if Telegram service is properly initialized before starting load generation
-            if (telegramService.isServiceRunning()) {
-              await simpleDATConnector.startRealLoadGeneration(telegramService);
-              log('✅ Auto-started Tennessee load generation with Telegram notifications');
-            } else {
-              await simpleDATConnector.startRealLoadGeneration(null);
-              log('✅ Auto-started Tennessee load generation without Telegram (service not running)');
-            }
+            const startPromise = (async () => {
+              const { simpleDATConnector } = await import('./simple-dat-connector.js');
+              const { telegramService } = await import('./telegram-service.js');
+              
+              // Check if Telegram service is properly initialized before starting load generation
+              if (telegramService.isServiceRunning()) {
+                await simpleDATConnector.startRealLoadGeneration(telegramService);
+                log('✅ Auto-started Tennessee load generation with Telegram notifications');
+              } else {
+                await simpleDATConnector.startRealLoadGeneration(null);
+                log('✅ Auto-started Tennessee load generation without Telegram (service not running)');
+              }
+            })();
+            
+            await Promise.race([startPromise, timeoutPromise]);
           } catch (error) {
             log(`⚠️ Failed to auto-start Tennessee load generation: ${String(error)}`);
           }
-          
-          log('✅ Background services initialization completed');
-          
-        } catch (error) {
-          log(`⚠️ Background services initialization error: ${error}`);
-          // Don't fail the entire server if background services fail
-        }
-      }, 2000); // Start background services 2 seconds after server is listening
+        };
+        
+        // Start all services in parallel without awaiting them (fire-and-forget)
+        startGoogleSheets().finally(() => {});
+        startDATScraper().finally(() => {});
+        startTennesseeGeneration().finally(() => {});
+        
+        log('✅ Background services initialization started (running in parallel)');
+        
+      }, 1000); // Reduced from 2000ms to 1000ms for faster startup
     }
     
   } catch (error) {
