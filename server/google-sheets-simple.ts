@@ -199,19 +199,28 @@ class GoogleSheetsSimple {
         
         if (values.length < 5) continue;
 
-        // Based on the exact array output from debug logs, the actual mapping is:
+        // Fixed mapping based on screenshot showing: Pay | Total miles | Pick Up | Delivery | pick up date | Deadhead | Weight | Load Type | Contact Info | Company
         const pay = values[0] || '';        // '$361'
         const miles = values[1] || '';      // '837'
-        const origin = values[2] || '';     // 'Woodstock, GA'
-        const destination = values[3] || '';// 'Waco, TX'
-        const pickupDate = values[4] || ''; // '8/24 - 8/27'
-        const deadhead = values[5] || '';   // '-93'
-        const weight = values[6] || '';     // '2,500 lbs'
-        const loadType = values[7] || '';   // '8 ft - Partial' (EQUIPMENT)
-        const contact = values[8] || '';    // '(224) 515-7265' (PHONE)
-        const company = values[9] || '';    // 'Globaltranz/Afn' (COMPANY)
+        const origin = values[2] || '';     // 'Pick Up location'
+        const destination = values[3] || '';// 'Delivery location'
+        const pickupDate = values[4] || ''; // 'pick up date'
+        const deadhead = values[5] || '';   // 'Deadhead'
+        const weight = values[6] || '';     // 'Weight'
+        const loadType = values[7] || '';   // 'Load Type' (EQUIPMENT)
+        const contact = values[8] || '';    // 'Contact Info' (PHONE)
+        const company = values[9] || '';    // 'Company'
 
-        if (!origin || !destination) continue;
+        // Skip header row data - detect if this looks like header content
+        if (origin.toLowerCase().includes('pick up') || 
+            origin.toLowerCase().includes('delivery') ||
+            destination.toLowerCase().includes('delivery') ||
+            destination.toLowerCase().includes('pick up')) {
+          console.log(`📋 Skipping header row: ${origin} → ${destination}`);
+          continue;
+        }
+
+        if (!origin || !destination || origin.length < 2 || destination.length < 2) continue;
 
         const load = {
           id: `GS-${Date.now()}-${i}`,
