@@ -98,18 +98,9 @@ app.use((req, res, next) => {
           
           // 1. Auto-start Google Sheets Import Service
           try {
-            const { googleSheetsAutoImporter } = await import('./google-sheets-auto-importer.js');
-            await googleSheetsAutoImporter.start();
-            log('✅ Google Sheets auto-import running every 10 seconds');
-            
-            // Initialize Simple Google Sheets Integration
-            try {
-              const { googleSheetsSimple } = await import('./google-sheets-simple.js');
-              await googleSheetsSimple.start();
-              log('✅ Google Sheets Simple integration started');
-            } catch (error) {
-              log(`⚠️ Failed to start Google Sheets Simple integration: ${error}`);
-            }
+            const { googleSheetsSimple } = await import('./google-sheets-simple.js');
+            await googleSheetsSimple.start();
+            log('✅ Google Sheets Simple integration started - pulling loads every 3 minutes');
           } catch (error) {
             log(`⚠️ Failed to auto-start Google Sheets import service: ${error}`);
           }
