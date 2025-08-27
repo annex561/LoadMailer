@@ -8,7 +8,7 @@ Load Signal is a comprehensive fleet management system for truck load tracking a
 
 **REAL-TIME GPS TRACKING**: Advanced real-time driver location tracking system now integrated with authentic driver data. The LoadOps dashboard displays live GPS coordinates, timestamps, speeds, and service status indicators. Database storage methods implemented for driver location management with comprehensive API endpoints for location data retrieval.
 
-**CONFIRMED WORKING DRIVER SETUP** (DO NOT MODIFY): Annex Luberisse (ID: 3ce898f4-6962-461f-a9ea-bb81cc7d4a6f) is successfully configured and receiving load offers via Telegram with ID 5908383693. Driver configuration: status='available', equipment_type='dry_van', enableTelegramNotifications=true. System processes 800+ loads continuously with successful Telegram delivery to all configured drivers.
+**CONFIRMED WORKING DRIVER SETUP** (DO NOT MODIFY): Annex Luberisse (ID: 3ce898f4-6962-461f-a9ea-bb81cc7d4a6f) is successfully configured and receiving load offers via Telegram with ID 5908383693. Driver configuration: status='available', equipment_type='straight_box_truck' (26-foot box truck), enableTelegramNotifications=true. System processes 800+ loads continuously with successful Telegram delivery to all configured drivers.
 
 **MANUAL LOAD ENTRY SYSTEM**: Complete manual load entry form now operational for VA input. Professional form includes all essential DAT load fields: company information, origin/destination, rates, equipment type, dates, commodity, and special requirements. Loads automatically dispatch to eligible drivers via Telegram and appear immediately in the DAT Loads tab alongside any real DAT data. This provides a reliable alternative to browser automation challenges.
 
