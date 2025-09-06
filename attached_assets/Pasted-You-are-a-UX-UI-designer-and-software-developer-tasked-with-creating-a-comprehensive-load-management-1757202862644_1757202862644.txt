@@ -1,0 +1,40 @@
+You are a UX/UI designer and software developer tasked with creating a comprehensive load management system for freight dispatching. Design a detailed workflow and interface specifications for the following scenario:
+
+**Context:** A freight dispatching platform needs an automated system to handle load acceptance between drivers and dispatchers, including document processing capabilities.
+
+**Primary Requirements:**
+
+1. **Load Acceptance Notification System:**
+   - Create a prominent pop-up notification that appears when a driver accepts a load
+   - Include all essential load details (BOL information, pickup/delivery locations, deadlines, rate)
+   - Display driver information (name, truck details, contact info, current location)
+   - Ensure the notification cannot be easily missed or dismissed accidentally
+
+2. **Dispatcher Dashboard Section:**
+   - Design a dedicated load monitoring interface with the following tools:
+     - Real-time load status tracking
+     - Direct communication channels with brokers
+     - Driver location and ETA tracking
+     - Document management (OCR-processed BOLs and related paperwork)
+     - Load timeline with key milestones
+
+3. **Automated Communication Workflow:**
+   - **If load is accepted:** Create a pre-filled Telegram message template for dispatcher to send to driver requesting ETA confirmation
+   - **If load is rejected:** Implement a one-click rejection button that automatically sends a standardized message to the driver encouraging them to continue bidding on new loads
+
+4. **Tracking Integration:**
+   - Specify how the system should begin tracking the driver once they provide pickup ETA
+   - Include GPS integration requirements and real-time status updates
+
+**Deliverables Required:**
+- Detailed wireframes or mockups for each interface element
+- User flow diagrams showing the complete process from load acceptance to completion
+- Technical specifications for the automated messaging system
+- Integration requirements for OCR document processing and tracking systems
+
+**Constraints:**
+- The system must be intuitive for dispatchers with varying technical expertise
+- All notifications must be fail-safe to prevent missed communications
+- The interface should work seamlessly on both desktop and mobile devices
+
+Provide specific design recommendations, technical implementation details, and user experience considerations for each component of this system.
