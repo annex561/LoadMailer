@@ -5255,8 +5255,12 @@ Safe travels! 🚛`;
     try {
       console.log('📝 Manual load entry received:', req.body);
       
+      // Add CORS headers
+      res.header('Content-Type', 'application/json');
+      
       // First, create or get a customer for this manual entry
-      let customer = await storage.getCustomerByName(req.body.companyName);
+      const allCustomers = await storage.getAllCustomers();
+      let customer = allCustomers.find(c => c.name === req.body.companyName);
       if (!customer) {
         customer = await storage.createCustomer({
           name: req.body.companyName,
