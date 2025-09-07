@@ -20,6 +20,7 @@ const navigation = [
   { name: "DAT Scrapers", href: "/scrapers", icon: Bot, section: "loads" },
   
   // Communication & Dispatch
+  { name: "Dispatch Command Center", href: "/dispatch-command-center", icon: Headphones, section: "communication" },
   { name: "Telegram Dispatching", href: "/telegram-dispatching", icon: MessageSquare, section: "communication" },
   { name: "LoadMailer Bot", href: "/loadmailer-control", icon: Bot, section: "communication" },
   { name: "Email Templates", href: "/templates", icon: Mail, section: "communication" },
