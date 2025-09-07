@@ -32,28 +32,40 @@ export class TelegramLoadService {
         console.log('⚠️ Telegram service disabled - missing TELEGRAM_BOT_TOKEN or DISPATCHER_CHAT_ID');
         return;
       }
+
+      // Stop any existing bot instance first to prevent 409 conflicts
+      await this.shutdown();
       
       // Initialize bot configuration
       await this.initializeBotConfig();
       
-      // Create bot instance with enhanced logging
+      // Create bot instance with enhanced error handling and single instance protection
       this.bot = new TelegramBot(TELEGRAM_TOKEN, { 
         polling: {
-          interval: 1000,
-          autoStart: true,
+          interval: 2000, // Slower polling to reduce conflicts
+          autoStart: false, // Don't auto-start to control initialization
         }
       });
       
       // Add error handling for bot
       this.bot.on('error', (error) => {
         console.error('Telegram bot error:', error);
-        // Don't throw error - just log it to prevent app from crashing
+        if (error.message?.includes('409')) {
+          console.log('🔄 Bot conflict detected - restarting in 5 seconds...');
+          setTimeout(() => this.restartBot(), 5000);
+        }
       });
       
       this.bot.on('polling_error', (error) => {
         console.error('Telegram polling error:', error);
-        // Don't throw error - just log it to prevent app from crashing
+        if (error.message?.includes('409')) {
+          console.log('🔄 Polling conflict detected - restarting in 5 seconds...');
+          setTimeout(() => this.restartBot(), 5000);
+        }
       });
+      
+      // Start polling manually with retry logic
+      await this.startPollingWithRetry();
       
       // Start message queue processor
       this.startQueueProcessor();
@@ -65,7 +77,7 @@ export class TelegramLoadService {
       await this.initializeDefaultData();
       
       this.isRunning = true;
-      console.log('Telegram Load Dispatcher initialized successfully');
+      console.log('✅ Telegram Load Dispatcher initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Telegram service:', error);
       // Don't throw error - just log it to prevent app from failing to start
@@ -117,6 +129,66 @@ export class TelegramLoadService {
     this.messageQueue.push(messageFunction);
     if (!this.isProcessingQueue) {
       this.startQueueProcessor();
+    }
+  }
+
+  private async startPollingWithRetry(): Promise<void> {
+    let retries = 0;
+    const maxRetries = 3;
+    
+    while (retries < maxRetries && !this.isRunning) {
+      try {
+        console.log(`🚀 Starting Telegram bot polling (attempt ${retries + 1}/${maxRetries})...`);
+        await this.bot?.startPolling();
+        console.log('✅ Telegram bot polling started successfully');
+        return;
+      } catch (error: any) {
+        console.error(`❌ Failed to start polling (attempt ${retries + 1}):`, error);
+        retries++;
+        
+        if (error.message?.includes('409')) {
+          console.log('🔄 Bot instance conflict - waiting 10 seconds before retry...');
+          await new Promise(resolve => setTimeout(resolve, 10000));
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      }
+    }
+    
+    if (retries >= maxRetries) {
+      console.error('❌ Failed to start Telegram bot after maximum retries');
+    }
+  }
+
+  private async restartBot(): Promise<void> {
+    console.log('🔄 Restarting Telegram bot...');
+    try {
+      await this.shutdown();
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+      await this.initialize();
+    } catch (error) {
+      console.error('Failed to restart bot:', error);
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    console.log('🛑 Shutting down Telegram service...');
+    this.isRunning = false;
+    
+    try {
+      if (this.bot) {
+        await this.bot.stopPolling();
+        this.bot.removeAllListeners();
+        this.bot = null;
+      }
+      
+      // Clear message queue
+      this.messageQueue = [];
+      this.isProcessingQueue = false;
+      
+      console.log('✅ Telegram service shutdown complete');
+    } catch (error) {
+      console.error('Error during shutdown:', error);
     }
   }
 
