@@ -2545,6 +2545,39 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
+  // Quick setup endpoint to set Annex's GPS location to Nashville
+  app.post('/api/setup-annex-location', async (req, res) => {
+    try {
+      console.log('🔧 Setting up Annex location in Nashville, TN...');
+      
+      const location = await gpsTrackingService.updateDriverLocation('3ce898f4-6962-461f-a9ea-bb81cc7d4a6f', {
+        latitude: 36.1627,
+        longitude: -86.7816,
+        speed: 0,
+        heading: 0,
+        timestamp: new Date(),
+        batteryLevel: 85,
+        signalStrength: -65,
+        address: 'Nashville, TN'
+      });
+
+      console.log(`✅ Annex GPS location set to Nashville, TN successfully`);
+
+      res.json({
+        success: true,
+        message: 'Annex location set to Nashville, TN',
+        location: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          address: location.address
+        }
+      });
+    } catch (error) {
+      console.error('Error setting Annex location:', error);
+      res.status(500).json({ error: 'Failed to set Annex location' });
+    }
+  });
+
   // Geofence routes
   app.get("/api/gps/geofences", async (req, res) => {
     try {
