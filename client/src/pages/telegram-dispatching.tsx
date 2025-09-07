@@ -52,10 +52,6 @@ interface ServiceStatus {
   };
 }
 
-interface TestLoadResponse {
-  success: boolean;
-  message: string;
-}
 
 export default function TelegramDispatching() {
   const { toast } = useToast();
@@ -75,42 +71,6 @@ export default function TelegramDispatching() {
     refetchInterval: 5000, // Check service status every 5 seconds
   });
 
-  const testLoadMutation = useMutation({
-    mutationFn: async (): Promise<TestLoadResponse> => {
-      const response = await fetch("/api/telegram/test-load", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}) // Empty body for now, will add driver selection later
-      });
-      if (!response.ok) throw new Error('Failed to send test load');
-      return response.json();
-    },
-    onSuccess: (data: any) => {
-      toast({
-        title: "Test Load Result",
-        description: data.success 
-          ? `${data.message} - Load: ${data.details?.loadNumber}` 
-          : data.error,
-        variant: data.success ? "default" : "destructive",
-      });
-      
-      // Log detailed results for debugging
-      if (data.details) {
-        console.log('Test Load Details:', data.details);
-      }
-      
-      refetchOffers();
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to send test load",
-        variant: "destructive",
-      });
-    },
-  });
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
@@ -195,16 +155,6 @@ export default function TelegramDispatching() {
             >
               <RefreshCw className="w-4 h-4" />
               Refresh
-            </Button>
-            <Button 
-              onClick={() => testLoadMutation.mutate()}
-              disabled={testLoadMutation.isPending}
-              size="sm"
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-              data-testid="button-test-load"
-            >
-              <Play className="w-4 h-4" />
-              {testLoadMutation.isPending ? "Sending..." : "Test Load"}
             </Button>
           </div>
         </div>
@@ -304,15 +254,6 @@ export default function TelegramDispatching() {
               <p className="text-gray-500 mb-4">
                 No loads have been sent to drivers via Telegram yet.
               </p>
-              <Button 
-                onClick={() => testLoadMutation.mutate()}
-                disabled={testLoadMutation.isPending}
-                className="flex items-center gap-2"
-                data-testid="button-send-test-load"
-              >
-                <Play className="w-4 h-4" />
-                Send Test Load
-              </Button>
             </div>
           ) : (
             <div className="space-y-4">
