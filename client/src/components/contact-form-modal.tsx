@@ -127,7 +127,9 @@ export default function ContactFormModal({
       const endpoint = type === "driver" 
         ? `/api/drivers/${contact?.id}` 
         : `/api/customers/${contact?.id}`;
+      console.log(`🔧 Frontend sending ${type} update to:`, endpoint, data);
       const response = await apiRequest("PUT", endpoint, data);
+      console.log(`✅ Frontend received response:`, response.status, response.statusText);
       return response.json();
     },
     onSuccess: async () => {
@@ -149,10 +151,12 @@ export default function ContactFormModal({
       });
       onSuccess();
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error(`❌ Frontend ${type} update error:`, error);
+      console.error('Error details:', error.message, error.status, error.stack);
       toast({
         title: "Error",
-        description: `Failed to update ${type}`,
+        description: `Failed to update ${type}: ${error.message || 'Unknown error'}`,
         variant: "destructive",
       });
     },
