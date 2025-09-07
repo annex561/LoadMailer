@@ -1089,17 +1089,40 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
     }
 
     try {
-      // Get a sample load or create test data
-      const loads = await storage.getAllLoads();
-      if (loads.length > 0) {
-        // Find the most recent test load or any available load
-        const testLoad = loads.find(load => load.sourceBoard === 'test') || loads[0];
-        await this.processNewLoad(testLoad);
-        return true;
-      }
+      // Create a specific test load with straight_box_truck equipment for Annex
+      const testLoadData = {
+        loadNumber: `TEST-${Date.now()}`,
+        sourceBoard: 'test',
+        pickupAddress: 'Nashville, TN',
+        deliveryAddress: 'Atlanta, GA',
+        pickupDate: new Date(),
+        deliveryDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+        pickupTime: '08:00',
+        deliveryTime: '16:00',
+        rate: 2500,
+        miles: 250,
+        weight: 15000,
+        equipmentType: 'straight_box_truck', // KEY: This matches Annex's equipment
+        commodity: 'General Freight - TEST LOAD',
+        company: 'TEST LOGISTICS',
+        contactPhone: '555-TEST-LOAD',
+        ratePerMile: 10.00,
+        status: 'available' as const,
+        priority: 'standard' as const,
+        urgency: 'standard' as const,
+        temperatureRequired: false,
+        specialInstructions: '🧪 THIS IS A TEST LOAD - Testing button functionality'
+      };
+
+      // Create test load in database
+      const testLoad = await storage.createLoad(testLoadData);
+      console.log(`✅ TEST LOAD CREATED: ${testLoad.loadNumber} (straight_box_truck for Annex)`);
+
+      // Process the test load through the normal dispatch system
+      await this.processNewLoad(testLoad);
+      console.log(`📱 TEST LOAD SENT: ${testLoad.loadNumber} dispatched to eligible drivers`);
       
-      console.log('No loads available for testing');
-      return false;
+      return true;
     } catch (error) {
       console.error('Error sending test load:', error);
       return false;
