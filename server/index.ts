@@ -11,12 +11,20 @@ app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json');
   console.log(`🔍 API middleware intercepted: ${req.method} ${req.originalUrl}`);
   
-  // Override the end method to prevent Vite from overriding API responses
-  const originalEnd = res.end;
-  res.end = function(chunk, encoding) {
-    // Mark response as finished for API routes to prevent Vite override
-    res.locals.apiResponseSent = true;
-    return originalEnd.call(this, chunk, encoding);
+  // Add a special response flag that we can check later
+  const originalSend = res.send;
+  const originalJson = res.json;
+  
+  res.send = function(data) {
+    res.setHeader('X-API-Response', 'true');
+    res.setHeader('Content-Type', 'application/json');
+    return originalSend.call(this, data);
+  };
+  
+  res.json = function(data) {
+    res.setHeader('X-API-Response', 'true');
+    res.setHeader('Content-Type', 'application/json');
+    return originalJson.call(this, data);
   };
   
   next();
