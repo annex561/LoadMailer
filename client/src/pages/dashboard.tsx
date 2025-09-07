@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,11 +22,14 @@ import {
   Package,
   ArrowRight,
   Settings,
-  Star
+  Star,
+  User
 } from "lucide-react";
 import { useState } from "react";
 import { format } from "date-fns";
 import DriverLocationMap from "@/components/driver-location-map";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 type ScrapedLoad = {
   id: string;
@@ -56,6 +59,8 @@ export default function Dashboard() {
   const [selectedLoadBoard, setSelectedLoadBoard] = useState("all");
   const [equipmentFilter, setEquipmentFilter] = useState("all");
   const [dateRange, setDateRange] = useState("today");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Fetch loads from load boards (stored as regular loads with sourceBoard field)
   const { data: allLoads = [], isLoading: loadsLoading } = useQuery({
@@ -96,6 +101,39 @@ export default function Dashboard() {
     averageRate: number;
   }>({
     queryKey: ["/api/dashboard-stats"],
+  });
+
+  // Fetch available drivers
+  const { data: drivers = [] } = useQuery({
+    queryKey: ["/api/drivers"],
+    queryFn: async () => {
+      const response = await fetch("/api/drivers");
+      return response.json();
+    }
+  });
+
+  // Driver assignment mutation
+  const assignDriverMutation = useMutation({
+    mutationFn: async ({ loadId, driverId }: { loadId: string; driverId: string }) => {
+      return apiRequest(`/api/loads/${loadId}/assign-driver`, {
+        method: 'POST',
+        body: JSON.stringify({ driverId })
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Driver assigned successfully!",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to assign driver. Please try again.",
+        variant: "destructive",
+      });
+    }
   });
 
   // Filter loads by search and filters
@@ -358,6 +396,7 @@ export default function Dashboard() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">C$</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lane Rate</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assign Driver</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -440,6 +479,35 @@ export default function Dashboard() {
                                 <Star className="w-4 h-4 text-gray-300" />
                                 <span className="ml-1 text-sm text-gray-500">TRL,HAUL (NO ROUTES)</span>
                               </div>
+                            </td>
+                            {/* Assign Driver */}
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <Select onValueChange={(driverId) => {
+                                if (driverId && load.id) {
+                                  assignDriverMutation.mutate({ loadId: load.id, driverId });
+                                }
+                              }}>
+                                <SelectTrigger className="w-32 bg-white border border-gray-300">
+                                  <SelectValue placeholder="Assign" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                                  {drivers
+                                    .filter((driver: any) => driver.status === 'available')
+                                    .map((driver: any) => (
+                                    <SelectItem key={driver.id} value={driver.id}>
+                                      <div className="flex items-center">
+                                        <User className="w-3 h-3 mr-1 text-blue-600" />
+                                        {driver.name}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                  {drivers.filter((driver: any) => driver.status === 'available').length === 0 && (
+                                    <SelectItem value="none" disabled>
+                                      No drivers
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
                             </td>
                           </tr>
                         );
