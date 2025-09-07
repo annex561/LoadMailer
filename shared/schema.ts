@@ -348,6 +348,102 @@ export const loadDocuments = pgTable("load_documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Load Communication Threads - Central communication hub for each load
+export const loadCommunicationThreads = pgTable("load_communication_threads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").references(() => loads.id).notNull().unique(),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  status: text("status").notNull().default("active"), // active, archived, closed
+  lastMessageAt: timestamp("last_message_at").defaultNow(),
+  messageCount: integer("message_count").notNull().default(0),
+  unreadDriverMessages: integer("unread_driver_messages").notNull().default(0),
+  unreadDispatchMessages: integer("unread_dispatch_messages").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Load Messages - All communication within a load thread
+export const loadMessages = pgTable("load_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  threadId: varchar("thread_id").references(() => loadCommunicationThreads.id).notNull(),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  senderId: varchar("sender_id"), // driver ID or null for dispatch
+  senderRole: text("sender_role").notNull(), // 'driver', 'dispatch'
+  senderName: text("sender_name").notNull(), // Display name
+  
+  // Message content
+  messageType: text("message_type").notNull().default("text"), // text, image, document, location, status_update
+  textContent: text("text_content"),
+  
+  // Telegram integration
+  telegramMessageId: text("telegram_message_id"),
+  telegramChatId: text("telegram_chat_id"),
+  
+  // Status tracking
+  isRead: boolean("is_read").notNull().default(false),
+  readAt: timestamp("read_at"),
+  deliveredAt: timestamp("delivered_at"),
+  
+  // Message metadata
+  metadata: jsonb("metadata").default({}), // Extra data like location coords, status details
+  replyToMessageId: varchar("reply_to_message_id").references(() => loadMessages.id), // Thread replies
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Message Attachments - Images, documents, signatures linked to messages
+export const messageAttachments = pgTable("message_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  messageId: varchar("message_id").references(() => loadMessages.id).notNull(),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  
+  // File details
+  attachmentType: text("attachment_type").notNull(), // 'image', 'document', 'signature', 'location_screenshot'
+  fileName: text("file_name").notNull(),
+  fileUrl: text("file_url").notNull(), // Object storage URL
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type"),
+  
+  // Telegram file details
+  telegramFileId: text("telegram_file_id"),
+  telegramFileUniqueId: text("telegram_file_unique_id"),
+  
+  // Attachment metadata
+  width: integer("width"), // For images
+  height: integer("height"), // For images
+  caption: text("caption"), // Image/document caption
+  
+  uploadedAt: timestamp("uploaded_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Quick Reply Templates - Predefined responses for common updates
+export const quickReplyTemplates = pgTable("quick_reply_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateKey: text("template_key").notNull().unique(), // 'arrived_pickup', 'loaded', 'departed', 'delivered'
+  displayText: text("display_text").notNull(), // Button text shown to user
+  messageTemplate: text("message_template").notNull(), // Actual message sent
+  category: text("category").notNull().default("status"), // status, location, eta, custom
+  order: integer("order").notNull().default(0), // Display order
+  isActive: boolean("is_active").notNull().default(true),
+  isForDriver: boolean("is_for_driver").notNull().default(true),
+  isForDispatch: boolean("is_for_dispatch").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Communication Analytics and Logs
+export const communicationLogs = pgTable("communication_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  threadId: varchar("thread_id").references(() => loadCommunicationThreads.id),
+  action: text("action").notNull(), // 'thread_created', 'message_sent', 'attachment_uploaded', 'status_updated'
+  actorId: varchar("actor_id"), // Who performed the action
+  actorRole: text("actor_role").notNull(), // driver, dispatch, system
+  details: jsonb("details").default({}), // Action-specific details
+  timestamp: timestamp("timestamp").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Vehicle Management and Maintenance Tables
 export const vehicles = pgTable("vehicles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1505,6 +1601,22 @@ export type InsertAiAnalytics = z.infer<typeof insertAiAnalyticsSchema>;
 export type CostCalculations = typeof costCalculations.$inferSelect;
 export type InsertCostCalculations = z.infer<typeof insertCostCalculationsSchema>;
 
+// Communication System Types
+export type InsertLoadCommunicationThread = typeof loadCommunicationThreads.$inferInsert;
+export type LoadCommunicationThread = typeof loadCommunicationThreads.$inferSelect;
+
+export type InsertLoadMessage = typeof loadMessages.$inferInsert;
+export type LoadMessage = typeof loadMessages.$inferSelect;
+
+export type InsertMessageAttachment = typeof messageAttachments.$inferInsert;
+export type MessageAttachment = typeof messageAttachments.$inferSelect;
+
+export type InsertQuickReplyTemplate = typeof quickReplyTemplates.$inferInsert;
+export type QuickReplyTemplate = typeof quickReplyTemplates.$inferSelect;
+
+export type InsertCommunicationLog = typeof communicationLogs.$inferInsert;
+export type CommunicationLog = typeof communicationLogs.$inferSelect;
+
 // Define Drizzle Relations
 export const driversRelations = relations(drivers, ({ many }) => ({
   loads: many(loads),
@@ -1530,6 +1642,12 @@ export const loadsRelations = relations(loads, ({ one, many }) => ({
   documents: many(loadDocuments),
   offers: many(loadOffers),
   routes: many(routes),
+  communicationThread: one(loadCommunicationThreads, {
+    fields: [loads.id],
+    references: [loadCommunicationThreads.loadId],
+  }),
+  messages: many(loadMessages),
+  communicationLogs: many(communicationLogs),
 }));
 
 export const driverLocationsRelations = relations(driverLocations, ({ one }) => ({
@@ -1626,5 +1744,60 @@ export const scraperLogsRelations = relations(scraperLogs, ({ one }) => ({
   config: one(scraperConfigs, {
     fields: [scraperLogs.configId],
     references: [scraperConfigs.id],
+  }),
+}));
+
+// Communication System Relations
+export const loadCommunicationThreadsRelations = relations(loadCommunicationThreads, ({ one, many }) => ({
+  load: one(loads, {
+    fields: [loadCommunicationThreads.loadId],
+    references: [loads.id],
+  }),
+  driver: one(drivers, {
+    fields: [loadCommunicationThreads.driverId],
+    references: [drivers.id],
+  }),
+  messages: many(loadMessages),
+}));
+
+export const loadMessagesRelations = relations(loadMessages, ({ one, many }) => ({
+  thread: one(loadCommunicationThreads, {
+    fields: [loadMessages.threadId],
+    references: [loadCommunicationThreads.id],
+  }),
+  load: one(loads, {
+    fields: [loadMessages.loadId],
+    references: [loads.id],
+  }),
+  sender: one(drivers, {
+    fields: [loadMessages.senderId],
+    references: [drivers.id],
+  }),
+  attachments: many(messageAttachments),
+  replyTo: one(loadMessages, {
+    fields: [loadMessages.replyToMessageId],
+    references: [loadMessages.id],
+  }),
+}));
+
+export const messageAttachmentsRelations = relations(messageAttachments, ({ one }) => ({
+  message: one(loadMessages, {
+    fields: [messageAttachments.messageId],
+    references: [loadMessages.id],
+  }),
+  load: one(loads, {
+    fields: [messageAttachments.loadId],
+    references: [loads.id],
+  }),
+}));
+
+export const communicationLogsRelations = relations(communicationLogs, ({ one }) => ({
+  load: one(loads, {
+    fields: [communicationLogs.loadId],
+    references: [loads.id],
+  }),
+  thread: one(loadCommunicationThreads, {
+    fields: [communicationLogs.threadId],
+    references: [loadCommunicationThreads.id],
   }),
 }));
