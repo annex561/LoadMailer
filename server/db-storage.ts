@@ -964,4 +964,233 @@ export class DatabaseStorage implements IStorage {
   async getAvailableDrivers(): Promise<schema.Driver[]> {
     return await db.select().from(schema.drivers).where(eq(schema.drivers.status, 'available'));
   }
+
+  // Load Communication Thread operations
+  async getLoadCommunicationThread(id: string): Promise<schema.LoadCommunicationThread | undefined> {
+    const result = await db.select().from(schema.loadCommunicationThreads).where(eq(schema.loadCommunicationThreads.id, id));
+    return result[0];
+  }
+
+  async getLoadCommunicationThreadByLoad(loadId: string): Promise<schema.LoadCommunicationThread | undefined> {
+    const result = await db.select().from(schema.loadCommunicationThreads).where(eq(schema.loadCommunicationThreads.loadId, loadId));
+    return result[0];
+  }
+
+  async getAllLoadCommunicationThreads(): Promise<schema.LoadCommunicationThread[]> {
+    return await db.select().from(schema.loadCommunicationThreads).orderBy(desc(schema.loadCommunicationThreads.lastMessageAt));
+  }
+
+  async createLoadCommunicationThread(insertThread: schema.InsertLoadCommunicationThread): Promise<schema.LoadCommunicationThread> {
+    const id = randomUUID();
+    const thread: schema.LoadCommunicationThread = {
+      ...insertThread,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    await db.insert(schema.loadCommunicationThreads).values(thread);
+    return thread;
+  }
+
+  async updateLoadCommunicationThread(id: string, updateData: Partial<schema.InsertLoadCommunicationThread>): Promise<schema.LoadCommunicationThread | undefined> {
+    await db.update(schema.loadCommunicationThreads).set({ ...updateData, updatedAt: new Date() }).where(eq(schema.loadCommunicationThreads.id, id));
+    return this.getLoadCommunicationThread(id);
+  }
+
+  async deleteLoadCommunicationThread(id: string): Promise<boolean> {
+    const result = await db.delete(schema.loadCommunicationThreads).where(eq(schema.loadCommunicationThreads.id, id));
+    return result.rowCount > 0;
+  }
+
+  // Load Message operations
+  async getLoadMessage(id: string): Promise<schema.LoadMessage | undefined> {
+    const result = await db.select().from(schema.loadMessages).where(eq(schema.loadMessages.id, id));
+    return result[0];
+  }
+
+  async getLoadMessagesByThread(threadId: string): Promise<schema.LoadMessage[]> {
+    return await db.select().from(schema.loadMessages)
+      .where(eq(schema.loadMessages.threadId, threadId))
+      .orderBy(schema.loadMessages.createdAt);
+  }
+
+  async getLoadMessagesByLoad(loadId: string): Promise<schema.LoadMessage[]> {
+    return await db.select().from(schema.loadMessages)
+      .where(eq(schema.loadMessages.loadId, loadId))
+      .orderBy(schema.loadMessages.createdAt);
+  }
+
+  async createLoadMessage(insertMessage: schema.InsertLoadMessage): Promise<schema.LoadMessage> {
+    const id = randomUUID();
+    const message: schema.LoadMessage = {
+      ...insertMessage,
+      id,
+      createdAt: new Date(),
+    };
+    
+    await db.insert(schema.loadMessages).values(message);
+    return message;
+  }
+
+  async updateLoadMessage(id: string, updateData: Partial<schema.InsertLoadMessage>): Promise<schema.LoadMessage | undefined> {
+    await db.update(schema.loadMessages).set(updateData).where(eq(schema.loadMessages.id, id));
+    return this.getLoadMessage(id);
+  }
+
+  async markMessageAsRead(messageId: string): Promise<boolean> {
+    const result = await db.update(schema.loadMessages)
+      .set({ isRead: true, readAt: new Date() })
+      .where(eq(schema.loadMessages.id, messageId));
+    return result.rowCount > 0;
+  }
+
+  async getUnreadMessagesForDriver(driverId: string): Promise<schema.LoadMessage[]> {
+    const threadQuery = db.select({ id: schema.loadCommunicationThreads.id })
+      .from(schema.loadCommunicationThreads)
+      .where(eq(schema.loadCommunicationThreads.driverId, driverId));
+    
+    return await db.select().from(schema.loadMessages)
+      .where(and(
+        eq(schema.loadMessages.senderRole, 'dispatch'),
+        eq(schema.loadMessages.isRead, false),
+        drizzleSql`${schema.loadMessages.threadId} IN (${threadQuery})`
+      ))
+      .orderBy(desc(schema.loadMessages.createdAt));
+  }
+
+  async getUnreadMessagesForDispatch(): Promise<schema.LoadMessage[]> {
+    return await db.select().from(schema.loadMessages)
+      .where(and(
+        eq(schema.loadMessages.senderRole, 'driver'),
+        eq(schema.loadMessages.isRead, false)
+      ))
+      .orderBy(desc(schema.loadMessages.createdAt));
+  }
+
+  // Message Attachment operations
+  async getMessageAttachment(id: string): Promise<schema.MessageAttachment | undefined> {
+    const result = await db.select().from(schema.messageAttachments).where(eq(schema.messageAttachments.id, id));
+    return result[0];
+  }
+
+  async getMessageAttachmentsByMessage(messageId: string): Promise<schema.MessageAttachment[]> {
+    return await db.select().from(schema.messageAttachments)
+      .where(eq(schema.messageAttachments.messageId, messageId))
+      .orderBy(schema.messageAttachments.createdAt);
+  }
+
+  async getMessageAttachmentsByLoad(loadId: string): Promise<schema.MessageAttachment[]> {
+    return await db.select().from(schema.messageAttachments)
+      .where(eq(schema.messageAttachments.loadId, loadId))
+      .orderBy(desc(schema.messageAttachments.createdAt));
+  }
+
+  async createMessageAttachment(insertAttachment: schema.InsertMessageAttachment): Promise<schema.MessageAttachment> {
+    const id = randomUUID();
+    const attachment: schema.MessageAttachment = {
+      ...insertAttachment,
+      id,
+      createdAt: new Date(),
+    };
+    
+    await db.insert(schema.messageAttachments).values(attachment);
+    return attachment;
+  }
+
+  async updateMessageAttachment(id: string, updateData: Partial<schema.InsertMessageAttachment>): Promise<schema.MessageAttachment | undefined> {
+    await db.update(schema.messageAttachments).set(updateData).where(eq(schema.messageAttachments.id, id));
+    return this.getMessageAttachment(id);
+  }
+
+  async deleteMessageAttachment(id: string): Promise<boolean> {
+    const result = await db.delete(schema.messageAttachments).where(eq(schema.messageAttachments.id, id));
+    return result.rowCount > 0;
+  }
+
+  // Quick Reply Template operations
+  async getQuickReplyTemplate(id: string): Promise<schema.QuickReplyTemplate | undefined> {
+    const result = await db.select().from(schema.quickReplyTemplates).where(eq(schema.quickReplyTemplates.id, id));
+    return result[0];
+  }
+
+  async getAllQuickReplyTemplates(): Promise<schema.QuickReplyTemplate[]> {
+    return await db.select().from(schema.quickReplyTemplates).orderBy(schema.quickReplyTemplates.order);
+  }
+
+  async getActiveQuickReplyTemplates(): Promise<schema.QuickReplyTemplate[]> {
+    return await db.select().from(schema.quickReplyTemplates)
+      .where(eq(schema.quickReplyTemplates.isActive, true))
+      .orderBy(schema.quickReplyTemplates.order);
+  }
+
+  async getQuickReplyTemplatesForDriver(): Promise<schema.QuickReplyTemplate[]> {
+    return await db.select().from(schema.quickReplyTemplates)
+      .where(and(
+        eq(schema.quickReplyTemplates.isActive, true),
+        eq(schema.quickReplyTemplates.isForDriver, true)
+      ))
+      .orderBy(schema.quickReplyTemplates.order);
+  }
+
+  async getQuickReplyTemplatesForDispatch(): Promise<schema.QuickReplyTemplate[]> {
+    return await db.select().from(schema.quickReplyTemplates)
+      .where(and(
+        eq(schema.quickReplyTemplates.isActive, true),
+        eq(schema.quickReplyTemplates.isForDispatch, true)
+      ))
+      .orderBy(schema.quickReplyTemplates.order);
+  }
+
+  async createQuickReplyTemplate(insertTemplate: schema.InsertQuickReplyTemplate): Promise<schema.QuickReplyTemplate> {
+    const id = randomUUID();
+    const template: schema.QuickReplyTemplate = {
+      ...insertTemplate,
+      id,
+      createdAt: new Date(),
+    };
+    
+    await db.insert(schema.quickReplyTemplates).values(template);
+    return template;
+  }
+
+  async updateQuickReplyTemplate(id: string, updateData: Partial<schema.InsertQuickReplyTemplate>): Promise<schema.QuickReplyTemplate | undefined> {
+    await db.update(schema.quickReplyTemplates).set(updateData).where(eq(schema.quickReplyTemplates.id, id));
+    return this.getQuickReplyTemplate(id);
+  }
+
+  async deleteQuickReplyTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(schema.quickReplyTemplates).where(eq(schema.quickReplyTemplates.id, id));
+    return result.rowCount > 0;
+  }
+
+  // Communication Log operations
+  async getCommunicationLog(id: string): Promise<schema.CommunicationLog | undefined> {
+    const result = await db.select().from(schema.communicationLogs).where(eq(schema.communicationLogs.id, id));
+    return result[0];
+  }
+
+  async getCommunicationLogsByLoad(loadId: string): Promise<schema.CommunicationLog[]> {
+    return await db.select().from(schema.communicationLogs)
+      .where(eq(schema.communicationLogs.loadId, loadId))
+      .orderBy(desc(schema.communicationLogs.timestamp));
+  }
+
+  async getCommunicationLogsByThread(threadId: string): Promise<schema.CommunicationLog[]> {
+    return await db.select().from(schema.communicationLogs)
+      .where(eq(schema.communicationLogs.threadId, threadId))
+      .orderBy(desc(schema.communicationLogs.timestamp));
+  }
+
+  async createCommunicationLog(insertLog: schema.InsertCommunicationLog): Promise<schema.CommunicationLog> {
+    const id = randomUUID();
+    const log: schema.CommunicationLog = {
+      ...insertLog,
+      id,
+      createdAt: new Date(),
+    };
+    
+    await db.insert(schema.communicationLogs).values(log);
+    return log;
+  }
 }
