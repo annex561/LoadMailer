@@ -224,19 +224,36 @@ export default function ManualDispatch() {
 
   // Geocode address to coordinates (simplified - would use real geocoding service)
   const geocodeAddress = async (address: string) => {
-    // This is a simplified geocoding function
-    // In production, you'd use Google Maps, MapBox, or similar service
+    // Enhanced geocoding function with more Tennessee locations
     const cityCoords = {
       "Nashville, TN": { lat: 36.1627, lng: -86.7816 },
       "Atlanta, GA": { lat: 33.7490, lng: -84.3880 },
       "Memphis, TN": { lat: 35.1495, lng: -90.0490 },
       "Knoxville, TN": { lat: 35.9606, lng: -83.9207 },
       "Charlotte, NC": { lat: 35.2271, lng: -80.8431 },
+      "OOLTEWAH, TN": { lat: 35.0629, lng: -85.0516 },
+      "OOLTEWAH": { lat: 35.0629, lng: -85.0516 },
+      "Birmingham, AL": { lat: 33.5186, lng: -86.8104 },
+      "Louisville, KY": { lat: 38.2527, lng: -85.7585 },
+      "Chattanooga, TN": { lat: 35.0456, lng: -85.3097 },
       // Add more cities as needed
     };
     
-    const cityName = address.split(',')[0] + ', ' + address.split(',')[1]?.trim();
-    return cityCoords[cityName] || { lat: 36.1627, lng: -86.7816 }; // Default to Nashville
+    // Try exact match first
+    const exactMatch = cityCoords[address];
+    if (exactMatch) return exactMatch;
+    
+    // Try city, state format
+    const cityState = address.split(',')[0]?.trim() + ', ' + address.split(',')[1]?.trim();
+    const cityStateMatch = cityCoords[cityState];
+    if (cityStateMatch) return cityStateMatch;
+    
+    // Try just city name
+    const cityOnly = address.split(',')[0]?.trim();
+    const cityMatch = cityCoords[cityOnly];
+    if (cityMatch) return cityMatch;
+    
+    return { lat: 36.1627, lng: -86.7816 }; // Default to Nashville
   };
 
   // Enhanced drivers with location data and distance calculation
@@ -252,14 +269,21 @@ export default function ManualDispatch() {
       let estimatedArrival = '';
 
       if (location && selectedLoad.pickupAddress) {
-        // In a real implementation, you'd geocode the pickup address
-        // For now, we'll use a simplified distance calculation
-        distanceToPickup = Math.round(Math.random() * 150 + 10); // Mock distance 10-160 miles
-        const travelTime = distanceToPickup / 55; // Assume 55 mph average
-        estimatedArrival = format(
-          new Date(Date.now() + travelTime * 60 * 60 * 1000), 
-          'h:mm a'
-        );
+        // Use real GPS coordinates to calculate distance
+        const pickupCoords = await geocodeAddress(selectedLoad.pickupAddress);
+        if (pickupCoords) {
+          distanceToPickup = Math.round(calculateDistance(
+            location.latitude,
+            location.longitude,
+            pickupCoords.lat,
+            pickupCoords.lng
+          ));
+          const travelTime = distanceToPickup / 55; // Assume 55 mph average
+          estimatedArrival = format(
+            new Date(Date.now() + travelTime * 60 * 60 * 1000), 
+            'h:mm a'
+          );
+        }
       }
 
       return {
@@ -314,10 +338,26 @@ export default function ManualDispatch() {
     if (!selectedLoad) return driversWithDistance.filter(d => d.status === 'available');
     
     return driversWithDistance
-      .filter(driver => 
-        driver.status === 'available' && 
-        (driver.equipmentType === selectedLoad.equipmentType || driver.equipmentType === 'dry_van') // dry_van is compatible with most loads
-      )
+      .filter(driver => {
+        // Check if driver is available
+        if (driver.status !== 'available') return false;
+        
+        // Check equipment compatibility - be more flexible
+        const loadEquipment = selectedLoad.equipmentType;
+        const driverEquipment = driver.equipmentType;
+        
+        // Direct match
+        if (driverEquipment === loadEquipment) return true;
+        
+        // Box truck can handle most smaller loads
+        if (driverEquipment === 'straight_box_truck' && 
+            (loadEquipment === 'box_truck' || loadEquipment === 'dry_van')) return true;
+        
+        // Dry van is versatile
+        if (driverEquipment === 'dry_van') return true;
+        
+        return false;
+      })
       .sort((a, b) => (a.distanceToPickup || 999) - (b.distanceToPickup || 999));
   }, [driversWithDistance, selectedLoads, loads]);
 
