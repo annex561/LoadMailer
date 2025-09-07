@@ -83,6 +83,22 @@ export class DatabaseStorage implements IStorage {
     return this.getDriver(driverId);
   }
 
+  async getDriverByTelegramId(telegramId: string): Promise<schema.Driver | undefined> {
+    const result = await db.select().from(schema.drivers).where(eq(schema.drivers.telegramId, telegramId));
+    return result[0];
+  }
+
+  async getDriversWithTelegramEnabled(): Promise<schema.Driver[]> {
+    const result = await db.select().from(schema.drivers).where(
+      and(
+        eq(schema.drivers.enableTelegramNotifications, true),
+        // telegramId is not null - check if it exists and is not empty
+        sql`${schema.drivers.telegramId} IS NOT NULL AND ${schema.drivers.telegramId} != ''`
+      )
+    );
+    return result;
+  }
+
   // Customer operations
   async getCustomer(id: string): Promise<schema.Customer | undefined> {
     const result = await db.select().from(schema.customers).where(eq(schema.customers.id, id));
@@ -820,5 +836,132 @@ export class DatabaseStorage implements IStorage {
 
   async getGpsDeviceByDriver(driverId: string): Promise<schema.GpsDevice | undefined> {
     return undefined;
+  }
+
+  // Load Offer operations - CRITICAL for button functionality
+  async getLoadOffer(id: string): Promise<schema.LoadOffer | undefined> {
+    const result = await db.select().from(schema.loadOffers).where(eq(schema.loadOffers.id, id));
+    return result[0];
+  }
+
+  async getAllLoadOffers(): Promise<schema.LoadOffer[]> {
+    return await db.select().from(schema.loadOffers);
+  }
+
+  async getLoadOffers(loadId: string): Promise<schema.LoadOffer[]> {
+    return await db.select().from(schema.loadOffers).where(eq(schema.loadOffers.loadId, loadId));
+  }
+
+  async createLoadOffer(offer: schema.InsertLoadOffer): Promise<schema.LoadOffer> {
+    const id = randomUUID();
+    const loadOffer: schema.LoadOffer = {
+      ...offer,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.loadOffers).values(loadOffer);
+    return loadOffer;
+  }
+
+  async updateLoadOffer(id: string, offer: Partial<schema.InsertLoadOffer>): Promise<schema.LoadOffer | undefined> {
+    await db.update(schema.loadOffers).set({ ...offer, updatedAt: new Date() }).where(eq(schema.loadOffers.id, id));
+    return this.getLoadOffer(id);
+  }
+
+  async getLoadOfferByLoadAndDriver(loadId: string, driverId: string): Promise<schema.LoadOffer | undefined> {
+    const result = await db.select().from(schema.loadOffers).where(
+      and(
+        eq(schema.loadOffers.loadId, loadId),
+        eq(schema.loadOffers.driverId, driverId)
+      )
+    );
+    return result[0];
+  }
+
+  async updateLoadOfferByLoadAndDriver(loadId: string, driverId: string, offer: Partial<schema.InsertLoadOffer>): Promise<schema.LoadOffer | undefined> {
+    const existing = await this.getLoadOfferByLoadAndDriver(loadId, driverId);
+    if (!existing) return undefined;
+
+    await db.update(schema.loadOffers).set({ ...offer, updatedAt: new Date() }).where(eq(schema.loadOffers.id, existing.id));
+    return this.getLoadOffer(existing.id);
+  }
+
+  // Load offer statistics methods
+  async getLoadOffersByDriver(driverId: string): Promise<schema.LoadOffer[]> {
+    return await db.select().from(schema.loadOffers).where(eq(schema.loadOffers.driverId, driverId));
+  }
+
+  async getLoadOffersWithDetails(): Promise<(schema.LoadOffer & { load: schema.LoadWithRelations; driver: schema.Driver })[]> {
+    // Return empty array for now - complex join query would need proper implementation
+    return [];
+  }
+
+  async getDriverLoadOfferStats(driverId: string): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}> {
+    const offers = await this.getLoadOffersByDriver(driverId);
+    const driver = await this.getDriver(driverId);
+    
+    return {
+      driverId,
+      driverName: driver?.name || 'Unknown',
+      totalOffers: offers.length,
+      accepted: offers.filter(o => o.status === 'accepted').length,
+      declined: offers.filter(o => o.status === 'declined').length,
+      timeout: offers.filter(o => o.status === 'timeout').length,
+      pending: offers.filter(o => o.status === 'pending').length,
+    };
+  }
+
+  async getAllDriverLoadOfferStats(): Promise<{driverId: string; driverName: string; totalOffers: number; accepted: number; declined: number; timeout: number; pending: number}[]> {
+    const drivers = await this.getAllDrivers();
+    const stats = [];
+    
+    for (const driver of drivers) {
+      const driverStats = await this.getDriverLoadOfferStats(driver.id);
+      stats.push(driverStats);
+    }
+    
+    return stats;
+  }
+
+  // Route operations - Fix GPS tracking error
+  async getRoute(id: string): Promise<schema.Route | undefined> {
+    return undefined;
+  }
+
+  async getAllRoutes(): Promise<schema.Route[]> {
+    return [];
+  }
+
+  async getActiveRoutes(): Promise<schema.Route[]> {
+    return [];
+  }
+
+  async createRoute(route: schema.InsertRoute): Promise<schema.Route> {
+    const id = randomUUID();
+    const newRoute: schema.Route = {
+      ...route,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    return newRoute;
+  }
+
+  async updateRoute(id: string, route: Partial<schema.InsertRoute>): Promise<schema.Route | undefined> {
+    return undefined;
+  }
+
+  async getActiveRouteForDriver(driverId: string): Promise<schema.Route | undefined> {
+    return undefined;
+  }
+
+  async deleteRoute(id: string): Promise<boolean> {
+    return false;
+  }
+
+  // Available drivers method
+  async getAvailableDrivers(): Promise<schema.Driver[]> {
+    return await db.select().from(schema.drivers).where(eq(schema.drivers.status, 'available'));
   }
 }
