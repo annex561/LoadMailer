@@ -1,0 +1,40 @@
+You are tasked with designing a manual load dispatch override system for a logistics/transportation management platform. This system should allow dispatchers to manually assign incoming loads to the nearest available drivers when the automated system fails to do so.
+
+**System Requirements:**
+
+Create a comprehensive manual dispatch system that includes:
+
+1. **Load Management Interface:**
+   - Display all unassigned incoming loads with key details (pickup location, destination, weight, urgency level, time received)
+   - Show load status indicators (new, pending, assigned, failed auto-assignment)
+   - Include search and filter capabilities by location, load type, or time
+
+2. **Driver Availability Dashboard:**
+   - Real-time map view showing all available drivers and their current locations
+   - Driver information panel displaying: current location, capacity, vehicle type, availability status, and distance from pickup point
+   - Automatic distance calculation and sorting (nearest to farthest from load pickup location)
+
+3. **Manual Assignment Features:**
+   - One-click assignment functionality to send loads to selected drivers
+   - Bulk assignment capability for multiple loads
+   - Assignment confirmation system with driver acceptance/rejection tracking
+   - Override capabilities for emergency or priority loads
+
+4. **Communication Tools:**
+   - Direct messaging system between dispatcher and drivers
+   - Automated notifications to drivers about new assignments
+   - Status update notifications back to dispatchers
+
+5. **Backup and Logging:**
+   - Complete audit trail of all manual assignments
+   - Reason codes for manual interventions
+   - Performance metrics comparing manual vs. automated assignments
+
+**Technical Specifications:**
+- Ensure real-time data synchronization
+- Include mobile-responsive design for dispatchers
+- Implement role-based access controls
+- Provide integration capabilities with existing transportation management systems
+
+**Deliverables:**
+Provide detailed system architecture, user interface mockups, workflow diagrams, and implementation timeline. Include contingency procedures for system failures and training requirements for dispatch personnel.
