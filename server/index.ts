@@ -7,9 +7,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // Add explicit API middleware to ensure API routes return JSON - MUST be before route registration
-app.use('/api/*', (req, res, next) => {
+app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json');
-  console.log(`🔍 API middleware intercepted: ${req.method} ${req.path}`);
+  console.log(`🔍 API middleware intercepted: ${req.method} ${req.originalUrl}`);
+  
+  // Override the end method to prevent Vite from overriding API responses
+  const originalEnd = res.end;
+  res.end = function(chunk, encoding) {
+    // Mark response as finished for API routes to prevent Vite override
+    res.locals.apiResponseSent = true;
+    return originalEnd.call(this, chunk, encoding);
+  };
+  
   next();
 });
 
