@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type LoadDocument, type InsertLoadDocument, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration, type LoadBid, type InsertLoadBid, type BidResponse, type InsertBidResponse, type EmailCampaign, type InsertEmailCampaign, type EmailFollowUp, type InsertEmailFollowUp, type DispatcherNotification, type InsertDispatcherNotification, type LoadBidWithRelations, type EmailCampaignWithFollowUps } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type LoadDocument, type InsertLoadDocument, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration, type LoadBid, type InsertLoadBid, type BidResponse, type InsertBidResponse, type EmailCampaign, type InsertEmailCampaign, type EmailFollowUp, type InsertEmailFollowUp, type DispatcherNotification, type InsertDispatcherNotification, type LoadBidWithRelations, type EmailCampaignWithFollowUps, type LoadCommunicationThread, type InsertLoadCommunicationThread, type LoadMessage, type InsertLoadMessage, type MessageAttachment, type InsertMessageAttachment, type QuickReplyTemplate, type InsertQuickReplyTemplate, type CommunicationLog, type InsertCommunicationLog } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -248,6 +248,48 @@ export interface IStorage {
   createLoadDocument(document: InsertLoadDocument): Promise<LoadDocument>;
   updateLoadDocument(id: string, document: Partial<InsertLoadDocument>): Promise<LoadDocument | undefined>;
   deleteLoadDocument(id: string): Promise<boolean>;
+
+  // Load Communication Thread operations
+  getLoadCommunicationThread(id: string): Promise<LoadCommunicationThread | undefined>;
+  getLoadCommunicationThreadByLoad(loadId: string): Promise<LoadCommunicationThread | undefined>;
+  getAllLoadCommunicationThreads(): Promise<LoadCommunicationThread[]>;
+  createLoadCommunicationThread(thread: InsertLoadCommunicationThread): Promise<LoadCommunicationThread>;
+  updateLoadCommunicationThread(id: string, thread: Partial<InsertLoadCommunicationThread>): Promise<LoadCommunicationThread | undefined>;
+  deleteLoadCommunicationThread(id: string): Promise<boolean>;
+
+  // Load Message operations
+  getLoadMessage(id: string): Promise<LoadMessage | undefined>;
+  getLoadMessagesByThread(threadId: string): Promise<LoadMessage[]>;
+  getLoadMessagesByLoad(loadId: string): Promise<LoadMessage[]>;
+  createLoadMessage(message: InsertLoadMessage): Promise<LoadMessage>;
+  updateLoadMessage(id: string, message: Partial<InsertLoadMessage>): Promise<LoadMessage | undefined>;
+  markMessageAsRead(messageId: string): Promise<boolean>;
+  getUnreadMessagesForDriver(driverId: string): Promise<LoadMessage[]>;
+  getUnreadMessagesForDispatch(): Promise<LoadMessage[]>;
+
+  // Message Attachment operations
+  getMessageAttachment(id: string): Promise<MessageAttachment | undefined>;
+  getMessageAttachmentsByMessage(messageId: string): Promise<MessageAttachment[]>;
+  getMessageAttachmentsByLoad(loadId: string): Promise<MessageAttachment[]>;
+  createMessageAttachment(attachment: InsertMessageAttachment): Promise<MessageAttachment>;
+  updateMessageAttachment(id: string, attachment: Partial<InsertMessageAttachment>): Promise<MessageAttachment | undefined>;
+  deleteMessageAttachment(id: string): Promise<boolean>;
+
+  // Quick Reply Template operations
+  getQuickReplyTemplate(id: string): Promise<QuickReplyTemplate | undefined>;
+  getAllQuickReplyTemplates(): Promise<QuickReplyTemplate[]>;
+  getActiveQuickReplyTemplates(): Promise<QuickReplyTemplate[]>;
+  getQuickReplyTemplatesForDriver(): Promise<QuickReplyTemplate[]>;
+  getQuickReplyTemplatesForDispatch(): Promise<QuickReplyTemplate[]>;
+  createQuickReplyTemplate(template: InsertQuickReplyTemplate): Promise<QuickReplyTemplate>;
+  updateQuickReplyTemplate(id: string, template: Partial<InsertQuickReplyTemplate>): Promise<QuickReplyTemplate | undefined>;
+  deleteQuickReplyTemplate(id: string): Promise<boolean>;
+
+  // Communication Log operations
+  getCommunicationLog(id: string): Promise<CommunicationLog | undefined>;
+  getCommunicationLogsByLoad(loadId: string): Promise<CommunicationLog[]>;
+  getCommunicationLogsByThread(threadId: string): Promise<CommunicationLog[]>;
+  createCommunicationLog(log: InsertCommunicationLog): Promise<CommunicationLog>;
 }
 
 export class MemStorage implements IStorage {
