@@ -3289,14 +3289,38 @@ Safe travels! 🚛`;
 
   app.post("/api/telegram/test-load", async (req, res) => {
     try {
+      console.log('📍 TEST LOAD REQUEST: Starting test load creation...');
+      
+      // Check if Telegram service is running
+      if (!telegramLoadService.isServiceRunning()) {
+        console.log('❌ TEST LOAD: Telegram service not running');
+        return res.status(400).json({ 
+          success: false, 
+          error: "Telegram service is not running" 
+        });
+      }
+      
+      // Call the enhanced sendTestLoad method
       const success = await telegramLoadService.sendTestLoad();
+      console.log(`📍 TEST LOAD RESULT: ${success ? 'SUCCESS' : 'FAILED'}`);
+      
       if (success) {
-        res.json({ success: true, message: "Test load sent successfully" });
+        res.json({ 
+          success: true, 
+          message: "Test load created and sent to eligible drivers" 
+        });
       } else {
-        res.status(400).json({ success: false, error: "Failed to send test load" });
+        res.status(400).json({ 
+          success: false, 
+          error: "Failed to create or send test load - check if drivers are available and have Telegram enabled" 
+        });
       }
     } catch (error) {
-      res.status(500).json({ error: "Failed to send test load" });
+      console.error('❌ TEST LOAD ERROR:', error);
+      res.status(500).json({ 
+        success: false,
+        error: "Internal server error while sending test load" 
+      });
     }
   });
 

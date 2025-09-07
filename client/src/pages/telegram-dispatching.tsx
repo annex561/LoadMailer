@@ -77,7 +77,13 @@ export default function TelegramDispatching() {
 
   const testLoadMutation = useMutation({
     mutationFn: async (): Promise<TestLoadResponse> => {
-      const response = await fetch("/api/telegram/test-load");
+      const response = await fetch("/api/telegram/test-load", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}) // Empty body for now, will add driver selection later
+      });
       if (!response.ok) throw new Error('Failed to send test load');
       return response.json();
     },
