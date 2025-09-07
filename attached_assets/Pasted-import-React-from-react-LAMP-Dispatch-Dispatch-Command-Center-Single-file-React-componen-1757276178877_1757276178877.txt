@@ -1,0 +1,204 @@
+import React from "react";
+
+// LAMP Dispatch — Dispatch Command Center
+// Single-file React component (Tailwind CSS classes)
+// Drop into a Vite+React project with Tailwind enabled and render in App.jsx
+
+const kpis = [
+  { label: "Active Incidents", value: 2, icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    ) },
+  { label: "Available Units", value: 3, icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+        <path d="M16 3.13a4 4 0 010 7.75"/>
+      </svg>
+    ) },
+  { label: "En Route", value: 2, icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M22 12H2"/>
+        <path d="M14 5l7 7-7 7"/>
+      </svg>
+    ) },
+  { label: "Avg Response", value: "4.2m", icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 6v6l4 2"/>
+      </svg>
+    ) },
+  { label: "Coverage", value: "98%", icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+    ) },
+];
+
+const tabs = [
+  "Active Incidents",
+  "Units & Resources",
+  "Communications",
+  "Emergency Contacts",
+  "SOPs",
+  "Coverage Zones",
+];
+
+const incidents = [
+  {
+    id: "INC_001",
+    type: "BREAKDOWN • MAINT-001",
+    priority: "HIGH",
+    state: "ACTIVE",
+    driver: "Alex Liberty",
+    location: "I-75 Mile Marker 245, GA",
+    reported: "15 minutes ago",
+    dispatcher: "Sarah Johnson",
+    description: "Engine overheating, pulled over safely",
+  },
+  {
+    id: "INC_002",
+    type: "DELAY • DELAY-002",
+    priority: "MEDIUM",
+    state: "RESPONDING",
+    driver: "Maria Rodriguez",
+    location: "Nashville, TN",
+    reported: "an hour ago",
+    dispatcher: "Mike Chen",
+    description: "Traffic delay due to construction",
+  },
+];
+
+function Badge({ children, tone = "neutral" }) {
+  const tones = {
+    neutral: "bg-slate-700 text-slate-100 border border-slate-600",
+    green: "bg-emerald-600/20 text-emerald-300 border border-emerald-600/40",
+    yellow: "bg-amber-600/20 text-amber-300 border border-amber-600/40",
+    red: "bg-rose-600/20 text-rose-300 border border-rose-600/40",
+  };
+  return (
+    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${tones[tone]}`}>{children}</span>
+  );
+}
+
+function KpiCard({ icon, label, value }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/70 text-slate-200">
+        {icon}
+      </div>
+      <div className="flex flex-col">
+        <span className="text-sm text-slate-400">{label}</span>
+        <span className="text-xl font-semibold text-slate-100">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function IncidentCard({ item }) {
+  const tone = item.priority === "HIGH" ? "red" : item.priority === "MEDIUM" ? "yellow" : "neutral";
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-sm ring-1 ring-black/0">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-slate-300 text-lg font-semibold">{item.id}</span>
+          <Badge tone={tone}>{item.priority}</Badge>
+          <Badge tone="neutral">{item.state}</Badge>
+        </div>
+      </div>
+      <p className="text-slate-400 text-sm mb-1">{item.type}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2 text-sm">
+        <div><span className="text-slate-500">Driver:</span> <span className="text-slate-200">{item.driver}</span></div>
+        <div><span className="text-slate-500">Location:</span> <span className="text-slate-200">{item.location}</span></div>
+        <div><span className="text-slate-500">Reported:</span> <span className="text-slate-200">{item.reported}</span></div>
+        <div><span className="text-slate-500">Dispatcher:</span> <span className="text-slate-200">{item.dispatcher}</span></div>
+      </div>
+      <p className="mt-3 text-slate-300 text-sm leading-relaxed">{item.description}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700">Contact Driver</button>
+        <button className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700">Send Telegram</button>
+        <button className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700">View Location</button>
+        <button className="rounded-xl border border-emerald-700 bg-emerald-600/20 px-3 py-2 text-sm text-emerald-200 hover:bg-emerald-600/30">Resolve</button>
+      </div>
+    </div>
+  );
+}
+
+export default function DispatchCommandCenter() {
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      {/* Top Nav */}
+      <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-emerald-500" />
+            <span className="font-semibold tracking-wide">LAMP Dispatch</span>
+          </div>
+          <nav className="hidden md:flex items-center gap-6 text-sm text-slate-300">
+            <a className="hover:text-slate-100" href="#">Dashboard</a>
+            <a className="hover:text-slate-100" href="#">Drivers</a>
+            <a className="hover:text-slate-100" href="#">Loads</a>
+            <a className="hover:text-slate-100" href="#">Dispatcher</a>
+            <a className="hover:text-slate-100" href="#">Communications</a>
+            <a className="hover:text-slate-100" href="#">Live Tracking</a>
+            <a className="hover:text-slate-100" href="#">Settings</a>
+          </nav>
+        </div>
+      </header>
+
+      {/* Page Heading */}
+      <section className="mx-auto max-w-7xl px-4 py-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">Dispatch Command Center</h1>
+            <p className="text-slate-400">Central hub for all dispatch operations</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge tone="green">System Online</Badge>
+            <button className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700">Alerts (2)</button>
+          </div>
+        </div>
+
+        {/* KPI Grid */}
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {kpis.map((k) => (
+            <KpiCard key={k.label} {...k} />
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div className="mt-6 flex items-center gap-2 overflow-x-auto">
+          {tabs.map((t, i) => (
+            <button key={t} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-sm ${i===0 ? "border-slate-600 bg-slate-800 text-slate-100" : "border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800"}`}>{t}</button>
+          ))}
+        </div>
+
+        {/* Filters Row */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <div className="flex w-full sm:w-auto items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input placeholder="Search incidents…" className="w-full bg-transparent outline-none placeholder:text-slate-500" />
+          </div>
+          <select className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200">
+            <option>All Incidents</option>
+            <option>Breakdowns</option>
+            <option>Delays</option>
+          </select>
+          <button className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200">Filters</button>
+        </div>
+
+        {/* Incident Cards */}
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {incidents.map((it) => (
+            <IncidentCard key={it.id} item={it} />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
