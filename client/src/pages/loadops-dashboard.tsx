@@ -62,6 +62,7 @@ import DocumentManagement from './DocumentManagement';
 import DATScraper from './DATScraper';
 import DatLogin from './dat-login';
 import AdminOverview from './admin-overview';
+import ManualDispatch from './manual-dispatch';
 import NotFound from './not-found';
 import DriverLocationMap from '@/components/driver-location-map';
 
@@ -152,6 +153,8 @@ export default function LoadOpsDashboard() {
         return <DatLogin />;
       case '/admin-overview':
         return <AdminOverview />;
+      case '/manual-dispatch':
+        return <ManualDispatch />;
       default:
         return <NotFound />;
     }

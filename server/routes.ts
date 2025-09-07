@@ -3288,6 +3288,268 @@ Safe travels! 🚛`;
   });
 
 
+  // Manual Dispatch API Endpoints
+  app.post("/api/loads/:loadId/manual-assign", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const { 
+        driverId, 
+        dispatcherId, 
+        dispatcherName, 
+        actionType, 
+        reasonCode, 
+        reasonDescription, 
+        distanceToPickup 
+      } = req.body;
+
+      console.log(`📋 Manual assignment request: Load ${loadId} to Driver ${driverId}`);
+
+      // Validate required fields
+      if (!driverId || !dispatcherId || !dispatcherName || !actionType || !reasonCode) {
+        return res.status(400).json({ 
+          error: "Missing required fields: driverId, dispatcherId, dispatcherName, actionType, reasonCode" 
+        });
+      }
+
+      // Check if load exists and is available for assignment
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        return res.status(404).json({ error: "Load not found" });
+      }
+
+      // Check if driver exists and is available
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+
+      if (driver.status !== 'available') {
+        return res.status(400).json({ 
+          error: `Driver ${driver.name} is not available (status: ${driver.status})` 
+        });
+      }
+
+      // Check equipment compatibility
+      if (driver.equipmentType !== load.equipmentType && driver.equipmentType !== 'dry_van') {
+        console.log(`⚠️ Equipment mismatch: Load requires ${load.equipmentType}, driver has ${driver.equipmentType}`);
+        // Allow override for manual assignments but log warning
+      }
+
+      // Update load assignment
+      const updatedLoad = await storage.updateLoad(loadId, {
+        driverId: driverId,
+        status: 'assigned'
+      });
+
+      if (!updatedLoad) {
+        return res.status(500).json({ error: "Failed to assign load" });
+      }
+
+      // Create manual dispatch log entry (simplified for now)
+      console.log(`✅ Manual Assignment Log: ${actionType} - ${reasonCode} - Load ${loadId} assigned to ${driver.name}`);
+
+      // Create load offer record
+      const loadOffer = await storage.createLoadOffer({
+        loadId,
+        driverId,
+        status: 'pending',
+        sentAt: new Date(),
+        timeoutAt: new Date(Date.now() + 3 * 60 * 60 * 1000), // 3 hours timeout
+      });
+
+      // Send notification via Telegram if enabled and service is available
+      let telegramSent = false;
+      try {
+        if (driver.enableTelegramNotifications && driver.telegramId && telegramLoadService?.isServiceRunning()) {
+          console.log(`📱 Sending manual assignment notification via Telegram to ${driver.name}...`);
+          
+          // Create a simplified load message for manual assignment
+          const message = `🔔 *MANUAL LOAD ASSIGNMENT*\n\n` +
+            `📋 Load: ${load.loadNumber}\n` +
+            `📍 From: ${load.pickupAddress}\n` +
+            `📍 To: ${load.deliveryAddress}\n` +
+            `📅 Pickup: ${format(new Date(load.pickupDate), 'MMM dd')} at ${load.pickupTime}\n` +
+            `💰 Rate: $${load.rate?.toLocaleString() || 'TBD'}\n` +
+            `🚛 Equipment: ${load.equipmentType}\n` +
+            `⚖️ Weight: ${load.weight?.toLocaleString() || 'N/A'} lbs\n` +
+            `📏 Miles: ${load.miles || 'N/A'}\n\n` +
+            `👨‍💼 Assigned by: ${dispatcherName}\n` +
+            `📝 Reason: ${reasonDescription || reasonCode}\n\n` +
+            `Please confirm acceptance of this assignment.`;
+
+          await telegramLoadService.sendMessage(driver.telegramId, message);
+          telegramSent = true;
+          console.log(`✅ Manual assignment notification sent to ${driver.name}`);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to send Telegram notification:`, error);
+      }
+
+      res.json({
+        success: true,
+        message: `Load ${load.loadNumber} manually assigned to ${driver.name}`,
+        load: updatedLoad,
+        driver: driver,
+        telegramSent,
+        assignment: {
+          loadId,
+          driverId,
+          dispatcherId,
+          dispatcherName,
+          actionType,
+          reasonCode,
+          reasonDescription,
+          distanceToPickup,
+          assignedAt: new Date().toISOString()
+        }
+      });
+
+    } catch (error) {
+      console.error("❌ Error in manual load assignment:", error);
+      res.status(500).json({ error: "Failed to assign load manually" });
+    }
+  });
+
+  // Bulk assignment endpoint
+  app.post("/api/loads/bulk-assign", async (req, res) => {
+    try {
+      const { assignments } = req.body;
+
+      if (!assignments || !Array.isArray(assignments) || assignments.length === 0) {
+        return res.status(400).json({ error: "Invalid assignments array" });
+      }
+
+      console.log(`📋 Bulk assignment request: ${assignments.length} loads`);
+
+      const results = {
+        total: assignments.length,
+        successful: 0,
+        failed: 0,
+        errors: []
+      };
+
+      // Process each assignment
+      for (const assignment of assignments) {
+        try {
+          const { loadId, driverId, dispatcherId, dispatcherName, actionType, reasonCode } = assignment;
+
+          // Validate assignment
+          const load = await storage.getLoad(loadId);
+          const driver = await storage.getDriver(driverId);
+
+          if (!load || !driver) {
+            results.failed++;
+            results.errors.push(`Load ${loadId} or Driver ${driverId} not found`);
+            continue;
+          }
+
+          if (driver.status !== 'available') {
+            results.failed++;
+            results.errors.push(`Driver ${driver.name} is not available`);
+            continue;
+          }
+
+          // Assign load
+          await storage.updateLoad(loadId, {
+            driverId: driverId,
+            status: 'assigned'
+          });
+
+          // Create load offer
+          await storage.createLoadOffer({
+            loadId,
+            driverId,
+            status: 'pending',
+            sentAt: new Date(),
+            timeoutAt: new Date(Date.now() + 3 * 60 * 60 * 1000),
+          });
+
+          results.successful++;
+          console.log(`✅ Bulk assignment: Load ${load.loadNumber} assigned to ${driver.name}`);
+
+        } catch (error) {
+          results.failed++;
+          results.errors.push(`Assignment failed: ${error.message}`);
+        }
+      }
+
+      res.json(results);
+
+    } catch (error) {
+      console.error("❌ Error in bulk load assignment:", error);
+      res.status(500).json({ error: "Failed to process bulk assignment" });
+    }
+  });
+
+  // Get manual dispatch audit logs
+  app.get("/api/manual-dispatch/audit-logs", async (req, res) => {
+    try {
+      const { limit = 50, offset = 0, loadId, driverId, dispatcherId } = req.query;
+      
+      // This would fetch from manual dispatch log table when implemented
+      // For now, return empty array with structure
+      const logs = [];
+      
+      res.json({
+        logs,
+        total: 0,
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      });
+    } catch (error) {
+      console.error("❌ Error fetching manual dispatch audit logs:", error);
+      res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+
+  // Get manual dispatch statistics
+  app.get("/api/manual-dispatch/stats", async (req, res) => {
+    try {
+      const { period = 'today' } = req.query;
+      
+      // Calculate basic stats from load offers and assignments
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const loads = await storage.getAllLoads();
+      const drivers = await storage.getAllDrivers();
+      
+      const todaysLoads = loads.filter(load => 
+        new Date(load.createdAt).getTime() >= today.getTime()
+      );
+      
+      const unassignedLoads = loads.filter(load => 
+        !load.driverId && load.status === 'scheduled'
+      );
+      
+      const availableDrivers = drivers.filter(driver => 
+        driver.status === 'available'
+      );
+
+      const stats = {
+        period,
+        totalLoadsToday: todaysLoads.length,
+        unassignedLoads: unassignedLoads.length,
+        availableDrivers: availableDrivers.length,
+        manualAssignmentsToday: 0, // Would calculate from audit logs
+        automatedAssignmentsToday: 0, // Would calculate from load offers
+        averageResponseTime: 0, // Would calculate from audit logs
+        urgentLoads: loads.filter(load => load.priority === 'urgent').length,
+        equipmentTypes: {
+          dry_van: loads.filter(load => load.equipmentType === 'dry_van').length,
+          refrigerated: loads.filter(load => load.equipmentType === 'refrigerated').length,
+          flatbed: loads.filter(load => load.equipmentType === 'flatbed').length,
+          straight_box_truck: loads.filter(load => load.equipmentType === 'straight_box_truck').length,
+        }
+      };
+
+      res.json(stats);
+    } catch (error) {
+      console.error("❌ Error fetching manual dispatch stats:", error);
+      res.status(500).json({ error: "Failed to fetch statistics" });
+    }
+  });
+
   // Lane preferences API
   app.get("/api/lane-preferences", async (req, res) => {
     try {
