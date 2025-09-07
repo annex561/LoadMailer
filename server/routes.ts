@@ -5255,38 +5255,50 @@ Safe travels! 🚛`;
     try {
       console.log('📝 Manual load entry received:', req.body);
       
+      // First, create or get a customer for this manual entry
+      let customer = await storage.getCustomerByName(req.body.companyName);
+      if (!customer) {
+        customer = await storage.createCustomer({
+          name: req.body.companyName,
+          contactPerson: 'Manual Entry',
+          phone: req.body.contactPhone || '',
+          email: '',
+          address: ''
+        });
+      }
+      
       const loadData = {
-        id: `MANUAL-${Date.now()}`,
-        customerId: 'manual-entry',
-        origin: `${req.body.originCity}, ${req.body.originState}`,
-        destination: `${req.body.destinationCity}, ${req.body.destinationState}`,
+        loadNumber: req.body.loadId || `MANUAL-${Date.now()}`,
+        customerId: customer.id,
+        description: req.body.commodity || 'Manual Entry Load',
+        pickupAddress: `${req.body.originCity}, ${req.body.originState}`,
+        deliveryAddress: `${req.body.destinationCity}, ${req.body.destinationState}`,
         rate: req.body.rate,
-        mileage: req.body.mileage,
+        miles: req.body.mileage,
         weight: req.body.weight,
-        equipment: req.body.equipmentType,
-        pickupDate: req.body.pickupDate,
-        deliveryDate: req.body.deliveryDate,
-        status: 'available',
+        equipmentType: req.body.equipmentType,
+        pickupDate: new Date(req.body.pickupDate),
+        pickupTime: '08:00', // Default time
+        deliveryDate: new Date(req.body.deliveryDate),
+        deliveryTime: '17:00', // Default time
+        status: 'scheduled',
         priority: 'high',
-        commodity: req.body.commodity,
-        specialRequirements: req.body.specialRequirements,
-        source: 'manual_entry',
-        companyName: req.body.companyName,
-        contactPhone: req.body.contactPhone,
-        loadId: req.body.loadId,
-        createdAt: new Date().toISOString()
+        specialInstructions: req.body.specialRequirements,
+        sourceBoard: 'manual',
+        company: req.body.companyName,
+        contactPhone: req.body.contactPhone
       };
 
       // Store the load
-      await storage.createLoad(loadData);
+      const createdLoad = await storage.createLoad(loadData);
       
       // Add to DAT loads for VA viewing
       const datLoadData = {
-        postId: loadData.loadId,
+        postId: createdLoad.loadNumber,
         company: req.body.companyName,
         phone: req.body.contactPhone,
-        origin: loadData.origin,
-        destination: loadData.destination,
+        origin: loadData.pickupAddress,
+        destination: loadData.deliveryAddress,
         rate: `$${req.body.rate}`,
         mileage: `${req.body.mileage} mi`,
         equipment: req.body.equipmentType.replace('_', ' ').toUpperCase(),
@@ -5307,23 +5319,35 @@ Safe travels! 🚛`;
 
       console.log('✅ Manual load created and added to DAT loads tab');
 
-      // Notify nearby drivers
+      // Notify drivers using existing load notification system
       try {
         const drivers = await storage.getAllDrivers();
-        const availableDrivers = drivers.filter(d => d.status === 'available');
+        const availableDrivers = drivers.filter(d => d.status === 'available' && d.enableTelegramNotifications);
         let driversNotified = 0;
 
-        for (const driver of availableDrivers) {
-          // Simple proximity check (this could be enhanced with real geo calculations)
-          if (driver.telegramEnabled && driver.telegramChatId) {
-            console.log(`📲 Notifying driver ${driver.name} of new manual load`);
-            driversNotified++;
+        // Send to Telegram Load Service if available
+        if (telegramLoadService && telegramLoadService.isServiceRunning()) {
+          console.log(`📲 Sending new manual load to telegram service for dispatch`);
+          
+          // Create a load offer for each eligible driver
+          for (const driver of availableDrivers) {
+            if (driver.telegramId && driver.equipmentType === createdLoad.equipmentType) {
+              await storage.createLoadOffer({
+                loadId: createdLoad.id,
+                driverId: driver.id,
+                status: 'pending',
+                sentAt: new Date(),
+                timeoutAt: new Date(Date.now() + 3 * 60 * 60 * 1000), // 3 hours
+              });
+              driversNotified++;
+            }
           }
         }
 
         res.json({
           success: true,
-          loadId: loadData.id,
+          loadId: createdLoad.id,
+          loadNumber: createdLoad.loadNumber,
           driversNotified,
           message: 'Load created successfully and dispatched to drivers'
         });
@@ -5332,7 +5356,8 @@ Safe travels! 🚛`;
         console.error('⚠️ Error notifying drivers:', error);
         res.json({
           success: true,
-          loadId: loadData.id,
+          loadId: createdLoad.id,
+          loadNumber: createdLoad.loadNumber,
           driversNotified: 0,
           message: 'Load created but driver notification failed'
         });
