@@ -9,9 +9,8 @@ app.use(express.urlencoded({ extended: false }));
 // Add explicit API middleware to ensure API routes return JSON - MUST be before route registration
 app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json');
-  console.log(`🔍 API middleware intercepted: ${req.method} ${req.originalUrl}`);
   
-  // Add a special response flag that we can check later
+  // Add a special response flag that we can check later to detect API responses vs Vite HTML
   const originalSend = res.send;
   const originalJson = res.json;
   

@@ -127,9 +127,7 @@ export default function ContactFormModal({
       const endpoint = type === "driver" 
         ? `/api/drivers/${contact?.id}` 
         : `/api/customers/${contact?.id}`;
-      console.log(`🔧 Frontend sending ${type} update to:`, endpoint, data);
       const response = await apiRequest("PUT", endpoint, data);
-      console.log(`✅ Frontend received response:`, response.status, response.statusText);
       
       // Check if this is actually an API response or HTML from Vite
       const contentType = response.headers.get('content-type');
@@ -137,9 +135,8 @@ export default function ContactFormModal({
       
       if (!isApiResponse || !contentType?.includes('application/json')) {
         // This means Vite intercepted our response, but the update likely succeeded
-        // Let's just return a success object since we got a 200 status
+        // Return a success object since we got a 200 status
         if (response.status === 200) {
-          console.log('⚠️ Got HTML response but status 200 - treating as success');
           return { success: true, id: contact?.id };
         }
         throw new Error(`API returned ${contentType} instead of JSON`);
@@ -167,8 +164,6 @@ export default function ContactFormModal({
       onSuccess();
     },
     onError: (error: any) => {
-      console.error(`❌ Frontend ${type} update error:`, error);
-      console.error('Error details:', error.message, error.status, error.stack);
       toast({
         title: "Error",
         description: `Failed to update ${type}: ${error.message || 'Unknown error'}`,
