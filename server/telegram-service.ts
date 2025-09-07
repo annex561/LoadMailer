@@ -292,16 +292,25 @@ export class TelegramLoadService {
     // Drivers will be updated when they actually connect via telegram bot
     console.log('Telegram service initialized - waiting for real driver connections');
     
-    // Set first driver to unavailable to prevent fake telegram messages
+    // Set test drivers to unavailable to prevent fake telegram messages
+    // But preserve Annex Luberisse as he's a real driver
     const drivers = await storage.getAllDrivers();
-    if (drivers.length > 0) {
-      const firstDriver = drivers[0];
-      await storage.updateDriver(firstDriver.id, {
-        status: 'unavailable',
-        telegramId: null,
-        enableTelegramNotifications: false
-      });
-      console.log('Set test driver to unavailable to prevent fake telegram messages');
+    for (const driver of drivers) {
+      // Keep Annex available as he's a real driver
+      if (driver.id === '3ce898f4-6962-461f-a9ea-bb81cc7d4a6f') {
+        console.log(`✅ Keeping Annex Luberisse available for load assignment`);
+        continue;
+      }
+      
+      // Set other test drivers to unavailable if they don't have proper Telegram setup
+      if (!driver.telegramId || driver.telegramId.toString().startsWith('temp_')) {
+        await storage.updateDriver(driver.id, {
+          status: 'unavailable',
+          telegramId: null,
+          enableTelegramNotifications: false
+        });
+        console.log(`Set test driver ${driver.name} to unavailable to prevent fake telegram messages`);
+      }
     }
   }
 

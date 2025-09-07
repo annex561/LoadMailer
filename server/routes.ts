@@ -2578,6 +2578,29 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
+  // Setup endpoint to make Annex available for manual assignment
+  app.post('/api/setup-annex-available', async (req, res) => {
+    try {
+      console.log('🔧 Setting Annex to available status...');
+      
+      await storage.updateDriver('3ce898f4-6962-461f-a9ea-bb81cc7d4a6f', {
+        status: 'available',
+        telegramId: 5908383693,  // Set proper Telegram ID
+        enableTelegramNotifications: true
+      });
+
+      console.log(`✅ Annex status set to available successfully`);
+
+      res.json({
+        success: true,
+        message: 'Annex is now available for load assignment'
+      });
+    } catch (error) {
+      console.error('Error setting Annex available:', error);
+      res.status(500).json({ error: 'Failed to set Annex available' });
+    }
+  });
+
   // Geofence routes
   app.get("/api/gps/geofences", async (req, res) => {
     try {
