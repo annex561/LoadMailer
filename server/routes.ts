@@ -1271,6 +1271,82 @@ Safe travels! 🚛`;
     }
   });
 
+  // Load driver assignment endpoint
+  app.post("/api/loads/:id/assign-driver", async (req, res) => {
+    try {
+      const loadId = req.params.id;
+      const { driverId } = req.body;
+      
+      if (!driverId) {
+        return res.status(400).json({ error: "Driver ID is required" });
+      }
+
+      // Get the load and driver to verify they exist
+      const [load, driver] = await Promise.all([
+        storage.getLoad(loadId),
+        storage.getDriver(driverId)
+      ]);
+
+      if (!load) {
+        return res.status(404).json({ error: "Load not found" });
+      }
+
+      if (!driver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+
+      if (driver.status !== 'available') {
+        return res.status(400).json({ error: "Driver is not available" });
+      }
+
+      // Update the load with the assigned driver
+      const updatedLoad = await storage.updateLoad(loadId, {
+        driverId: driverId,
+        status: 'assigned',
+        assignedAt: new Date()
+      });
+
+      // Update driver status to on_route
+      await storage.updateDriver(driverId, {
+        status: 'on_route'
+      });
+
+      console.log(`✅ Load ${load.loadNumber} assigned to driver ${driver.name}`);
+
+      // Send confirmation via Telegram if available
+      try {
+        if (telegramLoadService && telegramLoadService.isServiceRunning() && driver.telegramId) {
+          const assignmentMessage = `🚛 *LOAD ASSIGNED*
+
+📋 Load: ${load.loadNumber}
+💰 Rate: $${load.rate}
+📍 Pickup: ${load.pickupAddress}
+📅 ${load.pickupDate ? new Date(load.pickupDate).toLocaleDateString() : 'ASAP'}
+🎯 Delivery: ${load.deliveryAddress}
+
+You have been assigned to this load. Safe travels! 🚛`;
+          
+          await telegramLoadService.sendMessageToDriver(driver.telegramId, assignmentMessage);
+          console.log(`📱 Assignment notification sent to driver ${driver.name} via Telegram`);
+        }
+      } catch (error) {
+        console.error("Error sending assignment notification:", error);
+        // Don't fail the assignment if notification fails
+      }
+
+      res.json({
+        success: true,
+        message: "Driver assigned successfully",
+        load: updatedLoad,
+        driver: driver
+      });
+
+    } catch (error) {
+      console.error("Error assigning driver to load:", error);
+      res.status(500).json({ error: "Failed to assign driver" });
+    }
+  });
+
   // Customer routes
   app.get("/api/customers", async (req, res) => {
     try {
