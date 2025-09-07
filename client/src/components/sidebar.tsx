@@ -14,6 +14,7 @@ const navigation = [
   { name: "Manage Loads", href: "/loads", icon: Package, section: "loads" },
   { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "loads" },
   { name: "Manual Load Entry", href: "/manual-load-entry", icon: UserPlus, section: "loads" },
+  { name: "Manual Dispatch", href: "/manual-dispatch", icon: Upload, section: "loads" },
   { name: "Google Sheets Import", href: "/google-sheets-import", icon: Sheet, section: "loads" },
   { name: "DAT Login", href: "/dat-login", icon: Bot, section: "loads" },
   { name: "DAT Scrapers", href: "/scrapers", icon: Bot, section: "loads" },
