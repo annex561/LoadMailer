@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   Search, 
   RefreshCw,
@@ -8,10 +8,14 @@ import {
   Truck, 
   Phone,
   Clock,
-  Timer
+  Timer,
+  User
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface GoogleSheetsLoad {
   id: string;
@@ -31,6 +35,8 @@ interface GoogleSheetsLoad {
 function DATLoads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [countdown, setCountdown] = useState(10);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: loads = [], isLoading, refetch, dataUpdatedAt } = useQuery<GoogleSheetsLoad[]>({
     queryKey: ["/api/dat-loads"],
@@ -38,6 +44,39 @@ function DATLoads() {
     refetchIntervalInBackground: true,
     staleTime: 0, // Data is immediately stale
     gcTime: 0, // Don't cache data
+  });
+
+  // Fetch available drivers
+  const { data: drivers = [] } = useQuery({
+    queryKey: ["/api/drivers"],
+    queryFn: async () => {
+      const response = await fetch("/api/drivers");
+      return response.json();
+    }
+  });
+
+  // Driver assignment mutation
+  const assignDriverMutation = useMutation({
+    mutationFn: async ({ loadId, driverId }: { loadId: string; driverId: string }) => {
+      return apiRequest(`/api/loads/${loadId}/assign-driver`, {
+        method: 'POST',
+        body: JSON.stringify({ driverId })
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Driver assigned successfully!",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to assign driver. Please try again.",
+        variant: "destructive",
+      });
+    }
   });
 
   // Countdown timer for next refresh - sync with actual query timing
@@ -128,19 +167,20 @@ function DATLoads() {
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Load Type</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Contact Info</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Company</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">Assign Driver</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-12 text-center">
+                  <td colSpan={11} className="px-6 py-12 text-center">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-4 text-gray-400" />
                     <p className="text-gray-500">Loading Google Sheets loads...</p>
                   </td>
                 </tr>
               ) : filteredLoads.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-12 text-center">
+                  <td colSpan={11} className="px-6 py-12 text-center">
                     <Truck className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                     <p className="text-lg font-medium text-gray-500">No loads available</p>
                     <p className="text-sm text-gray-400">Check back later for new freight opportunities</p>
@@ -198,6 +238,35 @@ function DATLoads() {
                     </td>
                     {/* Company */}
                     <td className="px-4 py-4 text-gray-900">{load.company || 'Unknown'}</td>
+                    {/* Assign Driver */}
+                    <td className="px-4 py-4">
+                      <Select onValueChange={(driverId) => {
+                        if (driverId && load.id) {
+                          assignDriverMutation.mutate({ loadId: load.id, driverId });
+                        }
+                      }}>
+                        <SelectTrigger className="w-40 bg-white border border-gray-300">
+                          <SelectValue placeholder="Select driver" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                          {drivers
+                            .filter((driver: any) => driver.status === 'available')
+                            .map((driver: any) => (
+                            <SelectItem key={driver.id} value={driver.id}>
+                              <div className="flex items-center">
+                                <User className="w-4 h-4 mr-2 text-blue-600" />
+                                {driver.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                          {drivers.filter((driver: any) => driver.status === 'available').length === 0 && (
+                            <SelectItem value="none" disabled>
+                              No available drivers
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </td>
                   </tr>
                 ))
               )}
