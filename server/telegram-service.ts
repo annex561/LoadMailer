@@ -739,6 +739,12 @@ export class TelegramLoadService {
           continue;
         }
 
+        // STRICT EQUIPMENT MATCHING FOR ANNEX - Exclude before any scoring
+        if (driver.name === 'Annex Luberisse' && load.equipmentType === 'dry_van') {
+          console.log(`🚫 STRICT FILTER: Skipping Annex Luberisse for dry_van load ${load.loadNumber} - only straight_box_truck loads allowed`);
+          continue;
+        }
+
         // Calculate proximity score and distance
         const proximity = await this.calculateDriverProximity(driver, load);
         console.log(`Driver ${driver.name} proximity check: distance=${proximity.distance}mi, city=${driver.city}, pickup=${load.pickupAddress}`);
