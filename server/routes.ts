@@ -7,6 +7,7 @@ import { analyticsService } from "./analytics-service";
 import { schedulerService } from "./scheduler-service";
 import { loadExpirationService } from "./load-expiration-service";
 import { telegramLoadService } from "./telegram-service";
+import { telegramCommunicationService } from "./telegram-communication-service";
 import { gpsTrackingService } from "./gps-tracking-service";
 import { loadBoardService } from "./load-board-service";
 import { biddingService } from "./bidding-service";
@@ -295,6 +296,10 @@ async function initializeAllServices() {
       try {
         await telegramLoadService.initialize();
         console.log('✅ Telegram Load Service initialized');
+        
+        // Initialize communication service after Telegram service is ready
+        await telegramCommunicationService.initialize();
+        console.log('✅ Telegram Communication Service initialized');
         
         // Initialize dependent services after Telegram service is ready
         setTimeout(() => {
@@ -2919,6 +2924,176 @@ You have been assigned to this load. Safe travels! 🚛`;
       }
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch geofence events" });
+    }
+  });
+
+  // ============== LOAD COMMUNICATION ROUTES ==============
+  
+  // Get all communication threads
+  app.get("/api/communications/threads", async (req, res) => {
+    try {
+      const threads = await storage.getAllLoadCommunicationThreads();
+      res.json(threads);
+    } catch (error) {
+      console.error('Error fetching communication threads:', error);
+      res.status(500).json({ error: "Failed to fetch communication threads" });
+    }
+  });
+
+  // Get communication thread for a specific load
+  app.get("/api/loads/:loadId/communications", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const thread = await storage.getLoadCommunicationThreadByLoad(loadId);
+      
+      if (!thread) {
+        return res.status(404).json({ error: "Communication thread not found" });
+      }
+      
+      res.json(thread);
+    } catch (error) {
+      console.error('Error fetching load communication thread:', error);
+      res.status(500).json({ error: "Failed to fetch communication thread" });
+    }
+  });
+
+  // Get messages for a load
+  app.get("/api/loads/:loadId/messages", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const messages = await storage.getLoadMessagesByLoad(loadId);
+      res.json(messages);
+    } catch (error) {
+      console.error('Error fetching load messages:', error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Get message attachments for a load
+  app.get("/api/loads/:loadId/attachments", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const attachments = await storage.getMessageAttachmentsByLoad(loadId);
+      res.json(attachments);
+    } catch (error) {
+      console.error('Error fetching message attachments:', error);
+      res.status(500).json({ error: "Failed to fetch attachments" });
+    }
+  });
+
+  // Send message to driver (dispatch to driver)
+  app.post("/api/loads/:loadId/send-message", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const { message } = req.body;
+      
+      if (!message) {
+        return res.status(400).json({ error: "Message content is required" });
+      }
+
+      await telegramCommunicationService.sendLoadUpdateToDriver(loadId, message);
+      res.json({ message: "Message sent to driver successfully" });
+    } catch (error) {
+      console.error('Error sending message to driver:', error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Get unread messages for dispatch
+  app.get("/api/communications/unread", async (req, res) => {
+    try {
+      const unreadMessages = await storage.getUnreadMessagesForDispatch();
+      res.json(unreadMessages);
+    } catch (error) {
+      console.error('Error fetching unread messages:', error);
+      res.status(500).json({ error: "Failed to fetch unread messages" });
+    }
+  });
+
+  // Mark message as read
+  app.put("/api/messages/:messageId/read", async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const updated = await storage.markMessageAsRead(messageId);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+      
+      res.json({ message: "Message marked as read" });
+    } catch (error) {
+      console.error('Error marking message as read:', error);
+      res.status(500).json({ error: "Failed to mark message as read" });
+    }
+  });
+
+  // Get quick reply templates
+  app.get("/api/communications/quick-replies", async (req, res) => {
+    try {
+      const { role } = req.query;
+      let templates;
+      
+      if (role === 'driver') {
+        templates = await storage.getQuickReplyTemplatesForDriver();
+      } else if (role === 'dispatch') {
+        templates = await storage.getQuickReplyTemplatesForDispatch();
+      } else {
+        templates = await storage.getActiveQuickReplyTemplates();
+      }
+      
+      res.json(templates);
+    } catch (error) {
+      console.error('Error fetching quick reply templates:', error);
+      res.status(500).json({ error: "Failed to fetch quick reply templates" });
+    }
+  });
+
+  // Get communication logs for a load
+  app.get("/api/loads/:loadId/communication-logs", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const logs = await storage.getCommunicationLogsByLoad(loadId);
+      res.json(logs);
+    } catch (error) {
+      console.error('Error fetching communication logs:', error);
+      res.status(500).json({ error: "Failed to fetch communication logs" });
+    }
+  });
+
+  // Create or update communication thread for a load
+  app.post("/api/loads/:loadId/init-communications", async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const load = await storage.getLoad(loadId);
+      
+      if (!load) {
+        return res.status(404).json({ error: "Load not found" });
+      }
+      
+      if (!load.driverId) {
+        return res.status(400).json({ error: "Load must be assigned to a driver" });
+      }
+
+      // Check if thread already exists
+      let thread = await storage.getLoadCommunicationThreadByLoad(loadId);
+      
+      if (!thread) {
+        // Create new thread
+        thread = await storage.createLoadCommunicationThread({
+          loadId: loadId,
+          driverId: load.driverId,
+          status: 'active',
+          lastMessageAt: new Date(),
+          messageCount: 0,
+          unreadDriverMessages: 0,
+          unreadDispatchMessages: 0
+        });
+      }
+      
+      res.json(thread);
+    } catch (error) {
+      console.error('Error initializing communication thread:', error);
+      res.status(500).json({ error: "Failed to initialize communication thread" });
     }
   });
 
