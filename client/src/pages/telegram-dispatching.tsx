@@ -87,12 +87,20 @@ export default function TelegramDispatching() {
       if (!response.ok) throw new Error('Failed to send test load');
       return response.json();
     },
-    onSuccess: (data: TestLoadResponse) => {
+    onSuccess: (data: any) => {
       toast({
-        title: "Test Load",
-        description: data.message,
+        title: "Test Load Result",
+        description: data.success 
+          ? `${data.message} - Load: ${data.details?.loadNumber}` 
+          : data.error,
         variant: data.success ? "default" : "destructive",
       });
+      
+      // Log detailed results for debugging
+      if (data.details) {
+        console.log('Test Load Details:', data.details);
+      }
+      
       refetchOffers();
     },
     onError: () => {
