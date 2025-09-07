@@ -1667,6 +1667,19 @@ Safe travels! 🛣️`;
         return;
       }
 
+      // Check if load offer exists, create if missing
+      let loadOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driver.id);
+      if (!loadOffer) {
+        console.log(`Creating missing load offer for ${driver.name} and load ${load.loadNumber}`);
+        loadOffer = await storage.createLoadOffer({
+          loadId: load.id,
+          driverId: driver.id,
+          status: 'pending',
+          sentAt: new Date(),
+          timeoutAt: new Date(Date.now() + 3 * 60 * 60 * 1000) // 3 hours from now
+        });
+      }
+
       // Update load offer status to accepted (driver has shown interest)
       await storage.updateLoadOfferByLoadAndDriver(loadId, driver.id, {
         status: 'accepted',
@@ -1719,6 +1732,19 @@ Safe travels! 🛣️`;
       if (!load) {
         this.bot?.sendMessage(chatId, '❌ Load not found.');
         return;
+      }
+
+      // Check if load offer exists, create if missing
+      let loadOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driver.id);
+      if (!loadOffer) {
+        console.log(`Creating missing load offer for ${driver.name} and load ${load.loadNumber}`);
+        loadOffer = await storage.createLoadOffer({
+          loadId: load.id,
+          driverId: driver.id,
+          status: 'pending',
+          sentAt: new Date(),
+          timeoutAt: new Date(Date.now() + 3 * 60 * 60 * 1000) // 3 hours from now
+        });
       }
 
       // Update load offer status
