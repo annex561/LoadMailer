@@ -222,8 +222,8 @@ export default function ManualDispatch() {
     return R * c;
   };
 
-  // Geocode address to coordinates (simplified - would use real geocoding service)
-  const geocodeAddress = async (address: string) => {
+  // Synchronous geocode address to coordinates
+  const geocodeAddressSync = (address: string) => {
     // Enhanced geocoding function with more Tennessee locations
     const cityCoords = {
       "Nashville, TN": { lat: 36.1627, lng: -86.7816 },
@@ -269,8 +269,8 @@ export default function ManualDispatch() {
       let estimatedArrival = '';
 
       if (location && selectedLoad.pickupAddress) {
-        // Use real GPS coordinates to calculate distance
-        const pickupCoords = await geocodeAddress(selectedLoad.pickupAddress);
+        // Use real GPS coordinates to calculate distance - synchronous geocoding
+        const pickupCoords = geocodeAddressSync(selectedLoad.pickupAddress);
         if (pickupCoords) {
           distanceToPickup = Math.round(calculateDistance(
             location.latitude,
