@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -89,9 +91,104 @@ interface AvailabilityMetric {
   total: number;
 }
 
+interface Communication {
+  id: string;
+  threadId: string;
+  loadNumber?: string;
+  driverId: string;
+  message: string;
+  messageType: "text" | "image" | "document";
+  fileUrl?: string;
+  createdAt: string;
+  isFromDriver: boolean;
+}
+
+interface Driver {
+  id: string;
+  name: string;
+  status: string;
+  telegramId?: string;
+}
+
+function CommunicationCard({ thread, drivers, onSendMessage }: { 
+  thread: any; 
+  drivers: Driver[]; 
+  onSendMessage: (driverId: string, message: string) => void;
+}) {
+  const [messageText, setMessageText] = useState("");
+  
+  const driver = drivers.find(d => d.id === thread.driverId);
+  const lastMessage = thread.lastMessage;
+  const unreadCount = thread.unreadCount || 0;
+  
+  const priority = unreadCount > 3 ? "HIGH" : unreadCount > 0 ? "MEDIUM" : "LOW";
+  
+  const handleSendMessage = () => {
+    if (messageText.trim() && thread.driverId) {
+      onSendMessage(thread.driverId, messageText.trim());
+      setMessageText("");
+    }
+  };
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-gray-900">{thread.loadNumber || thread.threadId}</span>
+          <Badge variant={priority === "HIGH" ? "destructive" : priority === "MEDIUM" ? "secondary" : "outline"}>
+            {priority}
+          </Badge>
+          {unreadCount > 0 && (
+            <Badge variant="default" className="bg-blue-600">
+              {unreadCount} unread
+            </Badge>
+          )}
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
+        <div><span className="font-medium">Driver:</span> {driver?.name || "Unknown"}</div>
+        <div><span className="font-medium">Load:</span> {thread.loadNumber || "General"}</div>
+        <div><span className="font-medium">Messages:</span> {thread.messageCount || 0}</div>
+        <div><span className="font-medium">Last Contact:</span> {lastMessage ? new Date(lastMessage.createdAt).toLocaleString() : "No messages"}</div>
+      </div>
+      
+      {lastMessage && (
+        <p className="text-sm text-gray-700 mb-3 p-2 bg-gray-50 rounded border-l-4 border-gray-300">
+          <span className="font-medium">{lastMessage.isFromDriver ? "Driver: " : "Dispatch: "}</span>
+          {lastMessage.message}
+        </p>
+      )}
+      
+      <div className="flex gap-2">
+        <input 
+          type="text"
+          placeholder="Type a message..."
+          value={messageText}
+          onChange={(e) => setMessageText(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+          className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          data-testid={`message-input-${thread.threadId}`}
+        />
+        <Button 
+          onClick={handleSendMessage}
+          disabled={!messageText.trim()}
+          size="sm"
+          className="bg-blue-600 hover:bg-blue-700"
+          data-testid={`send-message-${thread.threadId}`}
+        >
+          Send Telegram
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function LoadOpsDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [location] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Function to render content based on current route
   const renderContent = () => {
@@ -282,6 +379,93 @@ export default function LoadOpsDashboard() {
           </Card>
         </div>
         
+        {/* Communication Dispatch Command Center */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mt-8">
+          <Card className="lg:col-span-2 xl:col-span-2">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                <MessageSquare className="w-5 h-5" />
+                Active Communication Threads
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {threads.length > 0 ? (
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {threads.slice(0, 6).map((thread: any) => (
+                    <CommunicationCard 
+                      key={thread.threadId} 
+                      thread={thread} 
+                      drivers={drivers}
+                      onSendMessage={(driverId: string, message: string) => 
+                        sendMessageMutation.mutate({ driverId, message })
+                      }
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p>No active communication threads</p>
+                  <p className="text-sm mt-2">Threads will appear when drivers send messages</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Dispatch Quick Stats */}
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                <Headphones className="w-5 h-5" />
+                Dispatch Center Stats
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-blue-600" />
+                    <span className="text-sm font-medium">Active Threads</span>
+                  </div>
+                  <span className="text-lg font-bold text-blue-600">
+                    {threads.filter((t: any) => t.unreadCount > 0).length}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-green-600" />
+                    <span className="text-sm font-medium">Available Drivers</span>
+                  </div>
+                  <span className="text-lg font-bold text-green-600">
+                    {drivers.filter((d: any) => d.status === "available").length}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-orange-600" />
+                    <span className="text-sm font-medium">Total Messages</span>
+                  </div>
+                  <span className="text-lg font-bold text-orange-600">
+                    {threads.reduce((sum: number, t: any) => sum + (t.messageCount || 0), 0)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-purple-600" />
+                    <span className="text-sm font-medium">En Route</span>
+                  </div>
+                  <span className="text-lg font-bold text-purple-600">
+                    {drivers.filter((d: any) => d.status === "on_route").length}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        
         {/* Driver Location Map */}
         <div className="mt-8">
           <DriverLocationMap />
@@ -324,6 +508,36 @@ export default function LoadOpsDashboard() {
       return response.json();
     },
     refetchInterval: 30000
+  });
+
+  // Fetch communication threads for dispatch command center
+  const { data: threads = [] } = useQuery({
+    queryKey: ['/api/communications/threads'],
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
+
+  // Send message mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: async ({ driverId, message }: { driverId: string; message: string }) => {
+      return apiRequest(`/api/communications/send`, {
+        method: "POST",
+        body: { driverId, message, messageType: "text" }
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Message Sent",
+        description: "Your message has been sent to the driver",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/communications/threads"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to send message",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Sample data for finance metrics
