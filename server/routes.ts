@@ -6056,5 +6056,335 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
+  // ===== LOAD COMMUNICATION & MESSAGING API ENDPOINTS =====
+
+  // Initialize Telegram Communication Service
+  app.post('/api/communication/initialize', async (req, res) => {
+    try {
+      await telegramCommunicationService.initialize();
+      res.json({ success: true, message: 'Telegram Communication Service initialized' });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
+  });
+
+  // Get all load communication threads
+  app.get('/api/communication/threads', async (req, res) => {
+    try {
+      const threads = await storage.getAllLoadCommunicationThreads();
+      res.json({ success: true, threads });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch threads' 
+      });
+    }
+  });
+
+  // Get communication thread for specific load
+  app.get('/api/communication/threads/load/:loadId', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const thread = await storage.getLoadCommunicationThreadByLoad(loadId);
+      
+      if (!thread) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Communication thread not found for this load' 
+        });
+      }
+      
+      res.json({ success: true, thread });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch thread' 
+      });
+    }
+  });
+
+  // Get all messages for a load (load-specific conversation)
+  app.get('/api/communication/messages/load/:loadId', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const messages = await storage.getLoadMessages(loadId);
+      const attachments = await storage.getLoadAttachments(loadId);
+      
+      res.json({ 
+        success: true, 
+        messages, 
+        attachments,
+        count: messages.length 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch messages' 
+      });
+    }
+  });
+
+  // Get messages for specific thread
+  app.get('/api/communication/messages/thread/:threadId', async (req, res) => {
+    try {
+      const { threadId } = req.params;
+      const messages = await storage.getLoadMessagesByThread(threadId);
+      
+      res.json({ 
+        success: true, 
+        messages,
+        count: messages.length 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch messages' 
+      });
+    }
+  });
+
+  // Send message from dispatch to driver in load thread
+  app.post('/api/communication/send-message', async (req, res) => {
+    try {
+      const { loadId, message, messageType = 'text', metadata = {} } = req.body;
+      
+      if (!loadId || !message) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Load ID and message are required' 
+        });
+      }
+
+      // Send message through Telegram Communication Service
+      await telegramCommunicationService.sendLoadUpdateToDriver(loadId, message);
+      
+      res.json({ 
+        success: true, 
+        message: 'Message sent successfully to driver via Telegram' 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to send message' 
+      });
+    }
+  });
+
+  // Create communication thread when load is assigned (Load Assignment Workflow)
+  app.post('/api/communication/assign-load', async (req, res) => {
+    try {
+      const { loadId, driverId } = req.body;
+      
+      if (!loadId || !driverId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Load ID and Driver ID are required' 
+        });
+      }
+
+      // Update load assignment
+      await storage.updateLoad(loadId, { driverId, status: 'assigned' });
+      
+      // Get load and driver details
+      const load = await storage.getLoad(loadId);
+      const driver = await storage.getDriver(driverId);
+      
+      if (!load || !driver) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Load or driver not found' 
+        });
+      }
+
+      // Create communication thread
+      const thread = await storage.createLoadCommunicationThread({
+        loadId: loadId,
+        driverId: driverId,
+        status: 'active',
+        lastMessageAt: new Date(),
+        messageCount: 0,
+        unreadDriverMessages: 0,
+        unreadDispatchMessages: 0
+      });
+
+      // Send initial assignment message via Telegram
+      const assignmentMessage = `🚛 **LOAD ASSIGNED TO YOU**\n\n` +
+        `**Load:** ${load.loadNumber}\n` +
+        `**Route:** ${load.pickupAddress} → ${load.deliveryAddress}\n` +
+        `**Rate:** $${load.rate}\n` +
+        `**Pickup:** ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}\n` +
+        `**Delivery:** ${load.deliveryDate.toLocaleDateString()} at ${load.deliveryTime}\n\n` +
+        `**Company:** ${load.company || 'N/A'}\n` +
+        `**Contact:** ${load.contactPhone || 'See load details'}\n\n` +
+        `Please confirm receipt and provide updates in this chat. All communication for this load will be tracked here.`;
+
+      await telegramCommunicationService.sendLoadUpdateToDriver(loadId, assignmentMessage);
+
+      res.json({ 
+        success: true, 
+        message: 'Load assigned successfully and communication thread created',
+        threadId: thread.id,
+        loadNumber: load.loadNumber,
+        driverName: driver.name
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to assign load' 
+      });
+    }
+  });
+
+  // Get message attachments for a load (media gallery)
+  app.get('/api/communication/attachments/load/:loadId', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const attachments = await storage.getLoadAttachments(loadId);
+      
+      // Group attachments by type for easier display
+      const groupedAttachments = {
+        images: attachments.filter(a => a.attachmentType === 'image'),
+        documents: attachments.filter(a => a.attachmentType === 'document'),
+        signatures: attachments.filter(a => a.attachmentType === 'signature'),
+        other: attachments.filter(a => !['image', 'document', 'signature'].includes(a.attachmentType))
+      };
+      
+      res.json({ 
+        success: true, 
+        attachments: groupedAttachments,
+        totalCount: attachments.length 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch attachments' 
+      });
+    }
+  });
+
+  // Mark messages as read (update thread unread counts)
+  app.post('/api/communication/mark-read', async (req, res) => {
+    try {
+      const { threadId, role } = req.body; // role: 'driver' | 'dispatch'
+      
+      if (!threadId || !role) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Thread ID and role are required' 
+        });
+      }
+
+      const thread = await storage.getLoadCommunicationThread(threadId);
+      if (!thread) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Communication thread not found' 
+        });
+      }
+
+      // Update unread counts based on role
+      const updates = role === 'dispatch' 
+        ? { unreadDispatchMessages: 0 }
+        : { unreadDriverMessages: 0 };
+
+      await storage.updateLoadCommunicationThread(threadId, updates);
+      
+      res.json({ 
+        success: true, 
+        message: 'Messages marked as read' 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to mark messages as read' 
+      });
+    }
+  });
+
+  // Get communication analytics for loads
+  app.get('/api/communication/analytics', async (req, res) => {
+    try {
+      const logs = await storage.getAllCommunicationLogs();
+      
+      // Basic analytics
+      const analytics = {
+        totalThreads: await storage.getAllLoadCommunicationThreads().then(threads => threads.length),
+        totalMessages: await storage.getAllLoadMessages().then(messages => messages.length),
+        totalAttachments: await storage.getAllMessageAttachments().then(attachments => attachments.length),
+        messagesByType: logs.reduce((acc: any, log: any) => {
+          const action = log.action;
+          acc[action] = (acc[action] || 0) + 1;
+          return acc;
+        }, {}),
+        recentActivity: logs.slice(-10) // Last 10 activities
+      };
+      
+      res.json({ 
+        success: true, 
+        analytics 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch analytics' 
+      });
+    }
+  });
+
+  // Get quick reply templates
+  app.get('/api/communication/quick-replies', async (req, res) => {
+    try {
+      const templates = await storage.getAllQuickReplyTemplates();
+      res.json({ 
+        success: true, 
+        templates: templates.filter(t => t.isActive)
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch quick replies' 
+      });
+    }
+  });
+
+  // Create or update quick reply template
+  app.post('/api/communication/quick-replies', async (req, res) => {
+    try {
+      const { templateKey, displayText, messageTemplate, category = 'status', isForDriver = true, isForDispatch = false } = req.body;
+      
+      if (!templateKey || !displayText || !messageTemplate) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Template key, display text, and message template are required' 
+        });
+      }
+
+      const template = await storage.createQuickReplyTemplate({
+        templateKey,
+        displayText,
+        messageTemplate,
+        category,
+        order: 0,
+        isActive: true,
+        isForDriver,
+        isForDispatch
+      });
+      
+      res.json({ 
+        success: true, 
+        message: 'Quick reply template created successfully',
+        template 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to create quick reply template' 
+      });
+    }
+  });
+
   return httpServer;
 }
