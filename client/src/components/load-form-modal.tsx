@@ -27,18 +27,18 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
   const queryClient = useQueryClient();
 
   const form = useForm<InsertLoad>({
-    resolver: zodResolver(insertLoadSchema),
+    resolver: zodResolver(isEdit ? insertLoadSchema.partial() : insertLoadSchema),
     defaultValues: {
-      customerId: load?.customerId || undefined,
-      driverId: load?.driverId || undefined,
+      customerId: load?.customerId || "",
+      driverId: load?.driverId || "",
       description: load?.description || "",
-      weight: load?.weight || 0,
+      weight: load?.weight || undefined,
       priority: load?.priority || "standard",
       pickupAddress: load?.pickupAddress || "",
-      pickupDate: load?.pickupDate ? load.pickupDate.split('T')[0] : "",
+      pickupDate: load?.pickupDate ? (typeof load.pickupDate === 'string' ? load.pickupDate.split('T')[0] : new Date(load.pickupDate).toISOString().split('T')[0]) : "",
       pickupTime: load?.pickupTime || "",
       deliveryAddress: load?.deliveryAddress || "",
-      deliveryDate: load?.deliveryDate ? load.deliveryDate.split('T')[0] : "",
+      deliveryDate: load?.deliveryDate ? (typeof load.deliveryDate === 'string' ? load.deliveryDate.split('T')[0] : new Date(load.deliveryDate).toISOString().split('T')[0]) : "",
       deliveryTime: load?.deliveryTime || "",
       specialInstructions: load?.specialInstructions || "",
       status: load?.status || "scheduled",
@@ -79,7 +79,11 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
 
   const updateMutation = useMutation({
     mutationFn: async (data: InsertLoad) => {
-      const response = await apiRequest("PUT", `/api/loads/${load.id}`, data);
+      // Filter out undefined values for partial updates
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== undefined && value !== "")
+      );
+      const response = await apiRequest("PUT", `/api/loads/${load.id}`, cleanData);
       return response.json();
     },
     onSuccess: () => {
@@ -92,9 +96,10 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
       onSuccess();
     },
     onError: (error) => {
+      console.error("Update error:", error);
       toast({
         title: "Error",
-        description: "Failed to update load",
+        description: `Failed to update load: ${error.message || 'Unknown error'}`,
         variant: "destructive",
       });
     },

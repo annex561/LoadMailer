@@ -1770,17 +1770,23 @@ You have been assigned to this load. Safe travels! 🚛`;
   app.put("/api/loads/:id", async (req, res) => {
     try {
       const { id } = req.params;
+      console.log(`Updating load ${id} with data:`, req.body);
+      
       const validatedData = insertLoadSchema.partial().parse(req.body);
+      console.log(`Validated data:`, validatedData);
+      
       const originalLoad = await storage.getLoad(id);
       
       if (!originalLoad) {
+        console.error(`Load not found: ${id}`);
         return res.status(404).json({ error: "Load not found" });
       }
       
       const updatedLoad = await storage.updateLoad(id, validatedData);
       
       if (!updatedLoad) {
-        return res.status(404).json({ error: "Load not found" });
+        console.error(`Failed to update load: ${id}`);
+        return res.status(404).json({ error: "Load not found after update" });
       }
       
       // Send automated emails based on status changes
@@ -1792,9 +1798,15 @@ You have been assigned to this load. Safe travels! 🚛`;
         }
       }
       
+      console.log(`Successfully updated load ${id}`);
       res.json(updatedLoad);
     } catch (error) {
-      res.status(400).json({ error: "Invalid load data" });
+      console.error('Load update error:', error);
+      res.status(400).json({ 
+        error: "Invalid load data", 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        data: req.body
+      });
     }
   });
 
