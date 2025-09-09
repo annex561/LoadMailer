@@ -110,16 +110,18 @@ interface Driver {
   telegramId?: string;
 }
 
-function CommunicationCard({ thread, drivers, onSendMessage }: { 
+function CommunicationCard({ thread, drivers, loads, onSendMessage }: { 
   thread: any; 
-  drivers: Driver[]; 
+  drivers: Driver[];
+  loads: any[];
   onSendMessage: (driverId: string, message: string) => void;
 }) {
   const [messageText, setMessageText] = useState("");
+  const [showMediaGallery, setShowMediaGallery] = useState(false);
   
   const driver = drivers.find(d => d.id === thread.driverId);
-  const lastMessage = thread.lastMessage;
-  const unreadCount = thread.unreadCount || 0;
+  const load = loads.find(l => l.id === thread.loadId);
+  const unreadCount = thread.unreadDispatchMessages || 0;
   
   const priority = unreadCount > 3 ? "HIGH" : unreadCount > 0 ? "MEDIUM" : "LOW";
   
@@ -510,26 +512,32 @@ export default function LoadOpsDashboard() {
     refetchInterval: 30000
   });
 
-  // Fetch communication threads for dispatch command center
+  // Fetch load communication threads for dispatch command center
   const { data: threads = [] } = useQuery({
-    queryKey: ['/api/communications/threads'],
-    refetchInterval: 5000, // Refresh every 5 seconds
+    queryKey: ['/api/communication/threads'],
+    refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
   });
 
-  // Send message mutation
+  // Send message mutation - now load-specific
   const sendMessageMutation = useMutation({
     mutationFn: async ({ driverId, message }: { driverId: string; message: string }) => {
-      return apiRequest(`/api/communications/send`, {
+      // Find the active load for this driver to get loadId
+      const driverLoad = loads.find((load: any) => load.driverId === driverId && load.status === 'assigned');
+      if (!driverLoad) {
+        throw new Error('No active load found for this driver');
+      }
+      
+      return apiRequest(`/api/communication/send-message`, {
         method: "POST",
-        body: { driverId, message, messageType: "text" }
+        body: { loadId: driverLoad.id, message, messageType: "text" }
       });
     },
     onSuccess: () => {
       toast({
-        title: "Message Sent",
-        description: "Your message has been sent to the driver",
+        title: "Message sent via Telegram",
+        description: "Your message has been sent to the driver and logged to the load thread",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/communications/threads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/communication/threads"] });
     },
     onError: (error) => {
       toast({

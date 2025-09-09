@@ -6110,8 +6110,8 @@ You have been assigned to this load. Safe travels! 🚛`;
   app.get('/api/communication/messages/load/:loadId', async (req, res) => {
     try {
       const { loadId } = req.params;
-      const messages = await storage.getLoadMessages(loadId);
-      const attachments = await storage.getLoadAttachments(loadId);
+      const messages = await storage.getLoadMessagesByLoad(loadId);
+      const attachments = await storage.getMessageAttachmentsByLoad(loadId);
       
       res.json({ 
         success: true, 
@@ -6242,7 +6242,7 @@ You have been assigned to this load. Safe travels! 🚛`;
   app.get('/api/communication/attachments/load/:loadId', async (req, res) => {
     try {
       const { loadId } = req.params;
-      const attachments = await storage.getLoadAttachments(loadId);
+      const attachments = await storage.getMessageAttachmentsByLoad(loadId);
       
       // Group attachments by type for easier display
       const groupedAttachments = {
@@ -6307,19 +6307,18 @@ You have been assigned to this load. Safe travels! 🚛`;
   // Get communication analytics for loads
   app.get('/api/communication/analytics', async (req, res) => {
     try {
-      const logs = await storage.getAllCommunicationLogs();
+      const threads = await storage.getAllLoadCommunicationThreads();
       
-      // Basic analytics
+      // Calculate basic analytics from available data
       const analytics = {
-        totalThreads: await storage.getAllLoadCommunicationThreads().then(threads => threads.length),
-        totalMessages: await storage.getAllLoadMessages().then(messages => messages.length),
-        totalAttachments: await storage.getAllMessageAttachments().then(attachments => attachments.length),
-        messagesByType: logs.reduce((acc: any, log: any) => {
-          const action = log.action;
-          acc[action] = (acc[action] || 0) + 1;
-          return acc;
-        }, {}),
-        recentActivity: logs.slice(-10) // Last 10 activities
+        totalThreads: threads.length,
+        activeThreads: threads.filter(t => t.status === 'active').length,
+        totalMessages: threads.reduce((sum, thread) => sum + thread.messageCount, 0),
+        unreadDriverMessages: threads.reduce((sum, thread) => sum + thread.unreadDriverMessages, 0),
+        unreadDispatchMessages: threads.reduce((sum, thread) => sum + thread.unreadDispatchMessages, 0),
+        recentThreads: threads
+          .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+          .slice(0, 10)
       };
       
       res.json({ 
