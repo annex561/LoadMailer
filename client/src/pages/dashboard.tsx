@@ -115,16 +115,13 @@ export default function Dashboard() {
   // Driver assignment mutation
   const assignDriverMutation = useMutation({
     mutationFn: async ({ loadId, driverId }: { loadId: string; driverId: string }) => {
-      return apiRequest(`/api/loads/${loadId}/manual-assign`, {
-        method: 'POST',
-        body: JSON.stringify({ 
-          driverId,
-          dispatcherId: 'dashboard-dispatcher',
-          dispatcherName: 'Dashboard Dispatcher',
-          actionType: 'manual_assign',
-          reasonCode: 'dashboard_assign',
-          reasonDescription: 'Assignment from Dashboard interface'
-        })
+      return apiRequest('POST', `/api/loads/${loadId}/manual-assign`, {
+        driverId,
+        dispatcherId: 'dashboard-dispatcher',
+        dispatcherName: 'Dashboard Dispatcher',
+        actionType: 'manual_assign',
+        reasonCode: 'dashboard_assign',
+        reasonDescription: 'Assignment from Dashboard interface'
       });
     },
     onSuccess: () => {

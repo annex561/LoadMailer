@@ -25,12 +25,18 @@ export function DATVerificationDialog() {
   useEffect(() => {
     const checkVerificationStatus = async () => {
       try {
-        const response = await fetch('/api/dat/verification-status');
+        const response = await fetch('/api/dat/verification-status', {
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
         if (response.ok && response.headers.get('content-type')?.includes('application/json')) {
           const status: VerificationStatus = await response.json();
           setIsOpen(status.isWaitingForVerification);
         }
       } catch (error) {
+        console.log('DAT verification status check skipped - not critical for operations');
         // Silently handle verification status errors - this is not critical
         // Load processing works independently of this dialog
       }

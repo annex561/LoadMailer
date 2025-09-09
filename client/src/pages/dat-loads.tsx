@@ -58,16 +58,13 @@ function DATLoads() {
   // Driver assignment mutation
   const assignDriverMutation = useMutation({
     mutationFn: async ({ loadId, driverId }: { loadId: string; driverId: string }) => {
-      return apiRequest(`/api/loads/${loadId}/manual-assign`, {
-        method: 'POST',
-        body: JSON.stringify({ 
-          driverId,
-          dispatcherId: 'dat-dispatcher',
-          dispatcherName: 'DAT Loads Dispatcher',
-          actionType: 'manual_assign',
-          reasonCode: 'dat_assign',
-          reasonDescription: 'Assignment from DAT Loads interface'
-        })
+      return apiRequest('POST', `/api/loads/${loadId}/manual-assign`, {
+        driverId,
+        dispatcherId: 'dat-dispatcher',
+        dispatcherName: 'DAT Loads Dispatcher',
+        actionType: 'manual_assign',
+        reasonCode: 'dat_assign',
+        reasonDescription: 'Assignment from DAT Loads interface'
       });
     },
     onSuccess: () => {
