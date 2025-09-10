@@ -6,24 +6,45 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Add explicit API middleware to ensure API routes return JSON - MUST be before route registration
+// API route protection middleware - ensures API routes are handled before Vite fallback
 app.use('/api', (req, res, next) => {
+  // Mark this request as an API request
+  req.isAPIRequest = true;
   res.setHeader('Content-Type', 'application/json');
   
-  // Add a special response flag that we can check later to detect API responses vs Vite HTML
+  // Override the Vite fallback for API routes
   const originalSend = res.send;
   const originalJson = res.json;
+  const originalStatus = res.status;
+  
+  // Track if response was sent by API routes
+  let apiResponseSent = false;
   
   res.send = function(data) {
+    apiResponseSent = true;
     res.setHeader('X-API-Response', 'true');
     res.setHeader('Content-Type', 'application/json');
     return originalSend.call(this, data);
   };
   
   res.json = function(data) {
+    apiResponseSent = true;
     res.setHeader('X-API-Response', 'true');
     res.setHeader('Content-Type', 'application/json');
     return originalJson.call(this, data);
+  };
+  
+  res.status = function(code) {
+    if (code >= 400) {
+      // For error responses, ensure we send JSON
+      const result = originalStatus.call(this, code);
+      if (!apiResponseSent) {
+        // If no response sent yet, this will be handled by error middleware
+        req.shouldSendJSONError = true;
+      }
+      return result;
+    }
+    return originalStatus.call(this, code);
   };
   
   next();
@@ -73,12 +94,28 @@ app.use((req, res, next) => {
     const server = await Promise.race([routeRegistrationPromise, timeoutPromise]);
     log('✅ Routes registered successfully');
 
-    app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    // Enhanced error handling that ensures API routes return JSON
+    app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
 
+      // Always send JSON for API routes
+      if (req.originalUrl.startsWith('/api/') || req.isAPIRequest || req.shouldSendJSONError) {
+        if (!res.headersSent) {
+          res.status(status).json({ message });
+        }
+        return;
+      }
+
       res.status(status).json({ message });
       throw err;
+    });
+
+    // Add a middleware right before Vite to catch unhandled API routes
+    app.use('/api/*', (req: Request, res: Response) => {
+      if (!res.headersSent) {
+        res.status(404).json({ error: 'API endpoint not found' });
+      }
     });
 
     // importantly only setup vite in development and after
