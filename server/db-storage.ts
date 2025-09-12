@@ -1252,4 +1252,57 @@ export class DatabaseStorage implements IStorage {
     
     return messages.reverse(); // Return in chronological order
   }
+
+  // Communication Analytics operations
+  async getCommunicationInsights(startDate: Date, endDate: Date, insightType?: string): Promise<schema.CommunicationInsights[]> {
+    const conditions = [
+      gte(schema.communicationInsights.periodStart, startDate),
+      lte(schema.communicationInsights.periodEnd, endDate),
+    ];
+
+    if (insightType) {
+      conditions.push(eq(schema.communicationInsights.insightType, insightType));
+    }
+
+    return await db.select()
+      .from(schema.communicationInsights)
+      .where(and(...conditions))
+      .orderBy(desc(schema.communicationInsights.periodStart));
+  }
+
+  async getAIPerformanceMetrics(startDate: Date, endDate: Date, driverId?: string, threadId?: string): Promise<schema.AiPerformanceMetrics[]> {
+    const conditions = [
+      gte(schema.aiPerformanceMetrics.periodStart, startDate),
+      lte(schema.aiPerformanceMetrics.periodEnd, endDate),
+    ];
+
+    if (driverId) {
+      conditions.push(eq(schema.aiPerformanceMetrics.driverId, driverId));
+    }
+
+    if (threadId) {
+      conditions.push(eq(schema.aiPerformanceMetrics.threadId, threadId));
+    }
+
+    return await db.select()
+      .from(schema.aiPerformanceMetrics)
+      .where(and(...conditions))
+      .orderBy(desc(schema.aiPerformanceMetrics.periodStart));
+  }
+
+  async getDriverEngagementMetrics(startDate: Date, endDate: Date, driverId?: string): Promise<schema.DriverEngagementMetrics[]> {
+    const conditions = [
+      gte(schema.driverEngagementMetrics.periodStart, startDate),
+      lte(schema.driverEngagementMetrics.periodEnd, endDate),
+    ];
+
+    if (driverId) {
+      conditions.push(eq(schema.driverEngagementMetrics.driverId, driverId));
+    }
+
+    return await db.select()
+      .from(schema.driverEngagementMetrics)
+      .where(and(...conditions))
+      .orderBy(desc(schema.driverEngagementMetrics.periodStart));
+  }
 }

@@ -302,6 +302,11 @@ export interface IStorage {
     systemPrompt?: string;
   }): Promise<LoadCommunicationThread | undefined>;
   getMessagesForContext(threadId: string, limit?: number): Promise<LoadMessage[]>;
+
+  // Communication Analytics operations
+  getCommunicationInsights(startDate: Date, endDate: Date, insightType?: string): Promise<CommunicationInsights[]>;
+  getAIPerformanceMetrics(startDate: Date, endDate: Date, driverId?: string, threadId?: string): Promise<AiPerformanceMetrics[]>;
+  getDriverEngagementMetrics(startDate: Date, endDate: Date, driverId?: string): Promise<DriverEngagementMetrics[]>;
 }
 
 export class MemStorage implements IStorage {

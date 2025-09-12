@@ -1533,22 +1533,22 @@ export const communicationInsights = pgTable("communication_insights", {
   periodEnd: timestamp("period_end").notNull(),
   insightType: text("insight_type").notNull(), // daily_summary, weekly_summary, driver_engagement, ai_performance
   
-  // Metrics (non-negative constraints)
-  totalMessages: integer("total_messages").notNull().default(0).$check(sql`total_messages >= 0`),
-  driverMessages: integer("driver_messages").notNull().default(0).$check(sql`driver_messages >= 0`),
-  dispatchMessages: integer("dispatch_messages").notNull().default(0).$check(sql`dispatch_messages >= 0`),
-  aiSuggestions: integer("ai_suggestions").notNull().default(0).$check(sql`ai_suggestions >= 0`),
-  aiSuggestionsAccepted: integer("ai_suggestions_accepted").notNull().default(0).$check(sql`ai_suggestions_accepted >= 0`),
-  aiSuggestionsRejected: integer("ai_suggestions_rejected").notNull().default(0).$check(sql`ai_suggestions_rejected >= 0`),
-  aiAutoSent: integer("ai_auto_sent").notNull().default(0).$check(sql`ai_auto_sent >= 0`),
+  // Metrics (non-negative - validated in application layer)
+  totalMessages: integer("total_messages").notNull().default(0),
+  driverMessages: integer("driver_messages").notNull().default(0),
+  dispatchMessages: integer("dispatch_messages").notNull().default(0),
+  aiSuggestions: integer("ai_suggestions").notNull().default(0),
+  aiSuggestionsAccepted: integer("ai_suggestions_accepted").notNull().default(0),
+  aiSuggestionsRejected: integer("ai_suggestions_rejected").notNull().default(0),
+  aiAutoSent: integer("ai_auto_sent").notNull().default(0),
   
   // Response time metrics (in minutes, non-negative)
-  avgResponseTimeMinutes: real("avg_response_time_minutes").default(0).$check(sql`avg_response_time_minutes >= 0`),
-  medianResponseTimeMinutes: real("median_response_time_minutes").default(0).$check(sql`median_response_time_minutes >= 0`),
+  avgResponseTimeMinutes: real("avg_response_time_minutes").default(0),
+  medianResponseTimeMinutes: real("median_response_time_minutes").default(0),
   
   // Engagement metrics
-  activeDrivers: integer("active_drivers").notNull().default(0).$check(sql`active_drivers >= 0`),
-  totalActiveThreads: integer("total_active_threads").notNull().default(0).$check(sql`total_active_threads >= 0`),
+  activeDrivers: integer("active_drivers").notNull().default(0),
+  totalActiveThreads: integer("total_active_threads").notNull().default(0),
   
   // Additional insights data
   insights: jsonb("insights").default({}), // Additional computed insights
@@ -1570,19 +1570,19 @@ export const aiPerformanceMetrics = pgTable("ai_performance_metrics", {
   threadId: varchar("thread_id").references(() => loadCommunicationThreads.id),
   driverId: varchar("driver_id").references(() => drivers.id),
   
-  // AI suggestion metrics (non-negative)
-  totalSuggestions: integer("total_suggestions").notNull().default(0).$check(sql`total_suggestions >= 0`),
-  acceptedSuggestions: integer("accepted_suggestions").notNull().default(0).$check(sql`accepted_suggestions >= 0`),
-  rejectedSuggestions: integer("rejected_suggestions").notNull().default(0).$check(sql`rejected_suggestions >= 0`),
-  autoSentMessages: integer("auto_sent_messages").notNull().default(0).$check(sql`auto_sent_messages >= 0`),
+  // AI suggestion metrics (non-negative - validated in application layer)
+  totalSuggestions: integer("total_suggestions").notNull().default(0),
+  acceptedSuggestions: integer("accepted_suggestions").notNull().default(0),
+  rejectedSuggestions: integer("rejected_suggestions").notNull().default(0),
+  autoSentMessages: integer("auto_sent_messages").notNull().default(0),
   
-  // Performance metrics (non-negative)
-  avgConfidence: real("avg_confidence").default(0).$check(sql`avg_confidence >= 0 AND avg_confidence <= 100`), // 0-100
-  avgProcessingTimeMs: integer("avg_processing_time_ms").default(0).$check(sql`avg_processing_time_ms >= 0`), // milliseconds as integer
-  avgTokensUsed: real("avg_tokens_used").default(0).$check(sql`avg_tokens_used >= 0`),
+  // Performance metrics (non-negative - validated in application layer)
+  avgConfidence: real("avg_confidence").default(0), // 0-100
+  avgProcessingTimeMs: integer("avg_processing_time_ms").default(0), // milliseconds as integer
+  avgTokensUsed: real("avg_tokens_used").default(0),
   
   // Success metrics (removed derived suggestionAcceptanceRate - compute on demand)
-  avgTimeBetweenSuggestionAndResponseMs: integer("avg_time_between_suggestion_and_response_ms").default(0).$check(sql`avg_time_between_suggestion_and_response_ms >= 0`), // milliseconds as integer
+  avgTimeBetweenSuggestionAndResponseMs: integer("avg_time_between_suggestion_and_response_ms").default(0), // milliseconds as integer
   
   // Detailed metrics data
   metrics: jsonb("metrics").default({}), // Additional detailed metrics
@@ -1604,20 +1604,20 @@ export const driverEngagementMetrics = pgTable("driver_engagement_metrics", {
   periodStart: timestamp("period_start").notNull(),
   periodEnd: timestamp("period_end").notNull(),
   
-  // Message activity (non-negative)
-  messagesReceived: integer("messages_received").notNull().default(0).$check(sql`messages_received >= 0`),
-  messagesSent: integer("messages_sent").notNull().default(0).$check(sql`messages_sent >= 0`),
-  attachmentsSent: integer("attachments_sent").notNull().default(0).$check(sql`attachments_sent >= 0`),
+  // Message activity (non-negative - validated in application layer)
+  messagesReceived: integer("messages_received").notNull().default(0),
+  messagesSent: integer("messages_sent").notNull().default(0),
+  attachmentsSent: integer("attachments_sent").notNull().default(0),
   
   // Response metrics (in milliseconds, non-negative)
-  avgResponseTimeMs: integer("avg_response_time_ms").default(0).$check(sql`avg_response_time_ms >= 0`), // milliseconds as integer
-  totalResponseTimeMs: integer("total_response_time_ms").default(0).$check(sql`total_response_time_ms >= 0`), // For computing rolling averages
-  responseCount: integer("response_count").default(0).$check(sql`response_count >= 0`),
+  avgResponseTimeMs: integer("avg_response_time_ms").default(0), // milliseconds as integer
+  totalResponseTimeMs: integer("total_response_time_ms").default(0), // For computing rolling averages
+  responseCount: integer("response_count").default(0),
   
   // Engagement quality
-  threadsParticipated: integer("threads_participated").notNull().default(0).$check(sql`threads_participated >= 0`),
+  threadsParticipated: integer("threads_participated").notNull().default(0),
   lastActiveAt: timestamp("last_active_at"),
-  engagementScore: real("engagement_score").default(0).$check(sql`engagement_score >= 0 AND engagement_score <= 100`), // 0-100 computed engagement score
+  engagementScore: real("engagement_score").default(0), // 0-100 computed engagement score
   
   // Communication patterns
   preferredResponseTime: text("preferred_response_time"), // morning, afternoon, evening, night

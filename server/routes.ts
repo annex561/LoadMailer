@@ -6395,7 +6395,7 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
-  // Get communication analytics for loads
+  // Get communication analytics for loads (legacy endpoint)
   app.get('/api/communication/analytics', async (req, res) => {
     try {
       const threads = await storage.getAllLoadCommunicationThreads();
@@ -6420,6 +6420,212 @@ You have been assigned to this load. Safe travels! 🚛`;
       res.status(500).json({ 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to fetch analytics' 
+      });
+    }
+  });
+
+  // Get communication insights with date range filtering
+  app.get('/api/communication/insights', async (req, res) => {
+    try {
+      const { startDate, endDate, insightType } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          error: 'startDate and endDate are required parameters'
+        });
+      }
+
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid date format. Use ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)'
+        });
+      }
+
+      const insights = await storage.getCommunicationInsights(start, end, insightType as string);
+      
+      res.json({ 
+        success: true, 
+        insights,
+        dateRange: { start: start.toISOString(), end: end.toISOString() },
+        total: insights.length
+      });
+    } catch (error) {
+      console.error('❌ Failed to fetch communication insights:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch communication insights' 
+      });
+    }
+  });
+
+  // Get AI performance metrics with date range filtering
+  app.get('/api/communication/ai-performance', async (req, res) => {
+    try {
+      const { startDate, endDate, driverId, threadId } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          error: 'startDate and endDate are required parameters'
+        });
+      }
+
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid date format. Use ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)'
+        });
+      }
+
+      const metrics = await storage.getAIPerformanceMetrics(
+        start, 
+        end, 
+        driverId as string, 
+        threadId as string
+      );
+      
+      // Calculate computed metrics
+      const metricsWithComputed = metrics.map(metric => ({
+        ...metric,
+        suggestionAcceptanceRate: metric.totalSuggestions > 0 
+          ? (metric.acceptedSuggestions / metric.totalSuggestions) * 100 
+          : 0
+      }));
+      
+      res.json({ 
+        success: true, 
+        metrics: metricsWithComputed,
+        dateRange: { start: start.toISOString(), end: end.toISOString() },
+        total: metrics.length,
+        filters: {
+          driverId: driverId || null,
+          threadId: threadId || null
+        }
+      });
+    } catch (error) {
+      console.error('❌ Failed to fetch AI performance metrics:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch AI performance metrics' 
+      });
+    }
+  });
+
+  // Get driver engagement metrics with date range filtering
+  app.get('/api/communication/driver-engagement', async (req, res) => {
+    try {
+      const { startDate, endDate, driverId } = req.query;
+      
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          error: 'startDate and endDate are required parameters'
+        });
+      }
+
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid date format. Use ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)'
+        });
+      }
+
+      const metrics = await storage.getDriverEngagementMetrics(start, end, driverId as string);
+      
+      res.json({ 
+        success: true, 
+        metrics,
+        dateRange: { start: start.toISOString(), end: end.toISOString() },
+        total: metrics.length,
+        filters: {
+          driverId: driverId || null
+        }
+      });
+    } catch (error) {
+      console.error('❌ Failed to fetch driver engagement metrics:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch driver engagement metrics' 
+      });
+    }
+  });
+
+  // Trigger analytics processing for a specific date and period
+  app.post('/api/communication/process-analytics', async (req, res) => {
+    try {
+      const { date, period } = req.body;
+      
+      if (!date || !period) {
+        return res.status(400).json({
+          success: false,
+          error: 'date and period are required. Period must be one of: daily, weekly, monthly'
+        });
+      }
+
+      if (!['daily', 'weekly', 'monthly'].includes(period)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Period must be one of: daily, weekly, monthly'
+        });
+      }
+
+      const analyticsDate = new Date(date);
+      if (isNaN(analyticsDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid date format. Use ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)'
+        });
+      }
+
+      // Import and use the analytics service
+      const { communicationAnalyticsService } = await import('./communication-analytics-service.js');
+      
+      await communicationAnalyticsService.processAnalyticsForPeriod(analyticsDate, period);
+      
+      res.json({ 
+        success: true, 
+        message: `Analytics processing completed for ${period} period: ${analyticsDate.toDateString()}`,
+        date: analyticsDate.toISOString(),
+        period
+      });
+    } catch (error) {
+      console.error('❌ Failed to process analytics:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to process analytics' 
+      });
+    }
+  });
+
+  // Run daily analytics processing job
+  app.post('/api/communication/process-daily-analytics', async (req, res) => {
+    try {
+      const { communicationAnalyticsService } = await import('./communication-analytics-service.js');
+      
+      const date = req.body.date ? new Date(req.body.date) : new Date();
+      await communicationAnalyticsService.processDailyAnalytics(date);
+      
+      res.json({ 
+        success: true, 
+        message: `Daily analytics processing completed for ${date.toDateString()}`,
+        date: date.toISOString()
+      });
+    } catch (error) {
+      console.error('❌ Failed to process daily analytics:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to process daily analytics' 
       });
     }
   });

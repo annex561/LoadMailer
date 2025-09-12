@@ -68,6 +68,45 @@ interface RevenueMetrics {
   }>;
 }
 
+interface CommunicationInsight {
+  id: string;
+  insightType: string;
+  insightData: any;
+  periodStart: string;
+  periodEnd: string;
+  period: string;
+  createdAt: string;
+}
+
+interface AiPerformanceMetric {
+  id: string;
+  threadId: string;
+  driverId: string;
+  totalSuggestions: number;
+  acceptedSuggestions: number;
+  totalAutoSends: number;
+  averageConfidence: number;
+  periodStart: string;
+  periodEnd: string;
+  period: string;
+  createdAt: string;
+  suggestionAcceptanceRate?: number;
+}
+
+interface DriverEngagementMetric {
+  id: string;
+  driverId: string;
+  totalMessages: number;
+  totalResponseTime: number;
+  averageResponseTime: number;
+  messagesWithMedia: number;
+  quickReplyUsage: number;
+  periodStart: string;
+  periodEnd: string;
+  period: string;
+  createdAt: string;
+}
+
 export default function AnalyticsDashboard() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [timePeriod, setTimePeriod] = useState("monthly");
@@ -128,6 +167,69 @@ export default function AnalyticsDashboard() {
     refetchInterval: 60000,
   });
 
+  // Communication Insights Data
+  const { data: communicationInsights = [], isLoading: commInsightsLoading, refetch: refetchCommInsights } = useQuery<CommunicationInsight[]>({
+    queryKey: ["/api/communication/insights", dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const startDate = dateRange?.from || thirtyDaysAgo;
+      const endDate = dateRange?.to || now;
+      
+      const params = new URLSearchParams({
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
+      
+      return fetch(`/api/communication/insights?${params}`)
+        .then(res => res.json())
+        .then(data => data.insights || []);
+    },
+    refetchInterval: 60000,
+  });
+
+  // AI Performance Metrics Data
+  const { data: aiPerformanceMetrics = [], isLoading: aiPerfLoading, refetch: refetchAiPerf } = useQuery<AiPerformanceMetric[]>({
+    queryKey: ["/api/communication/ai-performance", dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const startDate = dateRange?.from || thirtyDaysAgo;
+      const endDate = dateRange?.to || now;
+      
+      const params = new URLSearchParams({
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
+      
+      return fetch(`/api/communication/ai-performance?${params}`)
+        .then(res => res.json())
+        .then(data => data.metrics || []);
+    },
+    refetchInterval: 60000,
+  });
+
+  // Driver Engagement Metrics Data
+  const { data: driverEngagementMetrics = [], isLoading: driverEngLoading, refetch: refetchDriverEng } = useQuery<DriverEngagementMetric[]>({
+    queryKey: ["/api/communication/driver-engagement", dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const startDate = dateRange?.from || thirtyDaysAgo;
+      const endDate = dateRange?.to || now;
+      
+      const params = new URLSearchParams({
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
+      
+      return fetch(`/api/communication/driver-engagement?${params}`)
+        .then(res => res.json())
+        .then(data => data.metrics || []);
+    },
+    refetchInterval: 60000,
+  });
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -157,9 +259,12 @@ export default function AnalyticsDashboard() {
     refetchCustomers();
     refetchRevenue();
     refetchTrends();
+    refetchCommInsights();
+    refetchAiPerf();
+    refetchDriverEng();
   };
 
-  const isLoading = dashboardLoading || driverLoading || customerLoading || revenueLoading || trendsLoading;
+  const isLoading = dashboardLoading || driverLoading || customerLoading || revenueLoading || trendsLoading || commInsightsLoading || aiPerfLoading || driverEngLoading;
 
   return (
     <div className="p-6 space-y-6" data-testid="analytics-dashboard">
@@ -325,11 +430,12 @@ export default function AnalyticsDashboard() {
 
       {/* Analytics Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 bg-white border border-gray-200">
+        <TabsList className="grid w-full grid-cols-5 bg-white border border-gray-200">
           <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
           <TabsTrigger value="drivers" data-testid="tab-drivers">Driver Performance</TabsTrigger>
           <TabsTrigger value="customers" data-testid="tab-customers">Customer Insights</TabsTrigger>
           <TabsTrigger value="revenue" data-testid="tab-revenue">Revenue Analysis</TabsTrigger>
+          <TabsTrigger value="communication" data-testid="tab-communication">Communication AI</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -718,6 +824,181 @@ export default function AnalyticsDashboard() {
                 <div className="text-center py-8 text-gray-500">
                   <DollarSign className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>No revenue data available</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="communication" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* AI Performance Summary */}
+            <Card className="bg-white border border-gray-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="w-5 h-5 text-purple-500" />
+                  AI Communication Performance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {aiPerformanceMetrics.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Total Suggestions</p>
+                        <p className="text-2xl font-bold text-gray-900" data-testid="ai-total-suggestions">
+                          {aiPerformanceMetrics.reduce((sum, metric) => sum + metric.totalSuggestions, 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Accepted</p>
+                        <p className="text-2xl font-bold text-green-600" data-testid="ai-accepted-suggestions">
+                          {aiPerformanceMetrics.reduce((sum, metric) => sum + metric.acceptedSuggestions, 0)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-gray-600">Acceptance Rate</span>
+                        <span className="text-sm font-medium">
+                          {formatPercentage(
+                            aiPerformanceMetrics.reduce((sum, metric) => sum + metric.totalSuggestions, 0) > 0
+                              ? (aiPerformanceMetrics.reduce((sum, metric) => sum + metric.acceptedSuggestions, 0) / 
+                                 aiPerformanceMetrics.reduce((sum, metric) => sum + metric.totalSuggestions, 0)) * 100
+                              : 0
+                          )}
+                        </span>
+                      </div>
+                      <Progress 
+                        value={
+                          aiPerformanceMetrics.reduce((sum, metric) => sum + metric.totalSuggestions, 0) > 0
+                            ? (aiPerformanceMetrics.reduce((sum, metric) => sum + metric.acceptedSuggestions, 0) / 
+                               aiPerformanceMetrics.reduce((sum, metric) => sum + metric.totalSuggestions, 0)) * 100
+                            : 0
+                        } 
+                        className="h-2" 
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No AI performance data available</p>
+                    <p className="text-xs mt-1">Start using AI suggestions to see metrics</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Driver Engagement Summary */}
+            <Card className="bg-white border border-gray-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-blue-500" />
+                  Driver Communication Engagement
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {driverEngagementMetrics.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Total Messages</p>
+                        <p className="text-2xl font-bold text-gray-900" data-testid="driver-total-messages">
+                          {driverEngagementMetrics.reduce((sum, metric) => sum + metric.totalMessages, 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Avg Response Time</p>
+                        <p className="text-2xl font-bold text-blue-600" data-testid="driver-avg-response-time">
+                          {driverEngagementMetrics.length > 0 
+                            ? Math.round(
+                                driverEngagementMetrics.reduce((sum, metric) => sum + metric.averageResponseTime, 0) / 
+                                driverEngagementMetrics.length / 60
+                              )
+                            : 0}m
+                        </p>
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm text-gray-600">Media Usage</span>
+                        <span className="text-sm font-medium">
+                          {driverEngagementMetrics.reduce((sum, metric) => sum + metric.messagesWithMedia, 0)} attachments
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Quick Reply Usage</span>
+                        <span className="text-sm font-medium">
+                          {driverEngagementMetrics.reduce((sum, metric) => sum + metric.quickReplyUsage, 0)} used
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No engagement data available</p>
+                    <p className="text-xs mt-1">Communication activity will appear here</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Communication Insights List */}
+          <Card className="bg-white border border-gray-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-indigo-500" />
+                Communication Insights & Analytics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {communicationInsights.length > 0 ? (
+                <div className="space-y-4">
+                  {communicationInsights.map((insight) => (
+                    <div 
+                      key={insight.id}
+                      className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                      data-testid={`insight-${insight.id}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                              {insight.insightType}
+                            </Badge>
+                            <span className="text-xs text-gray-500">
+                              {insight.period} period
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-800 mb-2">
+                            <strong>Period:</strong> {format(new Date(insight.periodStart), 'MMM dd, yyyy')} - {format(new Date(insight.periodEnd), 'MMM dd, yyyy')}
+                          </div>
+                          {insight.insightData && (
+                            <div className="text-sm text-gray-600 bg-gray-50 rounded p-2">
+                              <pre className="whitespace-pre-wrap text-xs">
+                                {typeof insight.insightData === 'string' 
+                                  ? insight.insightData 
+                                  : JSON.stringify(insight.insightData, null, 2)
+                                }
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400 ml-4">
+                          {format(new Date(insight.createdAt), 'MMM dd, HH:mm')}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No communication insights available</p>
+                  <p className="text-xs mt-1">Insights will be generated as communication data is processed</p>
                 </div>
               )}
             </CardContent>
