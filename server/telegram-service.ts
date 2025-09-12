@@ -36,6 +36,24 @@ export class TelegramLoadService {
         return;
       }
 
+      // SINGLETON GUARD: Prevent multiple bot instances globally
+      const instanceId = `telegram-bot-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const ownerStack = new Error().stack;
+      
+      if ((globalThis as any).__telegramBotSingleton) {
+        const existing = (globalThis as any).__telegramBotSingleton;
+        console.error(`❌ TELEGRAM BOT CONFLICT DETECTED!`);
+        console.error(`🔍 Existing instance: ${existing.instanceId}`);
+        console.error(`🔍 Existing owner:`, existing.ownerStack);
+        console.error(`🔍 New attempt from:`, ownerStack);
+        console.error(`🚫 BLOCKING duplicate bot creation - using existing instance`);
+        this.bot = existing.bot;
+        this.isRunning = existing.isRunning;
+        return;
+      }
+      
+      console.log(`🆔 Creating singleton Telegram bot instance: ${instanceId}`);
+
       // Stop any existing bot instance first to prevent 409 conflicts
       await this.shutdown();
       
@@ -49,6 +67,24 @@ export class TelegramLoadService {
           autoStart: false, // Don't auto-start to control initialization
         }
       });
+
+      // Register singleton globally with ownership tracking
+      (globalThis as any).__telegramBotSingleton = {
+        bot: this.bot,
+        instanceId,
+        ownerStack,
+        isRunning: false
+      };
+
+      // Clear any webhook state that might conflict with polling
+      try {
+        await this.bot.deleteWebhook({ drop_pending_updates: false });
+        const botInfo = await this.bot.getMe();
+        console.log(`🤖 Bot authenticated: @${botInfo.username} (${botInfo.first_name})`);
+        console.log(`🆔 Instance ID: ${instanceId}`);
+      } catch (error) {
+        console.warn('⚠️ Could not clear webhook state:', error);
+      }
       
       // Add error handling for bot - use safe restart without overlap
       this.bot.on('error', (error) => {

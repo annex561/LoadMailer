@@ -41,7 +41,8 @@ app.use(express.json());
 app.use("/api/", rateLimit({ windowMs: 60_000, max: 150 }));
 app.use(express.static("public"));
 
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+// DISABLED: Conflicts with main telegram service - use main system instead
+// const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 const pending = new Map(); // messageId -> { timeoutId, driverName, loadId }
 const loads = new Map(); // loadId -> { base fields..., assignedDriverChatId?, dims?, effectiveFeet? }
 const loadPhotos = new Map(); // loadId -> [photo urls]
