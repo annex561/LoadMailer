@@ -111,12 +111,6 @@ app.use((req, res, next) => {
       throw err;
     });
 
-    // Add a middleware right before Vite to catch unhandled API routes
-    app.use('/api/*', (req: Request, res: Response) => {
-      if (!res.headersSent) {
-        res.status(404).json({ error: 'API endpoint not found' });
-      }
-    });
 
     // importantly only setup vite in development and after
     // setting up all the other routes so the catch-all route

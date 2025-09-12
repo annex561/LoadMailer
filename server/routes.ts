@@ -468,12 +468,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Critical load CRUD routes - must be available immediately for frontend
   app.get('/api/loads', async (req, res) => {
     try {
-      const loads = await storage.getAllLoads();
-      res.json(loads);
+      const { status } = req.query;
+      
+      if (status && typeof status === "string") {
+        const loads = await storage.getLoadsByStatus(status);
+        res.json(loads);
+      } else {
+        const loads = await storage.getAllLoads();
+        res.json(loads);
+      }
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch loads" });
+    }
+  });
+
+  app.get("/api/loads/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const load = await storage.getLoad(id);
+      
+      if (!load) {
+        return res.status(404).json({ error: "Load not found" });
+      }
+      
+      res.json(load);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch load" });
+    }
+  });
+
+  app.post("/api/loads", async (req, res) => {
+    try {
+      const validatedData = insertLoadSchema.parse(req.body);
+      const load = await storage.createLoad(validatedData);
+      
+      // Send automated emails for new load
+      await sendAutomatedEmails(load, "load_created");
+      
+      // Send load to drivers via Telegram if it matches preferences
+      await telegramLoadService.processNewLoad(load);
+      
+      res.status(201).json(load);
+    } catch (error) {
+      console.error('Load validation error:', error);
+      res.status(400).json({ error: "Invalid load data", details: error.message });
+    }
+  });
+
+  app.put("/api/loads/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      console.log(`Updating load ${id} with data:`, req.body);
+      
+      const validatedData = insertLoadSchema.partial().parse(req.body);
+      console.log(`Validated data:`, validatedData);
+      
+      const originalLoad = await storage.getLoad(id);
+      
+      if (!originalLoad) {
+        console.error(`Load not found: ${id}`);
+        return res.status(404).json({ error: "Load not found" });
+      }
+      
+      const updatedLoad = await storage.updateLoad(id, validatedData);
+      
+      if (!updatedLoad) {
+        console.error(`Failed to update load: ${id}`);
+        return res.status(404).json({ error: "Load not found after update" });
+      }
+      
+      // Send automated emails based on status changes
+      if (validatedData.status && validatedData.status !== originalLoad.status) {
+        if (validatedData.status === "in_transit") {
+          await sendAutomatedEmails(updatedLoad, "pickup_confirmed");
+        } else if (validatedData.status === "delivered") {
+          await sendAutomatedEmails(updatedLoad, "delivered");
+        }
+      }
+      
+      console.log(`Successfully updated load ${id}`);
+      res.json(updatedLoad);
+    } catch (error) {
+      console.error('Load update error:', error);
+      res.status(400).json({ 
+        error: "Invalid load data", 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        data: req.body
+      });
+    }
+  });
+
+  app.delete("/api/loads/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteLoad(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Load not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete load" });
+    }
+  });
+
+  app.patch('/api/loads/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const updatedLoad = await storage.updateLoad(id, updates);
+      if (!updatedLoad) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      res.json(updatedLoad);
+    } catch (error) {
+      console.error('Error updating load:', error);
+      res.status(500).json({ error: 'Failed to update load' });
+    }
+  });
+
+  // Load-related endpoints
+  app.post('/api/loads/:id/assign', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { driverId } = req.body;
+      
+      const updatedLoad = await storage.updateLoad(id, { 
+        driverId, 
+        status: 'assigned' 
+      });
+      
+      if (!updatedLoad) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      res.json(updatedLoad);
+    } catch (error) {
+      console.error('Error assigning driver:', error);
+      res.status(500).json({ error: 'Failed to assign driver' });
+    }
+  });
+
+  app.get('/api/loads/:id/offers', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const offers = await storage.getLoadOffers(id);
+      res.json(offers);
+    } catch (error) {
+      console.error('Error fetching load offers:', error);
+      res.status(500).json({ error: 'Failed to fetch load offers' });
     }
   });
 
@@ -1427,37 +1576,7 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
-  // Load routes
-  app.get("/api/loads", async (req, res) => {
-    try {
-      const { status } = req.query;
-      
-      if (status && typeof status === "string") {
-        const loads = await storage.getLoadsByStatus(status);
-        res.json(loads);
-      } else {
-        const loads = await storage.getAllLoads();
-        res.json(loads);
-      }
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch loads" });
-    }
-  });
-
-  app.get("/api/loads/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const load = await storage.getLoad(id);
-      
-      if (!load) {
-        return res.status(404).json({ error: "Load not found" });
-      }
-      
-      res.json(load);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch load" });
-    }
-  });
+  // Load routes moved to immediate registration section
 
   // Special endpoint for creating test loads that bypass validation
   // Real DAT load entry endpoint
