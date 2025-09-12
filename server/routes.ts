@@ -337,12 +337,12 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   // Apply prefix-level authentication guards for communication and AI endpoints
   console.log('🛡️ Setting up route protection for communication and AI endpoints...');
-  // Temporarily making communication routes public for dashboard access
+  // Temporarily making communication and AI routes public for dashboard access
   // TODO: Implement proper user authentication system
   // app.use('/api/communication', isAuthenticated);
   // app.use('/api/communications', isAuthenticated);
-  app.use('/api/ai', isAuthenticated);
-  app.use('/api/ai-insights', isAuthenticated);
+  // app.use('/api/ai', isAuthenticated);
+  // app.use('/api/ai-insights', isAuthenticated);
   app.use([
     '/api/loads/:loadId/communications',
     '/api/loads/:loadId/communication-logs',
