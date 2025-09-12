@@ -989,7 +989,8 @@ export class DatabaseStorage implements IStorage {
         unreadDispatchMessages: schema.loadCommunicationThreads.unreadDispatchMessages,
         lastMessageAt: schema.loadCommunicationThreads.lastMessageAt,
         assistantEnabled: schema.loadCommunicationThreads.assistantEnabled,
-        assistantMode: schema.loadCommunicationThreads.assistantMode,
+        loadOrigin: schema.loadCommunicationThreads.loadOrigin,
+        loadDestination: schema.loadCommunicationThreads.loadDestination,
         createdAt: schema.loadCommunicationThreads.createdAt,
         updatedAt: schema.loadCommunicationThreads.updatedAt,
         // Driver info
@@ -997,8 +998,6 @@ export class DatabaseStorage implements IStorage {
         driverPhone: schema.drivers.phone,
         // Load info
         loadNumber: schema.loads.loadNumber,
-        loadOrigin: schema.loads.origin,
-        loadDestination: schema.loads.destination,
       })
       .from(schema.loadCommunicationThreads)
       .leftJoin(schema.drivers, eq(schema.loadCommunicationThreads.driverId, schema.drivers.id))

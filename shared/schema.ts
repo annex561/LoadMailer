@@ -366,6 +366,9 @@ export const loadCommunicationThreads = pgTable("load_communication_threads", {
   systemPrompt: text("system_prompt"),
   aiConfig: jsonb("ai_config").default({}), // {model, temperature, maxContextMessages}
   autoSendConfidence: integer("auto_send_confidence").notNull().default(80),
+  // Load location info for display
+  loadOrigin: text("load_origin"),
+  loadDestination: text("load_destination"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
