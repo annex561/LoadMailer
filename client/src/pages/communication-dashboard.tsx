@@ -28,7 +28,16 @@ import {
   Camera,
   Paperclip,
   Mic,
-  MoreVertical
+  MoreVertical,
+  Brain,
+  Lightbulb,
+  Zap,
+  ThumbsUp,
+  ThumbsDown,
+  Settings,
+  Sparkles,
+  TrendingUp,
+  Target
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -82,6 +91,33 @@ interface QuickReplyTemplate {
   isForDispatch: boolean;
 }
 
+interface AiMessageSuggestion {
+  id: string;
+  threadId: string;
+  suggestedText: string;
+  confidence: number;
+  reasoning: string;
+  messageType: string;
+  tone: string;
+  autoSend: boolean;
+  createdAt: string;
+}
+
+interface AiThreadSettings {
+  assistantEnabled: boolean;
+  assistantMode: 'suggest' | 'autosend' | 'off';
+  autoSendConfidence: number;
+  systemPrompt?: string;
+}
+
+interface ConversationInsight {
+  sentiment: string;
+  urgency: string;
+  nextAction: string;
+  estimatedResponseTime: string;
+  driverMood: string;
+}
+
 export default function CommunicationDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -91,6 +127,9 @@ export default function CommunicationDashboard() {
   const [newMessage, setNewMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [showAiPanel, setShowAiPanel] = useState(true);
+  const [aiComposing, setAiComposing] = useState(false);
+  const [showAiSettings, setShowAiSettings] = useState(false);
   
   // Fetch communication threads
   const { data: threads = [], isLoading: threadsLoading, refetch: refetchThreads } = useQuery<LoadCommunicationThread[]>({
@@ -166,6 +205,94 @@ export default function CommunicationDashboard() {
     },
     onSuccess: () => {
       refetchThreads();
+    }
+  });
+
+  // Fetch AI suggestions for selected thread
+  const { data: aiSuggestions = [], isLoading: aiSuggestionsLoading, refetch: refetchAiSuggestions } = useQuery<AiMessageSuggestion[]>({
+    queryKey: ['/api/ai/suggestions', selectedThread?.id],
+    queryFn: async () => {
+      if (!selectedThread?.id) return [];
+      const response = await fetch(`/api/ai/suggestions/${selectedThread.id}`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!selectedThread?.id && selectedThread?.assistantEnabled,
+    refetchInterval: 5000, // Refresh AI suggestions every 5 seconds
+  });
+
+  // Get conversation insights
+  const { data: conversationInsights, isLoading: insightsLoading } = useQuery<ConversationInsight>({
+    queryKey: ['/api/ai/conversation-insights', selectedThread?.id],
+    queryFn: async () => {
+      if (!selectedThread?.id) return null;
+      const response = await fetch(`/api/ai/conversation-insights/${selectedThread.id}`);
+      if (!response.ok) return null;
+      return response.json();
+    },
+    enabled: !!selectedThread?.id && selectedThread?.assistantEnabled,
+    refetchInterval: 10000, // Refresh insights every 10 seconds
+  });
+
+  // Generate AI suggestion mutation
+  const generateAiSuggestionMutation = useMutation({
+    mutationFn: async ({ threadId, context, messageType, tone }: { 
+      threadId: string; 
+      context?: string; 
+      messageType?: string; 
+      tone?: string; 
+    }) => {
+      const response = await fetch('/api/ai/suggest-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId, context, messageType, tone })
+      });
+      if (!response.ok) throw new Error('Failed to generate AI suggestion');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchAiSuggestions();
+      toast({ title: "AI suggestion generated", description: "New suggestion available below" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to generate AI suggestion", description: error.message, variant: "destructive" });
+    }
+  });
+
+  // Approve AI suggestion mutation
+  const approveAiSuggestionMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      const response = await fetch(`/api/ai/approve/${messageId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approverId: 'dispatcher' })
+      });
+      if (!response.ok) throw new Error('Failed to approve suggestion');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchAiSuggestions();
+      refetchMessages();
+      refetchThreads();
+      toast({ title: "Message sent", description: "AI suggestion approved and sent" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to send message", description: error.message, variant: "destructive" });
+    }
+  });
+
+  // Reject AI suggestion mutation
+  const rejectAiSuggestionMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      const response = await fetch(`/api/ai/reject/${messageId}`, {
+        method: 'POST'
+      });
+      if (!response.ok) throw new Error('Failed to reject suggestion');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchAiSuggestions();
+      toast({ title: "Suggestion dismissed" });
     }
   });
 
@@ -379,18 +506,69 @@ export default function CommunicationDashboard() {
                 </div>
               </div>
               
-              {/* Load Info */}
+              {/* Load Info & AI Controls */}
               <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-4 text-sm text-gray-600">
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-4 h-4" />
-                    <span>{selectedThread.loadOrigin} → {selectedThread.loadDestination}</span>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      <span>{selectedThread.loadOrigin} → {selectedThread.loadDestination}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Truck className="w-4 h-4" />
+                      <span>{selectedThread.messageCount} messages</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Truck className="w-4 h-4" />
-                    <span>{selectedThread.messageCount} messages</span>
+                  
+                  {/* AI Assistant Controls */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={selectedThread?.assistantEnabled ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        // Toggle AI assistant for this thread
+                        toast({ title: "AI Assistant", description: selectedThread?.assistantEnabled ? "Disabled" : "Enabled" });
+                      }}
+                      data-testid="toggle-ai-assistant"
+                    >
+                      <Brain className="w-4 h-4 mr-1" />
+                      AI {selectedThread?.assistantEnabled ? 'On' : 'Off'}
+                    </Button>
                   </div>
                 </div>
+                
+                {/* Conversation Insights */}
+                {selectedThread?.assistantEnabled && conversationInsights && !insightsLoading && (
+                  <div className="border-t pt-2 mt-2">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                      <span>AI Insights</span>
+                      <Sparkles className="w-3 h-3" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center gap-1">
+                        <TrendingUp className="w-3 h-3 text-blue-500" />
+                        <span>Sentiment: {conversationInsights.sentiment}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Target className="w-3 h-3 text-orange-500" />
+                        <span>Urgency: {conversationInsights.urgency}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-green-500" />
+                        <span>Response: {conversationInsights.estimatedResponseTime}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <User className="w-3 h-3 text-purple-500" />
+                        <span>Mood: {conversationInsights.driverMood}</span>
+                      </div>
+                    </div>
+                    {conversationInsights.nextAction && (
+                      <div className="mt-2 p-2 bg-blue-50 rounded text-xs text-blue-700">
+                        <strong>Suggested Action:</strong> {conversationInsights.nextAction}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -431,6 +609,73 @@ export default function CommunicationDashboard() {
                 <div ref={messagesEndRef} />
               </div>
             </ScrollArea>
+
+            {/* AI Suggestions Panel */}
+            {selectedThread?.assistantEnabled && showAiPanel && aiSuggestions.length > 0 && (
+              <div className="border-t border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-yellow-600" />
+                    <h4 className="text-sm font-medium text-gray-800">AI Suggestions</h4>
+                    <Badge variant="outline" className="text-xs">
+                      {aiSuggestions.length} available
+                    </Badge>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAiPanel(false)}
+                    data-testid="close-ai-panel"
+                  >
+                    ×
+                  </Button>
+                </div>
+                
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {aiSuggestions.slice(0, 3).map((suggestion) => (
+                    <div key={suggestion.id} className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-800 mb-1">{suggestion.suggestedText}</p>
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <Badge className="bg-blue-100 text-blue-800 text-xs">
+                              {suggestion.confidence}% confident
+                            </Badge>
+                            <span>{suggestion.messageType}</span>
+                            <span>•</span>
+                            <span>{suggestion.tone}</span>
+                          </div>
+                          {suggestion.reasoning && (
+                            <p className="text-xs text-gray-600 mt-1 italic">{suggestion.reasoning}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => approveAiSuggestionMutation.mutate(suggestion.id)}
+                            disabled={approveAiSuggestionMutation.isPending}
+                            data-testid={`approve-suggestion-${suggestion.id}`}
+                          >
+                            <ThumbsUp className="w-3 h-3 mr-1" />
+                            Send
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => rejectAiSuggestionMutation.mutate(suggestion.id)}
+                            disabled={rejectAiSuggestionMutation.isPending}
+                            data-testid={`reject-suggestion-${suggestion.id}`}
+                          >
+                            <ThumbsDown className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Quick Replies */}
             <div className="p-3 border-t border-gray-200 bg-gray-50">
@@ -522,40 +767,158 @@ export default function CommunicationDashboard() {
               )}
             </div>
 
-            {/* Message Input */}
-            <div className="p-4 border-t border-gray-200 bg-white">
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <Textarea
-                    placeholder="Type your message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    rows={1}
-                    className="min-h-[40px] resize-none"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    data-testid="textarea-message"
-                  />
+            {/* Message Input with AI Smart Compose */}
+            <div className="border-t border-gray-200 bg-white">
+              {/* AI Quick Actions */}
+              {selectedThread?.assistantEnabled && (
+                <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-gray-600">AI Assist</span>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedThread) {
+                            generateAiSuggestionMutation.mutate({
+                              threadId: selectedThread.id,
+                              messageType: 'update',
+                              tone: 'professional'
+                            });
+                          }
+                        }}
+                        disabled={generateAiSuggestionMutation.isPending}
+                        data-testid="generate-ai-suggestion"
+                      >
+                        <Zap className="w-3 h-3 mr-1" />
+                        {generateAiSuggestionMutation.isPending ? 'Generating...' : 'Suggest'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAiComposing(!aiComposing)}
+                        data-testid="toggle-ai-compose"
+                      >
+                        <Brain className="w-3 h-3 mr-1" />
+                        {aiComposing ? 'Manual' : 'AI Compose'}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {aiComposing && (
+                    <div className="grid grid-cols-3 gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedThread) {
+                            generateAiSuggestionMutation.mutate({
+                              threadId: selectedThread.id,
+                              context: 'Request status update from driver',
+                              messageType: 'question',
+                              tone: 'friendly'
+                            });
+                          }
+                        }}
+                        className="text-xs"
+                      >
+                        📅 Status Update
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedThread) {
+                            generateAiSuggestionMutation.mutate({
+                              threadId: selectedThread.id,
+                              context: 'Thank driver and provide encouragement',
+                              messageType: 'response',
+                              tone: 'friendly'
+                            });
+                          }
+                        }}
+                        className="text-xs"
+                      >
+                        🙏 Thank You
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedThread) {
+                            generateAiSuggestionMutation.mutate({
+                              threadId: selectedThread.id,
+                              context: 'Address urgent delivery concern',
+                              messageType: 'response',
+                              tone: 'urgent'
+                            });
+                          }
+                        }}
+                        className="text-xs"
+                      >
+                        ⚠️ Urgent Response
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    data-testid="button-attach"
-                  >
-                    <Paperclip className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={!newMessage.trim() || sendMessageMutation.isPending}
-                    data-testid="button-send-message"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
+              )}
+              
+              {/* Message Input */}
+              <div className="p-4">
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 relative">
+                    <Textarea
+                      placeholder={selectedThread?.assistantEnabled ? "Type your message or use AI assist..." : "Type your message..."}
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      rows={1}
+                      className="min-h-[40px] resize-none pr-8"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      data-testid="textarea-message"
+                    />
+                    {selectedThread?.assistantEnabled && newMessage.length > 10 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-1 top-1 p-1"
+                        onClick={() => {
+                          if (selectedThread) {
+                            generateAiSuggestionMutation.mutate({
+                              threadId: selectedThread.id,
+                              context: `Help improve this message: "${newMessage}"`,
+                              messageType: 'response',
+                              tone: 'professional'
+                            });
+                          }
+                        }}
+                        title="Improve with AI"
+                        data-testid="improve-message-ai"
+                      >
+                        <Sparkles className="w-3 h-3 text-blue-500" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="button-attach"
+                    >
+                      <Paperclip className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!newMessage.trim() || sendMessageMutation.isPending}
+                      data-testid="button-send-message"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
