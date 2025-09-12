@@ -976,8 +976,35 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
-  async getAllLoadCommunicationThreads(): Promise<schema.LoadCommunicationThread[]> {
-    return await db.select().from(schema.loadCommunicationThreads).orderBy(desc(schema.loadCommunicationThreads.lastMessageAt));
+  async getAllLoadCommunicationThreads(): Promise<any[]> {
+    const threads = await db
+      .select({
+        id: schema.loadCommunicationThreads.id,
+        loadId: schema.loadCommunicationThreads.loadId,
+        driverId: schema.loadCommunicationThreads.driverId,
+        status: schema.loadCommunicationThreads.status,
+        messageCount: schema.loadCommunicationThreads.messageCount,
+        unreadDriverMessages: schema.loadCommunicationThreads.unreadDriverMessages,
+        unreadDispatchMessages: schema.loadCommunicationThreads.unreadDispatchMessages,
+        lastMessageAt: schema.loadCommunicationThreads.lastMessageAt,
+        assistantEnabled: schema.loadCommunicationThreads.assistantEnabled,
+        assistantMode: schema.loadCommunicationThreads.assistantMode,
+        createdAt: schema.loadCommunicationThreads.createdAt,
+        updatedAt: schema.loadCommunicationThreads.updatedAt,
+        // Driver info
+        driverName: schema.drivers.name,
+        driverPhone: schema.drivers.phone,
+        // Load info
+        loadNumber: schema.loads.loadNumber,
+        loadOrigin: schema.loads.origin,
+        loadDestination: schema.loads.destination,
+      })
+      .from(schema.loadCommunicationThreads)
+      .leftJoin(schema.drivers, eq(schema.loadCommunicationThreads.driverId, schema.drivers.id))
+      .leftJoin(schema.loads, eq(schema.loadCommunicationThreads.loadId, schema.loads.id))
+      .orderBy(desc(schema.loadCommunicationThreads.lastMessageAt));
+
+    return threads;
   }
 
   async createLoadCommunicationThread(insertThread: schema.InsertLoadCommunicationThread): Promise<schema.LoadCommunicationThread> {
