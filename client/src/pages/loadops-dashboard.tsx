@@ -118,10 +118,21 @@ function CommunicationCard({ thread, drivers, loads, onSendMessage }: {
 }) {
   const [messageText, setMessageText] = useState("");
   const [showMediaGallery, setShowMediaGallery] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<any>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
+  
+  // Local state for AI configuration to handle updates properly
+  const [assistantEnabled, setAssistantEnabled] = useState(thread.assistantEnabled || false);
+  const [assistantMode, setAssistantMode] = useState(thread.assistantMode || 'suggest');
+  const [autoSendConfidence, setAutoSendConfidence] = useState(thread.autoSendConfidence || 80);
+  
+  const { toast } = useToast();
   
   const driver = drivers.find(d => d.id === thread.driverId);
   const load = loads.find(l => l.id === thread.loadId);
   const unreadCount = thread.unreadDispatchMessages || 0;
+  const lastMessage = thread.lastMessage;
   
   const priority = unreadCount > 3 ? "HIGH" : unreadCount > 0 ? "MEDIUM" : "LOW";
   
@@ -129,6 +140,178 @@ function CommunicationCard({ thread, drivers, loads, onSendMessage }: {
     if (messageText.trim() && thread.driverId) {
       onSendMessage(thread.driverId, messageText.trim());
       setMessageText("");
+      setAiSuggestion(null);
+    }
+  };
+
+  const getAiSuggestion = async () => {
+    if (!thread.threadId) return;
+    
+    setIsLoadingAI(true);
+    try {
+      const response = await fetch('/api/ai/suggest-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          threadId: thread.threadId,
+          context: lastMessage?.textContent || lastMessage?.message || '',
+          messageType: 'response',
+          tone: 'professional'
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.suggestion) {
+          setAiSuggestion(result.suggestion);
+        } else {
+          toast({ title: result.error || 'AI assistant unavailable', variant: 'destructive' });
+        }
+      } else {
+        toast({ title: 'AI assistant unavailable', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Failed to get AI suggestion:', error);
+      toast({ title: 'AI assistant unavailable', variant: 'destructive' });
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  const useAiSuggestion = async () => {
+    if (!aiSuggestion?.suggestedText || !aiSuggestion?.messageId) return;
+    
+    try {
+      // Approve the AI suggestion in the backend
+      const response = await fetch(`/api/ai/approve/${aiSuggestion.messageId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approverId: 'dispatcher' })
+      });
+      
+      if (response.ok) {
+        // Fill the input with the approved suggestion
+        setMessageText(aiSuggestion.suggestedText);
+        setAiSuggestion(null);
+        toast({ 
+          title: 'AI suggestion approved',
+          description: 'The suggestion has been added to your message. Review and send when ready.'
+        });
+      } else {
+        toast({ title: 'Failed to approve suggestion', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Failed to approve AI suggestion:', error);
+      toast({ title: 'Failed to approve suggestion', variant: 'destructive' });
+    }
+  };
+
+  const dismissAiSuggestion = async () => {
+    if (!aiSuggestion?.messageId) {
+      setAiSuggestion(null);
+      return;
+    }
+    
+    try {
+      // Reject the AI suggestion in the backend
+      const response = await fetch(`/api/ai/reject/${aiSuggestion.messageId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rejectedBy: 'dispatcher' })
+      });
+      
+      if (response.ok) {
+        setAiSuggestion(null);
+        toast({ 
+          title: 'AI suggestion dismissed',
+          description: 'The suggestion has been rejected and removed.'
+        });
+      } else {
+        // Even if backend fails, clear the suggestion from UI
+        setAiSuggestion(null);
+        toast({ title: 'Suggestion dismissed', description: 'Backend update may have failed.' });
+      }
+    } catch (error) {
+      console.error('Failed to reject AI suggestion:', error);
+      setAiSuggestion(null);
+      toast({ title: 'Suggestion dismissed', description: 'Backend update may have failed.' });
+    }
+  };
+
+  const toggleAiAssistant = async (enabled: boolean) => {
+    try {
+      const response = await fetch(`/api/ai/thread/${thread.threadId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          assistantEnabled: enabled,
+          assistantMode: assistantMode,
+          autoSendConfidence: autoSendConfidence
+        })
+      });
+      
+      if (response.ok) {
+        setAssistantEnabled(enabled);
+        toast({ 
+          title: `AI Assistant ${enabled ? 'enabled' : 'disabled'}`,
+          description: `AI suggestions are now ${enabled ? 'available' : 'disabled'} for this thread.`
+        });
+      } else {
+        toast({ title: 'Failed to update AI assistant settings', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Failed to toggle AI assistant:', error);
+      toast({ title: 'Failed to update AI assistant settings', variant: 'destructive' });
+    }
+  };
+
+  const updateAssistantMode = async (mode: string) => {
+    try {
+      const response = await fetch(`/api/ai/thread/${thread.threadId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          assistantEnabled: assistantEnabled,
+          assistantMode: mode,
+          autoSendConfidence: autoSendConfidence
+        })
+      });
+      
+      if (response.ok) {
+        setAssistantMode(mode);
+        toast({ 
+          title: 'AI mode updated',
+          description: `AI assistant mode set to ${mode}`
+        });
+      } else {
+        toast({ title: 'Failed to update AI mode', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Failed to update AI mode:', error);
+      toast({ title: 'Failed to update AI mode', variant: 'destructive' });
+    }
+  };
+
+  const updateAutoSendConfidence = async (confidence: number) => {
+    try {
+      const response = await fetch(`/api/ai/thread/${thread.threadId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          assistantEnabled: assistantEnabled,
+          assistantMode: assistantMode,
+          autoSendConfidence: confidence
+        })
+      });
+      
+      if (response.ok) {
+        setAutoSendConfidence(confidence);
+      } else {
+        toast({ title: 'Failed to update auto-send threshold', variant: 'destructive' });
+      }
+    } catch (error) {
+      console.error('Failed to update auto-send threshold:', error);
+      toast({ title: 'Failed to update auto-send threshold', variant: 'destructive' });
     }
   };
 
@@ -146,6 +329,17 @@ function CommunicationCard({ thread, drivers, loads, onSendMessage }: {
             </Badge>
           )}
         </div>
+        
+        {/* AI Assistant Toggle */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowAiAssistant(!showAiAssistant)}
+          className="h-6 px-2 text-xs"
+          data-testid={`button-ai-assistant-${thread.threadId}`}
+        >
+          🤖 AI
+        </Button>
       </div>
       
       <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
@@ -160,6 +354,128 @@ function CommunicationCard({ thread, drivers, loads, onSendMessage }: {
           <span className="font-medium">{lastMessage.isFromDriver ? "Driver: " : "Dispatch: "}</span>
           {lastMessage.message}
         </p>
+      )}
+
+      {/* AI Assistant Panel */}
+      {showAiAssistant && (
+        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-medium text-blue-800">AI Communication Assistant</h4>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={getAiSuggestion}
+              disabled={isLoadingAI || !assistantEnabled}
+              className="h-6 px-2 text-xs bg-white"
+              data-testid={`button-get-suggestion-${thread.threadId}`}
+            >
+              {isLoadingAI ? '🔄' : '💡'} Suggest
+            </Button>
+          </div>
+
+          {/* AI Assistant Configuration */}
+          <div className="mb-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-blue-700">AI Assistant</label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleAiAssistant(!assistantEnabled)}
+                className={`h-6 px-2 text-xs ${assistantEnabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}
+                data-testid={`button-toggle-assistant-${thread.threadId}`}
+              >
+                {assistantEnabled ? 'Enabled' : 'Disabled'}
+              </Button>
+            </div>
+            
+            {assistantEnabled && (
+              <>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-blue-700">Mode</label>
+                  <select
+                    value={assistantMode}
+                    onChange={(e) => updateAssistantMode(e.target.value)}
+                    className="h-6 px-2 text-xs border border-gray-300 rounded bg-white"
+                    data-testid={`select-assistant-mode-${thread.threadId}`}
+                  >
+                    <option value="off">Off</option>
+                    <option value="suggest">Suggest Only</option>
+                    <option value="autosend">Auto-Send</option>
+                  </select>
+                </div>
+                
+                {assistantMode === 'autosend' && (
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-blue-700">Auto-Send Threshold</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="50"
+                        max="95"
+                        step="5"
+                        value={autoSendConfidence}
+                        onChange={(e) => updateAutoSendConfidence(parseInt(e.target.value))}
+                        className="w-16 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        data-testid={`slider-autosend-confidence-${thread.threadId}`}
+                      />
+                      <span className="text-xs text-blue-600 w-8">{autoSendConfidence}%</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          
+          {!assistantEnabled && (
+            <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded mb-2">
+              AI assistant is disabled for this thread. Enable it above to get message suggestions.
+            </div>
+          )}
+          
+          {aiSuggestion && assistantEnabled && (
+            <div className="space-y-2">
+              <div className="bg-white p-2 rounded border text-sm">
+                <div className="flex items-start justify-between mb-1">
+                  <span className="text-xs text-gray-500">Suggested Response</span>
+                  <Badge variant="outline" className="text-xs">
+                    {Math.round(aiSuggestion.confidence)}% confidence
+                  </Badge>
+                </div>
+                <p className="text-gray-800">{aiSuggestion.suggestedText}</p>
+                {aiSuggestion.reasoning && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    <em>{aiSuggestion.reasoning}</em>
+                  </p>
+                )}
+                {aiSuggestion.shouldAutoSend && (
+                  <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    ⚡ High confidence - would auto-send if enabled
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={useAiSuggestion}
+                  className="h-6 px-2 text-xs bg-white"
+                  data-testid={`button-use-suggestion-${thread.threadId}`}
+                >
+                  Use This
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={dismissAiSuggestion}
+                  className="h-6 px-2 text-xs bg-white"
+                  data-testid={`button-dismiss-suggestion-${thread.threadId}`}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
       
       <div className="flex gap-2">
