@@ -65,6 +65,7 @@ import DATScraper from './DATScraper';
 import DatLogin from './dat-login';
 import AdminOverview from './admin-overview';
 import ManualDispatch from './manual-dispatch';
+import CommunicationDashboard from './communication-dashboard';
 import NotFound from './not-found';
 import DriverLocationMap from '@/components/driver-location-map';
 
@@ -570,6 +571,8 @@ export default function LoadOpsDashboard() {
         return <AdminOverview />;
       case '/manual-dispatch':
         return <ManualDispatch />;
+      case '/communication-dashboard':
+        return <CommunicationDashboard />;
       default:
         return <NotFound />;
     }
@@ -956,6 +959,7 @@ export default function LoadOpsDashboard() {
     
     // Customer & Communication
     { name: 'Customers', href: '/customers', icon: Users, section: 'comm' },
+    { name: 'Communication Dashboard', href: '/communication-dashboard', icon: MessageSquare, section: 'comm' },
     { name: 'LoadMailer Control', href: '/loadmailer-control', icon: Mail, section: 'comm' },
     { name: 'Telegram Dispatching', href: '/telegram-dispatching', icon: MessageSquare, section: 'comm' },
     { name: 'SMS Status', href: '/sms-status', icon: MessageSquare, section: 'comm' },

@@ -6873,5 +6873,156 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
+  // Additional Communication Dashboard API endpoints
+  
+  // Alternative endpoint path for communication threads (to match frontend expectations)
+  app.get('/api/communication/threads', async (req, res) => {
+    try {
+      const threads = await storage.getAllLoadCommunicationThreads();
+      
+      // Transform data to match frontend expectations
+      const transformedThreads = threads.map(thread => ({
+        id: thread.id,
+        loadId: thread.loadId,
+        driverId: thread.driverId,
+        driverName: thread.driverName || 'Unknown Driver',
+        driverPhone: thread.driverPhone,
+        loadNumber: thread.loadNumber || `Load-${thread.loadId}`,
+        loadOrigin: thread.loadOrigin || 'Not specified',
+        loadDestination: thread.loadDestination || 'Not specified',
+        status: thread.status,
+        messageCount: thread.messageCount,
+        unreadDriverMessages: thread.unreadDriverMessages,
+        unreadDispatchMessages: thread.unreadDispatchMessages,
+        lastMessageAt: thread.lastMessageAt,
+        lastMessageText: thread.lastMessageText,
+        lastMessageSender: thread.lastMessageSender,
+        assistantEnabled: thread.assistantEnabled,
+        assistantMode: thread.assistantMode,
+        createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt
+      }));
+      
+      res.json(transformedThreads);
+    } catch (error) {
+      console.error('Error fetching communication threads:', error);
+      res.status(500).json({ error: "Failed to fetch communication threads" });
+    }
+  });
+
+  // Get messages for a specific thread (alternative endpoint)
+  app.get('/api/communication/messages/:threadId', async (req, res) => {
+    try {
+      const { threadId } = req.params;
+      const messages = await storage.getLoadMessagesByThread(threadId);
+      
+      // Transform messages to match frontend expectations
+      const transformedMessages = messages.map(message => ({
+        id: message.id,
+        threadId: message.threadId,
+        content: message.textContent || message.message || '',
+        sender: message.isFromDriver ? 'driver' : 'dispatch',
+        isRead: message.isRead,
+        isSuggested: message.isSuggested,
+        isSent: message.isSent,
+        approvedBy: message.approvedBy,
+        approvedAt: message.approvedAt,
+        mediaUrl: message.fileUrl,
+        mediaType: message.messageType === 'text' ? undefined : message.messageType,
+        createdAt: message.createdAt
+      }));
+      
+      res.json(transformedMessages);
+    } catch (error) {
+      console.error('Error fetching messages for thread:', error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Send message to thread (POST to /api/communication/messages)
+  app.post('/api/communication/messages', async (req, res) => {
+    try {
+      const { threadId, content, sender = 'dispatch' } = req.body;
+      
+      if (!threadId || !content) {
+        return res.status(400).json({ error: 'Thread ID and content are required' });
+      }
+
+      // Get thread details to find the loadId
+      const thread = await storage.getLoadCommunicationThread(threadId);
+      if (!thread) {
+        return res.status(404).json({ error: 'Communication thread not found' });
+      }
+
+      // Send message through Telegram Communication Service
+      if (sender === 'dispatch') {
+        await telegramCommunicationService.sendLoadUpdateToDriver(thread.loadId, content);
+      }
+
+      // Create message record in database
+      await storage.createLoadMessage({
+        threadId: threadId,
+        loadId: thread.loadId,
+        driverId: thread.driverId,
+        message: content,
+        textContent: content,
+        messageType: 'text',
+        isFromDriver: sender === 'driver',
+        isRead: false,
+        isSuggested: false,
+        isSent: true,
+        createdAt: new Date()
+      });
+
+      // Update thread stats
+      await storage.updateLoadCommunicationThread(threadId, {
+        messageCount: (thread.messageCount || 0) + 1,
+        lastMessageAt: new Date(),
+        lastMessageText: content.substring(0, 100), // First 100 chars
+        lastMessageSender: sender
+      });
+      
+      res.json({ 
+        success: true,
+        message: 'Message sent successfully'
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // Mark thread messages as read
+  app.post('/api/communication/threads/:threadId/mark-read', async (req, res) => {
+    try {
+      const { threadId } = req.params;
+      const { role } = req.body; // 'driver' | 'dispatch'
+      
+      if (!role) {
+        return res.status(400).json({ error: 'Role is required' });
+      }
+
+      const thread = await storage.getLoadCommunicationThread(threadId);
+      if (!thread) {
+        return res.status(404).json({ error: 'Communication thread not found' });
+      }
+
+      // Update unread counts based on role
+      const updates = role === 'dispatch' 
+        ? { unreadDispatchMessages: 0 }
+        : { unreadDriverMessages: 0 };
+
+      await storage.updateLoadCommunicationThread(threadId, updates);
+      
+      res.json({ 
+        success: true,
+        message: 'Messages marked as read' 
+      });
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+      res.status(500).json({ error: "Failed to mark messages as read" });
+    }
+  });
+
   return httpServer;
 }
