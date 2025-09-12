@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { randomUUID } from 'crypto';
 import { storage } from './storage';
 import type { LoadMessage, LoadCommunicationThread, Load, Driver } from '@shared/schema';
 
@@ -28,22 +29,49 @@ export interface AiMessageSuggestion {
 }
 
 export class AiCommunicationService {
-  private openai: OpenAI;
+  private openai: OpenAI | null = null;
+  private isInitialized = false;
   
   constructor() {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY environment variable is required');
+    // Lazy initialization to prevent server crashes
+    this.initializeOpenAI();
+  }
+
+  private initializeOpenAI() {
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        console.warn('⚠️ OPENAI_API_KEY not provided - AI assistant features disabled');
+        return;
+      }
+      
+      this.openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+      this.isInitialized = true;
+      console.log('✅ AI Communication Service initialized with OpenAI');
+    } catch (error) {
+      console.error('❌ Failed to initialize OpenAI:', error);
+      this.openai = null;
+      this.isInitialized = false;
     }
-    
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+  }
+
+  private checkInitialized(): boolean {
+    if (!this.isInitialized || !this.openai) {
+      console.warn('AI Communication Service not initialized - OpenAI unavailable');
+      return false;
+    }
+    return true;
   }
 
   /**
    * Generate contextual message suggestions for a communication thread
    */
   async generateMessageSuggestion(request: AiMessageRequest): Promise<AiMessageSuggestion | null> {
+    if (!this.checkInitialized()) {
+      return null;
+    }
+
     const startTime = Date.now();
     
     try {
@@ -135,7 +163,7 @@ export class AiCommunicationService {
                            suggestion.confidence >= (thread.autoSendConfidence || 80);
 
       return {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         threadId: request.threadId,
         suggestedText: suggestion.message,
         confidence: suggestion.confidence,
