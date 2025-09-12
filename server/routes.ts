@@ -299,9 +299,9 @@ async function initializeAllServices() {
         await telegramLoadService.initialize();
         console.log('✅ Telegram Load Service initialized');
         
-        // Initialize communication service after Telegram service is ready
+        // Initialize communication service (no bot instance needed)
         await telegramCommunicationService.initialize();
-        console.log('✅ Telegram Communication Service initialized');
+        console.log('✅ Telegram Communication Service initialized (delegating to main service)');
         
         // Initialize dependent services after Telegram service is ready
         setTimeout(() => {

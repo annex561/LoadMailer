@@ -34,16 +34,12 @@ export class TelegramCommunicationService {
         return;
       }
 
-      // Create bot instance
-      this.bot = new TelegramBot(TELEGRAM_TOKEN, { 
-        polling: false // We'll handle polling in the main service
-      });
-
-      // Set up enhanced message handlers
-      this.setupCommunicationHandlers();
+      // DO NOT create bot instance - let main service handle all Telegram operations
+      console.log('📡 Using main Telegram service for all bot operations (no separate instance)');
+      this.bot = null; // Explicitly set to null to avoid conflicts
       
       this.isRunning = true;
-      console.log('✅ Telegram Communication Service initialized');
+      console.log('✅ Telegram Communication Service initialized (delegating to main service)');
     } catch (error) {
       console.error('Failed to initialize Telegram communication service:', error);
     }
@@ -604,12 +600,25 @@ export class TelegramCommunicationService {
   }
 
   private async sendMessage(chatId: number, text: string, options?: any): Promise<void> {
-    if (!this.bot) return;
-
+    // Delegate to main telegram service instead of using separate bot instance
+    if (!this.isRunning) return;
+    
     try {
-      await this.bot.sendMessage(chatId, text, options);
+      // Import and use the main telegram service
+      const { telegramLoadService } = await import('./routes');
+      if (telegramLoadService && telegramLoadService.isInitialized()) {
+        const bot = telegramLoadService.getBot();
+        if (bot) {
+          await bot.sendMessage(chatId, text, options);
+          console.log('📱 Message sent via main telegram service');
+        } else {
+          console.log('⚠️ Main telegram bot not available');
+        }
+      } else {
+        console.log('⚠️ Main telegram service not initialized');
+      }
     } catch (error) {
-      console.error('Error sending Telegram message:', error);
+      console.error('Failed to send message via main telegram service:', error);
     }
   }
 

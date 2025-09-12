@@ -12,6 +12,9 @@ export class TelegramLoadService {
   private bot: TelegramBot | null = null;
   private config: TelegramBotConfig | null = null;
   private isRunning = false;
+  private isRestarting = false;
+  private isStartingPolling = false;
+  private restartTimeout: NodeJS.Timeout | null = null;
   private messageQueue: Array<() => Promise<any>> = [];
   private isProcessingQueue = false;
   private lastMessageTime = 0;
@@ -47,20 +50,20 @@ export class TelegramLoadService {
         }
       });
       
-      // Add error handling for bot
+      // Add error handling for bot - use safe restart without overlap
       this.bot.on('error', (error) => {
         console.error('Telegram bot error:', error);
         if (error.message?.includes('409')) {
-          console.log('🔄 Bot conflict detected - restarting in 5 seconds...');
-          setTimeout(() => this.restartBot(), 5000);
+          console.log('🔄 Bot conflict detected - attempting safe restart...');
+          this.safeRestartPolling();
         }
       });
       
       this.bot.on('polling_error', (error) => {
         console.error('Telegram polling error:', error);
         if (error.message?.includes('409')) {
-          console.log('🔄 Polling conflict detected - restarting in 5 seconds...');
-          setTimeout(() => this.restartBot(), 5000);
+          console.log('🔄 Polling conflict detected - attempting safe restart...');
+          this.safeRestartPolling();
         }
       });
       
@@ -133,47 +136,111 @@ export class TelegramLoadService {
   }
 
   private async startPollingWithRetry(): Promise<void> {
+    // Prevent re-entry during startup
+    if (this.isStartingPolling) {
+      console.log('⚠️ Polling startup already in progress, skipping...');
+      return;
+    }
+    
+    this.isStartingPolling = true;
     let retries = 0;
     const maxRetries = 3;
     
-    while (retries < maxRetries && !this.isRunning) {
-      try {
-        console.log(`🚀 Starting Telegram bot polling (attempt ${retries + 1}/${maxRetries})...`);
-        await this.bot?.startPolling();
-        console.log('✅ Telegram bot polling started successfully');
-        return;
-      } catch (error: any) {
-        console.error(`❌ Failed to start polling (attempt ${retries + 1}):`, error);
-        retries++;
-        
-        if (error.message?.includes('409')) {
-          console.log('🔄 Bot instance conflict - waiting 10 seconds before retry...');
-          await new Promise(resolve => setTimeout(resolve, 10000));
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 3000));
+    try {
+      while (retries < maxRetries && !this.isRunning) {
+        try {
+          console.log(`🚀 Starting Telegram bot polling (attempt ${retries + 1}/${maxRetries})...`);
+          await this.bot?.startPolling();
+          console.log('✅ Telegram bot polling started successfully');
+          this.isRunning = true; // Set immediately after successful start
+          
+          // Clear any pending restart timeouts on successful start
+          if (this.restartTimeout) {
+            clearTimeout(this.restartTimeout);
+            this.restartTimeout = null;
+          }
+          
+          return;
+        } catch (error: any) {
+          console.error(`❌ Failed to start polling (attempt ${retries + 1}):`, error);
+          retries++;
+          
+          if (error.message?.includes('409')) {
+            console.log('🔄 Bot instance conflict - waiting 10 seconds before retry...');
+            await new Promise(resolve => setTimeout(resolve, 10000));
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
         }
       }
-    }
-    
-    if (retries >= maxRetries) {
-      console.error('❌ Failed to start Telegram bot after maximum retries');
+      
+      if (retries >= maxRetries) {
+        console.error('❌ Failed to start Telegram bot after maximum retries');
+      }
+    } finally {
+      this.isStartingPolling = false;
     }
   }
 
-  private async restartBot(): Promise<void> {
-    console.log('🔄 Restarting Telegram bot...');
-    try {
-      await this.shutdown();
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
-      await this.initialize();
-    } catch (error) {
-      console.error('Failed to restart bot:', error);
+  private async safeRestartPolling(): Promise<void> {
+    // Prevent overlapping restarts with debouncing
+    if (this.isRestarting) {
+      console.log('⚠️ Restart already in progress, skipping...');
+      return;
     }
+    
+    // Clear any existing restart timeout
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout);
+    }
+    
+    // Debounce restarts - only allow one every 10 seconds
+    this.restartTimeout = setTimeout(async () => {
+      if (this.isRestarting || !this.bot) return;
+      
+      this.isRestarting = true;
+      console.log('🔄 Safe restart: stopping and restarting polling on same bot instance...');
+      
+      try {
+        // Only stop and start polling - don't recreate bot instance
+        await this.bot.stopPolling();
+        console.log('✅ Polling stopped');
+        
+        // Brief pause to ensure clean state
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Restart polling on the same bot instance
+        await this.bot.startPolling();
+        console.log('✅ Polling restarted successfully');
+        
+        this.isRunning = true;
+      } catch (error) {
+        console.error('Failed to restart polling:', error);
+        this.isRunning = false;
+      } finally {
+        this.isRestarting = false;
+        this.restartTimeout = null;
+      }
+    }, 10000); // 10 second debounce
+  }
+
+  // Legacy method kept for compatibility but replaced with safeRestartPolling
+  private async restartBot(): Promise<void> {
+    console.log('🔄 Legacy restart called - using safe restart instead...');
+    return this.safeRestartPolling();
   }
 
   async shutdown(): Promise<void> {
     console.log('🛑 Shutting down Telegram service...');
     this.isRunning = false;
+    this.isRestarting = false;
+    this.isStartingPolling = false;
+    
+    // Clear any pending restart timeout
+    if (this.restartTimeout) {
+      clearTimeout(this.restartTimeout);
+      this.restartTimeout = null;
+    }
     
     try {
       if (this.bot) {
@@ -190,6 +257,16 @@ export class TelegramLoadService {
     } catch (error) {
       console.error('Error during shutdown:', error);
     }
+  }
+
+  // Public method for communication service to access bot instance
+  getBot(): TelegramBot | null {
+    return this.bot;
+  }
+
+  // Public method to check if service is initialized
+  isInitialized(): boolean {
+    return this.isRunning && this.bot !== null;
   }
 
   private startBatchProcessor(): void {
