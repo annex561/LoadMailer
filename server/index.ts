@@ -94,6 +94,10 @@ app.use((req, res, next) => {
     const server = await Promise.race([routeRegistrationPromise, timeoutPromise]);
     log('✅ Routes registered successfully');
 
+    // Add terminal API 404 handler before Vite setup to prevent fall-through to Vite's catch-all
+    app.use('/api', (_req, res) => res.status(404).json({ message: 'API endpoint not found' }));
+    log('✅ API 404 handler added');
+
     // Enhanced error handling that ensures API routes return JSON
     app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

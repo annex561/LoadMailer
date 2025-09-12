@@ -752,6 +752,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
+  // Communication threads route - CRITICAL for dashboard
+  app.get('/api/communication/threads', async (req, res) => {
+    try {
+      console.log('🚀 Communication threads API called');
+      console.log('📞 About to call storage.getAllLoadCommunicationThreads()');
+      const threads = await storage.getAllLoadCommunicationThreads();
+      console.log(`📋 Retrieved ${threads.length} communication threads from storage`);
+      res.json(threads);
+    } catch (error) {
+      console.error('❌ Error fetching communication threads:', error);
+      res.status(500).json({ error: "Failed to fetch communication threads" });
+    }
+  });
+
   console.log('✅ Essential routes registered - server ready for startup');
   
   // Defer ALL service initialization and remaining routes until after server starts
@@ -6863,42 +6877,7 @@ You have been assigned to this load. Safe travels! 🚛`;
 
   // Additional Communication Dashboard API endpoints
   
-  // Alternative endpoint path for communication threads (to match frontend expectations)
-  app.get('/api/communication/threads', async (req, res) => {
-    try {
-      const threads = await storage.getAllLoadCommunicationThreads();
-      console.log('🔍 Communication threads API - Raw data from storage:', threads?.length || 0, 'threads');
-      console.log('🔍 Communication threads API - First thread:', threads?.[0] || 'No threads');
-      
-      // Transform data to match frontend expectations
-      const transformedThreads = threads.map(thread => ({
-        id: thread.id,
-        loadId: thread.loadId,
-        driverId: thread.driverId,
-        driverName: thread.driverName || 'Unknown Driver',
-        driverPhone: thread.driverPhone,
-        loadNumber: thread.loadNumber || `Load-${thread.loadId}`,
-        loadOrigin: thread.loadOrigin || 'Not specified',
-        loadDestination: thread.loadDestination || 'Not specified',
-        status: thread.status,
-        messageCount: thread.messageCount,
-        unreadDriverMessages: thread.unreadDriverMessages,
-        unreadDispatchMessages: thread.unreadDispatchMessages,
-        lastMessageAt: thread.lastMessageAt,
-        lastMessageText: thread.lastMessageText,
-        lastMessageSender: thread.lastMessageSender,
-        assistantEnabled: thread.assistantEnabled,
-        assistantMode: thread.assistantMode,
-        createdAt: thread.createdAt,
-        updatedAt: thread.updatedAt
-      }));
-      
-      res.json(transformedThreads);
-    } catch (error) {
-      console.error('Error fetching communication threads:', error);
-      res.status(500).json({ error: "Failed to fetch communication threads" });
-    }
-  });
+  // DUPLICATE ROUTE REMOVED - using immediate registration only
 
   // Get messages for a specific thread (alternative endpoint)
   app.get('/api/communication/messages/:threadId', async (req, res) => {
