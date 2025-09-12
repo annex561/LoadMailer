@@ -1193,4 +1193,63 @@ export class DatabaseStorage implements IStorage {
     await db.insert(schema.communicationLogs).values(log);
     return log;
   }
+
+  // AI Assistant Communication operations
+  async getSuggestedMessages(threadId: string): Promise<schema.LoadMessage[]> {
+    return await db.select()
+      .from(schema.loadMessages)
+      .where(and(
+        eq(schema.loadMessages.threadId, threadId),
+        eq(schema.loadMessages.isSuggested, true),
+        eq(schema.loadMessages.isSent, false)
+      ))
+      .orderBy(desc(schema.loadMessages.createdAt));
+  }
+
+  async approveSuggestedMessage(messageId: string, approverId: string): Promise<schema.LoadMessage | undefined> {
+    await db.update(schema.loadMessages)
+      .set({
+        approvedBy: approverId,
+        approvedAt: new Date(),
+        isSent: true,
+      })
+      .where(eq(schema.loadMessages.id, messageId));
+    
+    const result = await db.select().from(schema.loadMessages).where(eq(schema.loadMessages.id, messageId));
+    return result[0];
+  }
+
+  async rejectSuggestedMessage(messageId: string): Promise<boolean> {
+    const result = await db.delete(schema.loadMessages)
+      .where(eq(schema.loadMessages.id, messageId));
+    return result.rowCount > 0;
+  }
+
+  async updateThreadAiConfig(threadId: string, config: {
+    assistantEnabled?: boolean;
+    assistantMode?: 'suggest' | 'autosend' | 'off';
+    autoSendConfidence?: number;
+    systemPrompt?: string;
+  }): Promise<schema.LoadCommunicationThread | undefined> {
+    await db.update(schema.loadCommunicationThreads)
+      .set({
+        ...config,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.loadCommunicationThreads.id, threadId));
+    
+    const result = await db.select().from(schema.loadCommunicationThreads)
+      .where(eq(schema.loadCommunicationThreads.id, threadId));
+    return result[0];
+  }
+
+  async getMessagesForContext(threadId: string, limit: number = 20): Promise<schema.LoadMessage[]> {
+    const messages = await db.select()
+      .from(schema.loadMessages)
+      .where(eq(schema.loadMessages.threadId, threadId))
+      .orderBy(desc(schema.loadMessages.createdAt))
+      .limit(limit);
+    
+    return messages.reverse(); // Return in chronological order
+  }
 }

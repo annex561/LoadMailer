@@ -358,6 +358,14 @@ export const loadCommunicationThreads = pgTable("load_communication_threads", {
   messageCount: integer("message_count").notNull().default(0),
   unreadDriverMessages: integer("unread_driver_messages").notNull().default(0),
   unreadDispatchMessages: integer("unread_dispatch_messages").notNull().default(0),
+  // AI Assistant features
+  assistantEnabled: boolean("assistant_enabled").notNull().default(true),
+  assistantMode: text("assistant_mode").notNull().default("suggest"), // suggest, autosend, off
+  contextSummary: text("context_summary"),
+  lastSummarizedMessageId: varchar("last_summarized_message_id"),
+  systemPrompt: text("system_prompt"),
+  aiConfig: jsonb("ai_config").default({}), // {model, temperature, maxContextMessages}
+  autoSendConfidence: integer("auto_send_confidence").notNull().default(80),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -368,7 +376,7 @@ export const loadMessages = pgTable("load_messages", {
   threadId: varchar("thread_id").references(() => loadCommunicationThreads.id).notNull(),
   loadId: varchar("load_id").references(() => loads.id).notNull(),
   senderId: varchar("sender_id"), // driver ID or null for dispatch
-  senderRole: text("sender_role").notNull(), // 'driver', 'dispatch'
+  senderRole: text("sender_role").notNull(), // 'driver', 'dispatch', 'assistant', 'system'
   senderName: text("sender_name").notNull(), // Display name
   
   // Message content
@@ -383,6 +391,14 @@ export const loadMessages = pgTable("load_messages", {
   isRead: boolean("is_read").notNull().default(false),
   readAt: timestamp("read_at"),
   deliveredAt: timestamp("delivered_at"),
+  
+  // AI Assistant features
+  isSuggested: boolean("is_suggested").notNull().default(false),
+  isSent: boolean("is_sent").notNull().default(false),
+  approvedBy: varchar("approved_by"), // dispatcher ID who approved
+  approvedAt: timestamp("approved_at"),
+  aiData: jsonb("ai_data").default({}), // {model, promptTokens, completionTokens, latencyMs, confidence, toolsUsed}
+  visibility: text("visibility").notNull().default("external"), // external, internal
   
   // Message metadata
   metadata: jsonb("metadata").default({}), // Extra data like location coords, status details
@@ -436,10 +452,10 @@ export const communicationLogs = pgTable("communication_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   loadId: varchar("load_id").references(() => loads.id).notNull(),
   threadId: varchar("thread_id").references(() => loadCommunicationThreads.id),
-  action: text("action").notNull(), // 'thread_created', 'message_sent', 'attachment_uploaded', 'status_updated'
+  action: text("action").notNull(), // 'thread_created', 'message_sent', 'attachment_uploaded', 'status_updated', 'ai_suggestion', 'ai_message_sent', 'ai_message_rejected', 'ai_autosend_toggle'
   actorId: varchar("actor_id"), // Who performed the action
-  actorRole: text("actor_role").notNull(), // driver, dispatch, system
-  details: jsonb("details").default({}), // Action-specific details
+  actorRole: text("actor_role").notNull(), // driver, dispatch, system, assistant
+  details: jsonb("details").default({}), // Action-specific details - includes confidence and latency for AI actions
   timestamp: timestamp("timestamp").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });

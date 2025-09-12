@@ -21,6 +21,7 @@ import { DATWebsiteScraper } from "./dat-website-scraper";
 import { RealDATScraper } from "./real-dat-scraper";
 import { DATLoadPoster } from "./dat-load-poster";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
+import { aiCommunicationService } from "./ai-communication-service";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
@@ -6471,6 +6472,197 @@ You have been assigned to this load. Safe travels! 🚛`;
       res.status(500).json({ 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to create quick reply template' 
+      });
+    }
+  });
+
+  // AI Assistant Communication endpoints
+  
+  // Generate AI message suggestion
+  app.post('/api/ai/suggest-message', async (req, res) => {
+    try {
+      const { threadId, context, messageType, tone } = req.body;
+      
+      if (!threadId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Thread ID is required' 
+        });
+      }
+
+      const suggestion = await aiCommunicationService.generateMessageSuggestion({
+        threadId,
+        context,
+        messageType,
+        tone
+      });
+
+      if (!suggestion) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Unable to generate suggestion - thread may have AI disabled' 
+        });
+      }
+
+      // Store the suggestion as a message
+      const message = await aiCommunicationService.createMessageSuggestion(suggestion);
+
+      res.json({ 
+        success: true, 
+        suggestion: {
+          ...suggestion,
+          messageId: message?.id
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to generate AI suggestion' 
+      });
+    }
+  });
+
+  // Get suggested messages for a thread
+  app.get('/api/ai/suggestions/:threadId', async (req, res) => {
+    try {
+      const { threadId } = req.params;
+      const suggestions = await storage.getSuggestedMessages(threadId);
+      
+      res.json({ 
+        success: true, 
+        suggestions 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch suggestions' 
+      });
+    }
+  });
+
+  // Approve a suggested message
+  app.post('/api/ai/approve/:messageId', async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const { approverId } = req.body;
+      
+      if (!approverId) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Approver ID is required' 
+        });
+      }
+
+      const message = await aiCommunicationService.approveMessage(messageId, approverId);
+      
+      if (!message) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Message not found or already processed' 
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Message approved successfully',
+        data: message 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to approve message' 
+      });
+    }
+  });
+
+  // Reject a suggested message
+  app.delete('/api/ai/reject/:messageId', async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const { rejectedBy } = req.body;
+      
+      const success = await aiCommunicationService.rejectMessage(messageId, rejectedBy || 'dispatcher');
+      
+      if (!success) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Message not found' 
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Message rejected successfully' 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to reject message' 
+      });
+    }
+  });
+
+  // Update AI settings for a thread
+  app.put('/api/ai/thread/:threadId/settings', async (req, res) => {
+    try {
+      const { threadId } = req.params;
+      const { assistantEnabled, assistantMode, autoSendConfidence, systemPrompt } = req.body;
+      
+      const thread = await aiCommunicationService.updateThreadAiSettings(threadId, {
+        assistantEnabled,
+        assistantMode,
+        autoSendConfidence,
+        systemPrompt
+      });
+      
+      if (!thread) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Thread not found' 
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'AI settings updated successfully',
+        thread 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to update AI settings' 
+      });
+    }
+  });
+
+  // Analyze incoming message and suggest response
+  app.post('/api/ai/analyze-message/:messageId', async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      
+      const suggestion = await aiCommunicationService.analyzeIncomingMessage(messageId);
+      
+      if (!suggestion) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Message not found or AI disabled for thread' 
+        });
+      }
+
+      // Store the suggestion as a message
+      const message = await aiCommunicationService.createMessageSuggestion(suggestion);
+
+      res.json({ 
+        success: true, 
+        suggestion: {
+          ...suggestion,
+          messageId: message?.id
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to analyze message' 
       });
     }
   });

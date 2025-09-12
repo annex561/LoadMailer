@@ -290,6 +290,18 @@ export interface IStorage {
   getCommunicationLogsByLoad(loadId: string): Promise<CommunicationLog[]>;
   getCommunicationLogsByThread(threadId: string): Promise<CommunicationLog[]>;
   createCommunicationLog(log: InsertCommunicationLog): Promise<CommunicationLog>;
+
+  // AI Assistant Communication operations
+  getSuggestedMessages(threadId: string): Promise<LoadMessage[]>;
+  approveSuggestedMessage(messageId: string, approverId: string): Promise<LoadMessage | undefined>;
+  rejectSuggestedMessage(messageId: string): Promise<boolean>;
+  updateThreadAiConfig(threadId: string, config: {
+    assistantEnabled?: boolean;
+    assistantMode?: 'suggest' | 'autosend' | 'off';
+    autoSendConfidence?: number;
+    systemPrompt?: string;
+  }): Promise<LoadCommunicationThread | undefined>;
+  getMessagesForContext(threadId: string, limit?: number): Promise<LoadMessage[]>;
 }
 
 export class MemStorage implements IStorage {
