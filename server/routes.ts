@@ -326,11 +326,10 @@ async function initializeAllServices() {
   }
 }
 
-export async function registerRoutes(app: Express): Promise<Server> {
-  console.log('⚡ Ultra-fast server startup - minimal routes only...');
+export async function registerRoutes(app: Express): Promise<void> {
+  console.log('⚡ Ultra-fast server startup - registering routes...');
   
-  // Create HTTP server immediately
-  const server = createServer(app);
+  // Register routes immediately
   
   // Add only the most essential routes for immediate startup
   app.get('/api/health', (req, res) => {
@@ -766,6 +765,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get messages for a specific communication thread
+  app.get('/api/communication/messages/:threadId', async (req, res) => {
+    try {
+      const { threadId } = req.params;
+      console.log(`🚀 Getting messages for thread: ${threadId}`);
+      const messages = await storage.getLoadMessagesByThread(threadId);
+      console.log(`📋 Retrieved ${messages.length} messages for thread ${threadId}`);
+      res.json(messages);
+    } catch (error) {
+      console.error('❌ Error fetching messages:', error);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Send message to thread (POST to /api/communication/messages) - CRITICAL for dashboard
+  app.post('/api/communication/messages', async (req, res) => {
+    try {
+      const { threadId, content, sender = 'dispatch' } = req.body;
+      
+      if (!threadId || !content) {
+        return res.status(400).json({ error: 'Thread ID and content are required' });
+      }
+
+      // Get thread details to find the loadId
+      const thread = await storage.getLoadCommunicationThread(threadId);
+      if (!thread) {
+        return res.status(404).json({ error: 'Communication thread not found' });
+      }
+
+      // Send message through Telegram Communication Service
+      if (sender === 'dispatch') {
+        await telegramCommunicationService.sendLoadUpdateToDriver(thread.loadId, content);
+      }
+
+      // Create message record in database
+      await storage.createLoadMessage({
+        threadId: threadId,
+        loadId: thread.loadId,
+        driverId: thread.driverId,
+        message: content,
+        textContent: content,
+        messageType: 'text',
+        senderRole: sender,
+        senderName: sender === 'driver' ? thread.driverName : 'Dispatcher',
+        isFromDriver: sender === 'driver',
+        isRead: false,
+        isSuggested: false,
+        isSent: true,
+        createdAt: new Date()
+      });
+
+      // Update thread stats
+      await storage.updateLoadCommunicationThread(threadId, {
+        messageCount: (thread.messageCount || 0) + 1,
+        lastMessageAt: new Date(),
+        lastMessageText: content.substring(0, 100), // First 100 chars
+        lastMessageSender: sender
+      });
+      
+      res.json({ 
+        success: true,
+        message: 'Message sent successfully'
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // AI suggestions endpoint
+  app.get('/api/ai/suggestions/:threadId', async (req, res) => {
+    try {
+      const { threadId } = req.params;
+      console.log(`🤖 Getting AI suggestions for thread: ${threadId}`);
+      
+      // Mock AI suggestions for now - replace with actual AI service
+      const suggestions = [
+        {
+          id: "1",
+          text: "Thanks for the update! Please confirm your ETA to the delivery location.",
+          confidence: 0.85,
+          type: "status_check"
+        },
+        {
+          id: "2", 
+          text: "Please upload BOL and delivery confirmation when complete.",
+          confidence: 0.78,
+          type: "paperwork"
+        },
+        {
+          id: "3",
+          text: "Great job on the pickup! Drive safe to your destination.",
+          confidence: 0.72,
+          type: "encouragement"
+        }
+      ];
+      
+      res.json({ suggestions });
+    } catch (error) {
+      console.error('❌ Error getting AI suggestions:', error);
+      res.status(500).json({ error: "Failed to get AI suggestions" });
+    }
+  });
+
+  // AI conversation insights endpoint
+  app.get('/api/ai/conversation-insights/:threadId', async (req, res) => {
+    try {
+      const { threadId } = req.params;
+      console.log(`🧠 Getting conversation insights for thread: ${threadId}`);
+      
+      // Mock insights for now - replace with actual AI analysis
+      const insights = {
+        sentiment: "positive",
+        urgency: "medium", 
+        driverMood: "confident",
+        responseTime: "2min",
+        keyTopics: ["pickup", "delivery", "paperwork"],
+        riskFactors: []
+      };
+      
+      res.json(insights);
+    } catch (error) {
+      console.error('❌ Error getting conversation insights:', error);
+      res.status(500).json({ error: "Failed to get conversation insights" });
+    }
+  });
+
   console.log('✅ Essential routes registered - server ready for startup');
   
   // Defer ALL service initialization and remaining routes until after server starts
@@ -775,7 +901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     registerRemainingRoutes(app);
   }, 5000);
   
-  return server;
+  console.log('✅ All routes registered successfully');
 }
 
 // Function to register all the remaining routes after server startup
@@ -6908,58 +7034,6 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
-  // Send message to thread (POST to /api/communication/messages)
-  app.post('/api/communication/messages', async (req, res) => {
-    try {
-      const { threadId, content, sender = 'dispatch' } = req.body;
-      
-      if (!threadId || !content) {
-        return res.status(400).json({ error: 'Thread ID and content are required' });
-      }
-
-      // Get thread details to find the loadId
-      const thread = await storage.getLoadCommunicationThread(threadId);
-      if (!thread) {
-        return res.status(404).json({ error: 'Communication thread not found' });
-      }
-
-      // Send message through Telegram Communication Service
-      if (sender === 'dispatch') {
-        await telegramCommunicationService.sendLoadUpdateToDriver(thread.loadId, content);
-      }
-
-      // Create message record in database
-      await storage.createLoadMessage({
-        threadId: threadId,
-        loadId: thread.loadId,
-        driverId: thread.driverId,
-        message: content,
-        textContent: content,
-        messageType: 'text',
-        isFromDriver: sender === 'driver',
-        isRead: false,
-        isSuggested: false,
-        isSent: true,
-        createdAt: new Date()
-      });
-
-      // Update thread stats
-      await storage.updateLoadCommunicationThread(threadId, {
-        messageCount: (thread.messageCount || 0) + 1,
-        lastMessageAt: new Date(),
-        lastMessageText: content.substring(0, 100), // First 100 chars
-        lastMessageSender: sender
-      });
-      
-      res.json({ 
-        success: true,
-        message: 'Message sent successfully'
-      });
-    } catch (error) {
-      console.error('Error sending message:', error);
-      res.status(500).json({ error: "Failed to send message" });
-    }
-  });
 
   // Mark thread messages as read
   app.post('/api/communication/threads/:threadId/mark-read', async (req, res) => {
