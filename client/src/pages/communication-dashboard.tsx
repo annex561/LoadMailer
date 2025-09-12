@@ -147,7 +147,7 @@ export default function CommunicationDashboard() {
   }, [threads]);
 
   // Fetch messages for selected thread
-  const { data: messages = [], isLoading: messagesLoading, refetch: refetchMessages } = useQuery<LoadMessage[]>({
+  const { data: rawMessages = [], isLoading: messagesLoading, refetch: refetchMessages } = useQuery<any[]>({
     queryKey: ['/api/communication/messages', selectedThread?.id],
     queryFn: async () => {
       if (!selectedThread?.id) return [];
@@ -159,12 +159,31 @@ export default function CommunicationDashboard() {
     refetchInterval: 2000, // Refresh every 2 seconds for real-time chat
   });
 
+  // Transform API response to frontend format
+  const messages: LoadMessage[] = rawMessages.map(msg => ({
+    id: msg.id,
+    threadId: msg.threadId,
+    content: msg.textContent, // ✅ Map textContent to content
+    sender: msg.senderRole, // ✅ Map senderRole to sender  
+    isRead: msg.isRead,
+    isSuggested: msg.isSuggested,
+    isSent: msg.isSent,
+    approvedBy: msg.approvedBy,
+    approvedAt: msg.approvedAt,
+    mediaUrl: msg.mediaUrl,
+    mediaType: msg.mediaType,
+    createdAt: msg.createdAt
+  }));
+
   // Fetch quick reply templates
   const { data: templates = [] } = useQuery<QuickReplyTemplate[]>({
     queryKey: ['/api/communication/quick-replies'],
     queryFn: async () => {
       const response = await fetch('/api/communication/quick-replies?role=dispatch');
-      if (!response.ok) throw new Error('Failed to fetch templates');
+      if (!response.ok) {
+        console.warn('Quick replies endpoint failed, using fallback empty array');
+        return []; // Return empty array if endpoint fails
+      }
       const data = await response.json();
       return data.templates || data; // Handle both response formats
     },
