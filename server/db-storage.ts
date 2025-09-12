@@ -977,6 +977,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllLoadCommunicationThreads(): Promise<any[]> {
+    console.log('🚀 DB Storage - getAllLoadCommunicationThreads called');
     const threads = await db
       .select({
         id: schema.loadCommunicationThreads.id,

@@ -98,6 +98,15 @@ export default function CommunicationDashboard() {
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
   });
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Communication Dashboard - Threads data:', threads);
+    console.log('Communication Dashboard - Threads count:', threads.length);
+    if (threads.length > 0) {
+      console.log('Communication Dashboard - First thread:', threads[0]);
+    }
+  }, [threads]);
+
   // Fetch messages for selected thread
   const { data: messages = [], isLoading: messagesLoading, refetch: refetchMessages } = useQuery<LoadMessage[]>({
     queryKey: ['/api/communication/messages', selectedThread?.id],

@@ -6162,18 +6162,6 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
-  // Get all load communication threads
-  app.get('/api/communication/threads', async (req, res) => {
-    try {
-      const threads = await storage.getAllLoadCommunicationThreads();
-      res.json({ success: true, threads });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to fetch threads' 
-      });
-    }
-  });
 
   // Get communication thread for specific load
   app.get('/api/communication/threads/load/:loadId', async (req, res) => {
@@ -6879,6 +6867,8 @@ You have been assigned to this load. Safe travels! 🚛`;
   app.get('/api/communication/threads', async (req, res) => {
     try {
       const threads = await storage.getAllLoadCommunicationThreads();
+      console.log('🔍 Communication threads API - Raw data from storage:', threads?.length || 0, 'threads');
+      console.log('🔍 Communication threads API - First thread:', threads?.[0] || 'No threads');
       
       // Transform data to match frontend expectations
       const transformedThreads = threads.map(thread => ({
