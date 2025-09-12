@@ -336,6 +336,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Telegram service health check
+  app.get('/api/telegram/health', (req, res) => {
+    try {
+      const isRunning = telegramLoadService.isServiceRunning();
+      const config = telegramLoadService.getConfig();
+      
+      res.json({
+        status: isRunning ? 'running' : 'stopped',
+        isServiceRunning: isRunning,
+        hasConfig: !!config,
+        botUsername: config?.botUsername || 'unknown',
+        dispatcherId: config?.dispatcherId || 'unknown',
+        responseTimeoutMinutes: config?.responseTimeoutMinutes || 0,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Send test message to specific driver
+  app.post('/api/telegram/test/:driverId', async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      
+      if (!telegramLoadService.isServiceRunning()) {
+        return res.status(503).json({
+          success: false,
+          error: 'Telegram service is not running',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Get driver details
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(404).json({
+          success: false,
+          error: 'Driver not found',
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      if (!driver.telegramId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Driver does not have Telegram ID configured',
+          driverName: driver.name,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Send test message
+      const testMessage = `🧪 *TEST MESSAGE*\n\n` +
+        `Hello ${driver.name}!\n\n` +
+        `This is a test message from the LoadMaster dispatch system.\n` +
+        `Your Telegram notifications are working correctly.\n\n` +
+        `Driver ID: ${driver.id}\n` +
+        `Telegram ID: ${driver.telegramId}\n` +
+        `Time: ${new Date().toLocaleString()}`;
+
+      await telegramLoadService.sendMessage(driver.telegramId, testMessage);
+
+      res.json({
+        success: true,
+        message: 'Test message sent successfully',
+        driverName: driver.name,
+        telegramId: driver.telegramId,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('Error sending test message:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   // PRIORITY: Manual load entry endpoint - register early for proper JSON handling
   app.post('/api/manual-loads', async (req, res) => {
     try {
@@ -549,6 +634,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Send Telegram notifications for driver assignments
+      if (validatedData.driverId && validatedData.driverId !== originalLoad.driverId) {
+        console.log(`🚛 Load ${id} assigned to driver ${validatedData.driverId} - sending Telegram notification`);
+        try {
+          await telegramLoadService.processNewLoad(updatedLoad);
+          console.log(`✅ Telegram notification sent for load assignment ${id}`);
+        } catch (error) {
+          console.error(`❌ Failed to send Telegram notification for load ${id}:`, error);
+        }
+      }
+      
       console.log(`Successfully updated load ${id}`);
       res.json(updatedLoad);
     } catch (error) {
@@ -608,6 +704,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Load not found' });
       }
       
+      // Send Telegram notification for driver assignment
+      console.log(`🚛 Load ${id} assigned to driver ${driverId} - sending Telegram notification`);
+      try {
+        await telegramLoadService.processNewLoad(updatedLoad);
+        console.log(`✅ Telegram notification sent for load assignment ${id}`);
+      } catch (error) {
+        console.error(`❌ Failed to send Telegram notification for load ${id}:`, error);
+      }
+      
       res.json(updatedLoad);
     } catch (error) {
       console.error('Error assigning driver:', error);
@@ -662,26 +767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 function registerRemainingRoutes(app: Express) {
   console.log('📡 Registering remaining routes in background...');
   
-  // Setup Google Sheets DAT loads endpoint - CRITICAL for frontend
-  app.get('/api/dat-loads', async (req, res) => {
-    try {
-      // Use the already imported googleSheetsSimple instance
-      const { googleSheetsSimple, getGoogleSheetsLoads } = await import('./google-sheets-simple.js');
-      const loads = getGoogleSheetsLoads();
-      console.log(`📋 DIRECT API serving ${loads.length} Google Sheets loads (bypassing db-storage)`);
-      
-      // If no loads, try to manually check the instance
-      if (loads.length === 0) {
-        console.log('⚠️ No loads found, checking module state...');
-        console.log(`📋 Google Sheets Simple running: ${googleSheetsSimple.isRunning}`);
-      }
-      
-      res.json(loads);
-    } catch (error) {
-      console.error('❌ Error getting Google Sheets loads:', error);
-      res.json([]);
-    }
-  });
+  // Duplicate route removed - using immediate registration only
 
   console.log('✅ Critical API routes registered: /api/dat-loads');
 
@@ -1868,134 +1954,7 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
-  app.post("/api/loads", async (req, res) => {
-    try {
-      const validatedData = insertLoadSchema.parse(req.body);
-      const load = await storage.createLoad(validatedData);
-      
-      // Send automated emails for new load
-      await sendAutomatedEmails(load, "load_created");
-      
-      // Send load to drivers via Telegram if it matches preferences
-      await telegramLoadService.processNewLoad(load);
-      
-      res.status(201).json(load);
-    } catch (error) {
-      console.error('Load validation error:', error);
-      res.status(400).json({ error: "Invalid load data", details: error.message });
-    }
-  });
-
-  app.put("/api/loads/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      console.log(`Updating load ${id} with data:`, req.body);
-      
-      const validatedData = insertLoadSchema.partial().parse(req.body);
-      console.log(`Validated data:`, validatedData);
-      
-      const originalLoad = await storage.getLoad(id);
-      
-      if (!originalLoad) {
-        console.error(`Load not found: ${id}`);
-        return res.status(404).json({ error: "Load not found" });
-      }
-      
-      const updatedLoad = await storage.updateLoad(id, validatedData);
-      
-      if (!updatedLoad) {
-        console.error(`Failed to update load: ${id}`);
-        return res.status(404).json({ error: "Load not found after update" });
-      }
-      
-      // Send automated emails based on status changes
-      if (validatedData.status && validatedData.status !== originalLoad.status) {
-        if (validatedData.status === "in_transit") {
-          await sendAutomatedEmails(updatedLoad, "pickup_confirmed");
-        } else if (validatedData.status === "delivered") {
-          await sendAutomatedEmails(updatedLoad, "delivered");
-        }
-      }
-      
-      console.log(`Successfully updated load ${id}`);
-      res.json(updatedLoad);
-    } catch (error) {
-      console.error('Load update error:', error);
-      res.status(400).json({ 
-        error: "Invalid load data", 
-        details: error instanceof Error ? error.message : 'Unknown error',
-        data: req.body
-      });
-    }
-  });
-
-  app.delete("/api/loads/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const deleted = await storage.deleteLoad(id);
-      
-      if (!deleted) {
-        return res.status(404).json({ error: "Load not found" });
-      }
-      
-      res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete load" });
-    }
-  });
-
-  // Dispatcher-specific endpoints
-  // Get load offers for a specific load
-  app.get('/api/loads/:id/offers', async (req, res) => {
-    try {
-      const { id } = req.params;
-      const offers = await storage.getLoadOffers(id);
-      res.json(offers);
-    } catch (error) {
-      console.error('Error fetching load offers:', error);
-      res.status(500).json({ error: 'Failed to fetch load offers' });
-    }
-  });
-
-  // Update load status and details (PATCH for partial updates)
-  app.patch('/api/loads/:id', async (req, res) => {
-    try {
-      const { id } = req.params;
-      const updates = req.body;
-      
-      const updatedLoad = await storage.updateLoad(id, updates);
-      if (!updatedLoad) {
-        return res.status(404).json({ error: 'Load not found' });
-      }
-      
-      res.json(updatedLoad);
-    } catch (error) {
-      console.error('Error updating load:', error);
-      res.status(500).json({ error: 'Failed to update load' });
-    }
-  });
-
-  // Assign driver to load
-  app.post('/api/loads/:id/assign', async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { driverId } = req.body;
-      
-      const updatedLoad = await storage.updateLoad(id, { 
-        driverId, 
-        status: 'assigned' 
-      });
-      
-      if (!updatedLoad) {
-        return res.status(404).json({ error: 'Load not found' });
-      }
-      
-      res.json(updatedLoad);
-    } catch (error) {
-      console.error('Error assigning driver:', error);
-      res.status(500).json({ error: 'Failed to assign driver' });
-    }
-  });
+  // Duplicate routes removed - using immediate registration only
 
   // Real-time driver location endpoints
   app.get('/api/driver-locations/active', async (req, res) => {

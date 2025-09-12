@@ -84,7 +84,7 @@ app.use((req, res, next) => {
   try {
     log('🚀 Starting server initialization...');
     
-    // Add timeout wrapper for route registration
+    // Add timeout wrapper for route registration on main app
     const routeRegistrationPromise = registerRoutes(app);
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Route registration timeout after 30 seconds')), 30000);
