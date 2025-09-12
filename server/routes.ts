@@ -29,6 +29,7 @@ import { realDriverLocationService } from "./real-driver-location-service";
 import { taskMagicIntegration } from './taskmagic-integration';
 import { datScraperService as puppeteerDATService } from './dat-puppeteer-scraper';
 import { googleSheetsService } from './google-sheets-service';
+import { setupAuth, isAuthenticated } from "./replitAuth";
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -328,6 +329,36 @@ async function initializeAllServices() {
 
 export async function registerRoutes(app: Express): Promise<void> {
   console.log('⚡ Ultra-fast server startup - registering routes...');
+  
+  // Set up authentication FIRST to secure all routes
+  console.log('🔐 Setting up Replit authentication...');
+  await setupAuth(app);
+  console.log('✅ Authentication middleware configured');
+
+  // Apply prefix-level authentication guards for communication and AI endpoints
+  console.log('🛡️ Setting up route protection for communication and AI endpoints...');
+  app.use('/api/communication', isAuthenticated);
+  app.use('/api/communications', isAuthenticated);
+  app.use('/api/ai', isAuthenticated);
+  app.use('/api/ai-insights', isAuthenticated);
+  app.use([
+    '/api/loads/:loadId/communications',
+    '/api/loads/:loadId/communication-logs',
+    '/api/loads/:loadId/init-communications',
+  ], isAuthenticated);
+  console.log('✅ Protected communication and AI endpoints from unauthorized access');
+
+  // Add authentication routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
   
   // Register routes immediately
   

@@ -1332,4 +1332,25 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions))
       .orderBy(desc(schema.driverEngagementMetrics.periodStart));
   }
+
+  // User operations - REQUIRED for Replit Auth
+  async getUser(id: string): Promise<schema.User | undefined> {
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: schema.UpsertUser): Promise<schema.User> {
+    const [user] = await db
+      .insert(schema.users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: schema.users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
+  }
 }
