@@ -1525,6 +1525,113 @@ export const aiAnalytics = pgTable("ai_analytics", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Communication Insights Dashboard tables
+export const communicationInsights = pgTable("communication_insights", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  period: text("period").notNull(), // daily, weekly, monthly
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  insightType: text("insight_type").notNull(), // daily_summary, weekly_summary, driver_engagement, ai_performance
+  
+  // Metrics (non-negative constraints)
+  totalMessages: integer("total_messages").notNull().default(0).$check(sql`total_messages >= 0`),
+  driverMessages: integer("driver_messages").notNull().default(0).$check(sql`driver_messages >= 0`),
+  dispatchMessages: integer("dispatch_messages").notNull().default(0).$check(sql`dispatch_messages >= 0`),
+  aiSuggestions: integer("ai_suggestions").notNull().default(0).$check(sql`ai_suggestions >= 0`),
+  aiSuggestionsAccepted: integer("ai_suggestions_accepted").notNull().default(0).$check(sql`ai_suggestions_accepted >= 0`),
+  aiSuggestionsRejected: integer("ai_suggestions_rejected").notNull().default(0).$check(sql`ai_suggestions_rejected >= 0`),
+  aiAutoSent: integer("ai_auto_sent").notNull().default(0).$check(sql`ai_auto_sent >= 0`),
+  
+  // Response time metrics (in minutes, non-negative)
+  avgResponseTimeMinutes: real("avg_response_time_minutes").default(0).$check(sql`avg_response_time_minutes >= 0`),
+  medianResponseTimeMinutes: real("median_response_time_minutes").default(0).$check(sql`median_response_time_minutes >= 0`),
+  
+  // Engagement metrics
+  activeDrivers: integer("active_drivers").notNull().default(0).$check(sql`active_drivers >= 0`),
+  totalActiveThreads: integer("total_active_threads").notNull().default(0).$check(sql`total_active_threads >= 0`),
+  
+  // Additional insights data
+  insights: jsonb("insights").default({}), // Additional computed insights
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint to prevent duplicate aggregations
+  uniqueInsight: sql`UNIQUE (period, period_start, insight_type)`,
+  // Indexes for query performance
+  periodStartIdx: sql`CREATE INDEX CONCURRENTLY communication_insights_period_start_idx ON communication_insights (period, period_start)`,
+  insightTypeIdx: sql`CREATE INDEX CONCURRENTLY communication_insights_insight_type_idx ON communication_insights (insight_type, period_start)`,
+}));
+
+export const aiPerformanceMetrics = pgTable("ai_performance_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  period: text("period").notNull(), // daily, weekly, monthly
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  threadId: varchar("thread_id").references(() => loadCommunicationThreads.id),
+  driverId: varchar("driver_id").references(() => drivers.id),
+  
+  // AI suggestion metrics (non-negative)
+  totalSuggestions: integer("total_suggestions").notNull().default(0).$check(sql`total_suggestions >= 0`),
+  acceptedSuggestions: integer("accepted_suggestions").notNull().default(0).$check(sql`accepted_suggestions >= 0`),
+  rejectedSuggestions: integer("rejected_suggestions").notNull().default(0).$check(sql`rejected_suggestions >= 0`),
+  autoSentMessages: integer("auto_sent_messages").notNull().default(0).$check(sql`auto_sent_messages >= 0`),
+  
+  // Performance metrics (non-negative)
+  avgConfidence: real("avg_confidence").default(0).$check(sql`avg_confidence >= 0 AND avg_confidence <= 100`), // 0-100
+  avgProcessingTimeMs: integer("avg_processing_time_ms").default(0).$check(sql`avg_processing_time_ms >= 0`), // milliseconds as integer
+  avgTokensUsed: real("avg_tokens_used").default(0).$check(sql`avg_tokens_used >= 0`),
+  
+  // Success metrics (removed derived suggestionAcceptanceRate - compute on demand)
+  avgTimeBetweenSuggestionAndResponseMs: integer("avg_time_between_suggestion_and_response_ms").default(0).$check(sql`avg_time_between_suggestion_and_response_ms >= 0`), // milliseconds as integer
+  
+  // Detailed metrics data
+  metrics: jsonb("metrics").default({}), // Additional detailed metrics
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint per driver/thread/period (nulls allowed for thread/driver)
+  uniqueMetric: sql`UNIQUE (period, period_start, driver_id, thread_id)`,
+  // Indexes for query performance
+  dateIdx: sql`CREATE INDEX CONCURRENTLY ai_performance_metrics_period_start_idx ON ai_performance_metrics (period_start)`,
+  driverDateIdx: sql`CREATE INDEX CONCURRENTLY ai_performance_metrics_driver_date_idx ON ai_performance_metrics (driver_id, period_start)`,
+  threadDateIdx: sql`CREATE INDEX CONCURRENTLY ai_performance_metrics_thread_date_idx ON ai_performance_metrics (thread_id, period_start)`,
+}));
+
+export const driverEngagementMetrics = pgTable("driver_engagement_metrics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  period: text("period").notNull(), // daily, weekly, monthly
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  
+  // Message activity (non-negative)
+  messagesReceived: integer("messages_received").notNull().default(0).$check(sql`messages_received >= 0`),
+  messagesSent: integer("messages_sent").notNull().default(0).$check(sql`messages_sent >= 0`),
+  attachmentsSent: integer("attachments_sent").notNull().default(0).$check(sql`attachments_sent >= 0`),
+  
+  // Response metrics (in milliseconds, non-negative)
+  avgResponseTimeMs: integer("avg_response_time_ms").default(0).$check(sql`avg_response_time_ms >= 0`), // milliseconds as integer
+  totalResponseTimeMs: integer("total_response_time_ms").default(0).$check(sql`total_response_time_ms >= 0`), // For computing rolling averages
+  responseCount: integer("response_count").default(0).$check(sql`response_count >= 0`),
+  
+  // Engagement quality
+  threadsParticipated: integer("threads_participated").notNull().default(0).$check(sql`threads_participated >= 0`),
+  lastActiveAt: timestamp("last_active_at"),
+  engagementScore: real("engagement_score").default(0).$check(sql`engagement_score >= 0 AND engagement_score <= 100`), // 0-100 computed engagement score
+  
+  // Communication patterns
+  preferredResponseTime: text("preferred_response_time"), // morning, afternoon, evening, night
+  communicationStyle: text("communication_style"), // brief, detailed, emoji_heavy, formal
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  // Unique constraint per driver/period
+  uniqueDriverPeriod: sql`UNIQUE (driver_id, period, period_start)`,
+  // Indexes for query performance
+  driverPeriodIdx: sql`CREATE INDEX CONCURRENTLY driver_engagement_metrics_driver_period_idx ON driver_engagement_metrics (driver_id, period_start)`,
+  periodIdx: sql`CREATE INDEX CONCURRENTLY driver_engagement_metrics_period_idx ON driver_engagement_metrics (period_start)`,
+}));
+
 export const costCalculations = pgTable("cost_calculations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   loadId: varchar("load_id").references(() => loads.id).notNull(),
@@ -1817,3 +1924,48 @@ export const communicationLogsRelations = relations(communicationLogs, ({ one })
     references: [loadCommunicationThreads.id],
   }),
 }));
+
+// Communication Insights Dashboard Relations
+export const aiPerformanceMetricsRelations = relations(aiPerformanceMetrics, ({ one }) => ({
+  thread: one(loadCommunicationThreads, {
+    fields: [aiPerformanceMetrics.threadId],
+    references: [loadCommunicationThreads.id],
+  }),
+  driver: one(drivers, {
+    fields: [aiPerformanceMetrics.driverId],
+    references: [drivers.id],
+  }),
+}));
+
+export const driverEngagementMetricsRelations = relations(driverEngagementMetrics, ({ one }) => ({
+  driver: one(drivers, {
+    fields: [driverEngagementMetrics.driverId],
+    references: [drivers.id],
+  }),
+}));
+
+// Insert Schemas for Communication Insights
+export const insertCommunicationInsightsSchema = createInsertSchema(communicationInsights).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAiPerformanceMetricsSchema = createInsertSchema(aiPerformanceMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertDriverEngagementMetricsSchema = createInsertSchema(driverEngagementMetrics).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Insert Types
+export type InsertCommunicationInsights = z.infer<typeof insertCommunicationInsightsSchema>;
+export type InsertAiPerformanceMetrics = z.infer<typeof insertAiPerformanceMetricsSchema>;
+export type InsertDriverEngagementMetrics = z.infer<typeof insertDriverEngagementMetricsSchema>;
+
+// Select Types
+export type CommunicationInsights = typeof communicationInsights.$inferSelect;
+export type AiPerformanceMetrics = typeof aiPerformanceMetrics.$inferSelect;
+export type DriverEngagementMetrics = typeof driverEngagementMetrics.$inferSelect;
