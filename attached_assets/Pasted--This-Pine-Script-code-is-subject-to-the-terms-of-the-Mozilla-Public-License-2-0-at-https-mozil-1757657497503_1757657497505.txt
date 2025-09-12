@@ -1,0 +1,929 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// ©Victory Protocol: Reversal Signals)
+
+//@version=6
+indicator("Victory Protocol: Reversal Signals V1", overlay=true, behind_chart = true, max_boxes_count = 500, max_lines_count = 500, max_labels_count = 500)
+import TradingView/ta/9
+// ---------------------------------------------------------------------------------------------------------------------
+// Inputs and variables preparation
+// ---------------------------------------------------------------------------------------------------------------------
+const string generalGroup = "General"
+i_signalType = input.string(defval = "Both", title = "Long/Short", group = generalGroup, options=["Both", "Long", "Short", "None"], tooltip = "Controls drawing of Shooting/Falling range background colors. This will also affect signal printing.")
+i_displaySignals = input.bool(defval = true, title = "Display signals", group = generalGroup, tooltip = "Display buy/sell signals.")
+i_strongBullSignalColor = input.color(defval = color.new(#00FF00, 0), title = "Long Color - Strong", group = generalGroup, inline="bullSignalColor")
+i_weakBullSignalColor = input.color(defval = color.new(#00FF00, 60), title = "Weak", group = generalGroup, inline="bullSignalColor")
+i_strongBearSignalColor = input.color(defval = color.new(#FF00FF, 0), title = "Short color - Strong", group = generalGroup, inline="bearSignalColor")
+i_weakBearSignalColor = input.color(defval = color.new(#FF00FF, 60), title = "Weak", group = generalGroup, inline="bearSignalColor")
+
+i_waitForConfirmation = input.bool(defval = true, title = "Wait for confirmation", group = generalGroup, tooltip = "Wait for candle confirmation before triggering signals and alerts. Note: disabling this may lead to false signals.")
+
+const string patternsGroup = "Long signals                     Short signals"
+i_bullSweepRL = input.string(defval = "Both", title = "Sweep   ", group = patternsGroup, inline = "Sweep", options = ["Both", "Strong", "Weak", "None"])
+i_bearSweepRL = input.string(defval = "None", title = " Sweep      ", group = patternsGroup, inline = "Sweep", options = ["Both", "Strong", "Weak", "None"])
+
+i_piercingBullRL = input.string(defval = "Both", title = "Piercing ", group = patternsGroup, inline = "Piercing", options = ["Both", "Strong", "Weak", "None"])
+i_piercingBearRL = input.string(defval = "Strong", title = "  Piercing    ", group = patternsGroup, inline = "Piercing", options = ["Both", "Strong", "Weak", "None"])
+
+i_bullHaramiRL = input.string(defval = "Weak", title = "HaRami  ", group = patternsGroup, inline = "Harami", options = ["Both", "Strong", "Weak", "None"])
+i_bearHaramiRL = input.string(defval = "Weak", title = "  HaRami     ", group = patternsGroup, inline = "Harami", options = ["Both", "Strong", "Weak", "None"])
+
+i_bullTweezerRL = input.string(defval = "Strong", title = "Tweezer ", group = patternsGroup, inline = "Tweezer", options = ["Both", "Strong", "Weak", "None"])
+i_bearTweezerRL = input.string(defval = "Strong", title = "  Tweezer    ", group = patternsGroup, inline = "Tweezer", options = ["Both", "Strong", "Weak", "None"])
+
+i_bullEngulfingRL = input.string(defval = "Strong", title = "Engulfing", group = patternsGroup, inline = "Engulfing", options = ["Both", "Strong", "Weak", "None"])
+i_bearEngulfingRL = input.string(defval = "Strong", title = "  Engulfing   ", group = patternsGroup, inline = "Engulfing", options = ["Both", "Strong", "Weak", "None"])
+
+i_bullHammerRL = input.string(defval = "Strong", title = "Hammer ", group = patternsGroup, inline = "Hammer", options = ["Both", "Strong", "Weak", "None"])
+i_bearHangingManRL = input.string(defval = "None", title = "  Hanging man", group = patternsGroup, inline = "Hammer", options = ["Both", "Strong", "Weak", "None"])
+
+// --------------------------------------
+const string shootingRangeGroup = "Shooting/Falling range"
+// RSI offsets. Default value of 15 and -5 will give a bullishShootingRange threshold of 35 and 55 respectively
+i_rsiCurrentTF_offset = input.int(defval = 15, title = "RSI offset current TF", group = shootingRangeGroup, inline = "RSIoffset")
+i_rsiUppperTF_offset = input.int(defval = -5, title = "Higher TF", group = shootingRangeGroup, inline = "RSIoffset", tooltip = "RSI offset from the 50-level on the current and higher timeframe.")
+
+i_higherTF = input.string(defval = "15", title = "higher timeframe", group = shootingRangeGroup, options=["5", "15", "30", "60", "240", "D"], tooltip = "Which higher timeframe to use when checking the 2nd RSI.")
+
+// --------------------------------------
+const string fvgGroup = "Fair value gap"
+i_enableFVG = input.bool(defval = true, title = "Enable/Disable FVG's", group = fvgGroup, tooltip = "Enable or disable rendering of FVG's. Note that much of the signal logic relies on confluence checks for FVG's, but on the other hand, the logic is rather performance heavy and may be cluttering your graph.")
+i_tf1 = input.bool(false, "1", group=fvgGroup)
+i_tf3 = input.bool(true, "5", group=fvgGroup)
+i_tf4 = input.bool(true, "15", group=fvgGroup)
+i_tf7 = input.bool(true, "60", group=fvgGroup)
+i_tf10 = input.bool(false, "240", group=fvgGroup)
+i_tf11 = input.bool(false, "D", group=fvgGroup)
+
+i_FVGBarCull = input.int(defval = 50, title = "Cull FVG boxes", minval = 0, maxval = 1000, group = fvgGroup, tooltip = "Cull FVG boxes after given number of bars. Set this to a high number like 100-200 if you want to see them. Setting it too high can degrade performance and cause clutter.")
+i_changeColor = input.bool(defval = true, title = "Change color on mitigation", group = fvgGroup, tooltip = "Change color to gray when FVG has been mitigated.")
+i_extend_r = input.bool(defval = false, title = "Extend to the right", group = fvgGroup, tooltip = "Extend FVG boxes to the right.")
+i_bullColor = input.color(defval=color.new(color.green, 90), title="Bullish FVG Color", inline="Set Custom Color", group=fvgGroup)
+i_bearColor = input.color(defval=color.new(color.red, 90), title="Bearish FVG Color", inline="Set Custom Color", group=fvgGroup)
+i_bullColorTested = input.color(defval=color.new(color.gray, 90), title="Tested Bullish FVG Color", inline="Set Custom Color", group=fvgGroup)
+i_bearColorTested = input.color(defval=color.new(color.gray, 90), title="Tested Bearish FVG Color", inline="Set Custom Color", group=fvgGroup)
+
+// --------------------------------------
+const string noTradeZoneGrp = "No-Trade zones. You have to delete an existing no-trade alert and add it again: Any alert() function call, for it to trigger."
+i_suppressSignals = input.bool(defval = false, title = "Suppress signals during No-Trade zones", group = noTradeZoneGrp, display = display.none, tooltip = "If checked, no signals will be triggered in the No-trade zones.")
+i_ntzBgColor = input.color(color.new(color.orange, 90), title = "No-trade zone color", group = noTradeZoneGrp, display = display.none, inline="ntzColor"), i_ntzBarColor = input.color(color.new(color.orange, 0), title = "", group = noTradeZoneGrp, display = display.none, inline="ntzColor")
+i_ntzSessionZone  = input.string(defval = "Europe/Copenhagen", title = "Timezone", group = noTradeZoneGrp, display = display.none, tooltip = "Set this to match your local timezone. Use either GMT, UTC or IANA timezone formats.")
+
+i_showNoTradeZone1 = input.bool(defval = false, title = "Zone 1", group = noTradeZoneGrp, display = display.none, inline = "1l1")
+i_ntz1SessionTime  = input.session("0950-1010", "Time", group = noTradeZoneGrp, display = display.none, inline = "1l1")
+
+i_showNoTradeZone2 = input.bool(defval = false, title = "Zone 2", group = noTradeZoneGrp, display = display.none, inline = "2l1")
+i_ntz2SessionTime  = input.session("1615-1635", "Time", group = noTradeZoneGrp, display = display.none, inline = "2l1")
+
+i_showNoTradeZone3 = input.bool(defval = false, title = "Zone 3", group = noTradeZoneGrp, display = display.none, inline = "3l1")
+i_ntz3SessionTime  = input.session("1715-0915", "Time", group = noTradeZoneGrp, display = display.none, inline = "3l1")
+
+// --------------------------------------
+const string athGroup = "All time high"
+i_showATH = input.bool(defval = true, title = "Show All time high", group = athGroup, display = display.none, tooltip = "Often times markets behave differently when we're in or close to ATH. By enabling this, you will see visually see where price is relative to ATH.")
+i_athColor = input.color(defval = color.new(color.blue, 75), title = "ATH color", group = athGroup, display = display.none, inline = "athColor")
+i_athFadeColor = input.color(defval = color.new(color.blue, 100), title = "Bottom", group = athGroup, display = display.none, inline = "athColor")
+
+// --------------------------------------
+const string swingPointsGroup = "Imbalance"
+i_showLastSwingPoint = input.bool(defval = true, title = "Show imbalance lines", group = swingPointsGroup)
+i_trendLookBack = input.int(14, title="Lookback Period", minval=2, maxval=34, group = swingPointsGroup)
+i_showImbalance = input.string(defval = "None", title = "Show imbalance", group = swingPointsGroup, options = ["Points", "Percentages", "Both", "None"])
+i_trendTextCol = input.color(color.yellow, title="Imbalance text color", group = swingPointsGroup)
+i_imbalanceThreshold = input.float(defval = 0.0, group = swingPointsGroup, step=0.01, title = "Imbalance threshold", tooltip = "Set this to 0 if you want all regular signals to show up. Set this to ie. 0.2 to filter out signals where imbalance pct is below 0.2pct. This can help out filtering out some fake signals, but will also produce fewer signals.")
+
+// --------------------------------------
+const string backTestGroup = "Backtest"
+i_ShowBackTest = input.bool(defval = true, title = "Show backtest results", group = backTestGroup, tooltip = "Show a simple backtest table. Does not take slippage or commision into consideration. Be aware this is pure teoretical numbers and should only be used as a guideline based on historical data.")
+i_backTestTableColor = input.color(defval = color.white, title = "Table color", group = backTestGroup)
+i_TPfibLevel = input.string(defval = "Fixed", title = "Take profit method", inline = "tp", group = backTestGroup, options = ["Fixed", "23.6%", "38.2%", "50.0%", "61.8%", "88.6%"])
+i_TP = input.float(defval = 10.0, title = "Fixed Take profit", inline = "tp", minval = 0.0, group = backTestGroup, tooltip = "When backtesting, it will either use the Fixed 'Take Profit' as set next to - or it will use the selected fib retracement-level as Take profit. Note that if the calculated fib-level is less than the 'Fixed take profit', it will use that as Take profit.")
+i_SL = input.float(defval = 10.0, title = "Stop loss", minval = 0.0, group = backTestGroup, tooltip = "Fixed stop loss")
+i_showTradeGuidelines = input.string(defval = "Both", title = "Show trade guidelines", group = backTestGroup, options = ["Both", "Take profit", "Stop loss", "None"])
+i_TradeGuidelineLength = input.int(defval = 0, title = "Trade guidelines length", group = backTestGroup, tooltip = "How long the trade guidelines should be.")
+i_showTradeValues = input.bool(defval = false, title = "Show take profit values", group = backTestGroup, inline = "showTPvalues")
+i_showTradeDelta = input.bool(defval = false, title = "Show take profit deltas", inline = "showTPvalues", group = backTestGroup, tooltip = "Paint the suggested TP value/delta on the graph when triggering a signal. Useful when typing in the values to your tradingplatform.")
+i_backTestTextSize = input.string(defval = "Small", title = "TextSize", group = backTestGroup, options = ["Tiny", "Small", "Normal", "Auto"])
+i_backTestPosition = input.string(defval = "Bottom_Left", title = "Position", group = backTestGroup, options = ["Bottom_Left", "Bottom_Center", "Bottom_Right"])
+
+// ---------------------------------------------------------------------------------------------------------------------
+triggerStrongBullSweep = i_bullSweepRL == "Strong" or i_bullSweepRL == "Both"
+triggerWeakBullSweep = i_bullSweepRL == "Weak" or i_bullSweepRL == "Both"
+triggerStrongPiercingBull = i_piercingBullRL == "Strong" or i_piercingBullRL == "Both"
+triggerWeakPiercingBull = i_piercingBullRL == "Weak" or i_piercingBullRL == "Both"
+triggerStrongBullHarami = i_bullHaramiRL == "Strong" or i_bullHaramiRL == "Both"
+triggerWeakBullHarami = i_bullHaramiRL == "Weak" or i_bullHaramiRL == "Both"
+triggerStrongBullTweezer = i_bullTweezerRL == "Strong" or i_bullTweezerRL == "Both"
+triggerWeakBullTweezer= i_bullTweezerRL == "Weak" or i_bullTweezerRL == "Both"
+triggerStrongEngulfingBull = i_bullEngulfingRL == "Strong" or i_bullEngulfingRL == "Both"
+triggerWeakEngulfingBull = i_bullEngulfingRL == "Weak" or i_bullEngulfingRL == "Both"
+triggerStrongBullHammer = i_bullHammerRL == "Strong" or i_bullHammerRL == "Both"
+triggerWeakBullHammer = i_bullHammerRL == "Weak" or i_bullHammerRL == "Both"
+
+triggerStrongBearSweep = i_bearSweepRL == "Strong" or i_bearSweepRL == "Both"
+triggerWeakBearSweep = i_bearSweepRL == "Weak" or i_bearSweepRL == "Both"
+triggerStrongPiercingBear = i_piercingBearRL == "Strong" or i_piercingBearRL == "Both"
+triggerWeakPiercingBear = i_piercingBearRL == "Weak" or i_piercingBearRL == "Both"
+triggerStrongBearHarami = i_bearHaramiRL == "Strong" or i_bearHaramiRL == "Both"
+triggerWeakBearHarami = i_bearHaramiRL == "Weak" or i_bearHaramiRL == "Both"
+triggerStrongBearTweezer = i_bearTweezerRL == "Strong" or i_bearTweezerRL == "Both"
+triggerWeakBearTweezer= i_bearTweezerRL == "Weak" or i_bearTweezerRL == "Both"
+triggerStrongEngulfingBear = i_bearEngulfingRL == "Strong" or i_bearEngulfingRL == "Both"
+triggerWeakEngulfingBear = i_bearEngulfingRL == "Weak" or i_bearEngulfingRL == "Both"
+triggerStrongBearHangingMan = i_bearHangingManRL == "Strong" or i_bearHangingManRL == "Both"
+triggerWeakBearHangingMan = i_bearHangingManRL == "Weak" or i_bearHangingManRL == "Both"
+
+triggerBull = i_signalType == "Long" or i_signalType == "Both"
+triggerBear = i_signalType == "Short" or i_signalType == "Both"
+
+// Bull thresholds
+rsiMidPoint = 50
+rsiCurrHiThreshold = rsiMidPoint - i_rsiCurrentTF_offset
+rsihigherHiThreshold = rsiMidPoint - i_rsiUppperTF_offset
+
+// Bear thresholds
+rsiCurrLoThreshold = rsiMidPoint + i_rsiCurrentTF_offset
+rsihigherLoThreshold = rsiMidPoint + i_rsiUppperTF_offset
+
+// RSI values from current and higher timeframe
+rsi = ta.rsi(close, 14)
+rsihigherTF = request.security(syminfo.tickerid, i_higherTF, rsi[barstate.isconfirmed ? 0 : 1])
+
+// Threshold calculations using confirmed bars
+bullishShootingRange = triggerBull and (rsi <= rsiCurrHiThreshold) and (rsihigherTF <= rsihigherHiThreshold) and barstate.isconfirmed
+bearishFallingRange = triggerBear and (rsi >= rsiCurrLoThreshold) and (rsihigherTF >= rsihigherLoThreshold) and barstate.isconfirmed
+
+// Background coloring
+bgcolor(bullishShootingRange ? color.new(color.green, 85) : na)
+bgcolor(bearishFallingRange ? color.new(color.red, 85) : na)
+
+// ---------------------------------------------------------------------------------------------------------------------
+// FVG
+// Modified version of ©pmk07's MTF FVG tiny indicator
+// - Added registration of mitigated FVG levels
+// - Added additional logic for culling boxes for better performance
+// - Integrated with main signal logic
+// ---------------------------------------------------------------------------------------------------------------------
+var box[] bullBoxes  = array.new_box()
+var box[] bearBoxes  = array.new_box()
+var box[] mitigatedBoxes = array.new_box()
+var box[] mitigatedBullBoxes = array.new_box()
+var box[] mitigatedBearBoxes = array.new_box()
+
+FindBox(_timeframe) =>
+    var int bearBull = na
+    var float top = na
+    var float bottom = na
+    var int left = na
+    if barstate.isconfirmed
+        bearBull := low[2] >= high ? -1 : low >= high[2] ? 1 : 0
+        top := bearBull > 0 ? low : bearBull < 0 ? low[2] : 0
+        bottom := bearBull > 0 ? high[2] : bearBull < 0 ? high : 0
+        left := time - _timeframe * 60000 * 2
+    [left, top, bottom, bearBull]
+
+CreateBox(_time, _top, _bottom, x, TF) =>
+    _col = x > 0 ? i_bullColor : i_bearColor
+    _extend = i_extend_r ? extend.right : extend.none
+    box boxOB = na
+    if x != 0
+        boxOB := box.new(left=_time, top=_top, right=time, extend=_extend , bottom=_bottom, bgcolor=_col, border_color = na, xloc = xloc.bar_time)
+    if x > 0
+        array.push(bullBoxes, boxOB)
+    if x < 0
+        array.push(bearBoxes, boxOB)
+
+UpdateBox(_boxes, _bearBull) => 
+    if array.size(_boxes) > 0
+        for i = array.size(_boxes) - 1 to 0 by 1
+            box = array.get(_boxes, i)
+            boxLow = box.get_bottom(box)
+            boxHigh = box.get_top(box)
+            if (_bearBull > 0 and low < boxLow) or (_bearBull < 0 and high > boxHigh)
+                box.set_right(box, time)
+                box.set_extend(box, extend.none)
+                if i_changeColor
+                    box.set_bgcolor(box, i_bullColorTested)
+                array.set(_boxes, i, na)
+                array.push(mitigatedBoxes, box)
+            else 
+                if _bearBull > 0 and low < boxHigh                
+                    oldLow = box.get_bottom(box)
+                    box.set_bottom(box, low)
+                    box.set_extend(box, extend.none)
+                    array.set(_boxes, i, na)
+                    array.push(mitigatedBullBoxes, box)
+
+                    _col =  i_bullColor
+                    _extend = i_extend_r ? extend.right : extend.none
+                    box boxOB = na
+                    if _bearBull != 0
+                        boxOB := box.new(left=box.get_left(box), top=low, right=time, extend=_extend , bottom=oldLow, bgcolor=_col, border_color = na, xloc = xloc.bar_time)
+                    if _bearBull > 0
+                        array.push(bullBoxes, boxOB)
+                    if _bearBull < 0
+                        array.push(bearBoxes, boxOB)
+
+                    if i_changeColor
+                        box.set_bgcolor(box, i_bullColorTested)
+                        array.set(_boxes, i, na)
+
+                if _bearBull < 0 and high > boxLow
+                    oldHigh = box.get_top(box)
+                    box.set_top(box, high)
+                    box.set_extend(box, extend.none)
+                    array.set(_boxes, i, na)
+                    array.push(mitigatedBearBoxes, box)
+
+                    _col =  i_bearColor
+                    _extend = i_extend_r ? extend.right : extend.none
+                    box boxOB = na
+                    if _bearBull != 0
+                        boxOB := box.new(left=box.get_left(box), top=oldHigh, right=time, extend=_extend , bottom=high, bgcolor=_col, border_color = na, xloc = xloc.bar_time)
+                    if _bearBull > 0
+                        array.push(bullBoxes, boxOB)
+                    if _bearBull < 0
+                        array.push(bearBoxes, boxOB)
+
+                    if i_changeColor
+                        box.set_bgcolor(box, i_bearColorTested)
+                        array.set(_boxes, i, na)
+                box.set_right(box, time)
+        
+    if array.size(_boxes) > 0 
+        for i = array.size(_boxes) - 1 to 0 by 1
+            if na(array.get(_boxes, i))
+                array.remove(_boxes, i)
+
+if i_enableFVG
+    if i_tf1 and timeframe.change("1")
+        [_time1, _top1, _bottom1, xi_tf1]  = request.security(syminfo.tickerid, "1", FindBox(1))
+        CreateBox(_time1, _top1, _bottom1, xi_tf1, "1")
+    if i_tf3 and timeframe.change("5")
+        [_time3, _top3, _bottom3, xi_tf3]  = request.security(syminfo.tickerid, "5", FindBox(5))
+        CreateBox(_time3, _top3, _bottom3, xi_tf3, "5")
+    if i_tf4 and timeframe.change("15")
+        [_time4, _top4, _bottom4, xi_tf4]  = request.security(syminfo.tickerid, "15", FindBox(15))
+        CreateBox(_time4, _top4, _bottom4, xi_tf4, "15")
+    if i_tf7 and timeframe.change("60")
+        [_time7, _top7, _bottom7, xi_tf7]  = request.security(syminfo.tickerid, "60", FindBox(60))
+        CreateBox(_time7, _top7, _bottom7, xi_tf7, "60")
+    if i_tf10 and timeframe.change("240")
+        [_time10, _top10, _bottom10, xi_tf10]  = request.security(syminfo.tickerid, "240", FindBox(240))
+        CreateBox(_time10, _top10, _bottom10, xi_tf10, "240")
+    if i_tf11 and timeframe.change("D")
+        [_time11, _top11, _bottom11, xi_tf11]  = request.security(syminfo.tickerid, "D", FindBox(1440))
+        CreateBox(_time11, _top11, _bottom11, xi_tf11, "D")
+
+// Find mitigations
+FindMitigatedBoxes(_mitigatedBoxes) =>
+    _mitigatedaFVG = false
+    if array.size(_mitigatedBoxes) > 0
+        for i = array.size(_mitigatedBoxes) - 1 to 0 by 1
+            if na(array.get(_mitigatedBoxes, i))
+                array.remove(_mitigatedBoxes, i)
+            else
+                box =  array.get(_mitigatedBoxes, i)
+                left = box.get_left(box)
+                right = box.get_right(box)
+                top = box.get_top(box)
+                bottom = box.get_bottom(box)
+
+                if low <= top and high >= bottom and right == time
+                    _mitigatedaFVG := true
+
+                // Cull bars (we don't need mitigated FVG's to take up space)
+                if right < time - (60000 * i_FVGBarCull)
+                    array.set(_mitigatedBoxes, i, na)
+                    box.delete(box)
+    _mitigatedaFVG
+ 
+mitigatedaBullFVG = false
+mitigatedaBearFVG = false
+mitigatedaFVG = false
+if i_enableFVG
+    UpdateBox(bullBoxes, 1)
+    UpdateBox(bearBoxes, -1)
+
+    mitigatedaBullFVG := FindMitigatedBoxes(mitigatedBullBoxes)
+    mitigatedaBearFVG := FindMitigatedBoxes(mitigatedBearBoxes)
+    mitigatedaFVG := FindMitigatedBoxes(mitigatedBoxes)
+
+bullLiquidity = (mitigatedaBullFVG[0] or mitigatedaFVG[0]) or (mitigatedaBullFVG[1] or mitigatedaFVG[1])
+bearLiquidity = (mitigatedaBearFVG[0] or mitigatedaFVG[0]) or (mitigatedaBearFVG[1] or mitigatedaFVG[1])
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Candlestick patterns logic
+// ---------------------------------------------------------------------------------------------------------------------
+// Prepare helper values
+float bodyHigh = math.max(open, close)
+float bodyLow = math.min(open, close)
+float candleRange = math.abs(low - high)
+float bodyRange = bodyHigh - bodyLow
+float avgBodyRange = ta.ema(bodyRange, 14)
+bool greenCandle = open < close
+bool redCandle = open > close
+float upperWickPct = ((high - bodyHigh) / candleRange) * 100
+float lowerWickPct = ((bodyLow - low) / candleRange) * 100
+float bodyPct = (bodyRange / candleRange) * 100
+
+// enums for candle classifications
+enum tSize
+    zero
+    tiny
+    small
+    long
+enum tCandleSide
+    upper
+    lower
+
+GetWickSize(tCandleSide side) =>    
+    float wickSize = na
+    if side == tCandleSide.upper
+        wickSize := high - bodyHigh
+    else
+        wickSize := bodyLow - low
+
+    // true: classify relative to percent of candleRange
+    // false: classify relative to percent of bodyRange
+    useCandleRangeSizeLogic = false
+
+    if wickSize == 0
+        tSize.zero
+    else if useCandleRangeSizeLogic ? wickSize < candleRange * 0.1 :  wickSize < bodyRange * 0.2
+        tSize.tiny
+    else if useCandleRangeSizeLogic ? wickSize >= candleRange * 0.1 and wickSize < candleRange * 0.7 : wickSize >= bodyRange * 0.2 and wickSize < bodyRange * 1.2
+        tSize.small
+    else if useCandleRangeSizeLogic ? wickSize >= candleRange * 0.7 : wickSize >= bodyRange * 1.2
+        tSize.long
+
+GetBodySize() =>
+    if math.round_to_mintick(close) == math.round_to_mintick(open)
+        tSize.zero
+    else if bodyRange < avgBodyRange * 0.25
+        tSize.tiny
+    else if bodyRange >= avgBodyRange * 0.25 and bodyRange < avgBodyRange * 0.7
+        tSize.small
+    else if bodyRange > avgBodyRange * 0.7
+        tSize.long
+
+tSize lowerWick = GetWickSize(tCandleSide.lower)
+tSize upperWick = GetWickSize(tCandleSide.upper)
+tSize bodySize = GetBodySize()
+
+accEntryCandleSize = candleRange <= ta.atr(14) * 2
+
+// Bullish Patterns --------------------------------------------------
+signalTooltips = array.new_string()
+signalDetails = array.new_string()
+isDojiCandle = bodySize == tSize.zero and upperWick != tSize.zero and lowerWick != tSize.zero
+
+bullSweep = 
+     (
+     (lowerWick[2] != tSize.zero and lowerWick[1] != tSize.zero and (low[1] < low[2] or math.round_to_mintick(low[2]) - math.round_to_mintick(low[1]) == 0) and close > bodyLow[1] and redCandle[1] and redCandle[2] and greenCandle)
+     or (lowerWick[2] != tSize.zero and lowerWick[1] != tSize.zero and (low[1] < low[2] or math.round_to_mintick(low[2]) - math.round_to_mintick(low[1]) == 0) and isDojiCandle[1] and close > bodyLow[1] and greenCandle)
+     ) 
+     and accEntryCandleSize
+     and triggerBull and ((triggerStrongBullSweep ? bullLiquidity : false) or (triggerWeakBullSweep ? not bullLiquidity : false))
+if bullSweep
+    signalTooltips.push("Sweep")
+
+bullPiercing = redCandle[1] and greenCandle and (bodyLow[1] + (bodyHigh[1] - bodyLow[1]) / 2) < close and low < low[1] //and close[1] > open and open[1] > close
+     and triggerBull and ((triggerStrongPiercingBull ? bullLiquidity : false) or (triggerWeakPiercingBull ? not bullLiquidity : false))
+     and accEntryCandleSize
+if bullPiercing
+    signalTooltips.push("Piercing")
+
+bullHarami = greenCandle and high <= bodyHigh[1] and low >= bodyLow[1] and redCandle[1]
+     and triggerBull and ((triggerStrongBullHarami ? bullLiquidity : false) or (triggerWeakBullHarami ? not bullLiquidity : false))
+if bullHarami
+    signalTooltips.push("Harami")
+
+bullTweezer = math.round_to_mintick(low[1]) - math.round_to_mintick(low) == 0 and greenCandle and redCandle[1] and (bodySize == tSize.small or bodySize == tSize.long) and (bodySize[1] == tSize.small or bodySize[1] == tSize.long)
+     and triggerBull and ((triggerStrongBullTweezer ? bullLiquidity : false) or (triggerWeakBullTweezer ? not bullLiquidity : false))
+if bullTweezer
+    signalTooltips.push("Tweezer")
+
+bullEngulfing = redCandle[1] and greenCandle and bodyRange > bodyRange[1] / 2 and open < close[1] and bodyHigh > bodyHigh[1]
+     and triggerBull and ((triggerStrongEngulfingBull ? bullLiquidity : false) or (triggerWeakEngulfingBull ? not bullLiquidity : false))
+     and accEntryCandleSize
+if bullEngulfing
+    signalTooltips.push("Engulfing")
+
+bullHammer = upperWick == tSize.zero and (bodySize == tSize.tiny or bodySize == tSize.small) and (lowerWick == tSize.long)
+     and triggerBull and ((triggerStrongBullHammer ? bullLiquidity : false) or (triggerWeakBullHammer ? not bullLiquidity : false))
+if bullHammer
+    signalTooltips.push("Hammer")
+
+// Bearish Patterns --------------------------------------------------
+bearSweep = 
+      (
+      (upperWick[2] != tSize.zero and upperWick[1] != tSize.zero and (high[1] > high[2] or math.round_to_mintick(high[2]) - math.round_to_mintick(high[1]) == 0) and close < bodyHigh[1] and greenCandle[2] and greenCandle[1] and redCandle)
+      or (upperWick[2] != tSize.zero and upperWick[1] != tSize.zero and (high[1] < high[2] or math.round_to_mintick(high[2]) - math.round_to_mintick(high[1]) == 0) and isDojiCandle[1] and close < bodyHigh[1] and redCandle)
+      )
+      and accEntryCandleSize
+      and triggerBear and ((triggerStrongBearSweep ? bearLiquidity : false) or (triggerWeakBearSweep ? not bearLiquidity : false))
+if bearSweep
+    signalTooltips.push("Sweep")
+
+bearPiercing = greenCandle[1] and redCandle and (bodyLow[1] + (bodyHigh[1] - bodyLow[1]) / 2) > close and high > high[1] //and close[1] < open and open[1] < close
+     and triggerBear and ((triggerStrongPiercingBear ? bearLiquidity : false) or (triggerWeakPiercingBear ? not bearLiquidity : false))
+     and accEntryCandleSize
+if bearPiercing
+    signalTooltips.push("Piercing")
+
+bearHarami = redCandle and low >= bodyLow[1] and high <= bodyHigh[1] and greenCandle[1]
+     and triggerBear and ((triggerStrongBearHarami ? bearLiquidity : false) or (triggerWeakBearHarami ? not bearLiquidity : false))
+if bearHarami
+    signalTooltips.push("Harami")
+
+bearTweezer = math.round_to_mintick(high[1]) - math.round_to_mintick(high) == 0 and redCandle and greenCandle[1] and (bodySize == tSize.small or bodySize == tSize.long) and (bodySize[1] == tSize.small or bodySize[1] == tSize.long)
+     and triggerBear and ((triggerStrongBearTweezer ? bearLiquidity : false) or (triggerWeakBearTweezer ? not bearLiquidity : false))
+if bearTweezer
+    signalTooltips.push("Tweezer")
+
+bearEngulfing = greenCandle[1] and redCandle and bodyRange > bodyRange[1] / 2 and open > close[1] and bodyLow < bodyLow[1]
+     and triggerBear and ((triggerStrongEngulfingBear ? bearLiquidity : false) or (triggerWeakEngulfingBear ? not bearLiquidity : false))
+     and accEntryCandleSize
+if bearEngulfing
+    signalTooltips.push("Engulfing")
+
+bearHangingMan = upperWick == tSize.zero and (bodySize == tSize.tiny or bodySize == tSize.small) and (lowerWick == tSize.long)
+     and triggerBear and ((triggerStrongBearHangingMan ? bearLiquidity : false) or (triggerWeakBearHangingMan ? not bearLiquidity : false))
+if bearHangingMan
+    signalTooltips.push("Hanging Man")
+
+// Gather strings for tooltip when hovering mouse over signals.
+string signalTT = ""
+for signal in signalTooltips
+    signalTT := signalTT + signal + "\n"
+
+// ---------------------------------------------------------------------------------------------------------------------
+// All time high (ATH)
+// ---------------------------------------------------------------------------------------------------------------------
+var float ath = 0
+var float ath_bottom = 0
+rangePct = 0.2
+const int athLag = 0
+if close[1] > ath
+    ath := close[1]
+    ath_bottom := ath * (1 - rangePct / 100)
+p1 = plot(ath[athLag], color = i_showATH ? i_athColor : color.new(color.white, 100), title = "ATH", display = display.none)
+p2 = plot(ath_bottom[athLag], color = i_showATH ? i_athFadeColor : color.new(color.white, 100), title = "ATH bottom", display = display.none)
+fill(p1, p2, top_value = ath[athLag], top_color = i_showATH ? i_athColor : color.new(color.white, 100), bottom_value = ath_bottom[athLag], bottom_color = i_athFadeColor)
+
+// ---------------------------------------------------------------------------------------------------------------------
+// No-Trade zones: There are times where I don't want to get signals and alerts
+// ---------------------------------------------------------------------------------------------------------------------
+inNoTradeZone1   = bool(time(timeframe.period, i_ntz1SessionTime, i_ntzSessionZone))
+inNoTradeZone2   = bool(time(timeframe.main_period, i_ntz2SessionTime, i_ntzSessionZone))
+inNoTradeZone3   = bool(time(timeframe.main_period, i_ntz3SessionTime, i_ntzSessionZone))
+
+inNoTradeZone = (i_showNoTradeZone1 and inNoTradeZone1) or (i_showNoTradeZone2 and inNoTradeZone2) or (i_showNoTradeZone3 and inNoTradeZone3)
+bgcolor(inNoTradeZone ? i_ntzBgColor : na)
+noTradeBar = inNoTradeZone
+plotshape(noTradeBar, "NoTrade", shape.square, location = location.bottom, size = size.small, color = i_ntzBarColor, display = display.none)
+
+triggerSignals1   = ((not i_showNoTradeZone1) or (not i_suppressSignals) and inNoTradeZone1) or (not inNoTradeZone1)
+triggerSignals2   = ((not i_showNoTradeZone2) or (not i_suppressSignals) and inNoTradeZone2) or (not inNoTradeZone2)
+triggerSignals3   = ((not i_showNoTradeZone3) or (not i_suppressSignals) and inNoTradeZone3) or (not inNoTradeZone3)
+triggerSignals    = triggerSignals1 and triggerSignals2 and triggerSignals3
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Signals
+// ---------------------------------------------------------------------------------------------------------------------
+bool anyEntrySignal = false
+bullSignal = (
+     (bullishShootingRange[0] and 
+     (bullSweep or bullPiercing or bullHarami or bullTweezer or bullEngulfing or bullHammer)
+     ) or (
+     bullishShootingRange[1] and 
+     (bullSweep or bullPiercing or bullHarami or bullTweezer or bullEngulfing or bullHammer)
+     ))
+     and (i_waitForConfirmation ? barstate.isconfirmed : true)
+     and triggerSignals
+     and not anyEntrySignal[1]
+
+bearSignal = (
+     (bearishFallingRange[0] and 
+     (bearSweep or bearPiercing or bearHarami or bearTweezer or bearEngulfing or bearHangingMan)
+     ) or (
+     bearishFallingRange[1] and 
+     (bearSweep or bearPiercing or bearHarami or bearTweezer or bearEngulfing or bearHangingMan)
+     ))
+     and (i_waitForConfirmation ? barstate.isconfirmed : true)
+     and triggerSignals
+     and not anyEntrySignal[1]
+
+weakBull = (bullSignal and not bullLiquidity)
+weakBear = (bearSignal and not bearLiquidity)
+
+strongBull = bullSignal and bullLiquidity
+strongBear = bearSignal and bearLiquidity
+anyEntrySignal := weakBull or strongBull or weakBear or strongBear
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Imbalance / Trends
+// ---------------------------------------------------------------------------------------------------------------------
+enum direction
+    up
+    down
+
+float PrevHigh = ta.highestbars(high, i_trendLookBack) == 0 ? high : na
+float prevLow = ta.lowestbars(low, i_trendLookBack) == 0 ? low : na
+
+var direction trendDir = na
+trendDir := bool(PrevHigh) and na(prevLow) ? direction.up : bool(prevLow) and na(PrevHigh) ? direction.down : trendDir
+
+// Arrays for SwingPoints
+var max_array_size = 10
+var swingPoints = array.new_float(0)
+oldswingPoints = array.copy(swingPoints)
+
+AddSwingPoint(pointer, value, bindex) =>
+    array.unshift(pointer, bindex)
+    array.unshift(pointer, value)
+    if array.size(pointer) > max_array_size
+        array.pop(pointer)
+        array.pop(pointer)
+
+GetTPValue(float imbalancePoints) =>
+    float tp = na
+    if i_TPfibLevel == "23.6%"
+        tp := imbalancePoints * 0.236
+    else if i_TPfibLevel == "38.2%"
+        tp := imbalancePoints * 0.382
+    else if i_TPfibLevel == "50.0%"
+        tp := imbalancePoints * 0.5
+    else if i_TPfibLevel == "61.8%"
+        tp := imbalancePoints * 0.618
+    else if i_TPfibLevel == "88.6%"
+        tp := imbalancePoints * 0.886
+    tp
+
+dirChanged = trendDir[0] != trendDir[1]
+
+if (PrevHigh != 0 or prevLow != 0)
+    swingPrice = trendDir == direction.up ? PrevHigh : prevLow
+    if dirChanged
+        AddSwingPoint(swingPoints, swingPrice, bar_index)
+    else
+        if array.size(swingPoints) == 0
+            AddSwingPoint(swingPoints, swingPrice, bar_index)
+        else if (trendDir == direction.up and swingPrice > array.get(swingPoints, 0)) or (trendDir == direction.down and swingPrice < array.get(swingPoints, 0))
+            array.set(swingPoints, 0, swingPrice)
+            array.set(swingPoints, 1, bar_index)
+
+// Plotting swingPoints and labels
+var line imbalanceLine = na
+label signalLabel = na
+var float imbalancePoints = na
+
+var int recentHiLowBar = na
+var float recentHiLow = na
+var float imbalancePct = na
+var float tp = na
+float tp_y = na
+var string pctText = ""
+
+var line tp_line = na
+var line sl_line = na
+var label tp_label = na
+var label sl_label = na
+
+bool showPointText = (i_showImbalance == "Points" or i_showImbalance == "Both")
+bool showPctText = (i_showImbalance == "Percentages" or i_showImbalance == "Both")
+
+HighestBar(lookback) =>
+    if lookback > 0
+        tempHigh = high
+        index = 0
+        for i = 0 to lookback - 1
+            if high[i] > tempHigh
+                tempHigh := high[i]
+                index := i
+        index
+    else
+        0
+
+LowestBar(lookback) =>
+    if lookback > 0
+        tempLow = low
+        index = 0
+        for i = 0 to lookback - 1
+            if low[i] < tempLow
+                tempLow := low[i]
+                index := i
+        index
+    else
+        0
+
+var float signal_y = na
+if anyEntrySignal and array.size(swingPoints) >= 6
+    recentHiLow := array.get(swingPoints, 2)
+
+    adj = math.round(array.get(swingPoints, 3)) - 1
+    if adj > i_trendLookBack * 2
+        adj := i_trendLookBack * 2
+    offset = (strongBull or weakBull) ? LowestBar(adj - 1) : HighestBar(adj - 1)
+    signal_y := (strongBull or weakBull) ? low[offset] : high[offset]
+    imbalancePoints := math.abs(recentHiLow - signal_y)
+    tp := GetTPValue(imbalancePoints)
+    imbalancePct := (imbalancePoints * 100) / recentHiLow
+    if i_imbalanceThreshold > 0 and imbalancePct < i_imbalanceThreshold
+        strongBull := false
+        weakBull := false
+        strongBear := false
+        weakBear := false
+    else if i_showLastSwingPoint
+        imbalanceLine := line.new(x1 = bar_index - offset, y1 = signal_y, x2 = math.round(array.get(swingPoints, 3)), y2 = array.get(swingPoints, 2), color = trendDir == direction.up ? i_strongBullSignalColor : i_strongBearSignalColor, width = 1, style = line.style_dotted)
+    // imbalance labels   
+    // Used for staggering labels if they show up too close together
+    recentBullSignal = strongBull[1] or strongBull[2] or weakBull[1] or weakBull[2]
+    recentBearSignal = strongBear[1] or strongBear[2] or weakBear[1] or weakBear[2]
+    pctText := ((i_showImbalance == "Percentages" or i_showImbalance == "Both") ? str.tostring(imbalancePct, "#.##") + "%" : "")
+    pointText = ((i_showImbalance == "Points" or i_showImbalance == "Both") ? str.tostring(imbalancePoints) : "")
+    // Imbalance label
+    if strongBull or weakBull
+        label.new(x = bar_index, y = na, text = "\n\n" + (recentBullSignal ? "\n\n" : "") + pointText + (showPointText and showPctText ? " - (" : "") + pctText + (showPointText and showPctText ? ")" : ""), yloc = trendDir == direction.up ? yloc.abovebar : yloc.belowbar, textcolor = i_trendTextCol, style = label.style_none, size = size.small)
+    else if strongBear or weakBear
+        label.new(x = bar_index, y = na, text = pointText + (showPointText and showPctText ? " - (" : "") + pctText + (showPointText and showPctText ? ")" : "") + "\n\n" + (recentBullSignal ? "\n\n" : ""), yloc = trendDir == direction.up ? yloc.abovebar : yloc.belowbar, textcolor = i_trendTextCol, style = label.style_none, size = size.small)
+
+if (strongBull[1] or weakBull[1] or strongBear[1] or weakBear[1]) and array.size(swingPoints) >= 6
+    recentHiLowBar := math.round(array.get(swingPoints, 3))
+    recentHiLow := array.get(swingPoints, 2)
+    imbalancePoints := math.abs(recentHiLow - open)
+    imbalancePct := (imbalancePoints * 100) / recentHiLow
+     
+    entry = open
+    usingMinTP = false
+    tp := tp - math.abs(signal_y - entry)
+    if tp < i_TP
+        usingMinTP := true
+        tp := i_TP
+    if i_TPfibLevel == "Fixed"
+        tp := i_TP
+
+    // entry line
+    if i_showTradeGuidelines == "Take profit" or i_showTradeGuidelines == "Both" or i_showTradeGuidelines == "Stop loss"
+        line.new(x1 = bar_index, y1 = entry, x2 = bar_index + i_TradeGuidelineLength, y2 = entry, width = 1, style = line.style_solid, color = color.gray)
+    
+    tp_Text = ""
+    tp_y := entry + (tp * ((strongBull[1] or weakBull[1]) ? 1 : -1))
+    sl_Text = ""
+    sl_y = entry + (i_SL * ((strongBull[1] or weakBull[1]) ? -1 : 1))
+    if i_showTradeValues
+        tp_Text := str.tostring(tp_y, "#,###.##")
+        sl_Text := str.tostring(sl_y, "#,###.##")
+    if i_showTradeDelta
+        if i_showTradeValues
+            tp_Text := tp_Text + "("
+            sl_Text := sl_Text + "("
+        tp_Text := tp_Text + str.tostring(tp, "#,###.##")
+        sl_Text := sl_Text + str.tostring(i_SL, "#,###.##")
+        if i_showTradeValues
+            tp_Text := tp_Text + ")"
+            sl_Text := sl_Text + ")"
+
+    // tp and sl lines + labels
+    if i_showTradeValues or i_showTradeDelta
+        tp_label := label.new(bar_index + i_TradeGuidelineLength-1, tp_y, text = tp_Text, style = label.style_label_left, color = color.new(color.white, 100), size = size.small, textcolor = i_strongBullSignalColor)
+        sl_label := label.new(bar_index + i_TradeGuidelineLength-1, sl_y, text = sl_Text, style = label.style_label_left, color = color.new(color.white, 100), size = size.small, textcolor = i_strongBearSignalColor)
+    if i_showTradeGuidelines == "Take profit" or i_showTradeGuidelines == "Both"
+        tp_line := line.new(x1 = bar_index, y1 = tp_y, x2 = bar_index + i_TradeGuidelineLength, y2 = tp_y, width = 1, style = usingMinTP ? line.style_dotted : line.style_solid, color = i_strongBullSignalColor)
+    if i_showTradeGuidelines == "Stop loss" or i_showTradeGuidelines == "Both"
+        sl_line := line.new(x1 = bar_index, y1 = sl_y, x2 = bar_index + i_TradeGuidelineLength, y2 = sl_y, width = 1, style = line.style_solid, color = i_strongBearSignalColor)
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Signal Plots
+// ---------------------------------------------------------------------------------------------------------------------
+if ((strongBull or weakBull) and i_displaySignals)
+    signalLabel := label.new(bar_index, na, "▲", xloc = xloc.bar_index, yloc = yloc.belowbar, style = label.style_none, size = size.normal, textcolor = strongBull ? i_strongBullSignalColor : i_weakBullSignalColor, tooltip = signalTT, textalign = text.align_left)
+
+if ((strongBear or weakBear) and i_displaySignals)
+    signalLabel := label.new(bar_index, na, "▼", xloc = xloc.bar_index, yloc = yloc.abovebar, style = label.style_none, size = size.normal, textcolor = strongBear ? i_strongBearSignalColor : i_weakBearSignalColor, tooltip = signalTT, textalign = text.align_left)
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Alerts
+// ---------------------------------------------------------------------------------------------------------------------
+alertcondition(bullishShootingRange and not bullishShootingRange[1] and triggerSignals, "BullishShooting range", "Entered a potential bullish shooting range area. Watch out for opportunities to go long.")
+alertcondition(bearishFallingRange and not bearishFallingRange[1] and triggerSignals, "BearishFalling range", "Entered a potential bearish falling range area. Watch out for opportunities to go short.")
+
+alertcondition(weakBull, "Weak bull signal", "Weak bull signal. There's no liquidity. Enter long at own risk.")
+alertcondition(weakBear, "Weak bear signal", "Weak bear signal. There's no liquidity. Enter long at own risk.")
+
+alertcondition(strongBull, "Strong bull signal", "Strong bull signal. Check for proper imbalance before entering long.")
+alertcondition(strongBear, "Strong bear signal", "Strong bear signal. Check for proper imbalance before entering short.")
+
+if inNoTradeZone and not inNoTradeZone[1]
+    alert("Entering No-Trade zone - Don't take any trades.", alert.freq_once_per_bar)
+else if not inNoTradeZone and inNoTradeZone[1]
+    alert("Leaving No-Trade zone - Trade again.", alert.freq_once_per_bar)
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Experimental Backtest
+// ---------------------------------------------------------------------------------------------------------------------
+enum tradeDir
+    buy
+    sell
+enum signalTrigger
+    sweep = "Sweeping"
+    engulfing = "Engulfing"
+    tweezer = "Tweezer"
+    hammer = "Hammer"
+    piercing = "Piercing"
+    generic = "Generic"
+enum tradeState
+    trade_open
+    trade_closed
+enum signalStrength
+    strong
+    weak
+enum tradeResult
+    pending
+    win
+    loss
+
+type trade
+    tradeDir dir
+    signalTrigger signalType
+    signalStrength strength
+    float price
+    float TP
+    float TPdelta
+    float SL
+    float SLdelta
+    tradeState state
+    tradeResult winLoss
+    label signalLabel
+    string orderId
+
+type tradeSummaryLineByTrigger
+    signalTrigger signalType
+    array<signalStrength> tradeSummaryLineByStrength
+    tradeResult winLoss
+
+var openTrades = array.new<trade>()
+var closedTrades = array.new<trade>()
+
+GetSignalTrigger() =>
+    // TODO: Implement this if i want to expand on intelligence of what patterns generate good results
+    signalTrigger.generic
+
+GetSize(string sizeString) =>
+    size = size.small
+    if (sizeString == "Tiny")
+        size := size.tiny
+    if (sizeString == "Small")
+        size := size.small
+    if (sizeString == "Normal")
+        size := size.normal
+    if (sizeString == "Auto")
+        size := size.auto
+    size
+
+var int orderNo = 0
+string orderId = na
+if i_ShowBackTest
+    if (strongBull[1])
+        newTrade = trade.new(tradeDir.buy, signalType = GetSignalTrigger(), strength = signalStrength.strong, price = open, TP = tp_y, TPdelta = tp, SL = open - i_SL, SLdelta = i_SL, state = tradeState.trade_open, winLoss = tradeResult.pending, signalLabel = signalLabel[1], orderId = orderId[1])
+        openTrades.push(newTrade)
+    if (weakBull[1])
+        newTrade = trade.new(tradeDir.buy, signalType = GetSignalTrigger(), strength = signalStrength.weak, price = open, TP = tp_y, TPdelta = tp, SL = open - i_SL, SLdelta = i_SL, state = tradeState.trade_open, winLoss = tradeResult.pending, signalLabel = signalLabel[1], orderId = orderId[1])
+        openTrades.push(newTrade)
+    if (strongBear[1])
+        newTrade = trade.new(tradeDir.sell, signalType = GetSignalTrigger(), strength = signalStrength.strong, price = open, TP = tp_y, TPdelta = tp, SL = open + i_SL, SLdelta = i_SL, state = tradeState.trade_open, winLoss = tradeResult.pending, signalLabel = signalLabel[1], orderId = orderId[1])
+        openTrades.push(newTrade)
+    if (weakBear[1])
+        newTrade = trade.new(tradeDir.sell, signalType = GetSignalTrigger(), strength = signalStrength.weak, price = open, TP = tp_y, TPdelta = tp, SL = open + i_SL, SLdelta = i_SL, state = tradeState.trade_open, winLoss = tradeResult.pending, signalLabel = signalLabel[1], orderId = orderId[1])
+        openTrades.push(newTrade)
+
+    if array.size(openTrades) > 0
+        for i = array.size(openTrades) - 1 to 0
+            trade t = array.get(openTrades, i)
+            if t.dir == tradeDir.buy
+                if high >= t.TP
+                    t.state := tradeState.trade_closed
+                    t.winLoss := tradeResult.win
+                    closedTrades.push(t)
+                    array.remove(openTrades, i)
+                    if not na(t.signalLabel)
+                        label.set_text(t.signalLabel, "✓")
+                        label.set_textcolor(t.signalLabel, color.green)
+                else if low <= t.SL
+                    t.state := tradeState.trade_closed
+                    t.winLoss := tradeResult.loss
+                    closedTrades.push(t)
+                    array.remove(openTrades, i)
+                    if not na(t.signalLabel)
+                        label.set_text(t.signalLabel, "✗")
+                        label.set_textcolor(t.signalLabel, color.red)
+            else if t.dir == tradeDir.sell
+                if low <= t.TP
+                    t.state := tradeState.trade_closed
+                    t.winLoss := tradeResult.win
+                    closedTrades.push(t)
+                    array.remove(openTrades, i)
+                    if not na(t.signalLabel)
+                        label.set_text(t.signalLabel, "✓")
+                        label.set_textcolor(t.signalLabel, color.green)
+                else if high >= t.SL
+                    t.state := tradeState.trade_closed
+                    t.winLoss := tradeResult.loss
+                    closedTrades.push(t)
+                    array.remove(openTrades, i)
+                    if not na(t.signalLabel)
+                        label.set_text(t.signalLabel, "✗")
+                        label.set_textcolor(t.signalLabel, color.red)
+
+    numberOfSignals = 1
+    rows = 2 + (numberOfSignals * 2)
+
+    backTestPosition = position.bottom_center
+    if i_backTestPosition == "Bottom_Right"
+        backTestPosition := position.bottom_right
+    else if i_backTestPosition == "Bottom_Left"
+        backTestPosition := position.bottom_left
+    else if i_backTestPosition == "Bottom_Center"
+        backTestPosition := position.bottom_center
+
+    var table statsTable = table.new(backTestPosition, 11, rows)
+    tableTextColor = i_backTestTableColor
+    if barstate.islast
+        int strongWinCount = 0
+        int strongLossCount = 0
+        int weakWinCount = 0
+        int weakLossCount = 0
+        float maxDrawdown = 0.0
+        float maxProfit = 0.0
+        float currentPL = 0.0
+        float strongPL = 0.0
+        float weakPL = 0.0
+        float totalTP = 0.0    // used for calculating avg TP
+        float avgTP = na
+        if array.size(closedTrades) > 0
+            for i = array.size(closedTrades) - 1 to 0
+                trade t = array.get(closedTrades, i)
+                totalTP := totalTP + nz(t.TPdelta)
+                if t.winLoss == tradeResult.win and t.strength == signalStrength.strong
+                    strongWinCount := strongWinCount + 1
+                    currentPL := currentPL + t.TPdelta
+                    strongPL := strongPL + t.TPdelta
+                else if t.winLoss == tradeResult.loss and t.strength == signalStrength.strong
+                    strongLossCount := strongLossCount + 1
+                    currentPL := currentPL - t.SLdelta
+                    strongPL := strongPL - t.SLdelta
+                else if t.winLoss == tradeResult.win and t.strength == signalStrength.weak
+                    weakWinCount := weakWinCount + 1
+                    currentPL := currentPL + t.TPdelta
+                    weakPL := weakPL + t.TPdelta
+                else if t.winLoss == tradeResult.loss and t.strength == signalStrength.weak
+                    weakLossCount := weakLossCount + 1
+                    currentPL := currentPL - t.SLdelta
+                    weakPL := weakPL - t.SLdelta
+
+                if currentPL < maxDrawdown
+                    maxDrawdown := currentPL
+                if currentPL > maxProfit
+                    maxProfit := currentPL
+            avgTP := totalTP / (array.size(closedTrades))
+
+        // Row headers
+        textSize = GetSize(i_backTestTextSize)
+        table.cell(statsTable, 0, 1, "Strong", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        table.cell(statsTable, 0, 2, "Weak", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        table.cell(statsTable, 0, 3, "Total", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        // Column headers
+        table.cell(statsTable, 1, 0, "TP", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        table.cell(statsTable, 2, 0, "SL", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        table.cell(statsTable, 3, 0, "Total", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        table.cell(statsTable, 4, 0, "Win %", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        table.cell(statsTable, 5, 0, "Profit", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        table.cell(statsTable, 6, 0, "Avg TP", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        table.cell(statsTable, 7, 0, "Min", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+        table.cell(statsTable, 8, 0, "Max", text_size = textSize, text_formatting = text.format_bold, text_color = tableTextColor)
+
+        // Simple summary for now.. consider making it into a strategy
+        table.cell(statsTable, 1, 1, str.tostring(strongWinCount), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 2, 1, str.tostring(strongLossCount), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 3, 1, str.tostring(strongWinCount + strongLossCount), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        strongWinPct = strongWinCount / (strongWinCount + strongLossCount)
+        table.cell(statsTable, 4, 1, str.tostring(strongWinPct, "#.##" + "%"), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 5, 1, str.tostring(strongPL, "###,###.##"), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+
+        table.cell(statsTable, 1, 2, str.tostring(weakWinCount), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 2, 2, str.tostring(weakLossCount), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 3, 2, str.tostring(weakWinCount + weakLossCount), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        weakWinPct = weakWinCount / (weakWinCount + weakLossCount)
+        table.cell(statsTable, 4, 2, str.tostring(weakWinPct, "#.##" + "%"), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 5, 2, str.tostring(weakPL, "###,###.##"), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+
+        winsCount = strongWinCount + weakWinCount
+        lossCount = strongLossCount + weakLossCount
+        table.cell(statsTable, 1, 3, str.tostring(winsCount), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 2, 3, str.tostring(lossCount), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 3, 3, str.tostring(winsCount + lossCount), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 4, 3, str.tostring(winsCount / (winsCount + lossCount), "#.##" + "%"), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 5, 3, str.tostring(strongPL + weakPL, "###,###.##"), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 6, 3, str.tostring(avgTP, "###,###.##"), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 7, 3, str.tostring(maxDrawdown, "###,###.##"), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
+        table.cell(statsTable, 8, 3, str.tostring(maxProfit, "###,###.##"), text_size = textSize, text_formatting = text.format_none, text_color = tableTextColor)
