@@ -207,6 +207,11 @@ export default function CommunicationDashboard() {
     sendMessageMutation.mutate({ threadId: selectedThread.id, content: template.messageTemplate });
   };
 
+  const handleQuickMessage = (content: string) => {
+    if (!selectedThread) return;
+    sendMessageMutation.mutate({ threadId: selectedThread.id, content });
+  };
+
   const formatMessageTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -428,27 +433,94 @@ export default function CommunicationDashboard() {
             </ScrollArea>
 
             {/* Quick Replies */}
-            {templates.filter(t => t.isForDispatch && t.isActive).length > 0 && (
-              <div className="p-2 border-t border-gray-200 bg-gray-50">
-                <div className="flex gap-2 overflow-x-auto">
-                  {templates
-                    .filter(t => t.isForDispatch && t.isActive)
-                    .slice(0, 4)
-                    .map((template) => (
-                    <Button
-                      key={template.id}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleQuickReply(template)}
-                      className="whitespace-nowrap"
-                      data-testid={`quick-reply-${template.templateKey}`}
-                    >
-                      {template.displayText}
-                    </Button>
-                  ))}
-                </div>
+            <div className="p-3 border-t border-gray-200 bg-gray-50">
+              <h4 className="text-xs font-medium text-gray-700 mb-2">Quick Messages</h4>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {/* Common Dispatcher Messages */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickMessage('Hi! Just a friendly reminder about your pickup today. Please confirm when you arrive at the pickup location. Thanks!')}
+                  className="whitespace-nowrap text-xs"
+                  data-testid="quick-reply-pickup-reminder"
+                >
+                  📍 Pickup Reminder
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickMessage('Please provide an ETA for delivery. Customer is asking for updates. Thank you!')}
+                  className="whitespace-nowrap text-xs"
+                  data-testid="quick-reply-delivery-update"
+                >
+                  🚚 Delivery ETA
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickMessage('Hi! Can you please provide a quick status update on this load? Thanks!')}
+                  className="whitespace-nowrap text-xs"
+                  data-testid="quick-reply-status-check"
+                >
+                  ❓ Status Check
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickMessage('Great! Load confirmed. Please proceed to pickup location and keep me updated. Safe travels!')}
+                  className="whitespace-nowrap text-xs"
+                  data-testid="quick-reply-load-confirmed"
+                >
+                  ✅ Load Confirmed
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickMessage('Please remember to get all required paperwork signed and send photos when pickup/delivery is complete.')}
+                  className="whitespace-nowrap text-xs"
+                  data-testid="quick-reply-paperwork"
+                >
+                  📋 Paperwork
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuickMessage('Please contact the customer before arrival. Their contact info is in the load details. Thanks!')}
+                  className="whitespace-nowrap text-xs"
+                  data-testid="quick-reply-contact-customer"
+                >
+                  📞 Call Customer
+                </Button>
               </div>
-            )}
+
+              {/* Show existing templates if any */}
+              {templates.filter(t => t.isForDispatch && t.isActive).length > 0 && (
+                <div>
+                  <h5 className="text-xs font-medium text-gray-600 mb-2">Saved Templates</h5>
+                  <div className="flex gap-2 overflow-x-auto">
+                    {templates
+                      .filter(t => t.isForDispatch && t.isActive)
+                      .map((template) => (
+                      <Button
+                        key={template.id}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleQuickReply(template)}
+                        className="whitespace-nowrap text-xs"
+                        data-testid={`quick-reply-${template.templateKey}`}
+                      >
+                        {template.displayText}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Message Input */}
             <div className="p-4 border-t border-gray-200 bg-white">
