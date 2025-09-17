@@ -613,25 +613,30 @@ export class TelegramCommunicationService {
   }
 
   private async sendMessage(chatId: number, text: string, options?: any): Promise<void> {
-    // Delegate to main telegram service instead of using separate bot instance
-    if (!this.isRunning) return;
+    if (!this.isRunning) {
+      console.log('⚠️ Communication service not running - message not sent');
+      return;
+    }
     
     try {
-      // Import and use the main telegram service
-      const { telegramLoadService } = await import('./routes');
-      if (telegramLoadService && telegramLoadService.isInitialized()) {
-        const bot = telegramLoadService.getBot();
-        if (bot) {
-          await bot.sendMessage(chatId, text, options);
-          console.log('📱 Message sent via main telegram service');
-        } else {
-          console.log('⚠️ Main telegram bot not available');
-        }
-      } else {
-        console.log('⚠️ Main telegram service not initialized');
+      // First try to use the bot instance if available
+      if (this.bot) {
+        await this.bot.sendMessage(chatId, text, options);
+        console.log('📱 Message sent via communication service bot');
+        return;
       }
+
+      // Fallback to accessing the shared singleton
+      const sharedBot = (globalThis as any).__telegramBotSingleton?.bot;
+      if (sharedBot) {
+        await sharedBot.sendMessage(chatId, text, options);
+        console.log('📱 Message sent via shared singleton bot');
+        return;
+      }
+
+      console.log('⚠️ No bot instance available - message not sent');
     } catch (error) {
-      console.error('Failed to send message via main telegram service:', error);
+      console.error('❌ Failed to send message via Telegram:', error);
     }
   }
 
