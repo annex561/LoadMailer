@@ -8,6 +8,8 @@ import { schedulerService } from "./scheduler-service";
 import { loadExpirationService } from "./load-expiration-service";
 import { telegramLoadService } from "./telegram-service";
 import { telegramCommunicationService } from "./telegram-communication-service";
+import { smsCommunicationService } from "./sms-communication-service";
+import smsService from "./sms-service";
 import { gpsTrackingService } from "./gps-tracking-service";
 import { loadBoardService } from "./load-board-service";
 import { biddingService } from "./bidding-service";
@@ -827,9 +829,18 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: 'Communication thread not found' });
       }
 
-      // Send message through Telegram Communication Service
+      // Send message through SMS Communication Service
+      let messageDelivered = false;
       if (sender === 'dispatch') {
-        await telegramCommunicationService.sendLoadUpdateToDriver(thread.loadId, content);
+        messageDelivered = await smsCommunicationService.sendLoadUpdateToDriver(thread.loadId, content);
+        
+        // If SMS delivery fails, return error to show delivery failure
+        if (!messageDelivered) {
+          return res.status(409).json({ 
+            error: 'Message could not be delivered to driver. Check if load has assigned driver with valid phone number.',
+            success: false 
+          });
+        }
       }
 
       // Create message record in database
@@ -6322,11 +6333,11 @@ You have been assigned to this load. Safe travels! 🚛`;
 
   // ===== LOAD COMMUNICATION & MESSAGING API ENDPOINTS =====
 
-  // Initialize Telegram Communication Service
+  // Initialize SMS Communication Service
   app.post('/api/communication/initialize', async (req, res) => {
     try {
-      await telegramCommunicationService.initialize();
-      res.json({ success: true, message: 'Telegram Communication Service initialized' });
+      await smsCommunicationService.initialize();
+      res.json({ success: true, message: 'SMS Communication Service initialized' });
     } catch (error) {
       res.status(500).json({ 
         success: false, 
@@ -6335,28 +6346,81 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
-  // Debug endpoint to test communication service and bot availability
+  // Debug endpoint to test SMS communication service
   app.get('/api/communication/debug', async (req, res) => {
     try {
-      const isRunning = telegramCommunicationService.isRunning;
-      const globalSingleton = (globalThis as any).__telegramBotSingleton;
-      const hasBot = !!globalSingleton?.bot;
-      const botInfo = hasBot ? 'Available' : 'Not available';
+      const isRunning = smsCommunicationService.serviceRunning;
+      const smsConfigured = smsService.isServiceConfigured();
       
-      console.log('🔧 Communication Debug Check:');
+      console.log('🔧 SMS Communication Debug Check:');
       console.log(`📡 Service running: ${isRunning}`);
-      console.log(`🤖 Global bot singleton: ${hasBot ? 'Found' : 'Missing'}`);
-      console.log(`🎯 Bot status: ${botInfo}`);
+      console.log(`📱 SMS service configured: ${smsConfigured}`);
       
       res.json({
         serviceRunning: isRunning,
-        botSingletonExists: hasBot,
-        botStatus: botInfo,
+        smsConfigured: smsConfigured,
+        communicationType: 'SMS',
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      console.error('❌ Communication debug error:', error);
+      console.error('❌ SMS Communication debug error:', error);
       res.status(500).json({ error: 'Debug check failed' });
+    }
+  });
+
+  // SMS Webhook endpoints for receiving messages from drivers
+  app.post('/api/sms/webhook', async (req, res) => {
+    try {
+      // Verify Twilio signature for security (optional but recommended for production)
+      const twilioSignature = req.headers['x-twilio-signature'] as string;
+      if (process.env.NODE_ENV === 'production' && twilioSignature) {
+        // TODO: Implement full Twilio signature verification in production
+        console.log('🔒 Twilio signature verification recommended for production');
+      }
+      
+      console.log('📱 SMS webhook received:', req.body);
+      
+      const { From, Body, MessageSid } = req.body;
+      
+      if (!From || !Body) {
+        console.log('⚠️ Invalid SMS webhook data - missing From or Body');
+        console.log('📋 Request body keys:', Object.keys(req.body));
+        return res.status(400).send('Invalid webhook data');
+      }
+
+      // Handle incoming SMS through communication service
+      await smsCommunicationService.handleIncomingSMS(From, Body, MessageSid);
+      
+      // Respond with TwiML to acknowledge receipt
+      res.set('Content-Type', 'text/xml');
+      res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>Message received</Message>
+</Response>`);
+    } catch (error) {
+      console.error('❌ Error handling SMS webhook:', error);
+      res.status(500).send('Error processing SMS');
+    }
+  });
+
+  // SMS status webhook to track delivery status
+  app.post('/api/sms/status', async (req, res) => {
+    try {
+      console.log('📱 SMS status update:', req.body);
+      
+      const { MessageSid, MessageStatus, ErrorCode, ErrorMessage } = req.body;
+      
+      if (MessageStatus === 'delivered') {
+        console.log(`✅ SMS ${MessageSid} delivered successfully`);
+      } else if (MessageStatus === 'failed') {
+        console.log(`❌ SMS ${MessageSid} delivery failed: ${ErrorCode} - ${ErrorMessage}`);
+      }
+      
+      // Just acknowledge receipt
+      res.status(200).send('OK');
+    } catch (error) {
+      console.error('❌ Error handling SMS status webhook:', error);
+      res.status(500).send('Error processing status');
     }
   });
 

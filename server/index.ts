@@ -160,6 +160,19 @@ app.use((req, res, next) => {
       
       // Fire-and-forget approach - start each service independently without blocking anything
       
+      // 0. SMS Communication Service (immediate initialization)
+      setTimeout(() => {
+        (async () => {
+          try {
+            const { smsCommunicationService } = await import('./sms-communication-service.js');
+            await smsCommunicationService.initialize();
+            log('✅ SMS Communication Service initialized - ready for bidirectional SMS communication');
+          } catch (error) {
+            log(`⚠️ SMS Communication Service failed to initialize: ${error.message || error}`);
+          }
+        })();
+      }, 500);
+      
       // 1. Google Sheets Import Service (completely independent)
       setTimeout(() => {
         (async () => {
