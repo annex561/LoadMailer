@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { 
   MessageSquare, 
@@ -37,7 +38,10 @@ import {
   Settings,
   Sparkles,
   TrendingUp,
-  Target
+  Target,
+  UserPlus,
+  AlertTriangle,
+  X
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -118,6 +122,27 @@ interface ConversationInsight {
   driverMood: string;
 }
 
+interface UnassignedLoad {
+  id: string;
+  loadNumber: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  status: string;
+  rate?: number;
+  miles?: number;
+  equipmentType: string;
+  priority: string;
+  createdAt: string;
+}
+
+interface Driver {
+  id: string;
+  name: string;
+  phone?: string;
+  status: 'available' | 'on_route' | 'unavailable';
+  equipmentType: string;
+}
+
 export default function CommunicationDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -130,6 +155,8 @@ export default function CommunicationDashboard() {
   const [showAiPanel, setShowAiPanel] = useState(true);
   const [aiComposing, setAiComposing] = useState(false);
   const [showAiSettings, setShowAiSettings] = useState(false);
+  const [showUnassignedLoads, setShowUnassignedLoads] = useState(false);
+  const [selectedLoadForAssignment, setSelectedLoadForAssignment] = useState<UnassignedLoad | null>(null);
   
   // Fetch communication threads
   const { data: threads = [], isLoading: threadsLoading, refetch: refetchThreads } = useQuery<LoadCommunicationThread[]>({
@@ -315,6 +342,50 @@ export default function CommunicationDashboard() {
     }
   });
 
+  // Fetch unassigned loads
+  const { data: unassignedLoads = [], isLoading: unassignedLoadsLoading, refetch: refetchUnassignedLoads } = useQuery<UnassignedLoad[]>({
+    queryKey: ['/api/loads/unassigned'],
+    queryFn: async () => {
+      const response = await fetch('/api/loads?status=unassigned');
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.filter((load: any) => !load.driverId);
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Fetch all drivers
+  const { data: availableDrivers = [] } = useQuery<Driver[]>({
+    queryKey: ['/api/drivers'],
+    queryFn: async () => {
+      const response = await fetch('/api/drivers');
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.filter((driver: any) => driver.status === 'available');
+    },
+  });
+
+  // Assign driver to load mutation
+  const assignDriverMutation = useMutation({
+    mutationFn: async ({ loadId, driverId }: { loadId: string; driverId: string }) => {
+      const response = await fetch(`/api/loads/${loadId}/book-for-driver/${driverId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) throw new Error('Failed to assign driver');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Driver assigned successfully", description: `${data.driverName} assigned to load ${data.loadNumber}` });
+      refetchUnassignedLoads();
+      refetchThreads();
+      setSelectedLoadForAssignment(null);
+    },
+    onError: (error) => {
+      toast({ title: "Failed to assign driver", description: error.message, variant: "destructive" });
+    }
+  });
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -388,18 +459,31 @@ export default function CommunicationDashboard() {
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Communication Center</h2>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                refetchThreads();
-                refetchMessages();
-              }}
-              disabled={threadsLoading}
-              data-testid="button-refresh"
-            >
-              <RefreshCw className={`w-4 h-4 ${threadsLoading ? 'animate-spin' : ''}`} />
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowUnassignedLoads(!showUnassignedLoads)}
+                className={showUnassignedLoads ? 'bg-blue-50 border-blue-300' : ''}
+                data-testid="button-toggle-unassigned"
+              >
+                <UserPlus className="w-4 h-4 mr-1" />
+                Unassigned ({unassignedLoads.length})
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  refetchThreads();
+                  refetchMessages();
+                  refetchUnassignedLoads();
+                }}
+                disabled={threadsLoading}
+                data-testid="button-refresh"
+              >
+                <RefreshCw className={`w-4 h-4 ${threadsLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
           
           {/* Search and Filter */}
