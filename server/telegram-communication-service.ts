@@ -34,12 +34,23 @@ export class TelegramCommunicationService {
         return;
       }
 
-      // DO NOT create bot instance - let main service handle all Telegram operations
-      console.log('📡 Using main Telegram service for all bot operations (no separate instance)');
-      this.bot = null; // Explicitly set to null to avoid conflicts
+      // Use shared bot instance from TelegramLoadService to avoid conflicts
+      console.log('📡 Accessing shared Telegram bot instance...');
+      
+      // Get shared bot instance from global singleton
+      const sharedBot = (globalThis as any).__telegramBotSingleton?.bot;
+      if (sharedBot) {
+        this.bot = sharedBot;
+        console.log('✅ Using shared Telegram bot instance for communication');
+        
+        // Set up communication-specific handlers
+        this.setupCommunicationHandlers();
+      } else {
+        console.log('⚠️ No shared bot instance found - communication handlers will be added when bot is available');
+      }
       
       this.isRunning = true;
-      console.log('✅ Telegram Communication Service initialized (delegating to main service)');
+      console.log('✅ Telegram Communication Service initialized');
     } catch (error) {
       console.error('Failed to initialize Telegram communication service:', error);
     }
@@ -561,42 +572,44 @@ export class TelegramCommunicationService {
   }
 
   // Dispatch methods for sending messages to drivers
-  async sendMessageToDriver(driverId: string, message: string, options?: any): Promise<void> {
-    const driver = await storage.getDriver(driverId);
-    if (!driver?.telegramId) return;
+  
+  async sendMessageToDriver(driverId: string, message: string): Promise<void> {
+    try {
+      const driver = await storage.getDriver(driverId);
+      if (!driver?.telegramId) {
+        console.log(`⚠️ Driver ${driverId} has no Telegram ID - cannot send message`);
+        return;
+      }
 
-    await this.sendMessage(parseInt(driver.telegramId), message, options);
+      await this.sendMessage(parseInt(driver.telegramId), message);
+      console.log(`✅ Message sent to driver ${driver.name} (${driverId})`);
+    } catch (error) {
+      console.error(`❌ Failed to send message to driver ${driverId}:`, error);
+    }
   }
 
   async sendLoadUpdateToDriver(loadId: string, message: string): Promise<void> {
-    const load = await storage.getLoad(loadId);
-    if (!load?.driverId) return;
-
-    const thread = await storage.getLoadCommunicationThreadByLoad(loadId);
-    if (!thread) return;
-
-    // Create dispatch message record
-    await this.createMessageRecord({
-      threadId: thread.id,
-      loadId: loadId,
-      senderId: null, // Dispatch
-      senderRole: 'dispatch',
-      senderName: 'Dispatch',
-      messageType: 'text',
-      textContent: message,
-      telegramMessageId: '',
-      telegramChatId: '',
-      metadata: {
-        source: 'dispatch_update'
+    try {
+      // Get the load to find the assigned driver
+      const load = await storage.getLoad(loadId);
+      if (!load?.driverId) {
+        console.log(`⚠️ Load ${loadId} has no assigned driver - cannot send message`);
+        return;
       }
-    });
 
-    await this.sendMessageToDriver(load.driverId, message);
-    
-    await this.logCommunication(loadId, thread.id, 'message_sent', 'dispatch', 'dispatch', {
-      messageType: 'dispatch_update',
-      messageLength: message.length
-    });
+      const driver = await storage.getDriver(load.driverId);
+      if (!driver?.telegramId) {
+        console.log(`⚠️ Driver ${load.driverId} has no Telegram ID - cannot send message`);
+        return;
+      }
+
+      const formattedMessage = `📦 **Load ${load.loadNumber}**\n\n💬 **Message from Dispatch:**\n${message}`;
+      
+      await this.sendMessage(parseInt(driver.telegramId), formattedMessage, { parse_mode: 'Markdown' });
+      console.log(`✅ Load update sent to driver ${driver.name} for load ${load.loadNumber}`);
+    } catch (error) {
+      console.error(`❌ Failed to send load update for ${loadId}:`, error);
+    }
   }
 
   private async sendMessage(chatId: number, text: string, options?: any): Promise<void> {
