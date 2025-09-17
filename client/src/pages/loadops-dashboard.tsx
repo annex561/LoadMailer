@@ -131,8 +131,8 @@ function CommunicationCard({ thread, drivers, loads, onSendMessage }: {
   
   const { toast } = useToast();
   
-  const driver = drivers.find(d => d.id === thread.driverId);
-  const load = loads.find(l => l.id === thread.loadId);
+  const driver = drivers?.find(d => d.id === thread.driverId);
+  const load = loads?.find(l => l.id === thread.loadId);
   const unreadCount = thread.unreadDispatchMessages || 0;
   const lastMessage = thread.lastMessage;
   
@@ -720,6 +720,7 @@ export default function LoadOpsDashboard() {
                       key={thread.threadId} 
                       thread={thread} 
                       drivers={drivers}
+                      loads={loads}
                       onSendMessage={(driverId: string, message: string) => 
                         sendMessageMutation.mutate({ driverId, message })
                       }
@@ -844,7 +845,7 @@ export default function LoadOpsDashboard() {
   const sendMessageMutation = useMutation({
     mutationFn: async ({ driverId, message }: { driverId: string; message: string }) => {
       // Find the active load for this driver to get loadId
-      const driverLoad = loads.find((load: any) => load.driverId === driverId && load.status === 'assigned');
+      const driverLoad = loads?.find((load: any) => load.driverId === driverId && load.status === 'assigned');
       if (!driverLoad) {
         throw new Error('No active load found for this driver');
       }
