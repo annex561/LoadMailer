@@ -6335,6 +6335,31 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
+  // Debug endpoint to test communication service and bot availability
+  app.get('/api/communication/debug', async (req, res) => {
+    try {
+      const isRunning = telegramCommunicationService.isRunning;
+      const globalSingleton = (globalThis as any).__telegramBotSingleton;
+      const hasBot = !!globalSingleton?.bot;
+      const botInfo = hasBot ? 'Available' : 'Not available';
+      
+      console.log('🔧 Communication Debug Check:');
+      console.log(`📡 Service running: ${isRunning}`);
+      console.log(`🤖 Global bot singleton: ${hasBot ? 'Found' : 'Missing'}`);
+      console.log(`🎯 Bot status: ${botInfo}`);
+      
+      res.json({
+        serviceRunning: isRunning,
+        botSingletonExists: hasBot,
+        botStatus: botInfo,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('❌ Communication debug error:', error);
+      res.status(500).json({ error: 'Debug check failed' });
+    }
+  });
+
 
   // Get communication thread for specific load
   app.get('/api/communication/threads/load/:loadId', async (req, res) => {
