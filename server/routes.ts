@@ -6,10 +6,8 @@ import { storage } from "./storage";
 import { analyticsService } from "./analytics-service";
 import { schedulerService } from "./scheduler-service";
 import { loadExpirationService } from "./load-expiration-service";
-import { telegramLoadService } from "./telegram-service";
-import { telegramCommunicationService } from "./telegram-communication-service";
-import { smsCommunicationService } from "./sms-communication-service";
-import smsService from "./sms-service";
+import { smsService as smsLoadService } from "./sms-service";
+import { smsCommunicationService } from "./telegram-communication-service";
 import { gpsTrackingService } from "./gps-tracking-service";
 import { loadBoardService } from "./load-board-service";
 import { biddingService } from "./bidding-service";
@@ -166,11 +164,17 @@ LoadMaster Dispatch Team
       `Driver: ${driver.name} (${driver.phone})\n\n` +
       `Monitor email responses for booking confirmation.`;
 
-    if (telegramLoadService.isServiceRunning()) {
-      const config = telegramLoadService.getConfig();
-      if (config?.dispatcherId) {
-        await telegramLoadService.sendMessage(config.dispatcherId, emailNotificationMessage);
-        console.log(`✅ Sent email booking notification to dispatcher`);
+    // Send SMS notification to dispatcher if configured
+    const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER;
+    if (dispatcherPhone && smsLoadService.isServiceConfigured()) {
+      const result = await smsLoadService.sendSMS({
+        to: dispatcherPhone,
+        body: emailNotificationMessage
+      });
+      if (result.success) {
+        console.log(`✅ Sent email booking notification to dispatcher via SMS`);
+      } else {
+        console.log(`❌ Failed to send SMS notification: ${result.error}`);
       }
     } else {
       console.log(`📱 Email booking notification: ${emailNotificationMessage}`);
@@ -282,7 +286,7 @@ async function initializeAllServices() {
     const predictiveMaintenanceService = new PredictiveMaintenanceService();
     
     // Check SMS service configuration
-    console.log(`SMS Service status: ${smsService.isServiceConfigured() ? 'CONFIGURED ✓' : 'NOT CONFIGURED ✗'}`);
+    console.log(`SMS Service status: ${smsLoadService.isServiceConfigured() ? 'CONFIGURED ✓' : 'NOT CONFIGURED ✗'}`);
     
     // Initialize all services asynchronously
     Promise.resolve().then(async () => {
@@ -371,18 +375,16 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Telegram service health check
-  app.get('/api/telegram/health', (req, res) => {
+  app.get('/api/sms/health', (req, res) => {
     try {
-      const isRunning = telegramLoadService.isServiceRunning();
-      const config = telegramLoadService.getConfig();
+      const isRunning = smsLoadService.isLoadServiceRunning?.() || false;
+      const isConfigured = smsLoadService.isServiceConfigured();
       
       res.json({
         status: isRunning ? 'running' : 'stopped',
         isServiceRunning: isRunning,
-        hasConfig: !!config,
-        botUsername: config?.botUsername || 'unknown',
-        dispatcherId: config?.dispatcherId || 'unknown',
-        responseTimeoutMinutes: config?.responseTimeoutMinutes || 0,
+        isConfigured: isConfigured,
+        service: 'Twilio SMS',
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -394,15 +396,15 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // Send test message to specific driver
-  app.post('/api/telegram/test/:driverId', async (req, res) => {
+  // Send test SMS to specific driver
+  app.post('/api/sms/test/:driverId', async (req, res) => {
     try {
       const { driverId } = req.params;
       
-      if (!telegramLoadService.isServiceRunning()) {
+      if (!smsLoadService.isServiceConfigured()) {
         return res.status(503).json({
           success: false,
-          error: 'Telegram service is not running',
+          error: 'SMS service is not configured',
           timestamp: new Date().toISOString()
         });
       }
@@ -417,36 +419,49 @@ export async function registerRoutes(app: Express): Promise<void> {
         });
       }
 
-      if (!driver.telegramId) {
+      if (!driver.phoneNumber) {
         return res.status(400).json({
           success: false,
-          error: 'Driver does not have Telegram ID configured',
+          error: 'Driver does not have phone number configured',
           driverName: driver.name,
           timestamp: new Date().toISOString()
         });
       }
 
-      // Send test message
-      const testMessage = `🧪 *TEST MESSAGE*\n\n` +
+      // Send test SMS
+      const testMessage = `TEST MESSAGE\n\n` +
         `Hello ${driver.name}!\n\n` +
         `This is a test message from the LoadMaster dispatch system.\n` +
-        `Your Telegram notifications are working correctly.\n\n` +
+        `Your SMS notifications are working correctly.\n\n` +
         `Driver ID: ${driver.id}\n` +
-        `Telegram ID: ${driver.telegramId}\n` +
+        `Phone: ${driver.phoneNumber}\n` +
         `Time: ${new Date().toLocaleString()}`;
 
-      await telegramLoadService.sendMessage(driver.telegramId, testMessage);
-
-      res.json({
-        success: true,
-        message: 'Test message sent successfully',
-        driverName: driver.name,
-        telegramId: driver.telegramId,
-        timestamp: new Date().toISOString()
+      const result = await smsLoadService.sendSMS({
+        to: driver.phoneNumber,
+        body: testMessage
       });
 
+      if (result.success) {
+        res.json({
+          success: true,
+          message: 'Test SMS sent successfully',
+          driverName: driver.name,
+          phoneNumber: driver.phoneNumber,
+          messageId: result.messageId,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'Failed to send test SMS',
+          details: result.error,
+          timestamp: new Date().toISOString()
+        });
+      }
+
     } catch (error) {
-      console.error('Error sending test message:', error);
+      console.error('Error sending test SMS:', error);
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -1091,7 +1106,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.get('/api/communication/debug', async (req, res) => {
     try {
       const isRunning = smsCommunicationService.serviceRunning;
-      const smsConfigured = smsService.isServiceConfigured();
+      const smsConfigured = smsLoadService.isServiceConfigured();
       
       console.log('🔧 SMS Communication Debug Check:');
       console.log(`📡 Service running: ${isRunning}`);
