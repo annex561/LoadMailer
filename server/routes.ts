@@ -7,7 +7,7 @@ import { analyticsService } from "./analytics-service";
 import { schedulerService } from "./scheduler-service";
 import { loadExpirationService } from "./load-expiration-service";
 import { smsService as smsLoadService } from "./sms-service";
-import { smsCommunicationService } from "./telegram-communication-service";
+import { smsCommunicationService } from "./sms-communication-service";
 import { gpsTrackingService } from "./gps-tracking-service";
 import { loadBoardService } from "./load-board-service";
 import { biddingService } from "./bidding-service";
@@ -264,12 +264,12 @@ async function initializeDependentServices() {
     console.log('🚀 Initializing dependent services...');
     
     // Initialize services only if Telegram is running or if they can work without it
-    continuousLoadService = new ContinuousLoadService(telegramLoadService);
-    datScraperService = new DATScraperService(telegramLoadService);
-    realLoadService = new RealLoadIntegrationService(telegramLoadService);
-    datAPIService = new DATAPIService(telegramLoadService);
-    datWebsiteScraper = new DATWebsiteScraper(telegramLoadService);
-    realDATScraper = new RealDATScraper(telegramLoadService);
+    continuousLoadService = new ContinuousLoadService(smsLoadService);
+    datScraperService = new DATScraperService(smsLoadService);
+    realLoadService = new RealLoadIntegrationService(smsLoadService);
+    datAPIService = new DATAPIService(smsLoadService);
+    datWebsiteScraper = new DATWebsiteScraper(smsLoadService);
+    realDATScraper = new RealDATScraper(smsLoadService);
     
     console.log('✅ Dependent services initialized');
   } catch (error) {
@@ -301,14 +301,14 @@ async function initializeAllServices() {
 
     Promise.resolve().then(async () => {
       try {
-        await telegramLoadService.initialize();
-        console.log('✅ Telegram Load Service initialized');
+        // SMS Load Service already initialized in main startup
+        console.log('✅ SMS Load Service initialized');
         
-        // Initialize communication service (no bot instance needed)
-        await telegramCommunicationService.initialize();
-        console.log('✅ Telegram Communication Service initialized (delegating to main service)');
+        // Initialize SMS communication service
+        await smsCommunicationService.initialize();
+        console.log('✅ SMS Communication Service initialized');
         
-        // Initialize dependent services after Telegram service is ready
+        // Initialize dependent services after SMS service is ready
         setTimeout(() => {
           initializeDependentServices();
         }, 2000);
@@ -543,16 +543,16 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Notify drivers using existing load notification system
       try {
         const drivers = await storage.getAllDrivers();
-        const availableDrivers = drivers.filter(d => d.status === 'available' && d.enableTelegramNotifications);
+        const availableDrivers = drivers.filter(d => d.status === 'available' && d.enableSmsNotifications);
         let driversNotified = 0;
 
-        // Send to Telegram Load Service if available
-        if (telegramLoadService && telegramLoadService.isServiceRunning()) {
-          console.log(`📲 Sending new manual load to telegram service for dispatch`);
+        // Send to SMS Load Service if available
+        if (smsLoadService && smsLoadService.isServiceConfigured()) {
+          console.log(`📲 Sending new manual load to SMS service for dispatch`);
           
           // Create a load offer for each eligible driver
           for (const driver of availableDrivers) {
-            if (driver.telegramId && driver.equipmentType === createdLoad.equipmentType) {
+            if (driver.phoneNumber && driver.equipmentType === createdLoad.equipmentType) {
               await storage.createLoadOffer({
                 loadId: createdLoad.id,
                 driverId: driver.id,
@@ -751,8 +751,8 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Send automated emails for new load
       await sendAutomatedEmails(load, "load_created");
       
-      // Send load to drivers via Telegram if it matches preferences
-      await telegramLoadService.processNewLoad(load);
+      // Send load to drivers via SMS if it matches preferences
+      await smsLoadService.processNewLoad(load);
       
       res.status(201).json(load);
     } catch (error) {
@@ -792,14 +792,14 @@ export async function registerRoutes(app: Express): Promise<void> {
         }
       }
       
-      // Send Telegram notifications for driver assignments
+      // Send SMS notifications for driver assignments
       if (validatedData.driverId && validatedData.driverId !== originalLoad.driverId) {
-        console.log(`🚛 Load ${id} assigned to driver ${validatedData.driverId} - sending Telegram notification`);
+        console.log(`🚛 Load ${id} assigned to driver ${validatedData.driverId} - sending SMS notification`);
         try {
-          await telegramLoadService.processNewLoad(updatedLoad);
-          console.log(`✅ Telegram notification sent for load assignment ${id}`);
+          await smsLoadService.processNewLoad(updatedLoad);
+          console.log(`✅ SMS notification sent for load assignment ${id}`);
         } catch (error) {
-          console.error(`❌ Failed to send Telegram notification for load ${id}:`, error);
+          console.error(`❌ Failed to send SMS notification for load ${id}:`, error);
         }
       }
       
@@ -862,13 +862,13 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: 'Load not found' });
       }
       
-      // Send Telegram notification for driver assignment
-      console.log(`🚛 Load ${id} assigned to driver ${driverId} - sending Telegram notification`);
+      // Send SMS notification for driver assignment
+      console.log(`🚛 Load ${id} assigned to driver ${driverId} - sending SMS notification`);
       try {
-        await telegramLoadService.processNewLoad(updatedLoad);
-        console.log(`✅ Telegram notification sent for load assignment ${id}`);
+        await smsLoadService.processNewLoad(updatedLoad);
+        console.log(`✅ SMS notification sent for load assignment ${id}`);
       } catch (error) {
-        console.error(`❌ Failed to send Telegram notification for load ${id}:`, error);
+        console.error(`❌ Failed to send SMS notification for load ${id}:`, error);
       }
       
       res.json(updatedLoad);
