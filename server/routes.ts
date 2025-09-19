@@ -885,6 +885,26 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // MOVED DRIVER ENDPOINTS HERE TO TEST REGISTRATION LOCATION
+  console.log("🔥 TESTING DRIVER ENDPOINTS REGISTRATION AT WORKING LOCATION");
+  
+  // TEST ENDPOINT to verify route registration
+  app.get("/api/test-drivers-moved", (req, res) => {
+    console.log("🔧 MOVED TEST endpoint HIT - route registration working");
+    res.json({ message: "Moved test endpoint working", timestamp: new Date().toISOString() });
+  });
+
+  app.post("/api/drivers-moved", async (req, res) => {
+    console.log("🔧 MOVED POST /api/drivers-moved endpoint HIT");
+    try {
+      const validatedData = insertDriverSchema.parse(req.body);
+      const driver = await storage.createDriver(validatedData);
+      res.status(201).json(driver);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid driver data" });
+    }
+  });
+
   // AI suggestions endpoint
   app.get('/api/ai/suggestions/:threadId', async (req, res) => {
     try {
@@ -1251,6 +1271,9 @@ function registerRemainingRoutes(app: Express) {
     }
   });
 
+  // DEBUG: Check if we reach the driver endpoints section
+  console.log("🔥 REACHED DRIVER ENDPOINTS SECTION - line 1255");
+
   // Check for duplicate contacts before creation
   app.post("/api/check-duplicates", async (req, res) => {
     try {
@@ -1275,6 +1298,12 @@ function registerRemainingRoutes(app: Express) {
     }
   });
 
+  // TEST ENDPOINT to verify route registration
+  app.get("/api/test-drivers", (req, res) => {
+    console.log("🔧 TEST endpoint HIT - route registration working");
+    res.json({ message: "Test endpoint working", timestamp: new Date().toISOString() });
+  });
+
   app.post("/api/drivers", async (req, res) => {
     try {
       const validatedData = insertDriverSchema.parse(req.body);
@@ -1297,6 +1326,47 @@ function registerRemainingRoutes(app: Express) {
       const driver = await storage.createDriver(validatedData);
       res.status(201).json(driver);
     } catch (error) {
+      res.status(400).json({ error: "Invalid driver data" });
+    }
+  });
+
+  // Update driver endpoint
+  app.put("/api/drivers/:id", async (req, res) => {
+    console.log("🔧 PUT /api/drivers/:id endpoint HIT - driver update requested");
+    try {
+      const { id } = req.params;
+      const validatedData = insertDriverSchema.partial().parse(req.body);
+      
+      // Check if driver exists
+      const existingDriver = await storage.getDriver(id);
+      if (!existingDriver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+      
+      // Check for duplicates only if name, email, or phone are being updated
+      if (validatedData.name || validatedData.email || validatedData.phone) {
+        const duplicates = await storage.findDuplicateDrivers(
+          validatedData.name || existingDriver.name,
+          validatedData.email || existingDriver.email,
+          validatedData.phone || existingDriver.phone
+        );
+        
+        // Filter out the driver being updated from duplicates
+        const otherDuplicates = duplicates.filter(dup => dup.id !== id);
+        
+        if (otherDuplicates.length > 0) {
+          return res.status(409).json({ 
+            error: "Duplicate contact found", 
+            duplicates: otherDuplicates,
+            message: "Another driver with this name, email, or phone already exists." 
+          });
+        }
+      }
+      
+      const updatedDriver = await storage.updateDriver(id, validatedData);
+      res.json(updatedDriver);
+    } catch (error) {
+      console.error("Error updating driver:", error);
       res.status(400).json({ error: "Invalid driver data" });
     }
   });
@@ -1359,30 +1429,6 @@ function registerRemainingRoutes(app: Express) {
       res.status(400).json({ 
         error: error instanceof Error ? error.message : "Failed to create driver manually" 
       });
-    }
-  });
-
-  app.put("/api/drivers/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      console.log(`🔧 Updating driver ${id} with data:`, req.body);
-      const validatedData = insertDriverSchema.partial().parse(req.body);
-      console.log(`✅ Data validated successfully:`, validatedData);
-      const driver = await storage.updateDriver(id, validatedData);
-      
-      if (!driver) {
-        return res.status(404).json({ error: "Driver not found" });
-      }
-      
-      console.log(`✅ Driver ${id} updated successfully`);
-      res.json(driver);
-    } catch (error) {
-      console.error(`❌ Error updating driver ${id}:`, error);
-      if (error instanceof Error) {
-        res.status(400).json({ error: error.message });
-      } else {
-        res.status(400).json({ error: "Invalid driver data" });
-      }
     }
   });
 
@@ -6100,6 +6146,14 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
+  // End of route registration
+  console.log('✅ All routes registered successfully');
+}
+
+// Function to create and configure the HTTP server
+export function createHTTPServer(app: Express): Server {
+  console.log('⚡ Creating HTTP server...');
+  
   const httpServer = createServer(app);
 
   // Background services will be initialized after server starts listening
@@ -7460,5 +7514,6 @@ You have been assigned to this load. Safe travels! 🚛`;
     }
   });
 
+  console.log('✅ HTTP server created successfully');
   return httpServer;
 }

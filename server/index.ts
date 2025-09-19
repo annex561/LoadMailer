@@ -1,6 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
-import { registerRoutes } from "./routes";
+import { registerRoutes, createHTTPServer } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
@@ -85,9 +85,6 @@ app.use((req, res, next) => {
   try {
     log('🚀 Starting server initialization...');
     
-    // Create HTTP server
-    const server = createServer(app);
-    
     // Add timeout wrapper for route registration on main app
     const routeRegistrationPromise = registerRoutes(app);
     const timeoutPromise = new Promise((_, reject) => {
@@ -97,6 +94,10 @@ app.use((req, res, next) => {
     log('⏳ Registering routes...');
     await Promise.race([routeRegistrationPromise, timeoutPromise]);
     log('✅ Routes registered successfully');
+
+    // Create HTTP server after route registration
+    const server = createHTTPServer(app);
+    log('✅ HTTP server created');
 
     // Add terminal API 404 handler before Vite setup to prevent fall-through to Vite's catch-all
     app.use('/api', (_req, res) => res.status(404).json({ message: 'API endpoint not found' }));
