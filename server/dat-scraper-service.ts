@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer';
 import { storage } from './storage';
-import { TelegramLoadService } from './telegram-service';
+import { SMSLoadService } from './sms-service';
 
 interface DATLoad {
   origin: string;
@@ -19,10 +19,10 @@ export class DATScraperService {
   private page: any = null;
   private isRunning = false;
   private scrapeInterval: NodeJS.Timeout | null = null;
-  private telegramService: TelegramLoadService;
+  private smsService: SMSLoadService;
 
-  constructor(telegramService: TelegramLoadService) {
-    this.telegramService = telegramService;
+  constructor(smsService: SMSLoadService) {
+    this.smsService = smsService;
   }
 
   async initialize(): Promise<void> {
@@ -188,9 +188,9 @@ export class DATScraperService {
       const load = await storage.createLoad(loadData);
       console.log(`📋 [DAT] Scraped load ${load.loadNumber}: ${datLoad.origin} → ${datLoad.destination} ($${datLoad.rate})`);
 
-      // Send to Telegram notification system
-      await this.telegramService.processNewLoad(load);
-      console.log(`📱 [DAT] Load ${load.loadNumber} processed through Telegram system`);
+      // Send to SMS notification system
+      await this.smsService.processNewLoad(load);
+      console.log(`📱 [DAT] Load ${load.loadNumber} processed through SMS system`);
 
     } catch (error) {
       console.error('Error processing scraped DAT load:', error);

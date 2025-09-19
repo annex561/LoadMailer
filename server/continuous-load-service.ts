@@ -1,5 +1,5 @@
 import { storage } from './storage';
-import { TelegramLoadService } from './telegram-service';
+import { SMSLoadService } from './sms-service';
 
 interface LoadTemplate {
   pickupAddress: string;
@@ -13,7 +13,7 @@ interface LoadTemplate {
 export class ContinuousLoadService {
   private isRunning = false;
   private loadInterval: NodeJS.Timeout | null = null;
-  private telegramService: TelegramLoadService;
+  private smsService: SMSLoadService;
 
   // Load templates specifically designed for Annex and his routes
   private loadTemplates: LoadTemplate[] = [
@@ -59,8 +59,8 @@ export class ContinuousLoadService {
     }
   ];
 
-  constructor(telegramService: TelegramLoadService) {
-    this.telegramService = telegramService;
+  constructor(smsService: SMSLoadService) {
+    this.smsService = smsService;
   }
 
   async start(): Promise<void> {
@@ -137,9 +137,9 @@ export class ContinuousLoadService {
       const load = await storage.createLoad(loadData);
       console.log(`🚛 Generated load ${load.loadNumber}: ${template.pickupAddress} → ${template.deliveryAddress} ($${loadData.rate}, ${loadData.miles}mi)`);
 
-      // Immediately send to Telegram notification system
-      await this.telegramService.processNewLoad(load);
-      console.log(`📱 Load ${load.loadNumber} processed through Telegram system`);
+      // Immediately send to SMS notification system
+      await this.smsService.processNewLoad(load);
+      console.log(`📱 Load ${load.loadNumber} processed through SMS system`);
 
     } catch (error) {
       console.error('Error generating continuous load:', error);

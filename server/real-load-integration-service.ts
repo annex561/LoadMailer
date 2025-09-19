@@ -1,5 +1,5 @@
 import { storage } from './storage';
-import { TelegramLoadService } from './telegram-service';
+import { SMSLoadService } from './sms-service';
 import { DAT_EQUIPMENT_MAPPING, mapDATEquipmentType } from '../shared/equipment-types.js';
 
 interface LoadBoardAPIConfig {
@@ -25,7 +25,7 @@ interface RealLoad {
 }
 
 export class RealLoadIntegrationService {
-  private telegramService: TelegramLoadService;
+  private smsService: SMSLoadService;
   private loadBoards: LoadBoardAPIConfig[] = [
     {
       name: 'DAT',
@@ -39,8 +39,8 @@ export class RealLoadIntegrationService {
     }
   ];
 
-  constructor(telegramService: TelegramLoadService) {
-    this.telegramService = telegramService;
+  constructor(smsService: SMSLoadService) {
+    this.smsService = smsService;
   }
 
   /**
@@ -87,8 +87,8 @@ export class RealLoadIntegrationService {
       const load = await storage.createLoad(realLoad);
       console.log(`📋 [REAL DAT] Added verified load ${load.loadNumber}: ${loadData.origin} → ${loadData.destination} ($${loadData.rate})`);
 
-      // Immediately send to Telegram notification system
-      await this.telegramService.processNewLoad(load);
+      // Immediately send to SMS notification system
+      await this.smsService.processNewLoad(load);
       console.log(`📱 [REAL DAT] Load ${load.loadNumber} sent to eligible drivers`);
 
       return {

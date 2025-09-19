@@ -301,7 +301,8 @@ async function initializeAllServices() {
 
     Promise.resolve().then(async () => {
       try {
-        // SMS Load Service already initialized in main startup
+        // Initialize SMS Load Service
+        await smsLoadService.initializeLoadService();
         console.log('✅ SMS Load Service initialized');
         
         // Initialize SMS communication service
