@@ -21,11 +21,10 @@ export const drivers = pgTable("drivers", {
   maxLength: integer("max_length").default(53), // Length ft - matching load board spec
   maxWeight: integer("max_weight").default(26000), // Weight lbs - matching load board spec
 
-  // Telegram bot integration
-  telegramId: text("telegram_id").unique(),
-  telegramUsername: text("telegram_username"),
+  // SMS integration
+  phoneNumber: text("phone_number").unique(),
   city: text("city"),
-  enableTelegramNotifications: boolean("enable_telegram_notifications").notNull().default(false),
+  enableSmsNotifications: boolean("enable_sms_notifications").notNull().default(false),
   // Mood tracking
   currentMood: text("current_mood").default("😐"), // emoji representing current mood
   moodUpdatedAt: timestamp("mood_updated_at"),
@@ -300,11 +299,12 @@ export const avoidLocations = pgTable("avoid_locations", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const telegramBotConfig = pgTable("telegram_bot_config", {
+export const smsConfig = pgTable("sms_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  botToken: text("bot_token").notNull(),
-  dispatcherId: text("dispatcher_id").notNull(),
-  botUsername: text("bot_username"),
+  twilioAccountSid: text("twilio_account_sid").notNull(),
+  twilioAuthToken: text("twilio_auth_token").notNull(),
+  twilioPhoneNumber: text("twilio_phone_number").notNull(),
+  dispatcherPhoneNumber: text("dispatcher_phone_number").notNull(),
   responseTimeoutMinutes: integer("response_timeout_minutes").notNull().default(3),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -315,7 +315,7 @@ export const loadOffers = pgTable("load_offers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   loadId: varchar("load_id").references(() => loads.id).notNull(),
   driverId: varchar("driver_id").references(() => drivers.id).notNull(),
-  telegramMessageId: text("telegram_message_id"),
+  smsMessageId: text("sms_message_id"),
   status: text("status").notNull().default("pending"), // pending, accepted, declined, timeout
   sentAt: timestamp("sent_at").notNull(),
   respondedAt: timestamp("responded_at"),
@@ -386,9 +386,8 @@ export const loadMessages = pgTable("load_messages", {
   messageType: text("message_type").notNull().default("text"), // text, image, document, location, status_update
   textContent: text("text_content"),
   
-  // Telegram integration
-  telegramMessageId: text("telegram_message_id"),
-  telegramChatId: text("telegram_chat_id"),
+  // SMS integration
+  smsMessageId: text("sms_message_id"),
   
   // Status tracking
   isRead: boolean("is_read").notNull().default(false),
@@ -774,7 +773,7 @@ export const insertAvoidLocationSchema = createInsertSchema(avoidLocations).omit
   createdAt: true,
 });
 
-export const insertTelegramBotConfigSchema = createInsertSchema(telegramBotConfig).omit({
+export const insertSmsConfigSchema = createInsertSchema(smsConfig).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -873,7 +872,7 @@ export type InsertLanePreference = z.infer<typeof insertLanePreferenceSchema>;
 export type AvoidLocation = typeof avoidLocations.$inferSelect;
 export type InsertAvoidLocation = z.infer<typeof insertAvoidLocationSchema>;
 
-export type TelegramBotConfig = typeof telegramBotConfig.$inferSelect;
+export type SmsConfig = typeof smsConfig.$inferSelect;
 export type InsertTelegramBotConfig = z.infer<typeof insertTelegramBotConfigSchema>;
 
 export type LoadOffer = typeof loadOffers.$inferSelect;
@@ -1202,9 +1201,9 @@ export const bidResponses = pgTable("bid_responses", {
   reason: text("reason"), // rate_too_low, bad_location, equipment_mismatch, scheduling_conflict
   notes: text("notes"),
   
-  // Telegram tracking
-  telegramMessageId: text("telegram_message_id"),
-  responseMethod: text("response_method").notNull().default("telegram"), // telegram, phone, email
+  // SMS tracking
+  smsMessageId: text("sms_message_id"),
+  responseMethod: text("response_method").notNull().default("sms"), // sms, phone, email
   
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -1278,9 +1277,9 @@ export const dispatcherNotifications = pgTable("dispatcher_notifications", {
   priority: text("priority").notNull().default("normal"), // low, normal, high, urgent
   message: text("message").notNull(),
   
-  // Telegram details
-  telegramChatId: text("telegram_chat_id").notNull(),
-  telegramMessageId: text("telegram_message_id"),
+  // SMS details
+  phoneNumber: text("phone_number").notNull(),
+  smsMessageId: text("sms_message_id"),
   
   // Status tracking
   status: text("status").notNull().default("pending"), // pending, sent, delivered, failed
