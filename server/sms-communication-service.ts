@@ -166,17 +166,6 @@ export class SMSCommunicationService {
     }
   }
 
-  private normalizePhoneNumber(phone: string): string {
-    // Remove all non-digit characters and add country code if missing
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length === 10) {
-      return `1${digits}`; // Add US country code
-    }
-    if (digits.length === 11 && digits.startsWith('1')) {
-      return digits;
-    }
-    return digits;
-  }
 
   private async findOrCreateActiveThread(driver: Driver): Promise<LoadCommunicationThread | null> {
     // Get driver's active loads
@@ -269,22 +258,33 @@ export class SMSCommunicationService {
 
   async sendLoadUpdateToDriver(loadId: string, message: string): Promise<boolean> {
     try {
+      console.log(`🔍 SMS DEBUG: sendLoadUpdateToDriver called for load ${loadId}`);
+      console.log(`🔍 SMS DEBUG: Message content: ${message.substring(0, 50)}...`);
+      
       // Get the load to find the assigned driver
       const load = await storage.getLoad(loadId);
+      console.log(`🔍 SMS DEBUG: Load data:`, load ? `${load.loadNumber} (driver: ${load.driverId})` : 'NOT FOUND');
+      
       if (!load?.driverId) {
         console.log(`⚠️ Load ${loadId} has no assigned driver - cannot send SMS`);
         return false;
       }
 
       const driver = await storage.getDriver(load.driverId);
+      console.log(`🔍 SMS DEBUG: Driver data:`, driver ? `${driver.name} (phone: ${driver.phone})` : 'NOT FOUND');
+      
       if (!driver?.phone) {
         console.log(`⚠️ Driver ${load.driverId} has no phone number - cannot send SMS`);
         return false;
       }
 
       const formattedMessage = `📦 Load ${load.loadNumber}\n\n💬 Dispatch:\n${message}\n\nReply to respond or send status updates.`;
+      console.log(`🔍 SMS DEBUG: Formatted message: ${formattedMessage.substring(0, 100)}...`);
+      console.log(`🔍 SMS DEBUG: About to call sendSMS to ${driver.phone}`);
       
       const result = await this.sendSMS(driver.phone, formattedMessage);
+      console.log(`🔍 SMS DEBUG: sendSMS result:`, result);
+      
       if (result.success) {
         console.log(`✅ Load update SMS sent to driver ${driver.name} for load ${load.loadNumber}`);
         return true;

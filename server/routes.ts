@@ -830,16 +830,24 @@ export async function registerRoutes(app: Express): Promise<void> {
 
       // Send message through SMS Communication Service
       let messageDelivered = false;
-      if (sender === 'dispatch') {
+      console.log(`🔍 ROUTE DEBUG: Sender is: "${sender}", thread load ID: ${thread.loadId}`);
+      
+      if (sender === 'dispatch' || sender === 'dispatcher') {
+        console.log(`🔍 ROUTE DEBUG: About to call SMS service for load ${thread.loadId}`);
         messageDelivered = await smsCommunicationService.sendLoadUpdateToDriver(thread.loadId, content);
+        console.log(`🔍 ROUTE DEBUG: SMS service returned: ${messageDelivered}`);
         
         // If SMS delivery fails, return error to show delivery failure
         if (!messageDelivered) {
+          console.log(`🔍 ROUTE DEBUG: SMS delivery failed, returning 409 error`);
           return res.status(409).json({ 
             error: 'Message could not be delivered to driver. Check if load has assigned driver with valid phone number.',
             success: false 
           });
         }
+        console.log(`🔍 ROUTE DEBUG: SMS delivery successful, continuing with database save`);
+      } else {
+        console.log(`🔍 ROUTE DEBUG: Sender is not dispatch/dispatcher, skipping SMS`);
       }
 
       // Create message record in database
@@ -7427,6 +7435,28 @@ You have been assigned to this load. Safe travels! 🚛`;
         error: error instanceof Error ? error.message : 'Failed to generate contextual recommendations',
         recommendations: []
       });
+    }
+  });
+
+  // SMS Test endpoint for debugging
+  app.post('/api/test-sms', async (req, res) => {
+    try {
+      const { phone, message } = req.body;
+      console.log(`🔍 Testing SMS to ${phone}: ${message}`);
+      
+      const result = await smsService.sendSMS({
+        to: phone || '+14234555007',
+        body: message || 'Test SMS from LoadMaster'
+      });
+      
+      res.json({
+        success: result.success,
+        error: result.error,
+        messageId: result.messageId
+      });
+    } catch (error) {
+      console.error('Test SMS failed:', error);
+      res.status(500).json({ error: 'Test SMS failed' });
     }
   });
 
