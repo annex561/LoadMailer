@@ -1,5 +1,5 @@
-import TelegramBot from "node-telegram-bot-api";
-import { storage } from "./storage";
+import { smsService } from './sms-service';
+import { storage } from './storage';
 import type { 
   LoadWithRelations, 
   Driver, 
@@ -11,15 +11,15 @@ import type {
   InsertLoadMessage,
   InsertMessageAttachment,
   InsertCommunicationLog
-} from "@shared/schema";
-import { ObjectStorageService } from "./objectStorage";
+} from '@shared/schema';
+import { ObjectStorageService } from './objectStorage';
 
-const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TWILIO_WEBHOOK_URL = process.env.TWILIO_WEBHOOK_URL || '';
 
-export class TelegramCommunicationService {
-  private bot: TelegramBot | null = null;
+export class SmsCommunicationService {
   private isRunning = false;
   private objectStorageService: ObjectStorageService;
+  private incomingMessageQueue: Array<{ from: string; body: string; timestamp: Date }> = [];
 
   constructor() {
     this.objectStorageService = new ObjectStorageService();
@@ -27,106 +27,72 @@ export class TelegramCommunicationService {
 
   async initialize(): Promise<void> {
     try {
-      console.log('🚀 Initializing Telegram Communication Service...');
+      console.log('🚀 Initializing SMS Communication Service...');
       
-      if (!TELEGRAM_TOKEN) {
-        console.log('⚠️ Telegram communication disabled - missing TELEGRAM_BOT_TOKEN');
+      if (!smsService.isServiceConfigured()) {
+        console.log('⚠️ SMS communication disabled - Twilio not configured');
         return;
       }
 
-      // Use shared bot instance from TelegramLoadService to avoid conflicts
-      console.log('📡 Accessing shared Telegram bot instance...');
-      
-      // Get shared bot instance from global singleton
-      const sharedBot = (globalThis as any).__telegramBotSingleton?.bot;
-      if (sharedBot) {
-        this.bot = sharedBot;
-        console.log('✅ Using shared Telegram bot instance for communication');
-        
-        // Set up communication-specific handlers
-        this.setupCommunicationHandlers();
-      } else {
-        console.log('⚠️ No shared bot instance found - communication handlers will be added when bot is available');
-      }
+      // Start processing incoming messages
+      this.startMessageProcessor();
       
       this.isRunning = true;
-      console.log('✅ Telegram Communication Service initialized');
+      console.log('✅ SMS Communication Service initialized');
     } catch (error) {
-      console.error('Failed to initialize Telegram communication service:', error);
+      console.error('Failed to initialize SMS communication service:', error);
     }
   }
 
-  private setupCommunicationHandlers(): void {
-    if (!this.bot) return;
-
-    // Handle text messages from drivers
-    this.bot.on('message', async (msg) => {
-      try {
-        await this.handleIncomingMessage(msg);
-      } catch (error) {
-        console.error('Error handling incoming message:', error);
+  private startMessageProcessor(): void {
+    // Process incoming SMS messages queue
+    setInterval(async () => {
+      if (this.incomingMessageQueue.length > 0) {
+        const message = this.incomingMessageQueue.shift();
+        if (message) {
+          try {
+            await this.handleIncomingSMS(message);
+          } catch (error) {
+            console.error('Error processing SMS message:', error);
+          }
+        }
       }
-    });
-
-    // Handle photo messages
-    this.bot.on('photo', async (msg) => {
-      try {
-        await this.handlePhotoMessage(msg);
-      } catch (error) {
-        console.error('Error handling photo message:', error);
-      }
-    });
-
-    // Handle document messages
-    this.bot.on('document', async (msg) => {
-      try {
-        await this.handleDocumentMessage(msg);
-      } catch (error) {
-        console.error('Error handling document message:', error);
-      }
-    });
-
-    // Handle location messages
-    this.bot.on('location', async (msg) => {
-      try {
-        await this.handleLocationMessage(msg);
-      } catch (error) {
-        console.error('Error handling location message:', error);
-      }
-    });
-
-    // Handle callback queries from inline buttons
-    this.bot.on('callback_query', async (callbackQuery) => {
-      try {
-        await this.handleCallbackQuery(callbackQuery);
-      } catch (error) {
-        console.error('Error handling callback query:', error);
-      }
-    });
+    }, 1000); // Process every second
   }
 
-  private async handleIncomingMessage(msg: TelegramBot.Message): Promise<void> {
-    if (!msg.from || !msg.text) return;
+  // Method to receive SMS messages (called by webhook)
+  async receiveIncomingSMS(from: string, body: string): Promise<void> {
+    this.incomingMessageQueue.push({
+      from: from,
+      body: body.trim(),
+      timestamp: new Date()
+    });
+    console.log(`📱 SMS received from ${from}: ${body}`);
+  }
 
-    const telegramId = msg.from.id.toString();
-    const driver = await storage.getDriverByTelegramId(telegramId);
+  private async handleIncomingSMS(message: { from: string; body: string; timestamp: Date }): Promise<void> {
+    const phoneNumber = message.from;
+    const messageBody = message.body;
+
+    const driver = await storage.getDriverByPhoneNumber(phoneNumber);
     
     if (!driver) {
-      await this.sendMessage(msg.chat.id, 
+      await this.sendSMS(phoneNumber, 
         "I don't recognize you as a registered driver. Please contact dispatch for assistance.");
       return;
     }
 
     // Check if this is a quick reply command
-    if (msg.text.startsWith('/')) {
-      await this.handleQuickReplyCommand(msg, driver);
+    const upperBody = messageBody.toUpperCase();
+    if (this.isQuickReplyCommand(upperBody)) {
+      await this.handleQuickReplyCommand(phoneNumber, driver, upperBody);
       return;
     }
 
     // Find active communication thread for this driver
     const activeThread = await this.findOrCreateActiveThread(driver);
     if (!activeThread) {
-      await this.sendMessage(msg.chat.id, 
+      await this.sendSMS(phoneNumber, 
         "No active load found. Your message will be forwarded to dispatch.");
       // Handle general driver message without load context
       return;
@@ -140,202 +106,109 @@ export class TelegramCommunicationService {
       senderRole: 'driver',
       senderName: driver.name,
       messageType: 'text',
-      textContent: msg.text,
-      telegramMessageId: msg.message_id.toString(),
-      telegramChatId: msg.chat.id.toString(),
-      metadata: {}
+      textContent: messageBody,
+      smsMessageId: '',
+      metadata: {
+        phoneNumber: phoneNumber,
+        timestamp: message.timestamp.toISOString()
+      }
     });
 
     // Send acknowledgment with quick reply options
-    await this.sendQuickReplyOptions(msg.chat.id, activeThread.loadId);
+    await this.sendQuickReplyOptions(phoneNumber, activeThread.loadId);
     
     // Log communication activity
     await this.logCommunication(activeThread.loadId, activeThread.id, 'message_sent', driver.id, 'driver', {
       messageType: 'text',
-      messageLength: msg.text.length
+      messageLength: messageBody.length
     });
   }
 
-  private async handlePhotoMessage(msg: TelegramBot.Message): Promise<void> {
-    if (!msg.from || !msg.photo) return;
+  private isQuickReplyCommand(message: string): boolean {
+    const commands = ['ARRIVED', 'LOADED', 'ENROUTE', 'DELIVERED', 'ISSUE', 'HELP', 'STATUS', 'LOCATION'];
+    return commands.some(cmd => message.includes(cmd));
+  }
 
-    const telegramId = msg.from.id.toString();
-    const driver = await storage.getDriverByTelegramId(telegramId);
-    
-    if (!driver) return;
-
+  // Note: SMS doesn't support direct photo sending like Telegram
+  // Photos would need to be handled via MMS or external upload links
+  private async handlePhotoViaSMS(phoneNumber: string, driver: Driver): Promise<void> {
     const activeThread = await this.findOrCreateActiveThread(driver);
     if (!activeThread) return;
 
-    try {
-      // Get the highest resolution photo
-      const photo = msg.photo[msg.photo.length - 1];
-      
-      // Download and upload to object storage
-      const fileUrl = await this.downloadAndUploadFile(photo.file_id, 'image', msg.caption);
-      
-      // Create message record
-      const message = await this.createMessageRecord({
-        threadId: activeThread.id,
-        loadId: activeThread.loadId,
-        senderId: driver.id,
-        senderRole: 'driver',
-        senderName: driver.name,
-        messageType: 'image',
-        textContent: msg.caption || '',
-        telegramMessageId: msg.message_id.toString(),
-        telegramChatId: msg.chat.id.toString(),
-        metadata: {
-          fileId: photo.file_id,
-          fileSize: photo.file_size,
-          width: photo.width,
-          height: photo.height
-        }
-      });
-
-      // Create attachment record
-      await storage.createMessageAttachment({
-        messageId: message.id,
-        loadId: activeThread.loadId,
-        attachmentType: 'image',
-        fileName: `photo_${Date.now()}.jpg`,
-        fileUrl: fileUrl,
-        fileSize: photo.file_size,
-        mimeType: 'image/jpeg',
-        telegramFileId: photo.file_id,
-        telegramFileUniqueId: photo.file_unique_id,
-        width: photo.width,
-        height: photo.height,
-        caption: msg.caption || ''
-      });
-
-      await this.sendMessage(msg.chat.id, "📸 Photo received and uploaded to load documentation.");
-      
-      await this.logCommunication(activeThread.loadId, activeThread.id, 'attachment_uploaded', driver.id, 'driver', {
-        attachmentType: 'image',
-        fileSize: photo.file_size
-      });
-
-    } catch (error) {
-      console.error('Error handling photo:', error);
-      await this.sendMessage(msg.chat.id, "❌ Failed to upload photo. Please try again.");
-    }
+    // For SMS, we'd need to send a link for photo upload
+    const uploadLink = `${process.env.BASE_URL}/upload/${activeThread.loadId}/${driver.id}`;
+    
+    await this.sendSMS(phoneNumber, 
+      `📸 To send photos for this load, please use this link: ${uploadLink}\n\nThis link will allow you to upload photos directly to the load documentation.`);
   }
 
-  private async handleDocumentMessage(msg: TelegramBot.Message): Promise<void> {
-    if (!msg.from || !msg.document) return;
-
-    const telegramId = msg.from.id.toString();
-    const driver = await storage.getDriverByTelegramId(telegramId);
-    
-    if (!driver) return;
-
+  // Note: SMS doesn't support direct document sending
+  // Documents would need to be handled via external upload links
+  private async handleDocumentViaSMS(phoneNumber: string, driver: Driver): Promise<void> {
     const activeThread = await this.findOrCreateActiveThread(driver);
     if (!activeThread) return;
 
-    try {
-      const document = msg.document;
-      
-      // Download and upload to object storage
-      const fileUrl = await this.downloadAndUploadFile(document.file_id, 'document', document.file_name);
-      
-      // Create message record
-      const message = await this.createMessageRecord({
-        threadId: activeThread.id,
-        loadId: activeThread.loadId,
-        senderId: driver.id,
-        senderRole: 'driver',
-        senderName: driver.name,
-        messageType: 'document',
-        textContent: msg.caption || '',
-        telegramMessageId: msg.message_id.toString(),
-        telegramChatId: msg.chat.id.toString(),
-        metadata: {
-          fileId: document.file_id,
-          fileName: document.file_name,
-          fileSize: document.file_size,
-          mimeType: document.mime_type
-        }
-      });
-
-      // Create attachment record
-      await storage.createMessageAttachment({
-        messageId: message.id,
-        loadId: activeThread.loadId,
-        attachmentType: 'document',
-        fileName: document.file_name || `document_${Date.now()}`,
-        fileUrl: fileUrl,
-        fileSize: document.file_size,
-        mimeType: document.mime_type || 'application/octet-stream',
-        telegramFileId: document.file_id,
-        telegramFileUniqueId: document.file_unique_id,
-        caption: msg.caption || ''
-      });
-
-      await this.sendMessage(msg.chat.id, `📄 Document "${document.file_name}" received and uploaded to load files.`);
-      
-      await this.logCommunication(activeThread.loadId, activeThread.id, 'attachment_uploaded', driver.id, 'driver', {
-        attachmentType: 'document',
-        fileName: document.file_name,
-        fileSize: document.file_size
-      });
-
-    } catch (error) {
-      console.error('Error handling document:', error);
-      await this.sendMessage(msg.chat.id, "❌ Failed to upload document. Please try again.");
-    }
+    // For SMS, we'd need to send a link for document upload
+    const uploadLink = `${process.env.BASE_URL}/upload/${activeThread.loadId}/${driver.id}`;
+    
+    await this.sendSMS(phoneNumber, 
+      `📄 To send documents for this load, please use this link: ${uploadLink}\n\nThis link will allow you to upload documents directly to the load files.`);
   }
 
-  private async handleLocationMessage(msg: TelegramBot.Message): Promise<void> {
-    if (!msg.from || !msg.location) return;
-
-    const telegramId = msg.from.id.toString();
-    const driver = await storage.getDriverByTelegramId(telegramId);
-    
-    if (!driver) return;
-
+  private async handleLocationRequestViaSMS(phoneNumber: string, driver: Driver): Promise<void> {
     const activeThread = await this.findOrCreateActiveThread(driver);
     if (!activeThread) return;
 
-    // Create message record with location data
-    await this.createMessageRecord({
-      threadId: activeThread.id,
-      loadId: activeThread.loadId,
-      senderId: driver.id,
-      senderRole: 'driver',
-      senderName: driver.name,
-      messageType: 'location',
-      textContent: '📍 Driver location shared',
-      telegramMessageId: msg.message_id.toString(),
-      telegramChatId: msg.chat.id.toString(),
-      metadata: {
-        latitude: msg.location.latitude,
-        longitude: msg.location.longitude,
-        timestamp: new Date().toISOString()
-      }
-    });
-
-    await this.sendMessage(msg.chat.id, "📍 Location shared with dispatch.");
+    // For SMS, request location via Google Maps link or coordinates
+    const locationLink = `${process.env.BASE_URL}/location/${activeThread.loadId}/${driver.id}`;
     
-    await this.logCommunication(activeThread.loadId, activeThread.id, 'message_sent', driver.id, 'driver', {
-      messageType: 'location',
-      coordinates: [msg.location.latitude, msg.location.longitude]
-    });
+    await this.sendSMS(phoneNumber, 
+      `📍 Please share your location using this link: ${locationLink}\n\nOr reply with your current address or coordinates.`);
   }
 
-  private async handleQuickReplyCommand(msg: TelegramBot.Message, driver: Driver): Promise<void> {
-    const command = msg.text?.replace('/', '');
-    if (!command) return;
+  private async handleQuickReplyCommand(phoneNumber: string, driver: Driver, command: string): Promise<void> {
+    let templateKey = '';
+    let displayText = '';
+    let messageTemplate = '';
 
-    const template = await this.getQuickReplyTemplate(command);
-    if (!template) {
-      await this.sendMessage(msg.chat.id, "❓ Unknown command. Use the buttons provided for quick updates.");
+    // Map SMS commands to status updates
+    if (command.includes('ARRIVED')) {
+      templateKey = 'arrived';
+      displayText = 'Arrived at pickup location';
+      messageTemplate = 'Driver has arrived at the pickup location';
+    } else if (command.includes('LOADED')) {
+      templateKey = 'loaded';
+      displayText = 'Load picked up and secured';
+      messageTemplate = 'Load has been picked up and is secured for transport';
+    } else if (command.includes('ENROUTE')) {
+      templateKey = 'enroute';
+      displayText = 'En route to delivery';
+      messageTemplate = 'Driver is en route to the delivery location';
+    } else if (command.includes('DELIVERED')) {
+      templateKey = 'delivered';
+      displayText = 'Load delivered successfully';
+      messageTemplate = 'Load has been delivered successfully';
+    } else if (command.includes('ISSUE')) {
+      templateKey = 'issue';
+      displayText = 'Reporting an issue';
+      messageTemplate = 'Driver is reporting an issue with the load';
+    } else if (command.includes('HELP')) {
+      await this.sendSMSHelp(phoneNumber, driver);
+      return;
+    } else if (command.includes('STATUS')) {
+      await this.sendCurrentStatus(phoneNumber, driver);
+      return;
+    } else if (command.includes('LOCATION')) {
+      await this.handleLocationRequestViaSMS(phoneNumber, driver);
+      return;
+    } else {
+      await this.sendSMS(phoneNumber, "❓ Unknown command. Reply HELP for available commands.");
       return;
     }
 
     const activeThread = await this.findOrCreateActiveThread(driver);
     if (!activeThread) {
-      await this.sendMessage(msg.chat.id, "No active load found for status update.");
+      await this.sendSMS(phoneNumber, "No active load found for status update.");
       return;
     }
 
@@ -347,20 +220,20 @@ export class TelegramCommunicationService {
       senderRole: 'driver',
       senderName: driver.name,
       messageType: 'status_update',
-      textContent: template.messageTemplate,
-      telegramMessageId: msg.message_id.toString(),
-      telegramChatId: msg.chat.id.toString(),
+      textContent: messageTemplate,
+      smsMessageId: '',
       metadata: {
-        templateKey: template.templateKey,
-        category: template.category
+        templateKey: templateKey,
+        category: 'status_update',
+        phoneNumber: phoneNumber
       }
     });
 
-    await this.sendMessage(msg.chat.id, `✅ Status updated: ${template.displayText}`);
+    await this.sendSMS(phoneNumber, `✅ Status updated: ${displayText}`);
     
     await this.logCommunication(activeThread.loadId, activeThread.id, 'status_updated', driver.id, 'driver', {
-      statusType: template.templateKey,
-      statusMessage: template.messageTemplate
+      statusType: templateKey,
+      statusMessage: messageTemplate
     });
   }
 
@@ -503,33 +376,56 @@ export class TelegramCommunicationService {
     return uploadURL.split('?')[0]; // Return URL without query params
   }
 
-  private async sendQuickReplyOptions(chatId: number, loadId: string): Promise<void> {
-    const templates = await storage.getQuickReplyTemplatesForDriver();
+  private async sendQuickReplyOptions(phoneNumber: string, loadId: string): Promise<void> {
+    const quickCommands = [
+      '📍 Reply ARRIVED when you reach pickup',
+      '📦 Reply LOADED when load is secured',
+      '🚛 Reply ENROUTE when heading to delivery',
+      '✅ Reply DELIVERED when complete',
+      '⚠️ Reply ISSUE if there are problems',
+      '📍 Reply LOCATION to share your location',
+      '❓ Reply HELP for more commands'
+    ];
+
+    const message = `🔄 Quick commands available:\n\n${quickCommands.join('\n')}`;
+    await this.sendSMS(phoneNumber, message);
+  }
+
+  private async sendSMSHelp(phoneNumber: string, driver: Driver): Promise<void> {
+    const helpMessage = `📱 SMS Commands for ${driver.name}:\n\n` +
+      `• ARRIVED - At pickup location\n` +
+      `• LOADED - Load secured\n` +
+      `• ENROUTE - Heading to delivery\n` +
+      `• DELIVERED - Load delivered\n` +
+      `• ISSUE - Report problems\n` +
+      `• LOCATION - Share location\n` +
+      `• STATUS - Check current load\n` +
+      `• HELP - Show this message\n\n` +
+      `Send any other message to contact dispatch directly.`;
     
-    if (templates.length === 0) return;
+    await this.sendSMS(phoneNumber, helpMessage);
+  }
 
-    const keyboard = templates.map(template => ({
-      text: template.displayText,
-      callback_data: `quickreply_${template.templateKey}`
-    }));
-
-    // Group buttons in rows of 2
-    const inlineKeyboard = [];
-    for (let i = 0; i < keyboard.length; i += 2) {
-      inlineKeyboard.push(keyboard.slice(i, i + 2));
+  private async sendCurrentStatus(phoneNumber: string, driver: Driver): Promise<void> {
+    const activeThread = await this.findOrCreateActiveThread(driver);
+    if (!activeThread) {
+      await this.sendSMS(phoneNumber, "No active load assigned.");
+      return;
     }
 
-    // Add location sharing button
-    inlineKeyboard.push([{
-      text: '📍 Share Location',
-      callback_data: 'sendlocation'
-    }]);
+    const load = await storage.getLoad(activeThread.loadId);
+    if (!load) {
+      await this.sendSMS(phoneNumber, "Load information not found.");
+      return;
+    }
 
-    await this.sendMessage(chatId, '🔄 Quick actions available:', {
-      reply_markup: {
-        inline_keyboard: inlineKeyboard
-      }
-    });
+    const statusMessage = `📦 Current Load: ${load.loadNumber}\n` +
+      `📍 From: ${load.pickupAddress}\n` +
+      `📍 To: ${load.deliveryAddress}\n` +
+      `💰 Rate: $${(load.rate || 0) * 0.85}\n` +
+      `📅 Status: ${load.status}`;
+    
+    await this.sendSMS(phoneNumber, statusMessage);
   }
 
   private async requestLocationFromDriver(chatId: number | undefined, driver: Driver): Promise<void> {
@@ -576,12 +472,12 @@ export class TelegramCommunicationService {
   async sendMessageToDriver(driverId: string, message: string): Promise<void> {
     try {
       const driver = await storage.getDriver(driverId);
-      if (!driver?.telegramId) {
-        console.log(`⚠️ Driver ${driverId} has no Telegram ID - cannot send message`);
+      if (!driver?.phoneNumber) {
+        console.log(`⚠️ Driver ${driverId} has no phone number - cannot send message`);
         return;
       }
 
-      await this.sendMessage(parseInt(driver.telegramId), message);
+      await this.sendSMS(driver.phoneNumber, message);
       console.log(`✅ Message sent to driver ${driver.name} (${driverId})`);
     } catch (error) {
       console.error(`❌ Failed to send message to driver ${driverId}:`, error);
@@ -598,60 +494,50 @@ export class TelegramCommunicationService {
       }
 
       const driver = await storage.getDriver(load.driverId);
-      if (!driver?.telegramId) {
-        console.log(`⚠️ Driver ${load.driverId} has no Telegram ID - cannot send message`);
+      if (!driver?.phoneNumber) {
+        console.log(`⚠️ Driver ${load.driverId} has no phone number - cannot send message`);
         return;
       }
 
-      const formattedMessage = `📦 **Load ${load.loadNumber}**\n\n💬 **Message from Dispatch:**\n${message}`;
+      const formattedMessage = `📦 Load ${load.loadNumber}\n\n💬 Message from Dispatch:\n${message}`;
       
-      await this.sendMessage(parseInt(driver.telegramId), formattedMessage, { parse_mode: 'Markdown' });
+      await this.sendSMS(driver.phoneNumber, formattedMessage);
       console.log(`✅ Load update sent to driver ${driver.name} for load ${load.loadNumber}`);
     } catch (error) {
       console.error(`❌ Failed to send load update for ${loadId}:`, error);
     }
   }
 
-  private async sendMessage(chatId: number, text: string, options?: any): Promise<void> {
+  private async sendSMS(phoneNumber: string, text: string): Promise<void> {
     if (!this.isRunning) {
       console.log('⚠️ Communication service not running - message not sent');
       return;
     }
     
     try {
-      // First try to use the bot instance if available
-      if (this.bot) {
-        await this.bot.sendMessage(chatId, text, options);
-        console.log('📱 Message sent via communication service bot');
-        return;
+      const result = await smsService.sendSMS({
+        to: phoneNumber,
+        body: text
+      });
+      
+      if (result.success) {
+        console.log(`📱 SMS sent to ${phoneNumber}`);
+      } else {
+        console.error(`❌ Failed to send SMS to ${phoneNumber}: ${result.error}`);
       }
-
-      // Fallback to accessing the shared singleton
-      const sharedBot = (globalThis as any).__telegramBotSingleton?.bot;
-      if (sharedBot) {
-        await sharedBot.sendMessage(chatId, text, options);
-        console.log('📱 Message sent via shared singleton bot');
-        return;
-      }
-
-      console.log('⚠️ No bot instance available - message not sent');
     } catch (error) {
-      console.error('❌ Failed to send message via Telegram:', error);
+      console.error('❌ Failed to send SMS:', error);
     }
   }
 
   async shutdown(): Promise<void> {
-    if (this.bot) {
-      try {
-        await this.bot.stopPolling();
-        this.bot = null;
-      } catch (error) {
-        console.error('Error shutting down Telegram communication service:', error);
-      }
-    }
     this.isRunning = false;
-    console.log('✅ Telegram Communication Service shutdown complete');
+    this.incomingMessageQueue = [];
+    console.log('✅ SMS Communication Service shutdown complete');
   }
 }
 
-export const telegramCommunicationService = new TelegramCommunicationService();
+export const smsCommunicationService = new SmsCommunicationService();
+
+// For backward compatibility, export with old name
+export const telegramCommunicationService = smsCommunicationService;
