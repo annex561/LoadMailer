@@ -11,6 +11,7 @@ import DATLoads from "@/pages/dat-loads";
 import ManualLoadEntry from "@/pages/manual-load-entry";
 import DATLogin from "@/pages/dat-login";
 import TelegramDispatching from "@/pages/telegram-dispatching";
+import SMSDispatching from "@/pages/sms-dispatching";
 import Contacts from "@/pages/contacts";
 import Templates from "@/pages/templates";
 import DriverManagement from "@/pages/driver-management";
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/manual-load-entry" component={ManualLoadEntry} />
       <Route path="/dat-login" component={DATLogin} />
       <Route path="/telegram-dispatching" component={TelegramDispatching} />
+      <Route path="/sms-dispatching" component={SMSDispatching} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/templates" component={Templates} />
       <Route path="/driver-management" component={DriverManagement} />
