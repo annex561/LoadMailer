@@ -586,6 +586,115 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.status(500).json({ error: "Failed to fetch drivers" });
     }
   });
+
+  // CRITICAL DRIVER ENDPOINTS - Moved from deferred registration to immediate
+  
+  // Check for duplicate contacts before creation
+  app.post("/api/check-duplicates", async (req, res) => {
+    try {
+      const { name, email, phone, type } = req.body;
+      
+      if (!name || !email || !phone || !type) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      
+      if (type === "driver") {
+        const duplicates = await storage.findDuplicateDrivers(name, email, phone);
+        res.json({ duplicates, hasDuplicates: duplicates.length > 0 });
+      } else if (type === "customer") {
+        const duplicates = await storage.findDuplicateCustomers(name, email, phone);
+        res.json({ duplicates, hasDuplicates: duplicates.length > 0 });
+      } else {
+        res.status(400).json({ error: "Invalid type. Must be 'driver' or 'customer'" });
+      }
+    } catch (error) {
+      console.error("Error checking duplicates:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create new driver
+  app.post("/api/drivers", async (req, res) => {
+    try {
+      const validatedData = insertDriverSchema.parse(req.body);
+      
+      // Check for duplicates before creating
+      const duplicates = await storage.findDuplicateDrivers(
+        validatedData.name, 
+        validatedData.email, 
+        validatedData.phone
+      );
+      
+      if (duplicates.length > 0) {
+        return res.status(409).json({ 
+          error: "Duplicate contact found", 
+          duplicates,
+          message: "A driver with this name, email, or phone already exists." 
+        });
+      }
+      
+      const driver = await storage.createDriver(validatedData);
+      res.status(201).json(driver);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid driver data" });
+    }
+  });
+
+  // Update driver
+  app.put("/api/drivers/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = insertDriverSchema.partial().parse(req.body);
+      
+      // Check if driver exists
+      const existingDriver = await storage.getDriver(id);
+      if (!existingDriver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+      
+      // Check for duplicates only if name, email, or phone are being updated
+      if (validatedData.name || validatedData.email || validatedData.phone) {
+        const duplicates = await storage.findDuplicateDrivers(
+          validatedData.name || existingDriver.name,
+          validatedData.email || existingDriver.email,
+          validatedData.phone || existingDriver.phone
+        );
+        
+        // Filter out the driver being updated from duplicates
+        const otherDuplicates = duplicates.filter(dup => dup.id !== id);
+        
+        if (otherDuplicates.length > 0) {
+          return res.status(409).json({ 
+            error: "Duplicate contact found", 
+            duplicates: otherDuplicates,
+            message: "Another driver with this name, email, or phone already exists." 
+          });
+        }
+      }
+      
+      const updatedDriver = await storage.updateDriver(id, validatedData);
+      res.json(updatedDriver);
+    } catch (error) {
+      console.error("Error updating driver:", error);
+      res.status(400).json({ error: "Invalid driver data" });
+    }
+  });
+
+  // Delete driver
+  app.delete("/api/drivers/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteDriver(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete driver" });
+    }
+  });
   
   // Critical load CRUD routes - must be available immediately for frontend
   app.get('/api/loads', async (req, res) => {
@@ -1099,17 +1208,16 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   console.log('✅ Essential routes registered - server ready for startup');
   
-  // Defer ALL service initialization and remaining routes until after server starts
-  setTimeout(() => {
-    console.log('🔄 Starting background initialization...');
-    initializeAllServices();
-    registerRemainingRoutes(app);
-  }, 5000);
+  // Background initialization - immediate startup (no deferred registration needed)
+  console.log('🔄 Starting immediate background initialization...');
+  initializeAllServices();
   
   console.log('✅ All routes registered successfully');
 }
 
-// Function to register all the remaining routes after server startup
+// REMOVED: registerRemainingRoutes function - All critical endpoints now registered immediately
+// The deferred registration system was causing 404 errors and route conflicts
+/*
 function registerRemainingRoutes(app: Express) {
   console.log('📡 Registering remaining routes in background...');
   
@@ -1273,6 +1381,9 @@ function registerRemainingRoutes(app: Express) {
 
   // DEBUG: Check if we reach the driver endpoints section
   console.log("🔥 REACHED DRIVER ENDPOINTS SECTION - line 1255");
+
+  // DEBUG: Checking if we reach the driver endpoints section
+  console.log("🔥 EXECUTION TRACE: REACHED DRIVER ENDPOINTS SECTION - BEFORE check-duplicates");
 
   // Check for duplicate contacts before creation
   app.post("/api/check-duplicates", async (req, res) => {
@@ -6149,6 +6260,7 @@ You have been assigned to this load. Safe travels! 🚛`;
   // End of route registration
   console.log('✅ All routes registered successfully');
 }
+*/ // End of commented-out registerRemainingRoutes function
 
 // Function to create and configure the HTTP server
 export function createHTTPServer(app: Express): Server {
