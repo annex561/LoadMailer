@@ -854,11 +854,14 @@ export class DatabaseStorage implements IStorage {
 
   async createLoadOffer(offer: schema.InsertLoadOffer): Promise<schema.LoadOffer> {
     const id = randomUUID();
+    const now = new Date();
     const loadOffer: schema.LoadOffer = {
       ...offer,
       id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      sentAt: offer.sentAt || now, // Use provided sentAt or current time
+      timeoutAt: offer.timeoutAt || new Date(now.getTime() + 3 * 60 * 1000), // Default 3 minute timeout
+      createdAt: now,
+      updatedAt: now,
     };
     await db.insert(schema.loadOffers).values(loadOffer);
     return loadOffer;
