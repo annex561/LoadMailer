@@ -282,6 +282,9 @@ async function initializeAllServices() {
   try {
     console.log('🚀 Starting background service initialization...');
     
+    // Make SMS service globally available for test endpoint
+    (global as any).smsService = smsLoadService;
+    
     // Initialize services
     const predictiveMaintenanceService = new PredictiveMaintenanceService();
     
@@ -1174,6 +1177,40 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error('❌ Error handling SMS webhook:', error);
       res.status(500).send('Error processing SMS');
+    }
+  });
+
+  // Test SMS endpoint to send messages
+  app.post('/api/test-sms', async (req, res) => {
+    try {
+      const { to, message } = req.body;
+      
+      // Normalize phone number to E.164 format
+      let normalizedPhone = to.replace(/\D/g, '');
+      if (!normalizedPhone.startsWith('+')) {
+        if (normalizedPhone.length === 10) {
+          normalizedPhone = `+1${normalizedPhone}`;
+        } else if (!normalizedPhone.startsWith('1') && normalizedPhone.length === 11) {
+          normalizedPhone = `+${normalizedPhone}`;
+        }
+      }
+      
+      console.log(`📱 Sending test SMS to ${normalizedPhone}: ${message}`);
+      
+      const smsService = (global as any).smsService;
+      if (!smsService) {
+        return res.status(500).json({ error: 'SMS service not initialized' });
+      }
+      
+      const result = await smsService.sendSMS({
+        to: normalizedPhone,
+        body: message
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error sending test SMS:', error);
+      res.status(500).json({ error: 'Failed to send test SMS' });
     }
   });
 
