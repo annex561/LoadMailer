@@ -80,12 +80,15 @@ export class SMSLoadService {
       this.client = twilio(accountSid, authToken);
       this.fromPhones = [fromPhone1];
       
-      // Add second phone number if available (ensure proper formatting)
-      if (fromPhone2) {
+      // Add second phone number if available and valid (ensure proper formatting)
+      if (fromPhone2 && !fromPhone2.includes('555')) {
         const formattedPhone2 = fromPhone2.startsWith('+') ? fromPhone2 : `+${fromPhone2}`;
         this.fromPhones.push(formattedPhone2);
         console.log(`📱 SMS Service initialized with ${this.fromPhones.length} phone numbers: ${this.fromPhones.join(', ')}`);
       } else {
+        if (fromPhone2 && fromPhone2.includes('555')) {
+          console.log(`⚠️ Ignoring invalid test phone number: ${fromPhone2}`);
+        }
         console.log(`📱 SMS Service initialized with 1 phone number: ${fromPhone1}`);
       }
       
