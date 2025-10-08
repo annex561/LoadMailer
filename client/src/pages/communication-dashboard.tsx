@@ -58,13 +58,14 @@ import { Radio } from "lucide-react";
 // Types
 interface LoadCommunicationThread {
   id: string;
-  loadId: string;
+  threadType?: 'general' | 'load';
+  loadId?: string;
   driverId: string;
   driverName: string;
   driverPhone?: string;
-  loadNumber: string;
-  loadOrigin: string;
-  loadDestination: string;
+  loadNumber?: string;
+  loadOrigin?: string;
+  loadDestination?: string;
   status: 'active' | 'closed' | 'archived';
   messageCount: number;
   unreadDriverMessages: number;
@@ -74,8 +75,20 @@ interface LoadCommunicationThread {
   lastMessageSender?: 'driver' | 'dispatch';
   assistantEnabled?: boolean;
   assistantMode?: 'suggest' | 'autosend' | 'off';
+  loadOfferStatus?: 'pending' | 'accepted' | 'declined' | 'expired';
+  loadOfferId?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+interface Driver {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  status: string;
+  equipmentType?: string;
+  currentMood?: string;
 }
 
 interface LoadMessage {
@@ -186,6 +199,9 @@ export default function CommunicationDashboard() {
   const [showAiSettings, setShowAiSettings] = useState(false);
   const [showUnassignedLoads, setShowUnassignedLoads] = useState(false);
   const [selectedLoadForAssignment, setSelectedLoadForAssignment] = useState<UnassignedLoad | null>(null);
+  const [activeTab, setActiveTab] = useState<'general' | 'loads'>('general');
+  const [driverSearchQuery, setDriverSearchQuery] = useState("");
+  const [showDriverSearch, setShowDriverSearch] = useState(false);
   
   // Document upload states
   const [showUploadDialog, setShowUploadDialog] = useState(false);
@@ -199,6 +215,40 @@ export default function CommunicationDashboard() {
   const { data: threads = [], isLoading: threadsLoading, refetch: refetchThreads } = useQuery<LoadCommunicationThread[]>({
     queryKey: ['/api/communication/threads'],
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
+  });
+
+  // Search drivers
+  const { data: searchedDrivers = [], isLoading: driversLoading } = useQuery<Driver[]>({
+    queryKey: ['/api/communication/search-drivers', driverSearchQuery],
+    queryFn: async () => {
+      const response = await fetch(`/api/communication/search-drivers?query=${encodeURIComponent(driverSearchQuery)}`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: showDriverSearch && driverSearchQuery.length > 0,
+  });
+
+  // Start general conversation with driver
+  const startGeneralChatMutation = useMutation({
+    mutationFn: async (driverId: string) => {
+      const response = await fetch('/api/communication/general-thread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId })
+      });
+      if (!response.ok) throw new Error('Failed to start conversation');
+      return response.json();
+    },
+    onSuccess: (thread) => {
+      setSelectedThread(thread);
+      setShowDriverSearch(false);
+      setDriverSearchQuery("");
+      refetchThreads();
+      toast({ title: "Conversation started", description: `You can now chat with ${thread.driverName}` });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to start conversation", description: error.message, variant: "destructive" });
+    }
   });
   
   // Fetch Zello voice dispatch status
@@ -523,19 +573,30 @@ export default function CommunicationDashboard() {
 
   // Filter and search threads
   const filteredThreads = threads.filter(thread => {
+    // Filter by tab (general vs load conversations)
+    const matchesTab = activeTab === 'general' 
+      ? thread.threadType === 'general' 
+      : (!thread.threadType || thread.threadType === 'load');
+    
     const matchesSearch = searchTerm === "" || 
       thread.driverName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      thread.loadNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      thread.loadOrigin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      thread.loadDestination.toLowerCase().includes(searchTerm.toLowerCase());
+      (thread.loadNumber && thread.loadNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (thread.loadOrigin && thread.loadOrigin.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (thread.loadDestination && thread.loadDestination.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesStatus = filterStatus === "all" || 
       (filterStatus === "active" && thread.status === "active") ||
       (filterStatus === "unread" && thread.unreadDispatchMessages > 0) ||
       (filterStatus === "archived" && thread.status === "archived");
     
-    return matchesSearch && matchesStatus;
+    return matchesTab && matchesSearch && matchesStatus;
   });
+
+  // Get recent general conversations for quick access
+  const recentGeneralThreads = threads
+    .filter(t => t.threadType === 'general')
+    .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+    .slice(0, 5);
 
   const handleSendMessage = () => {
     if (!selectedThread || !newMessage.trim()) return;
@@ -912,12 +973,12 @@ export default function CommunicationDashboard() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowUnassignedLoads(!showUnassignedLoads)}
-                className={showUnassignedLoads ? 'bg-blue-50 border-blue-300' : ''}
-                data-testid="button-toggle-unassigned"
+                onClick={() => setShowDriverSearch(true)}
+                className="bg-green-50 border-green-300 hover:bg-green-100"
+                data-testid="button-search-driver"
               >
                 <UserPlus className="w-4 h-4 mr-1" />
-                Unassigned ({unassignedLoads.length})
+                Search Driver
               </Button>
               <Button
                 variant="outline"
@@ -934,13 +995,27 @@ export default function CommunicationDashboard() {
               </Button>
             </div>
           </div>
+
+          {/* Tabs for General vs Load Communications */}
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'general' | 'loads')} className="mb-3">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="general" data-testid="tab-general">
+                <MessageSquare className="w-4 h-4 mr-1" />
+                General Chats
+              </TabsTrigger>
+              <TabsTrigger value="loads" data-testid="tab-loads">
+                <Truck className="w-4 h-4 mr-1" />
+                Load Communications
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
           
           {/* Search and Filter */}
           <div className="space-y-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
-                placeholder="Search loads, drivers..."
+                placeholder={activeTab === 'general' ? "Search drivers..." : "Search loads, drivers..."}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -959,6 +1034,29 @@ export default function CommunicationDashboard() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Recent Drivers (shown in General tab) */}
+          {activeTab === 'general' && recentGeneralThreads.length > 0 && (
+            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Recent Drivers</h3>
+              <div className="space-y-1">
+                {recentGeneralThreads.map((thread) => (
+                  <button
+                    key={thread.id}
+                    onClick={() => setSelectedThread(thread)}
+                    className={`w-full text-left p-2 rounded hover:bg-white transition-colors flex items-center justify-between ${
+                      selectedThread?.id === thread.id ? 'bg-white shadow-sm' : ''
+                    }`}
+                  >
+                    <span className="text-sm text-gray-800">{thread.driverName}</span>
+                    {thread.unreadDispatchMessages > 0 && (
+                      <Badge className="bg-red-500 text-white text-xs">{thread.unreadDispatchMessages}</Badge>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           
           {/* Zello Voice Dispatch Status */}
           {zelloStatus && (
@@ -1005,13 +1103,31 @@ export default function CommunicationDashboard() {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-medium text-sm text-gray-900">{thread.loadNumber}</h4>
-                        {getThreadStatusBadge(thread)}
+                        {thread.threadType === 'general' ? (
+                          <>
+                            <h4 className="font-medium text-sm text-gray-900">{thread.driverName}</h4>
+                            <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-xs">General</Badge>
+                          </>
+                        ) : (
+                          <>
+                            <h4 className="font-medium text-sm text-gray-900">{thread.loadNumber}</h4>
+                            {getThreadStatusBadge(thread)}
+                          </>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-600">{thread.driverName}</p>
-                      <p className="text-xs text-gray-500">
-                        {thread.loadOrigin} → {thread.loadDestination}
-                      </p>
+                      {thread.threadType !== 'general' && (
+                        <>
+                          <p className="text-xs text-gray-600">{thread.driverName}</p>
+                          <p className="text-xs text-gray-500">
+                            {thread.loadOrigin} → {thread.loadDestination}
+                          </p>
+                        </>
+                      )}
+                      {thread.loadOfferStatus === 'pending' && (
+                        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs mt-1">
+                          Load Offer Pending
+                        </Badge>
+                      )}
                     </div>
                     <Avatar className="w-8 h-8">
                       <AvatarFallback className="text-xs bg-gray-200">
@@ -1535,6 +1651,97 @@ export default function CommunicationDashboard() {
           </div>
         )}
       </div>
+
+      {/* Driver Search Dialog */}
+      <Dialog open={showDriverSearch} onOpenChange={setShowDriverSearch}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Search and Chat with Driver</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Search driver by name, phone, or email..."
+                value={driverSearchQuery}
+                onChange={(e) => setDriverSearchQuery(e.target.value)}
+                className="pl-10"
+                autoFocus
+                data-testid="input-driver-search"
+              />
+            </div>
+            
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-2">
+                {driversLoading && (
+                  <div className="text-center py-4 text-gray-500">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    Searching drivers...
+                  </div>
+                )}
+                
+                {!driversLoading && searchedDrivers.length === 0 && driverSearchQuery.length > 0 && (
+                  <div className="text-center py-4 text-gray-500">
+                    No drivers found matching "{driverSearchQuery}"
+                  </div>
+                )}
+                
+                {searchedDrivers.map((driver) => (
+                  <Card 
+                    key={driver.id} 
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => startGeneralChatMutation.mutate(driver.id)}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10">
+                            <AvatarFallback className="bg-blue-100 text-blue-600">
+                              {driver.name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h4 className="font-medium text-sm">{driver.name}</h4>
+                            <p className="text-xs text-gray-600">{driver.phone || 'No phone'}</p>
+                            <p className="text-xs text-gray-500">{driver.equipmentType}</p>
+                          </div>
+                        </div>
+                        <Badge 
+                          className={
+                            driver.status === 'available' 
+                              ? "bg-green-100 text-green-800 border-green-200" 
+                              : driver.status === 'on_route'
+                              ? "bg-blue-100 text-blue-800 border-blue-200"
+                              : "bg-gray-100 text-gray-800 border-gray-200"
+                          }
+                        >
+                          {driver.status}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {!driversLoading && driverSearchQuery.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>Start typing to search for drivers</p>
+                    <p className="text-sm mt-2">You can search by name, phone, or email</p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowDriverSearch(false);
+              setDriverSearchQuery("");
+            }}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
