@@ -367,19 +367,45 @@ export class ZelloDispatchService extends EventEmitter {
     }
   }
 
-  async sendCustomMessage(message: string, channel: string): Promise<void> {
+  async sendCustomMessage(message: string, channel: string): Promise<boolean> {
     if (!this.isInitialized) {
       console.warn('⚠️ Zello service not initialized');
-      return;
+      return false;
     }
 
-    console.log(`📻 Sending to ${channel}: ${message}`);
-    
-    this.emit('custom_broadcast', {
-      channel,
-      message,
-      timestamp: new Date()
-    });
+    try {
+      console.log(`📻 Sending to ${channel}: ${message}`);
+      
+      // Use the Zello API to send the message
+      const response = await this.makeZelloApiCall('/channels/send', 'POST', {
+        channel,
+        message,
+        type: 'text'
+      });
+      
+      console.log(`✅ Message sent to Zello channel ${channel}`);
+      
+      // Also emit the event for any local listeners
+      this.emit('custom_broadcast', {
+        channel,
+        message,
+        timestamp: new Date()
+      });
+      
+      return true;
+    } catch (error) {
+      console.error(`❌ Failed to send message to Zello channel ${channel}:`, error);
+      
+      // Fallback: Still emit locally even if API fails
+      this.emit('custom_broadcast', {
+        channel,
+        message,
+        timestamp: new Date(),
+        error: true
+      });
+      
+      return false;
+    }
   }
 
   async addUserToChannel(username: string, channelName: string): Promise<boolean> {
