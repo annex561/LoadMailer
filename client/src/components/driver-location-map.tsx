@@ -3,25 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Navigation, Zap, Clock, Send, Truck } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useLocation } from "wouter";
-import L from "leaflet";
 
-// Import Leaflet CSS
-import "leaflet/dist/leaflet.css";
-
-// Fix for default icon paths
-const iconRetinaUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png';
-const iconUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png';
-const shadowUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png';
-
-// Configure default icon
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl,
-  iconUrl,
-  shadowUrl,
-});
+declare global {
+  interface Window {
+    L: any;
+  }
+}
 
 type DriverLocation = {
   driverId: string;
@@ -47,9 +36,11 @@ type LocationsResponse = {
 export default function DriverLocationMap() {
   const [, setLocation] = useLocation();
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const mapRef = useRef<any>(null);
+  const markersRef = useRef<Map<string, any>>(new Map());
   const [mapError, setMapError] = useState<string | null>(null);
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const loadAttemptRef = useRef(0);
   
   // Fetch real-time driver locations
   const { data: response, isLoading } = useQuery<LocationsResponse>({
@@ -63,28 +54,112 @@ export default function DriverLocationMap() {
   const formatSpeed = (speed?: number) => speed ? `${speed.toFixed(0)} mph` : "0 mph";
   const formatBattery = (level?: number) => level ? `${Math.round(level)}%` : "100%";
 
-  // Initialize Leaflet map
+  // Load Leaflet from CDN
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
+    // Prevent multiple load attempts
+    if (loadAttemptRef.current > 0) return;
+    loadAttemptRef.current++;
+
+    const loadLeaflet = () => {
+      // Check if already loaded
+      if (window.L) {
+        console.log("Leaflet already loaded");
+        setLeafletLoaded(true);
+        return;
+      }
+
+      // Add Leaflet CSS
+      if (!document.querySelector('link[href*="leaflet.css"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
+        link.crossOrigin = '';
+        document.head.appendChild(link);
+      }
+
+      // Add Leaflet JS
+      if (!document.querySelector('script[src*="leaflet.js"]')) {
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+        script.crossOrigin = '';
+        script.async = true;
+        
+        script.onload = () => {
+          console.log("Leaflet JS loaded successfully");
+          
+          // Fix default icon paths
+          if (window.L) {
+            delete (window.L.Icon.Default.prototype as any)._getIconUrl;
+            window.L.Icon.Default.mergeOptions({
+              iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+              iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+              shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+            });
+            
+            setLeafletLoaded(true);
+          }
+        };
+        
+        script.onerror = () => {
+          console.error("Failed to load Leaflet JS");
+          setMapError("Failed to load mapping library. Please refresh the page.");
+        };
+        
+        document.head.appendChild(script);
+      } else {
+        // Script already added, check if Leaflet is available
+        const checkLeaflet = setInterval(() => {
+          if (window.L) {
+            clearInterval(checkLeaflet);
+            console.log("Leaflet became available");
+            setLeafletLoaded(true);
+          }
+        }, 100);
+        
+        // Stop checking after 5 seconds
+        setTimeout(() => clearInterval(checkLeaflet), 5000);
+      }
+    };
+
+    loadLeaflet();
+  }, []);
+
+  // Initialize map after Leaflet is loaded
+  useEffect(() => {
+    if (!leafletLoaded || !mapContainerRef.current || mapRef.current || !window.L) {
+      return;
+    }
 
     try {
-      // Create map centered on Tennessee/Southeast US
-      const map = L.map(mapContainerRef.current, {
+      console.log("Initializing Leaflet map...");
+      
+      // Create map
+      const map = window.L.map(mapContainerRef.current, {
         center: [35.5175, -86.5804], // Tennessee center
         zoom: 7,
-        zoomControl: true
+        zoomControl: true,
       });
 
-      // Add OpenStreetMap tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // Add tile layer
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
+        maxZoom: 19,
       }).addTo(map);
 
+      // Store reference
       mapRef.current = map;
-      setMapError(null);
       
-      console.log("Map initialized successfully");
+      // Force resize after a short delay
+      setTimeout(() => {
+        if (mapRef.current) {
+          mapRef.current.invalidateSize();
+          console.log("Map initialized and resized");
+        }
+      }, 250);
+      
+      setMapError(null);
     } catch (error) {
       console.error("Failed to initialize map:", error);
       setMapError("Failed to initialize map. Please refresh the page.");
@@ -100,31 +175,36 @@ export default function DriverLocationMap() {
         }
       }
     };
-  }, []);
+  }, [leafletLoaded]);
 
   // Update markers when locations change
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !window.L || !leafletLoaded) return;
 
     try {
+      console.log(`Updating map with ${locations.length} locations`);
+      
       // Clear existing markers
       markersRef.current.forEach(marker => {
-        mapRef.current!.removeLayer(marker);
+        mapRef.current.removeLayer(marker);
       });
       markersRef.current.clear();
 
-      // Add new markers for each driver
+      // Add markers for each driver
       locations.forEach(location => {
-        // Create custom icon for moving trucks
+        // Create custom truck icon
         const iconHtml = `
-          <div style="background: ${location.isMoving ? '#2563eb' : '#6b7280'}; 
-                      width: 36px; height: 36px; 
-                      border-radius: 50%; 
-                      display: flex; 
-                      align-items: center; 
-                      justify-content: center;
-                      border: 2px solid white;
-                      box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+          <div style="
+            background: ${location.isMoving ? '#2563eb' : '#6b7280'}; 
+            width: 36px; 
+            height: 36px; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            border: 2px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          ">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
               <path d="M1 3h15v13H1z"></path>
               <path d="M16 8h4l3 3v5h-7V8z"></path>
@@ -134,7 +214,7 @@ export default function DriverLocationMap() {
           </div>
         `;
 
-        const customIcon = L.divIcon({
+        const customIcon = window.L.divIcon({
           html: iconHtml,
           iconSize: [36, 36],
           iconAnchor: [18, 18],
@@ -142,12 +222,12 @@ export default function DriverLocationMap() {
           className: 'custom-driver-icon'
         });
 
-        const marker = L.marker([location.latitude, location.longitude], {
+        const marker = window.L.marker([location.latitude, location.longitude], {
           icon: customIcon,
           title: location.driverName
         });
 
-        // Create popup content
+        // Add popup
         const popupContent = `
           <div style="min-width: 250px; padding: 8px;">
             <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1f2937;">
@@ -169,9 +249,13 @@ export default function DriverLocationMap() {
                 </span>
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="padding: 2px 8px; border-radius: 4px; font-size: 12px; 
-                           background: ${location.isMoving ? '#dbeafe' : '#f3f4f6'}; 
-                           color: ${location.isMoving ? '#1e40af' : '#6b7280'};">
+                <span style="
+                  padding: 2px 8px; 
+                  border-radius: 4px; 
+                  font-size: 12px; 
+                  background: ${location.isMoving ? '#dbeafe' : '#f3f4f6'}; 
+                  color: ${location.isMoving ? '#1e40af' : '#6b7280'};
+                ">
                   ${location.isMoving ? '🚚 Moving' : '⏸️ Stopped'}
                 </span>
                 <span style="color: #9ca3af; font-size: 12px;">
@@ -184,10 +268,17 @@ export default function DriverLocationMap() {
                 </div>
               ` : ''}
               <button onclick="window.sendLoadToDriver('${location.driverId}', '${location.driverName}')"
-                      style="width: 100%; padding: 6px; margin-top: 8px; 
-                             background: #2563eb; color: white; 
-                             border: none; border-radius: 4px; 
-                             cursor: pointer; font-size: 14px;">
+                      style="
+                        width: 100%; 
+                        padding: 6px; 
+                        margin-top: 8px; 
+                        background: #2563eb; 
+                        color: white; 
+                        border: none; 
+                        border-radius: 4px; 
+                        cursor: pointer; 
+                        font-size: 14px;
+                      ">
                 📦 Send Load to Driver
               </button>
             </div>
@@ -203,28 +294,30 @@ export default function DriverLocationMap() {
           setSelectedDriver(location.driverId);
         });
 
-        marker.addTo(mapRef.current!);
+        marker.addTo(mapRef.current);
         markersRef.current.set(location.driverId, marker);
       });
 
-      // Auto-fit map to show all drivers if there are locations
-      if (locations.length > 0 && mapRef.current) {
-        const bounds = L.latLngBounds(
+      // Fit map to show all drivers
+      if (locations.length > 0) {
+        const bounds = window.L.latLngBounds(
           locations.map(loc => [loc.latitude, loc.longitude])
         );
-        mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+        mapRef.current.fitBounds(bounds, { 
+          padding: [50, 50], 
+          maxZoom: 12 
+        });
       }
       
-      console.log(`Updated map with ${locations.length} driver locations`);
+      console.log(`Added ${locations.length} markers to map`);
     } catch (error) {
       console.error("Error updating map markers:", error);
     }
-  }, [locations]);
+  }, [locations, leafletLoaded]);
 
-  // Add global function for sending loads to drivers
+  // Add global function for sending loads
   useEffect(() => {
     (window as any).sendLoadToDriver = (driverId: string, driverName: string) => {
-      // Navigate to load management with driver pre-selected
       setLocation(`/load-management?assignTo=${driverId}&driverName=${encodeURIComponent(driverName)}`);
     };
 
@@ -260,7 +353,7 @@ export default function DriverLocationMap() {
             Real-Time Driver Locations
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="secondary">
+            <Badge variant="secondary" data-testid="text-location-count">
               {locations.length} Active
             </Badge>
             <Button 
@@ -299,7 +392,7 @@ export default function DriverLocationMap() {
             {/* Interactive Leaflet Map */}
             <div 
               ref={mapContainerRef}
-              className="h-[500px] rounded-lg border-2 border-gray-200 relative"
+              className="h-[500px] rounded-lg border-2 border-gray-200 relative bg-gray-100"
               data-testid="leaflet-map-container"
               style={{ zIndex: 1 }}
             />
