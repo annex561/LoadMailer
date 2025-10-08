@@ -44,6 +44,7 @@ import {
   X
 } from "lucide-react";
 import { format } from "date-fns";
+import { Radio } from "lucide-react";
 
 // Types
 interface LoadCommunicationThread {
@@ -162,6 +163,17 @@ export default function CommunicationDashboard() {
   const { data: threads = [], isLoading: threadsLoading, refetch: refetchThreads } = useQuery<LoadCommunicationThread[]>({
     queryKey: ['/api/communication/threads'],
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
+  });
+  
+  // Fetch Zello voice dispatch status
+  const { data: zelloStatus } = useQuery({
+    queryKey: ['/api/zello/status'],
+    queryFn: async () => {
+      const response = await fetch('/api/zello/status');
+      if (!response.ok) return null;
+      return response.json();
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Debug logging
@@ -510,6 +522,34 @@ export default function CommunicationDashboard() {
               </SelectContent>
             </Select>
           </div>
+          
+          {/* Zello Voice Dispatch Status */}
+          {zelloStatus && (
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-900">Zello Voice Dispatch</span>
+                </div>
+                <Badge className={zelloStatus.initialized ? "bg-green-100 text-green-800 border-green-200" : "bg-yellow-100 text-yellow-800 border-yellow-200"}>
+                  {zelloStatus.initialized ? 'Active' : 'Connecting'}
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                {zelloStatus.channels?.map((channel: any) => (
+                  <div key={channel.name} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-700">#{channel.name}</span>
+                    <span className="text-gray-500">{channel.userCount} users</span>
+                  </div>
+                ))}
+                {zelloStatus.totalUsers > 0 && (
+                  <div className="text-xs text-gray-600 mt-2 pt-2 border-t border-blue-100">
+                    Total drivers on Zello: {zelloStatus.totalUsers}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Thread List */}
