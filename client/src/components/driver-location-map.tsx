@@ -6,20 +6,22 @@ import { MapPin, Navigation, Zap, Clock, Send, Truck } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import L from "leaflet";
+
+// Import Leaflet CSS
 import "leaflet/dist/leaflet.css";
 
-// Fix Leaflet's default icon paths issue
-import icon from "leaflet/dist/images/marker-icon.png";
-import iconShadow from "leaflet/dist/images/marker-shadow.png";
+// Fix for default icon paths
+const iconRetinaUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png';
+const iconUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png';
+const shadowUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png';
 
-let DefaultIcon = L.icon({
-  iconUrl: icon,
-  shadowUrl: iconShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41]
+// Configure default icon
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl,
+  iconUrl,
+  shadowUrl,
 });
-
-L.Marker.prototype.options.icon = DefaultIcon;
 
 type DriverLocation = {
   driverId: string;
@@ -47,6 +49,7 @@ export default function DriverLocationMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const [mapError, setMapError] = useState<string | null>(null);
   
   // Fetch real-time driver locations
   const { data: response, isLoading } = useQuery<LocationsResponse>({
@@ -64,25 +67,37 @@ export default function DriverLocationMap() {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    // Create map centered on Tennessee/Southeast US
-    const map = L.map(mapContainerRef.current, {
-      center: [35.5175, -86.5804], // Tennessee center
-      zoom: 7,
-      zoomControl: true
-    });
+    try {
+      // Create map centered on Tennessee/Southeast US
+      const map = L.map(mapContainerRef.current, {
+        center: [35.5175, -86.5804], // Tennessee center
+        zoom: 7,
+        zoomControl: true
+      });
 
-    // Add OpenStreetMap tiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(map);
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
 
-    mapRef.current = map;
+      mapRef.current = map;
+      setMapError(null);
+      
+      console.log("Map initialized successfully");
+    } catch (error) {
+      console.error("Failed to initialize map:", error);
+      setMapError("Failed to initialize map. Please refresh the page.");
+    }
 
     return () => {
       if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
+        try {
+          mapRef.current.remove();
+          mapRef.current = null;
+        } catch (e) {
+          console.error("Error removing map:", e);
+        }
       }
     };
   }, []);
@@ -91,112 +106,118 @@ export default function DriverLocationMap() {
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Clear existing markers
-    markersRef.current.forEach(marker => {
-      mapRef.current!.removeLayer(marker);
-    });
-    markersRef.current.clear();
-
-    // Add new markers for each driver
-    locations.forEach(location => {
-      // Create custom icon for moving trucks
-      const iconHtml = `
-        <div style="background: ${location.isMoving ? '#2563eb' : '#6b7280'}; 
-                    width: 36px; height: 36px; 
-                    border-radius: 50%; 
-                    display: flex; 
-                    align-items: center; 
-                    justify-content: center;
-                    border: 2px solid white;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
-            <path d="M1 3h15v13H1z"></path>
-            <path d="M16 8h4l3 3v5h-7V8z"></path>
-            <circle cx="5.5" cy="18.5" r="2.5"></circle>
-            <circle cx="18.5" cy="18.5" r="2.5"></circle>
-          </svg>
-        </div>
-      `;
-
-      const customIcon = L.divIcon({
-        html: iconHtml,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-        popupAnchor: [0, -20],
-        className: 'custom-driver-icon'
+    try {
+      // Clear existing markers
+      markersRef.current.forEach(marker => {
+        mapRef.current!.removeLayer(marker);
       });
+      markersRef.current.clear();
 
-      const marker = L.marker([location.latitude, location.longitude], {
-        icon: customIcon,
-        title: location.driverName
-      });
-
-      // Create popup content
-      const popupContent = `
-        <div style="min-width: 250px; padding: 8px;">
-          <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1f2937;">
-            ${location.driverName}
-          </h3>
-          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px;">
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span style="color: #6b7280;">📍</span>
-              <span>${location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}</span>
-            </div>
-            <div style="display: flex; gap: 12px;">
-              <span style="display: flex; align-items: center; gap: 4px;">
-                <span style="color: #2563eb;">⚡</span>
-                ${formatSpeed(location.speed)}
-              </span>
-              <span style="display: flex; align-items: center; gap: 4px;">
-                <span style="color: #10b981;">🔋</span>
-                ${formatBattery(location.batteryLevel)}
-              </span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="padding: 2px 8px; border-radius: 4px; font-size: 12px; 
-                         background: ${location.isMoving ? '#dbeafe' : '#f3f4f6'}; 
-                         color: ${location.isMoving ? '#1e40af' : '#6b7280'};">
-                ${location.isMoving ? '🚚 Moving' : '⏸️ Stopped'}
-              </span>
-              <span style="color: #9ca3af; font-size: 12px;">
-                ${new Date(location.lastUpdate).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-              </span>
-            </div>
-            ${location.routeName ? `
-              <div style="color: #6b7280; font-size: 12px; border-top: 1px solid #e5e7eb; padding-top: 6px; margin-top: 4px;">
-                Route: ${location.routeName}
-              </div>
-            ` : ''}
-            <button onclick="window.sendLoadToDriver('${location.driverId}', '${location.driverName}')"
-                    style="width: 100%; padding: 6px; margin-top: 8px; 
-                           background: #2563eb; color: white; 
-                           border: none; border-radius: 4px; 
-                           cursor: pointer; font-size: 14px;">
-              📦 Send Load to Driver
-            </button>
+      // Add new markers for each driver
+      locations.forEach(location => {
+        // Create custom icon for moving trucks
+        const iconHtml = `
+          <div style="background: ${location.isMoving ? '#2563eb' : '#6b7280'}; 
+                      width: 36px; height: 36px; 
+                      border-radius: 50%; 
+                      display: flex; 
+                      align-items: center; 
+                      justify-content: center;
+                      border: 2px solid white;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
+              <path d="M1 3h15v13H1z"></path>
+              <path d="M16 8h4l3 3v5h-7V8z"></path>
+              <circle cx="5.5" cy="18.5" r="2.5"></circle>
+              <circle cx="18.5" cy="18.5" r="2.5"></circle>
+            </svg>
           </div>
-        </div>
-      `;
+        `;
 
-      marker.bindPopup(popupContent, {
-        maxWidth: 300,
-        closeButton: true
+        const customIcon = L.divIcon({
+          html: iconHtml,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+          popupAnchor: [0, -20],
+          className: 'custom-driver-icon'
+        });
+
+        const marker = L.marker([location.latitude, location.longitude], {
+          icon: customIcon,
+          title: location.driverName
+        });
+
+        // Create popup content
+        const popupContent = `
+          <div style="min-width: 250px; padding: 8px;">
+            <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1f2937;">
+              ${location.driverName}
+            </h3>
+            <div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px;">
+              <div style="display: flex; align-items: center; gap: 4px;">
+                <span style="color: #6b7280;">📍</span>
+                <span>${location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}</span>
+              </div>
+              <div style="display: flex; gap: 12px;">
+                <span style="display: flex; align-items: center; gap: 4px;">
+                  <span style="color: #2563eb;">⚡</span>
+                  ${formatSpeed(location.speed)}
+                </span>
+                <span style="display: flex; align-items: center; gap: 4px;">
+                  <span style="color: #10b981;">🔋</span>
+                  ${formatBattery(location.batteryLevel)}
+                </span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="padding: 2px 8px; border-radius: 4px; font-size: 12px; 
+                           background: ${location.isMoving ? '#dbeafe' : '#f3f4f6'}; 
+                           color: ${location.isMoving ? '#1e40af' : '#6b7280'};">
+                  ${location.isMoving ? '🚚 Moving' : '⏸️ Stopped'}
+                </span>
+                <span style="color: #9ca3af; font-size: 12px;">
+                  ${new Date(location.lastUpdate).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                </span>
+              </div>
+              ${location.routeName ? `
+                <div style="color: #6b7280; font-size: 12px; border-top: 1px solid #e5e7eb; padding-top: 6px; margin-top: 4px;">
+                  Route: ${location.routeName}
+                </div>
+              ` : ''}
+              <button onclick="window.sendLoadToDriver('${location.driverId}', '${location.driverName}')"
+                      style="width: 100%; padding: 6px; margin-top: 8px; 
+                             background: #2563eb; color: white; 
+                             border: none; border-radius: 4px; 
+                             cursor: pointer; font-size: 14px;">
+                📦 Send Load to Driver
+              </button>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent, {
+          maxWidth: 300,
+          closeButton: true
+        });
+
+        marker.on('click', () => {
+          setSelectedDriver(location.driverId);
+        });
+
+        marker.addTo(mapRef.current!);
+        markersRef.current.set(location.driverId, marker);
       });
 
-      marker.on('click', () => {
-        setSelectedDriver(location.driverId);
-      });
-
-      marker.addTo(mapRef.current!);
-      markersRef.current.set(location.driverId, marker);
-    });
-
-    // Auto-fit map to show all drivers if there are locations
-    if (locations.length > 0 && mapRef.current) {
-      const bounds = L.latLngBounds(
-        locations.map(loc => [loc.latitude, loc.longitude])
-      );
-      mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+      // Auto-fit map to show all drivers if there are locations
+      if (locations.length > 0 && mapRef.current) {
+        const bounds = L.latLngBounds(
+          locations.map(loc => [loc.latitude, loc.longitude])
+        );
+        mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+      }
+      
+      console.log(`Updated map with ${locations.length} driver locations`);
+    } catch (error) {
+      console.error("Error updating map markers:", error);
     }
   }, [locations]);
 
@@ -255,7 +276,11 @@ export default function DriverLocationMap() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {locations.length === 0 ? (
+        {mapError ? (
+          <div className="text-center py-12 text-red-600" data-testid="text-map-error">
+            <p className="font-semibold">{mapError}</p>
+          </div>
+        ) : locations.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground" data-testid="text-no-driver-locations">
             <Truck className="mx-auto h-12 w-12 mb-4" />
             <p className="font-semibold">No Active Driver Locations</p>
@@ -274,8 +299,9 @@ export default function DriverLocationMap() {
             {/* Interactive Leaflet Map */}
             <div 
               ref={mapContainerRef}
-              className="h-[500px] rounded-lg border-2 border-gray-200 relative z-10"
+              className="h-[500px] rounded-lg border-2 border-gray-200 relative"
               data-testid="leaflet-map-container"
+              style={{ zIndex: 1 }}
             />
             
             {/* Driver List */}
