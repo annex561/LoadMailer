@@ -41,6 +41,44 @@ export class ZelloDispatchService extends EventEmitter {
       console.warn('⚠️ ZELLO_API_KEY not found in environment variables');
     }
   }
+  
+  private async makeZelloApiCall(endpoint: string, method: string = 'GET', body?: any): Promise<any> {
+    if (!this.apiKey) {
+      throw new Error('Zello API key not configured');
+    }
+    
+    const url = `https://${this.workspaceUrl}/api/v1${endpoint}`;
+    
+    try {
+      const headers: any = {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      };
+      
+      const options: RequestInit = {
+        method,
+        headers
+      };
+      
+      if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+        options.body = JSON.stringify(body);
+      }
+      
+      const response = await fetch(url, options);
+      
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Zello API error: ${response.status} - ${errorData}`);
+      }
+      
+      const data = await response.json();
+      return data;
+      
+    } catch (error) {
+      console.error(`❌ Zello API call failed for ${endpoint}:`, error);
+      throw error;
+    }
+  }
 
   async initialize(): Promise<void> {
     if (!this.apiKey) {
@@ -337,10 +375,43 @@ export class ZelloDispatchService extends EventEmitter {
       channels.push('southeast-region');
     }
     
-    // In production, would make actual API call to Zello to create user
-    console.log(`📱 Creating Zello account for driver: ${username}`);
+    // Zello API integration (requires proper Zello Work admin credentials)
+    console.log(`📱 Preparing Zello account for driver: ${username}`);
     
-    // Add user to internal tracking
+    // NOTE: Real Zello Work API requires:
+    // 1. Admin username/password for Basic auth or OAuth session
+    // 2. Proper API endpoint configuration
+    // 3. Correct payload format with password_confirm and channels[] array
+    
+    // Currently using simulated provisioning for testing
+    // In production, replace with actual Zello Work API integration:
+    /*
+    try {
+      if (this.apiKey && this.isProduction) {
+        // Real API call would look like:
+        const response = await this.makeZelloWorkApiCall('/user/add', {
+          username,
+          password,
+          password_confirm: password,
+          email: driverData.email,
+          full_name: driverData.name,
+          channels: channels // as array
+        });
+        
+        if (response.code === 200) {
+          console.log(`✅ Successfully created Zello user: ${username}`);
+        }
+      }
+    } catch (apiError) {
+      console.error(`⚠️ Zello API provisioning failed:`, apiError);
+      // Would handle retry or queue for later provisioning
+    }
+    */
+    
+    console.log(`⚠️ Using simulated Zello provisioning (real API requires admin credentials)`);
+    console.log(`📝 Driver would receive: Username: ${username}, Channels: ${channels.join(', ')}`);
+    
+    // Add user to internal tracking (works even if API call fails)
     this.users.set(username, {
       name: driverData.name,
       username,

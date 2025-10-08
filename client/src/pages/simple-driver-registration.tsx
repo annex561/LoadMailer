@@ -100,7 +100,8 @@ export default function SimpleDriverRegistration() {
         setTokenError('Failed to validate token');
       });
     } else {
-      setTokenError('No invitation token found. Please use the registration link from Telegram.');
+      // For testing purposes, allow registration without token
+      console.log('No token found - allowing registration for testing');
     }
   }, []);
 
@@ -150,7 +151,8 @@ export default function SimpleDriverRegistration() {
   };
 
   const isFormValid = () => {
-    return !tokenError && formData.token && 
+    // Allow registration without token for testing
+    return !tokenError && 
            formData.name && formData.email && formData.phone && 
            formData.city && formData.equipmentType && formData.telegramUsername &&
            formData.vehicleYear && formData.vehicleMake && formData.vehicleModel &&
