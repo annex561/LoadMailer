@@ -1091,6 +1091,59 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount > 0;
   }
 
+  async getGeneralCommunicationThreadByDriver(driverId: string): Promise<schema.LoadCommunicationThread | undefined> {
+    const result = await db.select()
+      .from(schema.loadCommunicationThreads)
+      .where(
+        and(
+          eq(schema.loadCommunicationThreads.driverId, driverId),
+          eq(schema.loadCommunicationThreads.threadType, 'general'),
+          eq(schema.loadCommunicationThreads.status, 'active')
+        )
+      );
+    return result[0];
+  }
+
+  async acceptLoadOffer(threadId: string, loadId: string): Promise<boolean> {
+    // Get the thread
+    const thread = await this.getLoadCommunicationThread(threadId);
+    if (!thread) return false;
+
+    // Update the thread to mark the offer as accepted
+    await db.update(schema.loadCommunicationThreads)
+      .set({
+        loadOfferStatus: 'accepted',
+        loadOfferRespondedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(schema.loadCommunicationThreads.id, threadId));
+
+    // Assign the driver to the load
+    await db.update(schema.loads)
+      .set({
+        driverId: thread.driverId,
+        status: 'assigned',
+        updatedAt: new Date()
+      })
+      .where(eq(schema.loads.id, loadId));
+
+    // Create a new load-specific thread for this driver and load
+    await this.createLoadCommunicationThread({
+      threadType: 'load',
+      loadId: loadId,
+      driverId: thread.driverId,
+      status: 'active',
+      messageCount: 0,
+      unreadDriverMessages: 0,
+      unreadDispatchMessages: 0,
+      assistantEnabled: true,
+      assistantMode: 'suggest',
+      autoSendConfidence: 80
+    });
+
+    return true;
+  }
+
   // Load Message operations
   async getLoadMessage(id: string): Promise<schema.LoadMessage | undefined> {
     const result = await db.select().from(schema.loadMessages).where(eq(schema.loadMessages.id, id));

@@ -348,16 +348,23 @@ export const loadDocuments = pgTable("load_documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Load Communication Threads - Central communication hub for each load
+// Load Communication Threads - Central communication hub for loads and general driver communication
 export const loadCommunicationThreads = pgTable("load_communication_threads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  loadId: varchar("load_id").references(() => loads.id).notNull().unique(),
+  // Thread type determines if this is load-specific or general communication
+  threadType: text("thread_type").notNull().default("load"), // 'load' for load-specific, 'general' for direct driver chat
+  loadId: varchar("load_id").references(() => loads.id), // Optional - only for load-specific threads
   driverId: varchar("driver_id").references(() => drivers.id).notNull(),
   status: text("status").notNull().default("active"), // active, archived, closed
   lastMessageAt: timestamp("last_message_at").defaultNow(),
   messageCount: integer("message_count").notNull().default(0),
   unreadDriverMessages: integer("unread_driver_messages").notNull().default(0),
   unreadDispatchMessages: integer("unread_dispatch_messages").notNull().default(0),
+  // Load offer tracking
+  loadOfferId: varchar("load_offer_id"), // ID of the load being offered (for general threads)
+  loadOfferStatus: text("load_offer_status"), // 'pending', 'accepted', 'declined', 'expired'
+  loadOfferSentAt: timestamp("load_offer_sent_at"),
+  loadOfferRespondedAt: timestamp("load_offer_responded_at"),
   // AI Assistant features
   assistantEnabled: boolean("assistant_enabled").notNull().default(true),
   assistantMode: text("assistant_mode").notNull().default("suggest"), // suggest, autosend, off
@@ -369,6 +376,13 @@ export const loadCommunicationThreads = pgTable("load_communication_threads", {
   // Load location info for display
   loadOrigin: text("load_origin"),
   loadDestination: text("load_destination"),
+  // Driver info for display
+  driverName: text("driver_name"),
+  driverPhone: text("driver_phone"),
+  // Additional metadata
+  loadNumber: text("load_number"), // For quick reference
+  lastMessageText: text("last_message_text"), // Preview of last message
+  lastMessageSender: text("last_message_sender"), // 'driver' or 'dispatch'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -254,10 +254,12 @@ export interface IStorage {
   getLoadCommunicationThread(id: string): Promise<LoadCommunicationThread | undefined>;
   getLoadCommunicationThreadByLoad(loadId: string): Promise<LoadCommunicationThread | undefined>;
   getLoadCommunicationThreadByLoadAndDriver(loadId: string, driverId: string): Promise<LoadCommunicationThread | undefined>;
+  getGeneralCommunicationThreadByDriver(driverId: string): Promise<LoadCommunicationThread | undefined>;
   getAllLoadCommunicationThreads(): Promise<LoadCommunicationThread[]>;
   createLoadCommunicationThread(thread: InsertLoadCommunicationThread): Promise<LoadCommunicationThread>;
   updateLoadCommunicationThread(id: string, thread: Partial<InsertLoadCommunicationThread>): Promise<LoadCommunicationThread | undefined>;
   deleteLoadCommunicationThread(id: string): Promise<boolean>;
+  acceptLoadOffer(threadId: string, loadId: string): Promise<boolean>;
 
   // Load Message operations
   getLoadMessage(id: string): Promise<LoadMessage | undefined>;
