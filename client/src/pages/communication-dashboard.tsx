@@ -202,6 +202,7 @@ export default function CommunicationDashboard() {
   const [showUnassignedLoads, setShowUnassignedLoads] = useState(false);
   const [selectedLoadForAssignment, setSelectedLoadForAssignment] = useState<UnassignedLoad | null>(null);
   const [activeTab, setActiveTab] = useState<'general' | 'loads'>('general');
+  const [loadSearchQuery, setLoadSearchQuery] = useState("");
   const [showDriverDropdown, setShowDriverDropdown] = useState(false);
   
   // Document upload states
@@ -601,6 +602,23 @@ export default function CommunicationDashboard() {
       return data.filter((load: any) => !load.driverId && load.status === 'available').slice(0, 50); // Limit to 50 for performance
     },
     refetchInterval: 30000, // Refresh every 30 seconds
+    enabled: showUnassignedLoads && !loadSearchQuery // Don't fetch when searching
+  });
+
+  // Search for loads by load number
+  const { data: searchedLoads = [], isLoading: searchedLoadsLoading } = useQuery<UnassignedLoad[]>({
+    queryKey: ['/api/loads/search', loadSearchQuery],
+    queryFn: async () => {
+      const response = await fetch('/api/loads');
+      if (!response.ok) return [];
+      const data = await response.json();
+      // Filter loads by search query (search in load number)
+      const query = loadSearchQuery.toLowerCase();
+      return data.filter((load: any) => 
+        load.loadNumber && load.loadNumber.toLowerCase().includes(query)
+      ).slice(0, 50); // Limit results
+    },
+    enabled: showUnassignedLoads && loadSearchQuery.length > 0
   });
 
   // Fetch all drivers
@@ -1809,30 +1827,61 @@ export default function CommunicationDashboard() {
 
       {/* Unassigned Loads Dialog for Offering to Driver */}
       {showUnassignedLoads && selectedThread?.threadType === 'general' && (
-        <Dialog open={showUnassignedLoads} onOpenChange={setShowUnassignedLoads}>
+        <Dialog open={showUnassignedLoads} onOpenChange={(open) => {
+          setShowUnassignedLoads(open);
+          if (!open) setLoadSearchQuery(""); // Reset search when closing
+        }}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Select Load to Offer to {selectedThread.driverName}</DialogTitle>
             </DialogHeader>
-            <ScrollArea className="h-[500px]">
+            
+            {/* Load Search Input */}
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Type load number to search (e.g., LOAD-123456)..."
+                value={loadSearchQuery}
+                onChange={(e) => setLoadSearchQuery(e.target.value)}
+                className="pl-10"
+                autoFocus
+                data-testid="input-load-search"
+              />
+            </div>
+
+            <ScrollArea className="h-[450px]">
               <div className="space-y-2">
-                {unassignedLoads.length === 0 ? (
+                {/* Show loading state */}
+                {(unassignedLoadsLoading || searchedLoadsLoading) && (
                   <div className="text-center py-8 text-gray-500">
-                    <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No unassigned loads available</p>
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    Loading loads...
                   </div>
-                ) : (
-                  unassignedLoads.map((load) => (
-                    <Card 
-                      key={load.id}
-                      className="cursor-pointer hover:bg-gray-50"
-                      onClick={() => {
-                        offerLoadMutation.mutate({ 
-                          threadId: selectedThread.id, 
-                          loadId: load.id 
-                        });
-                      }}
-                    >
+                )}
+
+                {/* Show search results or unassigned loads */}
+                {!unassignedLoadsLoading && !searchedLoadsLoading && (
+                  <>
+                    {loadSearchQuery ? (
+                      // Show search results
+                      searchedLoads.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                          <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p>No loads found matching "{loadSearchQuery}"</p>
+                          <p className="text-sm mt-2">Try searching with a different load number</p>
+                        </div>
+                      ) : (
+                        searchedLoads.map((load) => (
+                          <Card 
+                            key={load.id}
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => {
+                              offerLoadMutation.mutate({ 
+                                threadId: selectedThread.id, 
+                                loadId: load.id 
+                              });
+                            }}
+                          >
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
@@ -1880,14 +1929,89 @@ export default function CommunicationDashboard() {
                         </div>
                       </CardContent>
                     </Card>
-                  ))
+                        ))
+                      )
+                    ) : (
+                      // Show unassigned loads when not searching
+                      unassignedLoads.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500">
+                          <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p>No unassigned loads available</p>
+                          <p className="text-sm mt-2">Use the search above to find any load by its number</p>
+                        </div>
+                      ) : (
+                        unassignedLoads.map((load) => (
+                          <Card 
+                            key={load.id}
+                            className="cursor-pointer hover:bg-gray-50"
+                            onClick={() => {
+                              offerLoadMutation.mutate({ 
+                                threadId: selectedThread.id, 
+                                loadId: load.id 
+                              });
+                            }}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <h4 className="font-medium text-sm">{load.loadNumber}</h4>
+                                    <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                                      ${load.rate || 'TBD'}
+                                    </Badge>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-sm text-gray-700">
+                                      <MapPin className="w-3 h-3 inline mr-1" />
+                                      {load.origin} → {load.destination}
+                                    </p>
+                                    <p className="text-xs text-gray-600">
+                                      <Truck className="w-3 h-3 inline mr-1" />
+                                      {load.equipmentType || 'Any'} • {load.weight || 'N/A'} lbs
+                                    </p>
+                                    <p className="text-xs text-gray-600">
+                                      <Clock className="w-3 h-3 inline mr-1" />
+                                      Pickup: {load.pickupDate ? format(new Date(load.pickupDate), 'MMM dd, HH:mm') : 'ASAP'}
+                                    </p>
+                                    {load.brokerName && (
+                                      <p className="text-xs text-gray-500">
+                                        Broker: {load.brokerName}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      offerLoadMutation.mutate({ 
+                                        threadId: selectedThread.id, 
+                                        loadId: load.id 
+                                      });
+                                    }}
+                                  >
+                                    Offer Load
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))
+                      )
+                    )}
+                  </>
                 )}
               </div>
             </ScrollArea>
             <DialogFooter>
               <Button 
                 variant="outline" 
-                onClick={() => setShowUnassignedLoads(false)}
+                onClick={() => {
+                  setShowUnassignedLoads(false);
+                  setLoadSearchQuery("");
+                }}
               >
                 Cancel
               </Button>
