@@ -303,17 +303,33 @@ async function initializeAllServices() {
       }
     });
 
-    // Initialize Zello voice dispatch service
-    Promise.resolve().then(async () => {
+    // Initialize Zello voice dispatch service immediately
+    setTimeout(async () => {
       try {
         console.log('🎙️ Starting Zello voice dispatch initialization...');
         await zelloService.initialize();
-        console.log('✅ Zello voice dispatch service initialized');
+        const status = {
+          initialized: zelloService.isServiceRunning(),
+          configured: zelloService.isServiceConfigured(),
+          channels: zelloService.channels,
+          totalUsers: zelloService.users.size
+        };
+        console.log('✅ Zello voice dispatch service initialized:', status);
         
         // Set up Zello event handlers
         zelloService.on('load_accepted', async (data) => {
           console.log(`✅ Driver ${data.driver} accepted load ${data.loadNumber} via Zello`);
-          // TODO: Update load status in database
+          // Update load status in database
+          const load = await storage.getLoadByNumber(data.loadNumber);
+          if (load && load.status === 'available') {
+            const driver = await storage.getDriverByNameOrPhone(data.driver);
+            if (driver) {
+              await storage.updateLoad(load.id, {
+                status: 'assigned',
+                driverId: driver.id
+              });
+            }
+          }
         });
         
         zelloService.on('load_declined', async (data) => {
@@ -324,7 +340,7 @@ async function initializeAllServices() {
       } catch (error) {
         console.error('❌ Failed to initialize Zello service:', error);
       }
-    });
+    }, 2000);  // Wait 2 seconds for server to be fully ready
 
     Promise.resolve().then(async () => {
       try {
@@ -1730,6 +1746,195 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error('❌ Error fetching message attachments:', error);
       res.status(500).json({ error: 'Failed to fetch attachments' });
+    }
+  });
+
+  // ===== ZELLO VOICE DISPATCH API ENDPOINTS =====
+
+  // Initialize Zello Voice Dispatch Service
+  app.post('/api/zello/initialize', async (req, res) => {
+    try {
+      console.log('🎙️ Manual Zello initialization requested');
+      await zelloService.initialize();
+      const status = {
+        initialized: zelloService.isServiceRunning(),
+        configured: zelloService.isServiceConfigured(),
+        channels: zelloService.channels,
+        totalUsers: zelloService.users.size
+      };
+      console.log('✅ Zello initialization complete:', status);
+      res.json(status);
+    } catch (error) {
+      console.error('❌ Zello initialization failed:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to initialize Zello' 
+      });
+    }
+  });
+
+  // Zello webhook endpoint for receiving messages from drivers
+  app.post('/api/zello/webhook', async (req, res) => {
+    try {
+      console.log('🎙️ Zello webhook received:', JSON.stringify(req.body, null, 2));
+      
+      const { 
+        type, 
+        channel, 
+        sender, 
+        message, 
+        text, 
+        attachment,
+        timestamp 
+      } = req.body;
+
+      // Handle different Zello event types
+      if (type === 'message' || type === 'text_message') {
+        // Text or voice message from driver
+        const messageContent = message || text || '';
+        const fromDriver = sender || req.body.from || req.body.user || '';
+        
+        if (!fromDriver || !messageContent) {
+          console.log('⚠️ Invalid Zello message - missing sender or content');
+          return res.status(400).json({ error: 'Invalid message data' });
+        }
+
+        // Find driver by name or phone
+        const driver = await storage.getDriverByNameOrPhone(fromDriver);
+        if (!driver) {
+          console.log(`⚠️ Unknown driver in Zello message: ${fromDriver}`);
+          return res.json({ status: 'ignored', reason: 'Unknown driver' });
+        }
+
+        // Check if message is a load response (ACCEPT/DECLINE)
+        const upperMessage = messageContent.toUpperCase();
+        if (upperMessage.includes('ACCEPT') || upperMessage.includes('BOOK')) {
+          // Driver accepting a load
+          const loadNumberMatch = messageContent.match(/LOAD-\d+/i);
+          if (loadNumberMatch) {
+            const loadNumber = loadNumberMatch[0].toUpperCase();
+            console.log(`✅ Driver ${driver.name} accepted load ${loadNumber} via Zello`);
+            
+            // Update load status
+            const load = await storage.getLoadByNumber(loadNumber);
+            if (load && load.status === 'available') {
+              await storage.updateLoad(load.id, {
+                status: 'assigned',
+                driverId: driver.id
+              });
+              
+              // Send confirmation back through Zello
+              await zelloService.sendMessage(
+                channel || 'all-drivers',
+                `✅ Load ${loadNumber} confirmed for ${driver.name}. Check Communication Dashboard for details.`
+              );
+            }
+          }
+        } else if (upperMessage.includes('DECLINE') || upperMessage.includes('PASS')) {
+          // Driver declining a load
+          const loadNumberMatch = messageContent.match(/LOAD-\d+/i);
+          if (loadNumberMatch) {
+            const loadNumber = loadNumberMatch[0].toUpperCase();
+            console.log(`❌ Driver ${driver.name} declined load ${loadNumber} via Zello`);
+            // TODO: Find next eligible driver
+          }
+        } else {
+          // Regular message - store in communication thread
+          console.log(`💬 Storing message from ${driver.name}: ${messageContent}`);
+          
+          // Find or create communication thread for this driver
+          let thread = await storage.getGeneralCommunicationThreadByDriver(driver.id);
+          
+          if (!thread) {
+            // Create new general communication thread
+            thread = await storage.createCommunicationThread({
+              driverId: driver.id,
+              loadId: null,  // General thread, no load attached
+              status: 'active',
+              threadType: 'general'
+            });
+          }
+
+          // Store the message
+          await storage.createCommunicationMessage({
+            threadId: thread.id,
+            sender: 'driver',
+            content: messageContent,
+            channel: 'zello',
+            metadata: {
+              zelloChannel: channel,
+              originalSender: fromDriver,
+              timestamp: timestamp || new Date().toISOString()
+            }
+          });
+
+          console.log(`✅ Zello message stored in thread ${thread.id}`);
+        }
+
+        // Handle attachments (documents, photos)
+        if (attachment) {
+          console.log('📎 Processing Zello attachment:', attachment);
+          
+          // Determine document type from caption or filename
+          const caption = attachment.caption || attachment.name || '';
+          let documentType = 'other';
+          
+          if (caption.match(/pod|delivery|proof/i)) {
+            documentType = 'proof_of_delivery';
+          } else if (caption.match(/bol|bill|lading/i)) {
+            documentType = 'bill_of_lading';  
+          } else if (caption.match(/inspect|report/i)) {
+            documentType = 'inspection_report';
+          } else if (caption.match(/damage|claim/i)) {
+            documentType = 'damage_photo';
+          }
+
+          // Find the most recent load for this driver
+          const recentLoad = await storage.getMostRecentLoadForDriver(driver.id);
+          
+          if (recentLoad) {
+            // Store attachment
+            await storage.createMessageAttachment({
+              messageId: null, // Will be linked to message if in thread
+              loadId: recentLoad.id,
+              driverId: driver.id,
+              fileUrl: attachment.url || attachment.path || '',
+              fileName: attachment.name || `zello_${Date.now()}.jpg`,
+              fileType: attachment.type || 'image/jpeg',
+              fileSize: attachment.size || 0,
+              uploadedBy: 'driver',
+              documentType: documentType,
+              metadata: {
+                source: 'zello',
+                channel: channel,
+                caption: caption,
+                timestamp: timestamp
+              }
+            });
+            
+            console.log(`📎 Zello document stored: ${documentType} for load ${recentLoad.loadNumber}`);
+          }
+        }
+        
+        res.json({ status: 'received', processed: true });
+        
+      } else if (type === 'channel_status') {
+        // Channel status update
+        console.log(`📻 Zello channel status: ${channel} - ${req.body.status}`);
+        res.json({ status: 'acknowledged' });
+        
+      } else if (type === 'user_status') {
+        // User online/offline status
+        console.log(`👤 Zello user status: ${req.body.user} - ${req.body.status}`);
+        res.json({ status: 'acknowledged' });
+        
+      } else {
+        console.log(`❓ Unknown Zello event type: ${type}`);
+        res.json({ status: 'ignored', reason: 'Unknown event type' });
+      }
+      
+    } catch (error) {
+      console.error('❌ Error handling Zello webhook:', error);
+      res.status(500).json({ error: 'Failed to process Zello webhook' });
     }
   });
 

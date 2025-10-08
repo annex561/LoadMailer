@@ -74,6 +74,33 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
+  async getDriverByNameOrPhone(nameOrPhone: string): Promise<schema.Driver | undefined> {
+    // First try to find by exact name match
+    const byName = await db.select().from(schema.drivers)
+      .where(eq(schema.drivers.name, nameOrPhone))
+      .limit(1);
+    
+    if (byName.length > 0) return byName[0];
+    
+    // Then try to find by phone number (clean both for comparison)
+    const cleanedSearch = nameOrPhone.replace(/[^0-9]/g, '');
+    if (cleanedSearch.length >= 10) {
+      // Use PostgreSQL's REPLACE to clean phone numbers in the database
+      const byPhone = await db.select().from(schema.drivers)
+        .where(drizzleSql`REPLACE(REPLACE(REPLACE(REPLACE(${schema.drivers.phone}, '-', ''), ' ', ''), '(', ''), ')', '') = ${cleanedSearch}`)
+        .limit(1);
+      
+      if (byPhone.length > 0) return byPhone[0];
+    }
+    
+    // Finally try partial name match (case insensitive)
+    const byPartialName = await db.select().from(schema.drivers)
+      .where(drizzleSql`LOWER(${schema.drivers.name}) LIKE LOWER(${`%${nameOrPhone}%`})`)
+      .limit(1);
+    
+    return byPartialName[0];
+  }
+
   async updateDriverMood(driverId: string, mood: string, note?: string): Promise<schema.Driver | undefined> {
     await db.update(schema.drivers).set({ 
       currentMood: mood, 
@@ -324,33 +351,69 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getLoadsByDriver(driverId: string): Promise<schema.LoadWithRelations[]> {
-    // Use raw SQL to avoid Drizzle query builder issues with assignedDriverId
-    const query = `
-      SELECT * FROM loads 
-      WHERE assigned_driver_id = $1 
-      AND status IN ('available', 'assigned', 'in_transit', 'picked_up')
-      ORDER BY created_at DESC
-    `;
-    
+    // Properly use parameterized query to prevent SQL injection
     try {
-      const loadsResult = await sql(query, [driverId]);
-      const loads = loadsResult as unknown as schema.Load[];
-      
-      // Map to LoadWithRelations format
-      const loadsWithRelations: schema.LoadWithRelations[] = [];
-      for (const load of loads) {
-        const driver = load.driverId ? await this.getDriver(load.driverId) : undefined;
-        const customer = load.customerId ? await this.getCustomer(load.customerId) : undefined;
-        loadsWithRelations.push({
-          ...load,
-          driver: driver || null,
-          customer: customer || null,
-        });
-      }
-      return loadsWithRelations;
+      // Use Drizzle query builder for safety
+      const result = await db.query.loads.findMany({
+        where: and(
+          eq(schema.loads.driverId, driverId),
+          or(
+            eq(schema.loads.status, 'available'),
+            eq(schema.loads.status, 'assigned'),
+            eq(schema.loads.status, 'in_transit'),
+            eq(schema.loads.status, 'picked_up')
+          )
+        ),
+        with: {
+          driver: true,
+          customer: true,
+        },
+        orderBy: [desc(schema.loads.createdAt)],
+      });
+      return result;
     } catch (error) {
       console.error('Error in getLoadsByDriver:', error);
       return [];
+    }
+  }
+
+  async getLoadByNumber(loadNumber: string): Promise<schema.LoadWithRelations | undefined> {
+    try {
+      const result = await db.query.loads.findFirst({
+        where: eq(schema.loads.loadNumber, loadNumber),
+        with: {
+          driver: true,
+          customer: true,
+        },
+      });
+      return result;
+    } catch (error) {
+      console.error(`Error getting load by number ${loadNumber}:`, error);
+      return undefined;
+    }
+  }
+
+  async getMostRecentLoadForDriver(driverId: string): Promise<schema.LoadWithRelations | undefined> {
+    try {
+      const result = await db.query.loads.findFirst({
+        where: and(
+          eq(schema.loads.driverId, driverId),
+          or(
+            eq(schema.loads.status, 'assigned'),
+            eq(schema.loads.status, 'in_transit'),
+            eq(schema.loads.status, 'picked_up')
+          )
+        ),
+        with: {
+          driver: true,
+          customer: true,
+        },
+        orderBy: [desc(schema.loads.createdAt)],
+      });
+      return result;
+    } catch (error) {
+      console.error(`Error getting most recent load for driver ${driverId}:`, error);
+      return undefined;
     }
   }
 

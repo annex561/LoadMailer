@@ -9,6 +9,7 @@ export interface IStorage {
   updateDriver(id: string, driver: Partial<InsertDriver>): Promise<Driver | undefined>;
   deleteDriver(id: string): Promise<boolean>;
   findDuplicateDrivers(name: string, email: string, phone: string): Promise<Driver[]>;
+  getDriverByNameOrPhone(nameOrPhone: string): Promise<Driver | undefined>;
   
   // Driver mood tracking
   updateDriverMood(driverId: string, mood: string, note?: string): Promise<Driver | undefined>;
@@ -29,6 +30,8 @@ export interface IStorage {
   deleteLoad(id: string): Promise<boolean>;
   getLoadsByStatus(status: string): Promise<LoadWithRelations[]>;
   getLoadsByDriver(driverId: string): Promise<LoadWithRelations[]>;
+  getLoadByNumber(loadNumber: string): Promise<LoadWithRelations | undefined>;
+  getMostRecentLoadForDriver(driverId: string): Promise<LoadWithRelations | undefined>;
 
   // Email template operations
   getEmailTemplate(id: string): Promise<EmailTemplate | undefined>;
