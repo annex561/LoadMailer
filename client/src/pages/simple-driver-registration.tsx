@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { EQUIPMENT_TYPES } from '@shared/equipment-types';
 import { apiRequest } from '@/lib/queryClient';
-import { Truck, User, Phone, Mail, MapPin, CheckCircle } from 'lucide-react';
+import { Truck, User, Phone, Mail, MapPin, CheckCircle, Radio } from 'lucide-react';
 
 interface SimpleDriverData {
   name: string;
@@ -104,6 +104,8 @@ export default function SimpleDriverRegistration() {
     }
   }, []);
 
+  const [zelloInfo, setZelloInfo] = useState<any>(null);
+
   const registerDriverMutation = useMutation({
     mutationFn: async (data: SimpleDriverData) => {
       const response = await fetch('/api/simple-driver-registration', {
@@ -120,9 +122,17 @@ export default function SimpleDriverRegistration() {
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['/api/drivers'] });
+      
+      // Store Zello info if available
+      if (result.zelloAccount) {
+        setZelloInfo(result.zelloAccount);
+      }
+      
       toast({
         title: 'Registration successful!',
-        description: 'Welcome to LoadMaster! You can now receive load offers.'
+        description: result.zelloAccount 
+          ? 'Your Zello voice dispatch account has been created!'
+          : 'Welcome to LoadMaster! You can now receive load offers.'
       });
       setIsComplete(true);
     },
@@ -157,16 +167,92 @@ export default function SimpleDriverRegistration() {
   if (isComplete) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-lg">
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
               <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
               <h3 className="text-2xl font-bold text-green-600">Registration Complete!</h3>
               <p className="text-muted-foreground">
                 Welcome to LoadMaster! Your driver profile has been created successfully. 
-                You can now start receiving load offers via Telegram.
+                You can now receive load offers via SMS and voice dispatch.
               </p>
-              <div className="flex gap-4 justify-center">
+              
+              {zelloInfo && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left space-y-3 mt-4">
+                  <h4 className="font-semibold text-blue-800 flex items-center">
+                    <Radio className="h-5 w-5 mr-2" />
+                    Your Zello Voice Dispatch Account
+                  </h4>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">Username:</span>
+                      <span className="ml-2 font-mono font-semibold text-blue-700">
+                        {zelloInfo.username}
+                      </span>
+                    </div>
+                    
+                    {zelloInfo.password && (
+                      <div>
+                        <span className="text-gray-600">Password:</span>
+                        <span className="ml-2 font-mono font-semibold text-blue-700">
+                          {zelloInfo.password}
+                        </span>
+                      </div>
+                    )}
+                    
+                    <div>
+                      <span className="text-gray-600">Your Channels:</span>
+                      <div className="ml-2 mt-1">
+                        {zelloInfo.channels?.map((channel: string) => (
+                          <span key={channel} className="inline-block px-2 py-1 bg-white rounded-md text-xs font-medium text-blue-700 mr-2 mb-1">
+                            #{channel}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {zelloInfo.appLinks && (
+                    <div className="pt-3 border-t border-blue-200">
+                      <p className="text-sm font-medium text-blue-800 mb-2">
+                        📱 Download the Zello Work app:
+                      </p>
+                      <div className="flex gap-3 justify-center">
+                        <a
+                          href={zelloInfo.appLinks.ios}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-3 py-2 bg-black text-white rounded-lg text-xs font-medium hover:bg-gray-800"
+                        >
+                          <Phone className="h-4 w-4 mr-1" />
+                          iOS App Store
+                        </a>
+                        <a
+                          href={zelloInfo.appLinks.android}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"
+                        >
+                          <Phone className="h-4 w-4 mr-1" />
+                          Google Play
+                        </a>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-2">
+                        Use Network: <span className="font-mono">lamp1</span>
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-2">
+                    <p className="text-xs text-yellow-800">
+                      ⚠️ Save these credentials! You'll need them to log into the Zello Work app.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex gap-4 justify-center pt-4">
                 <Button onClick={() => setLocation('/')} data-testid="button-go-to-dashboard">
                   Go to Dashboard
                 </Button>
