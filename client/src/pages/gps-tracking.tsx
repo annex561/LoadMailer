@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { MapPin, Navigation, Route, Activity, Zap, Signal, Clock, AlertTriangle } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import DriverLocationMap from "@/components/driver-location-map";
 
 type DriverLocation = {
   id: string;
@@ -70,10 +71,17 @@ export default function GPSTrackingPage() {
     heading: "",
   });
 
-  const { data: locations = [] } = useQuery<DriverLocation[]>({
-    queryKey: ["/api/driver-locations"],
+  const { data: locationsResponse } = useQuery<{
+    locations: DriverLocation[];
+    count: number;
+    serviceRunning: boolean;
+    trackedDrivers: number;
+  }>({
+    queryKey: ["/api/driver-locations/active"],
     refetchInterval: 10000, // Refresh every 10 seconds for real-time tracking
   });
+  
+  const locations = locationsResponse?.locations || [];
 
   const { data: devices = [] } = useQuery<GpsDevice[]>({
     queryKey: ["/api/gps/devices"],
@@ -253,7 +261,7 @@ export default function GPSTrackingPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold" data-testid="text-location-count">
-                  {locations.filter(l => l.isActive).length}
+                  {locations.length}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Real-time tracking enabled
@@ -291,6 +299,9 @@ export default function GPSTrackingPage() {
               </CardContent>
             </Card>
           </div>
+          
+          {/* Interactive Map with Driver Locations */}
+          <DriverLocationMap />
 
           <Card data-testid="card-location-table">
             <CardHeader>
