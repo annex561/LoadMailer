@@ -632,6 +632,103 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   // CRITICAL DRIVER ENDPOINTS - Moved from deferred registration to immediate
   
+  // Simple driver registration with Zello integration
+  app.post("/api/simple-driver-registration", async (req, res) => {
+    try {
+      console.log('📱 Processing driver registration with Zello integration...');
+      
+      // Extract token and driver data
+      const { token, ...driverData } = req.body;
+      
+      // Prepare driver data with defaults
+      const driverRecord = {
+        name: driverData.name,
+        email: driverData.email,
+        phone: driverData.phone,
+        city: driverData.city,
+        equipmentType: driverData.equipmentType,
+        weightCapacity: driverData.maxWeight || 26000,
+        maxLength: driverData.maxLength || 53,
+        status: 'available' as const,
+        enableSmsNotifications: true,
+        telegramUsername: driverData.telegramUsername || '',
+        licenseNumber: driverData.licenseNumber || '',
+        licenseState: driverData.licenseState || ''
+      };
+      
+      // Check for duplicates before creating
+      const duplicates = await storage.findDuplicateDrivers(
+        driverRecord.name,
+        driverRecord.email,
+        driverRecord.phone
+      );
+      
+      if (duplicates.length > 0) {
+        return res.status(409).json({
+          error: "Duplicate contact found",
+          duplicates,
+          message: "A driver with this name, email, or phone already exists."
+        });
+      }
+      
+      // Create driver in database first
+      const driver = await storage.createDriver(driverRecord);
+      
+      console.log(`✅ Driver created: ${driver.name} (${driver.id})`);
+      
+      // Create Zello account for the driver
+      try {
+        const zelloCredentials = await zelloService.createDriverAccount({
+          name: driver.name,
+          email: driver.email,
+          phone: driver.phone,
+          equipmentType: driver.equipmentType
+        });
+        
+        // Store Zello credentials with driver (in metadata or custom fields)
+        // For now, we'll return them to the driver directly
+        
+        // Send welcome SMS with Zello credentials
+        const welcomeMessage = zelloService.generateWelcomeMessage(zelloCredentials);
+        
+        // Try to send SMS with Zello credentials
+        if (smsLoadService?.isServiceConfigured()) {
+          try {
+            await smsLoadService.sendDirectSMS(driver.phone, welcomeMessage);
+            console.log('📱 Sent Zello welcome SMS to driver');
+          } catch (smsError) {
+            console.error('⚠️ Failed to send welcome SMS:', smsError);
+            // Continue even if SMS fails - they still get the info on screen
+          }
+        }
+        
+        console.log(`🎙️ Zello account created for ${driver.name}: ${zelloCredentials.username}`);
+        
+        res.status(201).json({
+          ...driver,
+          zelloAccount: {
+            username: zelloCredentials.username,
+            password: zelloCredentials.password, // Show password once during registration
+            channels: zelloCredentials.channels,
+            appLinks: zelloCredentials.appDownloadLinks
+          },
+          message: 'Registration complete! Check your phone for Zello app download links.'
+        });
+      } catch (zelloError) {
+        console.error('⚠️ Failed to create Zello account:', zelloError);
+        // Still return success for driver creation even if Zello fails
+        res.status(201).json({
+          ...driver,
+          message: 'Driver registered successfully. Voice dispatch setup pending.'
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ Registration error:', error);
+      res.status(400).json({ error: "Registration failed" });
+    }
+  });
+  
   // Check for duplicate contacts before creation
   app.post("/api/check-duplicates", async (req, res) => {
     try {
