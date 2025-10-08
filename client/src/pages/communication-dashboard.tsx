@@ -182,6 +182,7 @@ interface Driver {
   id: string;
   name: string;
   phone?: string;
+  email?: string;
   status: 'available' | 'on_route' | 'unavailable';
   equipmentType: string;
 }
@@ -201,8 +202,7 @@ export default function CommunicationDashboard() {
   const [showUnassignedLoads, setShowUnassignedLoads] = useState(false);
   const [selectedLoadForAssignment, setSelectedLoadForAssignment] = useState<UnassignedLoad | null>(null);
   const [activeTab, setActiveTab] = useState<'general' | 'loads'>('general');
-  const [driverSearchQuery, setDriverSearchQuery] = useState("");
-  const [showDriverSearch, setShowDriverSearch] = useState(false);
+  const [showDriverDropdown, setShowDriverDropdown] = useState(false);
   
   // Document upload states
   const [showUploadDialog, setShowUploadDialog] = useState(false);
@@ -218,23 +218,26 @@ export default function CommunicationDashboard() {
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
   });
 
-  // Fetch all drivers for search
+  // Fetch all drivers for search when in general tab
   const { data: allDrivers = [], isLoading: driversLoading } = useQuery<Driver[]>({
     queryKey: ['/api/drivers'],
-    enabled: showDriverSearch,
+    enabled: activeTab === 'general',
   });
   
-  // Filter drivers based on search query
-  const searchedDrivers = useMemo(() => {
-    if (!driverSearchQuery) return allDrivers;
+  // Filter drivers based on search term (focusing on first name)
+  const filteredDrivers = useMemo(() => {
+    if (!searchTerm || activeTab !== 'general') return [];
     
-    const query = driverSearchQuery.toLowerCase();
-    return allDrivers.filter(driver => 
-      driver.name.toLowerCase().includes(query) ||
-      (driver.phone && driver.phone.toLowerCase().includes(query)) ||
-      (driver.email && driver.email.toLowerCase().includes(query))
-    );
-  }, [allDrivers, driverSearchQuery]);
+    const query = searchTerm.toLowerCase();
+    return allDrivers.filter(driver => {
+      // Primary focus on first name
+      const firstName = driver.name.split(' ')[0].toLowerCase();
+      if (firstName.includes(query)) return true;
+      
+      // Also check full name
+      return driver.name.toLowerCase().includes(query);
+    });
+  }, [allDrivers, searchTerm, activeTab]);
 
   // Start general conversation with driver
   const startGeneralChatMutation = useMutation({
@@ -1042,31 +1045,19 @@ export default function CommunicationDashboard() {
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Communication Center</h2>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDriverSearch(true)}
-                className="bg-green-50 border-green-300 hover:bg-green-100"
-                data-testid="button-search-driver"
-              >
-                <UserPlus className="w-4 h-4 mr-1" />
-                Search Driver
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  refetchThreads();
-                  refetchMessages();
-                  refetchUnassignedLoads();
-                }}
-                disabled={threadsLoading}
-                data-testid="button-refresh"
-              >
-                <RefreshCw className={`w-4 h-4 ${threadsLoading ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                refetchThreads();
+                refetchMessages();
+                refetchUnassignedLoads();
+              }}
+              disabled={threadsLoading}
+              data-testid="button-refresh"
+            >
+              <RefreshCw className={`w-4 h-4 ${threadsLoading ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
 
           {/* Tabs for General vs Load Communications */}
@@ -1088,12 +1079,53 @@ export default function CommunicationDashboard() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
-                placeholder={activeTab === 'general' ? "Search drivers..." : "Search loads, drivers..."}
+                placeholder={activeTab === 'general' ? "Search drivers by name..." : "Search loads, drivers..."}
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setShowDriverDropdown(activeTab === 'general' && e.target.value.length > 0);
+                }}
+                onFocus={() => setShowDriverDropdown(activeTab === 'general' && searchTerm.length > 0)}
+                onBlur={() => setTimeout(() => setShowDriverDropdown(false), 200)}
                 className="pl-10"
                 data-testid="input-search"
               />
+              
+              {/* Driver Dropdown */}
+              {showDriverDropdown && filteredDrivers.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {filteredDrivers.map((driver) => (
+                    <button
+                      key={driver.id}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center justify-between"
+                      onClick={() => {
+                        startGeneralChatMutation.mutate(driver.id);
+                        setSearchTerm("");
+                        setShowDriverDropdown(false);
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-gray-400" />
+                        <div>
+                          <div className="text-sm font-medium">{driver.name}</div>
+                          <div className="text-xs text-gray-500">{driver.phone || 'No phone'}</div>
+                        </div>
+                      </div>
+                      <Badge 
+                        className={
+                          driver.status === 'available' 
+                            ? "bg-green-100 text-green-800 border-green-200 text-xs" 
+                            : driver.status === 'on_route'
+                            ? "bg-blue-100 text-blue-800 border-blue-200 text-xs"
+                            : "bg-gray-100 text-gray-800 border-gray-200 text-xs"
+                        }
+                      >
+                        {driver.status}
+                      </Badge>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="bg-white border border-gray-300" data-testid="select-filter">
@@ -1774,96 +1806,6 @@ export default function CommunicationDashboard() {
         )}
       </div>
 
-      {/* Driver Search Dialog */}
-      <Dialog open={showDriverSearch} onOpenChange={setShowDriverSearch}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Search and Chat with Driver</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Search driver by name, phone, or email..."
-                value={driverSearchQuery}
-                onChange={(e) => setDriverSearchQuery(e.target.value)}
-                className="pl-10"
-                autoFocus
-                data-testid="input-driver-search"
-              />
-            </div>
-            
-            <ScrollArea className="h-[300px]">
-              <div className="space-y-2">
-                {driversLoading && (
-                  <div className="text-center py-4 text-gray-500">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    Searching drivers...
-                  </div>
-                )}
-                
-                {!driversLoading && searchedDrivers.length === 0 && driverSearchQuery.length > 0 && (
-                  <div className="text-center py-4 text-gray-500">
-                    No drivers found matching "{driverSearchQuery}"
-                  </div>
-                )}
-                
-                {!driversLoading && searchedDrivers.map((driver) => (
-                  <Card 
-                    key={driver.id} 
-                    className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => startGeneralChatMutation.mutate(driver.id)}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="w-10 h-10">
-                            <AvatarFallback className="bg-blue-100 text-blue-600">
-                              {driver.name.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h4 className="font-medium text-sm">{driver.name}</h4>
-                            <p className="text-xs text-gray-600">{driver.phone || 'No phone'}</p>
-                            <p className="text-xs text-gray-500">{driver.equipmentType}</p>
-                          </div>
-                        </div>
-                        <Badge 
-                          className={
-                            driver.status === 'available' 
-                              ? "bg-green-100 text-green-800 border-green-200" 
-                              : driver.status === 'on_route'
-                              ? "bg-blue-100 text-blue-800 border-blue-200"
-                              : "bg-gray-100 text-gray-800 border-gray-200"
-                          }
-                        >
-                          {driver.status}
-                        </Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-
-                {!driversLoading && allDrivers.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No drivers available</p>
-                    <p className="text-sm mt-2">Add drivers to start conversations</p>
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowDriverSearch(false);
-              setDriverSearchQuery("");
-            }}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Unassigned Loads Dialog for Offering to Driver */}
       {showUnassignedLoads && selectedThread?.threadType === 'general' && (
