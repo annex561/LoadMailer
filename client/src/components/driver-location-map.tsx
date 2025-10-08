@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Navigation, Zap, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MapPin, Navigation, Zap, Clock, Send, Truck } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 
 type DriverLocation = {
   driverId: string;
@@ -26,67 +28,201 @@ type LocationsResponse = {
 };
 
 export default function DriverLocationMap() {
+  const [, setLocation] = useLocation();
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
+  const markersRef = useRef<Map<string, any>>(new Map());
+  
   // Fetch real-time driver locations
   const { data: response, isLoading } = useQuery<LocationsResponse>({
     queryKey: ["/api/driver-locations/active"],
-    refetchInterval: 15000, // Refresh every 15 seconds to match GPS tracking frequency
+    refetchInterval: 15000, // Refresh every 15 seconds
   });
 
   const locations = response?.locations || [];
   const [selectedDriver, setSelectedDriver] = useState<string | null>(null);
   
-  const formatSpeed = (speed?: number) => speed ? `${speed.toFixed(0)} mph` : "N/A";
-  const formatBattery = (level?: number) => level ? `${Math.round(level)}%` : "N/A";
+  const formatSpeed = (speed?: number) => speed ? `${speed.toFixed(0)} mph` : "0 mph";
+  const formatBattery = (level?: number) => level ? `${Math.round(level)}%` : "100%";
 
-  // Calculate map center based on driver locations
-  const mapCenter = locations.length > 0 ? {
-    lat: locations.reduce((sum, l) => sum + l.latitude, 0) / locations.length,
-    lng: locations.reduce((sum, l) => sum + l.longitude, 0) / locations.length
-  } : { lat: 35.5, lng: -85.0 }; // Tennessee center
-
+  // Initialize Leaflet map
   useEffect(() => {
-    // Check if Leaflet is already loaded
-    if (typeof window !== 'undefined' && (window as any).L) {
-      return;
-    }
+    if (!mapContainerRef.current || mapRef.current) return;
 
-    // Load real map tiles using vanilla JavaScript
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.onload = () => {
-      // Map will initialize when script loads
+    // Check if Leaflet is loaded
+    const initializeMap = () => {
+      if (typeof window === 'undefined' || !(window as any).L) {
+        setTimeout(initializeMap, 100);
+        return;
+      }
+
+      const L = (window as any).L;
+      
+      // Create map centered on Tennessee/Southeast US
+      const map = L.map(mapContainerRef.current, {
+        center: [35.5175, -86.5804], // Tennessee center
+        zoom: 7,
+        zoomControl: true
+      });
+
+      // Add OpenStreetMap tiles
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+
+      mapRef.current = map;
     };
-    script.onerror = () => {
-      console.error('Failed to load Leaflet script');
-    };
 
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-
-    // Only append if not already present
-    if (!document.querySelector(`script[src="${script.src}"]`)) {
+    // Load Leaflet if not already loaded
+    if (!(window as any).L) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = initializeMap;
       document.head.appendChild(script);
-    }
-    if (!document.querySelector(`link[href="${link.href}"]`)) {
+
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
       document.head.appendChild(link);
+    } else {
+      initializeMap();
     }
 
     return () => {
-      // Safe cleanup - only remove if they exist
-      try {
-        if (script.parentNode) {
-          document.head.removeChild(script);
-        }
-        if (link.parentNode) {
-          document.head.removeChild(link);
-        }
-      } catch (error) {
-        // Ignore cleanup errors
-        console.debug('Cleanup error (safe to ignore):', error);
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
       }
     };
   }, []);
+
+  // Update markers when locations change
+  useEffect(() => {
+    if (!mapRef.current || !(window as any).L) return;
+
+    const L = (window as any).L;
+    
+    // Clear existing markers
+    markersRef.current.forEach(marker => {
+      mapRef.current.removeLayer(marker);
+    });
+    markersRef.current.clear();
+
+    // Add new markers for each driver
+    locations.forEach(location => {
+      // Create custom icon for moving trucks
+      const iconHtml = `
+        <div style="background: ${location.isMoving ? '#2563eb' : '#6b7280'}; 
+                    width: 36px; height: 36px; 
+                    border-radius: 50%; 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2">
+            <path d="M1 3h15v13H1z"></path>
+            <path d="M16 8h4l3 3v5h-7V8z"></path>
+            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+          </svg>
+        </div>
+      `;
+
+      const customIcon = L.divIcon({
+        html: iconHtml,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -20],
+        className: 'custom-driver-icon'
+      });
+
+      const marker = L.marker([location.latitude, location.longitude], {
+        icon: customIcon,
+        title: location.driverName
+      });
+
+      // Create popup content
+      const popupContent = `
+        <div style="min-width: 250px; padding: 8px;">
+          <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1f2937;">
+            ${location.driverName}
+          </h3>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 14px;">
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span style="color: #6b7280;">📍</span>
+              <span>${location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}</span>
+            </div>
+            <div style="display: flex; gap: 12px;">
+              <span style="display: flex; align-items: center; gap: 4px;">
+                <span style="color: #2563eb;">⚡</span>
+                ${formatSpeed(location.speed)}
+              </span>
+              <span style="display: flex; align-items: center; gap: 4px;">
+                <span style="color: #10b981;">🔋</span>
+                ${formatBattery(location.batteryLevel)}
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="padding: 2px 8px; border-radius: 4px; font-size: 12px; 
+                         background: ${location.isMoving ? '#dbeafe' : '#f3f4f6'}; 
+                         color: ${location.isMoving ? '#1e40af' : '#6b7280'};">
+                ${location.isMoving ? '🚚 Moving' : '⏸️ Stopped'}
+              </span>
+              <span style="color: #9ca3af; font-size: 12px;">
+                ${new Date(location.lastUpdate).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+              </span>
+            </div>
+            ${location.routeName ? `
+              <div style="color: #6b7280; font-size: 12px; border-top: 1px solid #e5e7eb; padding-top: 6px; margin-top: 4px;">
+                Route: ${location.routeName}
+              </div>
+            ` : ''}
+            <button onclick="window.sendLoadToDriver('${location.driverId}', '${location.driverName}')"
+                    style="width: 100%; padding: 6px; margin-top: 8px; 
+                           background: #2563eb; color: white; 
+                           border: none; border-radius: 4px; 
+                           cursor: pointer; font-size: 14px;">
+              📦 Send Load to Driver
+            </button>
+          </div>
+        </div>
+      `;
+
+      marker.bindPopup(popupContent, {
+        maxWidth: 300,
+        closeButton: true
+      });
+
+      marker.on('click', () => {
+        setSelectedDriver(location.driverId);
+      });
+
+      marker.addTo(mapRef.current);
+      markersRef.current.set(location.driverId, marker);
+    });
+
+    // Auto-fit map to show all drivers if there are locations
+    if (locations.length > 0) {
+      const bounds = L.latLngBounds(
+        locations.map(loc => [loc.latitude, loc.longitude])
+      );
+      mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+    }
+  }, [locations]);
+
+  // Add global function for sending loads to drivers
+  useEffect(() => {
+    (window as any).sendLoadToDriver = (driverId: string, driverName: string) => {
+      // Navigate to load management with driver pre-selected
+      setLocation(`/load-management?assignTo=${driverId}&driverName=${encodeURIComponent(driverName)}`);
+    };
+
+    return () => {
+      delete (window as any).sendLoadToDriver;
+    };
+  }, [setLocation]);
 
   if (isLoading) {
     return (
@@ -94,12 +230,12 @@ export default function DriverLocationMap() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MapPin className="w-5 h-5" />
-            Driver Locations
+            Real-Time Driver Locations
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="animate-pulse">
-            <div className="h-64 bg-gray-200 rounded-lg"></div>
+            <div className="h-96 bg-gray-200 rounded-lg"></div>
           </div>
         </CardContent>
       </Card>
@@ -114,172 +250,105 @@ export default function DriverLocationMap() {
             <MapPin className="w-5 h-5" />
             Real-Time Driver Locations
           </div>
-          <Badge variant="secondary">
-            {locations.length} Active
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">
+              {locations.length} Active
+            </Badge>
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => setLocation('/gps-tracking')}
+              data-testid="button-view-gps-details"
+            >
+              <Navigation className="w-4 h-4 mr-1" />
+              GPS Details
+            </Button>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
         {locations.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground" data-testid="text-no-driver-locations">
-            <MapPin className="mx-auto h-12 w-12 mb-4" />
-            <p>No active driver locations available</p>
-            <p className="text-sm">Driver GPS tracking will appear here when active</p>
+            <Truck className="mx-auto h-12 w-12 mb-4" />
+            <p className="font-semibold">No Active Driver Locations</p>
+            <p className="text-sm mt-2">Driver locations will appear here when they're online</p>
+            <Button 
+              className="mt-4" 
+              variant="outline" 
+              size="sm"
+              onClick={() => setLocation('/drivers')}
+            >
+              Manage Drivers
+            </Button>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Real OpenStreetMap with tiles */}
-            <div className="relative h-96 rounded-lg overflow-hidden border-2 border-gray-200">
-              {/* Driver Status Dropdown - positioned to not block zoom */}
-              <div className="absolute bottom-4 right-4 z-10">
-                <select className="bg-white border border-gray-300 rounded px-3 py-1 text-sm shadow-sm">
-                  <option>Unlocated Drivers ({5 - locations.length})</option>
-                  <option>All Drivers ({5})</option>
-                  <option>Active Drivers ({locations.length})</option>
-                </select>
-              </div>
-
-              {/* Real Map iframe using OpenStreetMap */}
-              <iframe
-                src={`https://www.openstreetmap.org/export/embed.html?bbox=-125.0,25.0,-65.0,50.0&layer=mapnik&marker=${mapCenter.lat}%2C${mapCenter.lng}`}
-                style={{ 
-                  width: '100%', 
-                  height: '100%', 
-                  border: 'none',
-                  borderRadius: '8px'
-                }}
-                title="Driver Location Map"
-                data-testid="osm-iframe-map"
-              />
-
-              {/* Driver markers overlay */}
-              <div className="absolute inset-0 pointer-events-none">
-                {locations.map((location) => {
-                  // Convert lat/lng to accurate pixel position for overlay
-                  const lat = location.latitude;
-                  const lng = location.longitude;
-                  
-                  // More accurate mercator projection for US map bounds
-                  // Map bounds: -125.0 to -65.0 longitude, 25.0 to 50.0 latitude
-                  const mapBounds = {
-                    west: -125.0,
-                    east: -65.0,
-                    north: 50.0,
-                    south: 25.0
-                  };
-                  
-                  const x = ((lng - mapBounds.west) / (mapBounds.east - mapBounds.west)) * 100;
-                  const y = ((mapBounds.north - lat) / (mapBounds.north - mapBounds.south)) * 100;
-                  
-                  return (
-                    <div
-                      key={location.driverId}
-                      className="absolute pointer-events-auto"
-                      style={{ 
-                        left: `${Math.max(0, Math.min(100, x))}%`, 
-                        top: `${Math.max(0, Math.min(100, y))}%`,
-                        transform: 'translate(-50%, -50%)'
-                      }}
-                      data-testid={`driver-marker-${location.driverId}`}
-                    >
-                      <div 
-                        className="relative cursor-pointer group"
-                        onClick={() => setSelectedDriver(selectedDriver === location.driverId ? null : location.driverId)}
-                      >
-                        {/* Truck marker */}
-                        <div className="w-8 h-8 bg-blue-600 rounded-full border-2 border-white shadow-lg flex items-center justify-center hover:bg-blue-700 transition-colors">
-                          <Navigation className="w-4 h-4 text-white" />
-                        </div>
-                        
-                        {/* Info popup */}
-                        {selectedDriver === location.driverId && (
-                          <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 bg-white border border-gray-300 rounded-lg shadow-xl p-3 min-w-[220px] z-50">
-                            <div className="font-semibold text-sm mb-2 text-blue-900">{location.driverName}</div>
-                            <div className="space-y-1 text-xs">
-                              <div className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3 text-gray-400" />
-                                <span className="truncate">{location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}</span>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className="flex items-center gap-1">
-                                  <Navigation className="w-3 h-3 text-blue-600" />
-                                  {formatSpeed(location.speed)}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Zap className="w-3 h-3 text-green-600" />
-                                  {formatBattery(location.batteryLevel)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Badge variant={location.isMoving ? "default" : "secondary"} className="text-xs">
-                                  {location.isMoving ? 'Moving' : 'Stopped'}
-                                </Badge>
-                                <span className="text-xs text-gray-500">
-                                  {new Date(location.lastUpdate).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                                </span>
-                              </div>
-                              {location.routeName && (
-                                <div className="text-xs text-gray-500 mt-1">{location.routeName}</div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Instructions */}
-              <div className="absolute top-4 left-4 text-xs text-gray-600 bg-white/90 px-2 py-1 rounded shadow pointer-events-none">
-                Real OpenStreetMap • Click truck markers for driver details
-              </div>
-            </div>
+            {/* Interactive Leaflet Map */}
+            <div 
+              ref={mapContainerRef}
+              className="h-[500px] rounded-lg border-2 border-gray-200 relative"
+              data-testid="leaflet-map-container"
+            />
             
-            {/* Driver list below map */}
+            {/* Driver List */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {locations.map((location) => (
+              {locations.map(location => (
                 <div 
-                  key={location.driverId} 
-                  className="bg-gray-50 rounded-lg p-3 border"
+                  key={location.driverId}
+                  className={`p-3 border rounded-lg cursor-pointer transition-all hover:shadow-md ${
+                    selectedDriver === location.driverId ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                  }`}
+                  onClick={() => {
+                    setSelectedDriver(location.driverId);
+                    // Open marker popup on map
+                    const marker = markersRef.current.get(location.driverId);
+                    if (marker) {
+                      marker.openPopup();
+                      mapRef.current.setView([location.latitude, location.longitude], 12);
+                    }
+                  }}
                   data-testid={`driver-card-${location.driverId}`}
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <div className="font-semibold text-sm">{location.driverName}</div>
-                      <div className="text-xs text-gray-500">{location.routeName || 'On Route'}</div>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      <MapPin className="w-3 h-3 mr-1" />
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-semibold text-sm">{location.driverName}</span>
+                    <Badge 
+                      variant={location.isMoving ? "default" : "secondary"} 
+                      className="text-xs"
+                    >
                       {location.isMoving ? 'Moving' : 'Stopped'}
                     </Badge>
                   </div>
-                  
-                  <div className="space-y-1 text-xs">
+                  <div className="text-xs text-gray-600 space-y-1">
                     <div className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-gray-400" />
+                      <MapPin className="w-3 h-3" />
                       <span className="truncate">
-                        {location.address || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
+                        {location.address || `${location.latitude.toFixed(2)}, ${location.longitude.toFixed(2)}`}
                       </span>
                     </div>
-                    
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1">
-                          <Navigation className="w-3 h-3 text-blue-600" />
-                          {formatSpeed(location.speed)}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Zap className="w-3 h-3 text-green-600" />
-                          {formatBattery(location.batteryLevel)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 text-gray-400">
-                        <Clock className="w-3 h-3" />
-                        {new Date(location.lastUpdate).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                      </div>
+                      <span className="flex items-center gap-1">
+                        <Navigation className="w-3 h-3 text-blue-500" />
+                        {formatSpeed(location.speed)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-green-500" />
+                        {formatBattery(location.batteryLevel)}
+                      </span>
                     </div>
                   </div>
+                  <Button
+                    size="sm"
+                    className="w-full mt-2"
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLocation(`/load-management?assignTo=${location.driverId}&driverName=${encodeURIComponent(location.driverName)}`);
+                    }}
+                    data-testid={`button-send-load-${location.driverId}`}
+                  >
+                    <Send className="w-3 h-3 mr-1" />
+                    Send Load
+                  </Button>
                 </div>
               ))}
             </div>
