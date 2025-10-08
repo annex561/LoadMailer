@@ -252,8 +252,8 @@ export default function CommunicationDashboard() {
     },
     onSuccess: (thread) => {
       setSelectedThread(thread);
-      setShowDriverSearch(false);
-      setDriverSearchQuery("");
+      setSearchTerm("");
+      setShowDriverDropdown(false);
       refetchThreads();
       toast({ title: "Conversation started", description: `You can now chat with ${thread.driverName}` });
     },
