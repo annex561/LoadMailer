@@ -1,5 +1,6 @@
 import { storage } from './storage';
 import { SMSLoadService } from './sms-service';
+import { zelloService } from './zello-service';
 import { DAT_EQUIPMENT_MAPPING, mapDATEquipmentType } from '../shared/equipment-types.js';
 
 interface LoadBoardAPIConfig {
@@ -90,6 +91,23 @@ export class RealLoadIntegrationService {
       // Immediately send to SMS notification system
       await this.smsService.processNewLoad(load);
       console.log(`📱 [REAL DAT] Load ${load.loadNumber} sent to eligible drivers`);
+      
+      // Also broadcast via Zello for hotshot/expedite drivers
+      if (zelloService.isServiceConfigured()) {
+        const channel = loadData.equipmentType.includes('VAN') ? 'box-truck-ops' : 'hotshot-expedite';
+        await zelloService.sendLoadNotification({
+          loadNumber: load.loadNumber,
+          origin: loadData.origin,
+          destination: loadData.destination,
+          rate: loadData.rate,
+          distance: loadData.miles,
+          equipment: loadData.equipmentType,
+          weight: loadData.weight ? `${loadData.weight} lbs` : 'Standard',
+          pickupDate: loadData.pickupDate,
+          commodity: loadData.description
+        }, channel);
+        console.log(`🎙️ [REAL DAT] Load ${load.loadNumber} broadcast to Zello channel: ${channel}`);
+      }
 
       return {
         success: true,
