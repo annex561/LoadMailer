@@ -391,7 +391,7 @@ export const loadCommunicationThreads = pgTable("load_communication_threads", {
 export const loadMessages = pgTable("load_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   threadId: varchar("thread_id").references(() => loadCommunicationThreads.id).notNull(),
-  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  loadId: varchar("load_id").references(() => loads.id), // nullable for general conversations
   senderId: varchar("sender_id"), // driver ID or null for dispatch
   senderRole: text("sender_role").notNull(), // 'driver', 'dispatch', 'assistant', 'system'
   senderName: text("sender_name").notNull(), // Display name

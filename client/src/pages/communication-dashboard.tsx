@@ -584,10 +584,11 @@ export default function CommunicationDashboard() {
   const { data: unassignedLoads = [], isLoading: unassignedLoadsLoading, refetch: refetchUnassignedLoads } = useQuery<UnassignedLoad[]>({
     queryKey: ['/api/loads/unassigned'],
     queryFn: async () => {
-      const response = await fetch('/api/loads?status=unassigned');
+      const response = await fetch('/api/loads?status=available');
       if (!response.ok) return [];
       const data = await response.json();
-      return data.filter((load: any) => !load.driverId);
+      // Filter for loads that don't have a driver assigned
+      return data.filter((load: any) => !load.driverId && load.status === 'available').slice(0, 50); // Limit to 50 for performance
     },
     refetchInterval: 30000, // Refresh every 30 seconds
   });
