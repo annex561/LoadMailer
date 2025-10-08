@@ -412,8 +412,9 @@ export const loadMessages = pgTable("load_messages", {
 // Message Attachments - Images, documents, signatures linked to messages
 export const messageAttachments = pgTable("message_attachments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  messageId: varchar("message_id").references(() => loadMessages.id).notNull(),
+  messageId: varchar("message_id").references(() => loadMessages.id),
   loadId: varchar("load_id").references(() => loads.id).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id), // Track who uploaded
   
   // File details
   attachmentType: text("attachment_type").notNull(), // 'image', 'document', 'signature', 'location_screenshot'
@@ -421,6 +422,15 @@ export const messageAttachments = pgTable("message_attachments", {
   fileUrl: text("file_url").notNull(), // Object storage URL
   fileSize: integer("file_size"),
   mimeType: text("mime_type"),
+  
+  // Document categorization
+  documentCategory: text("document_category"), // 'pod', 'bol', 'inspection', 'damage_photo', 'pickup_confirmation', 'delivery_confirmation', 'other'
+  documentStatus: text("document_status").notNull().default("pending_review"), // 'pending_review', 'approved', 'rejected', 'archived'
+  
+  // Review tracking
+  reviewedBy: varchar("reviewed_by"), // Dispatcher who reviewed
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"), // Feedback on rejection or notes
   
   // Telegram file details
   telegramFileId: text("telegram_file_id"),
@@ -430,6 +440,8 @@ export const messageAttachments = pgTable("message_attachments", {
   width: integer("width"), // For images
   height: integer("height"), // For images
   caption: text("caption"), // Image/document caption
+  isPrimary: boolean("is_primary").notNull().default(false), // Main document for category
+  isRequired: boolean("is_required").notNull().default(false), // Required for load completion
   
   uploadedAt: timestamp("uploaded_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),

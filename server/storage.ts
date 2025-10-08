@@ -271,8 +271,13 @@ export interface IStorage {
   getMessageAttachment(id: string): Promise<MessageAttachment | undefined>;
   getMessageAttachmentsByMessage(messageId: string): Promise<MessageAttachment[]>;
   getMessageAttachmentsByLoad(loadId: string): Promise<MessageAttachment[]>;
+  getMessageAttachmentsByDriver(driverId: string): Promise<MessageAttachment[]>;
+  getMessageAttachmentsByCategory(loadId: string, category: string): Promise<MessageAttachment[]>;
+  getPendingReviewAttachments(): Promise<MessageAttachment[]>;
   createMessageAttachment(attachment: InsertMessageAttachment): Promise<MessageAttachment>;
   updateMessageAttachment(id: string, attachment: Partial<InsertMessageAttachment>): Promise<MessageAttachment | undefined>;
+  approveMessageAttachment(id: string, reviewerId: string, notes?: string): Promise<MessageAttachment | undefined>;
+  rejectMessageAttachment(id: string, reviewerId: string, notes: string): Promise<MessageAttachment | undefined>;
   deleteMessageAttachment(id: string): Promise<boolean>;
 
   // Quick Reply Template operations

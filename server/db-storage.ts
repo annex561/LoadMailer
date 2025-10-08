@@ -1138,6 +1138,51 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount > 0;
   }
 
+  async getMessageAttachmentsByDriver(driverId: string): Promise<schema.MessageAttachment[]> {
+    return await db.select().from(schema.messageAttachments)
+      .where(eq(schema.messageAttachments.driverId, driverId))
+      .orderBy(desc(schema.messageAttachments.createdAt));
+  }
+
+  async getMessageAttachmentsByCategory(loadId: string, category: string): Promise<schema.MessageAttachment[]> {
+    return await db.select().from(schema.messageAttachments)
+      .where(and(
+        eq(schema.messageAttachments.loadId, loadId),
+        eq(schema.messageAttachments.documentCategory, category)
+      ))
+      .orderBy(desc(schema.messageAttachments.createdAt));
+  }
+
+  async getPendingReviewAttachments(): Promise<schema.MessageAttachment[]> {
+    return await db.select().from(schema.messageAttachments)
+      .where(eq(schema.messageAttachments.documentStatus, 'pending_review'))
+      .orderBy(desc(schema.messageAttachments.createdAt));
+  }
+
+  async approveMessageAttachment(id: string, reviewerId: string, notes?: string): Promise<schema.MessageAttachment | undefined> {
+    await db.update(schema.messageAttachments)
+      .set({
+        documentStatus: 'approved',
+        reviewedBy: reviewerId,
+        reviewedAt: new Date(),
+        reviewNotes: notes || null
+      })
+      .where(eq(schema.messageAttachments.id, id));
+    return this.getMessageAttachment(id);
+  }
+
+  async rejectMessageAttachment(id: string, reviewerId: string, notes: string): Promise<schema.MessageAttachment | undefined> {
+    await db.update(schema.messageAttachments)
+      .set({
+        documentStatus: 'rejected',
+        reviewedBy: reviewerId,
+        reviewedAt: new Date(),
+        reviewNotes: notes
+      })
+      .where(eq(schema.messageAttachments.id, id));
+    return this.getMessageAttachment(id);
+  }
+
   // Quick Reply Template operations
   async getQuickReplyTemplate(id: string): Promise<schema.QuickReplyTemplate | undefined> {
     const result = await db.select().from(schema.quickReplyTemplates).where(eq(schema.quickReplyTemplates.id, id));
