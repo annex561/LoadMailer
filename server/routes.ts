@@ -1204,6 +1204,94 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // ===== ZELLO VOICE DISPATCH ENDPOINTS =====
+  
+  // Zello webhook for voice responses
+  app.post('/api/zello/webhook', async (req, res) => {
+    try {
+      console.log('🎙️ Zello webhook received:', req.body);
+      
+      const { channel, username, message, type, audio_url } = req.body;
+      
+      if (!channel || !username) {
+        return res.status(400).json({ error: 'Invalid webhook data' });
+      }
+      
+      // Handle different types of Zello events
+      if (type === 'voice_message' || type === 'text_message') {
+        const command = message?.toUpperCase() || '';
+        
+        // Extract load number from message if present
+        const loadNumberMatch = command.match(/LOAD-(\d+)/);
+        const loadNumber = loadNumberMatch ? loadNumberMatch[0] : undefined;
+        
+        await zelloService.handleVoiceResponse({
+          channel,
+          from: username,
+          command,
+          loadNumber
+        });
+        
+        console.log(`✅ Processed Zello response from ${username}: ${command}`);
+      }
+      
+      res.json({ success: true, message: 'Webhook processed' });
+    } catch (error) {
+      console.error('❌ Error handling Zello webhook:', error);
+      res.status(500).json({ error: 'Failed to process webhook' });
+    }
+  });
+  
+  // Get Zello channel status
+  app.get('/api/zello/status', async (req, res) => {
+    try {
+      const status = zelloService.getChannelStatus();
+      res.json(status);
+    } catch (error) {
+      console.error('❌ Error getting Zello status:', error);
+      res.status(500).json({ error: 'Failed to get Zello status' });
+    }
+  });
+  
+  // Create dynamic Zello channel for specific load
+  app.post('/api/zello/channels', async (req, res) => {
+    try {
+      const { name, users } = req.body;
+      
+      if (!name || !users || !Array.isArray(users)) {
+        return res.status(400).json({ error: 'Invalid channel data' });
+      }
+      
+      const success = await zelloService.createDynamicChannel(name, users);
+      
+      if (success) {
+        res.json({ success: true, message: `Channel ${name} created` });
+      } else {
+        res.status(400).json({ error: 'Failed to create channel' });
+      }
+    } catch (error) {
+      console.error('❌ Error creating Zello channel:', error);
+      res.status(500).json({ error: 'Failed to create channel' });
+    }
+  });
+  
+  // Send custom Zello broadcast
+  app.post('/api/zello/broadcast', async (req, res) => {
+    try {
+      const { message, channel } = req.body;
+      
+      if (!message || !channel) {
+        return res.status(400).json({ error: 'Message and channel required' });
+      }
+      
+      await zelloService.sendCustomMessage(message, channel);
+      res.json({ success: true, message: 'Broadcast sent' });
+    } catch (error) {
+      console.error('❌ Error sending Zello broadcast:', error);
+      res.status(500).json({ error: 'Failed to send broadcast' });
+    }
+  });
+
   // Test SMS endpoint to send messages
   app.post('/api/test-sms', async (req, res) => {
     try {
