@@ -28,6 +28,7 @@ export interface IStorage {
   updateLoad(id: string, load: Partial<InsertLoad>): Promise<LoadWithRelations | undefined>;
   deleteLoad(id: string): Promise<boolean>;
   getLoadsByStatus(status: string): Promise<LoadWithRelations[]>;
+  getLoadsByDriver(driverId: string): Promise<LoadWithRelations[]>;
 
   // Email template operations
   getEmailTemplate(id: string): Promise<EmailTemplate | undefined>;
@@ -774,6 +775,11 @@ export class MemStorage implements IStorage {
   async getLoadsByStatus(status: string): Promise<LoadWithRelations[]> {
     const allLoads = await this.getAllLoads();
     return allLoads.filter(load => load.status === status);
+  }
+
+  async getLoadsByDriver(driverId: string): Promise<LoadWithRelations[]> {
+    const allLoads = await this.getAllLoads();
+    return allLoads.filter(load => load.assignedDriverId === driverId);
   }
 
   // Email template operations

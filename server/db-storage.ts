@@ -323,6 +323,37 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async getLoadsByDriver(driverId: string): Promise<schema.LoadWithRelations[]> {
+    // Use raw SQL to avoid Drizzle query builder issues with assignedDriverId
+    const query = `
+      SELECT * FROM loads 
+      WHERE assigned_driver_id = $1 
+      AND status IN ('available', 'assigned', 'in_transit', 'picked_up')
+      ORDER BY created_at DESC
+    `;
+    
+    try {
+      const loadsResult = await sql(query, [driverId]);
+      const loads = loadsResult as unknown as schema.Load[];
+      
+      // Map to LoadWithRelations format
+      const loadsWithRelations: schema.LoadWithRelations[] = [];
+      for (const load of loads) {
+        const driver = load.driverId ? await this.getDriver(load.driverId) : undefined;
+        const customer = load.customerId ? await this.getCustomer(load.customerId) : undefined;
+        loadsWithRelations.push({
+          ...load,
+          driver: driver || null,
+          customer: customer || null,
+        });
+      }
+      return loadsWithRelations;
+    } catch (error) {
+      console.error('Error in getLoadsByDriver:', error);
+      return [];
+    }
+  }
+
   // Driver Telegram methods
   async getDriversWithTelegramEnabled(): Promise<schema.Driver[]> {
     try {
