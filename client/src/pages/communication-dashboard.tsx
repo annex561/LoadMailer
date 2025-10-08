@@ -1111,31 +1111,32 @@ export default function CommunicationDashboard() {
               
               {/* Driver Dropdown */}
               {showDriverDropdown && filteredDrivers.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-300 rounded-md shadow-xl max-h-60 overflow-y-auto">
                   {filteredDrivers.map((driver) => (
                     <button
                       key={driver.id}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center justify-between"
+                      className="w-full text-left px-4 py-3 hover:bg-gray-100 focus:bg-gray-100 flex items-center justify-between transition-colors"
                       onClick={() => {
                         startGeneralChatMutation.mutate(driver.id);
                         setSearchTerm("");
                         setShowDriverDropdown(false);
                       }}
+                      data-testid={`button-select-driver-${driver.id}`}
                     >
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-gray-400" />
+                      <div className="flex items-center gap-3">
+                        <User className="w-5 h-5 text-gray-600" />
                         <div>
-                          <div className="text-sm font-medium">{driver.name}</div>
-                          <div className="text-xs text-gray-500">{driver.phone || 'No phone'}</div>
+                          <div className="text-sm font-semibold text-gray-900">{driver.name}</div>
+                          <div className="text-sm text-gray-600">{driver.phone || 'No phone'}</div>
                         </div>
                       </div>
                       <Badge 
                         className={
                           driver.status === 'available' 
-                            ? "bg-green-100 text-green-800 border-green-200 text-xs" 
+                            ? "bg-green-100 text-green-800 border-green-200" 
                             : driver.status === 'on_route'
-                            ? "bg-blue-100 text-blue-800 border-blue-200 text-xs"
-                            : "bg-gray-100 text-gray-800 border-gray-200 text-xs"
+                            ? "bg-blue-100 text-blue-800 border-blue-200"
+                            : "bg-gray-100 text-gray-800 border-gray-200"
                         }
                       >
                         {driver.status}
@@ -1831,7 +1832,7 @@ export default function CommunicationDashboard() {
           setShowUnassignedLoads(open);
           if (!open) setLoadSearchQuery(""); // Reset search when closing
         }}>
-          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden bg-white border-2 border-gray-300 shadow-2xl">
             <DialogHeader>
               <DialogTitle>Select Load to Offer to {selectedThread.driverName}</DialogTitle>
             </DialogHeader>
