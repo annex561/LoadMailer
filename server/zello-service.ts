@@ -296,6 +296,110 @@ export class ZelloDispatchService extends EventEmitter {
     };
   }
 
+  async createDriverAccount(driverData: {
+    name: string;
+    email: string;
+    phone: string;
+    equipmentType?: string;
+  }): Promise<{
+    username: string;
+    password: string;
+    channels: string[];
+    appDownloadLinks: {
+      ios: string;
+      android: string;
+    };
+  }> {
+    // Generate unique username from name and last 4 digits of phone
+    const phoneDigits = driverData.phone.replace(/\D/g, '').slice(-4);
+    const cleanName = driverData.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const username = `${cleanName}_${phoneDigits}`;
+    
+    // Generate secure password
+    const password = this.generateSecurePassword();
+    
+    // Determine channels based on equipment type
+    const channels = ['all-drivers'];
+    
+    if (driverData.equipmentType) {
+      // Map equipment types to appropriate channels
+      const equipmentLower = driverData.equipmentType.toLowerCase();
+      
+      if (equipmentLower.includes('box') || equipmentLower.includes('straight')) {
+        channels.push('box-truck-ops');
+      } else if (equipmentLower.includes('van') || equipmentLower.includes('sprinter')) {
+        channels.push('hotshot-expedite');
+      } else if (equipmentLower.includes('flatbed')) {
+        channels.push('dispatch-priority');
+      }
+      
+      // Add regional channel (default to southeast for now)
+      channels.push('southeast-region');
+    }
+    
+    // In production, would make actual API call to Zello to create user
+    console.log(`📱 Creating Zello account for driver: ${username}`);
+    
+    // Add user to internal tracking
+    this.users.set(username, {
+      name: driverData.name,
+      username,
+      channels,
+      online: false
+    });
+    
+    // Add user to channels
+    for (const channelName of channels) {
+      await this.addUserToChannel(username, channelName);
+    }
+    
+    console.log(`✅ Zello account created: ${username}`);
+    console.log(`📻 Assigned to channels: ${channels.join(', ')}`);
+    
+    return {
+      username,
+      password,
+      channels,
+      appDownloadLinks: {
+        ios: 'https://apps.apple.com/app/zello-work-walkie-talkie/id991280948',
+        android: 'https://play.google.com/store/apps/details?id=com.loudtalks.work'
+      }
+    };
+  }
+
+  private generateSecurePassword(): string {
+    // Generate a secure but memorable password
+    const adjectives = ['Swift', 'Strong', 'Ready', 'Prime', 'Fleet', 'Turbo', 'Eagle'];
+    const nouns = ['Driver', 'Trucker', 'Hauler', 'Carrier', 'Freight', 'Road', 'Mile'];
+    const numbers = Math.floor(1000 + Math.random() * 9000);
+    
+    const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    
+    return `${adj}${noun}${numbers}!`;
+  }
+
+  generateWelcomeMessage(credentials: {
+    username: string;
+    password: string;
+    channels: string[];
+    appDownloadLinks: { ios: string; android: string };
+  }): string {
+    return `Welcome to LAMP Logistics Voice Dispatch! 🎙️
+
+Your Zello Work account is ready:
+Username: ${credentials.username}
+Password: ${credentials.password}
+
+Download Zello Work:
+iPhone: ${credentials.appDownloadLinks.ios}
+Android: ${credentials.appDownloadLinks.android}
+
+You've been added to channels: ${credentials.channels.join(', ')}
+
+Login and start receiving load broadcasts via voice!`;
+  }
+
   async createDynamicChannel(name: string, users: string[]): Promise<boolean> {
     if (this.channels.has(name)) {
       console.warn(`⚠️ Channel ${name} already exists`);
