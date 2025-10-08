@@ -1185,8 +1185,9 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: 'Communication thread not found' });
       }
 
-      // Send message through SMS Communication Service
+      // Send message through SMS Communication Service and Zello
       let messageDelivered = false;
+      let zelloDelivered = false;
       console.log(`🔍 ROUTE DEBUG: Sender is: "${sender}", thread load ID: ${thread.loadId}`);
       
       if (sender === 'dispatch' || sender === 'dispatcher') {
@@ -1194,17 +1195,40 @@ export async function registerRoutes(app: Express): Promise<void> {
         messageDelivered = await smsCommunicationService.sendLoadUpdateToDriver(thread.loadId, content);
         console.log(`🔍 ROUTE DEBUG: SMS service returned: ${messageDelivered}`);
         
-        // If SMS delivery fails, return error to show delivery failure
-        if (!messageDelivered) {
-          console.log(`🔍 ROUTE DEBUG: SMS delivery failed, returning 409 error`);
+        // Also send through Zello for drivers with Zello app
+        try {
+          const driver = await storage.getDriver(thread.driverId);
+          if (driver && driver.name) {
+            // Format message for Zello with load context
+            const load = await storage.getLoad(thread.loadId);
+            const zelloMessage = `📨 Message for Load ${load?.loadNumber || thread.loadId}\n` +
+                               `${load?.origin || ''} → ${load?.destination || ''}\n\n` +
+                               `${content}`;
+            
+            // Send to driver's personal channel or all-drivers channel
+            const driverUsername = driver.name.toLowerCase().replace(/\s+/g, '_');
+            await zelloService.sendCustomMessage(zelloMessage, driverUsername);
+            // Also send to all-drivers channel for visibility
+            await zelloService.sendCustomMessage(zelloMessage, 'all-drivers');
+            zelloDelivered = true;
+            console.log(`✅ Message sent via Zello to driver ${driver.name}`);
+          }
+        } catch (zelloError) {
+          console.error('⚠️ Zello delivery failed:', zelloError);
+          // Don't fail the entire request if Zello fails, SMS is primary
+        }
+        
+        // If neither SMS nor Zello delivery succeeds, return error
+        if (!messageDelivered && !zelloDelivered) {
+          console.log(`🔍 ROUTE DEBUG: Both SMS and Zello delivery failed, returning 409 error`);
           return res.status(409).json({ 
             error: 'Message could not be delivered to driver. Check if load has assigned driver with valid phone number.',
             success: false 
           });
         }
-        console.log(`🔍 ROUTE DEBUG: SMS delivery successful, continuing with database save`);
+        console.log(`🔍 ROUTE DEBUG: Message delivered via ${messageDelivered ? 'SMS' : ''} ${zelloDelivered ? 'Zello' : ''}`);
       } else {
-        console.log(`🔍 ROUTE DEBUG: Sender is not dispatch/dispatcher, skipping SMS`);
+        console.log(`🔍 ROUTE DEBUG: Sender is not dispatch/dispatcher, skipping SMS and Zello`);
       }
 
       // Create message record in database
@@ -1595,6 +1619,82 @@ export async function registerRoutes(app: Express): Promise<void> {
         // Extract load number from message if present
         const loadNumberMatch = command.match(/LOAD-(\d+)/);
         const loadNumber = loadNumberMatch ? loadNumberMatch[0] : undefined;
+        
+        // Find driver by Zello username
+        const drivers = await storage.getAllDrivers();
+        const driver = drivers.find(d => 
+          d.name.toLowerCase().replace(/[^a-z0-9]/g, '_').includes(username.toLowerCase())
+        );
+        
+        if (driver && loadNumber) {
+          // Find the load
+          const loads = await storage.getAllLoads();
+          const load = loads.find(l => l.loadNumber === loadNumber);
+          
+          if (load) {
+            // Find or create communication thread
+            let thread = await storage.getLoadCommunicationThreadByLoadAndDriver(load.id, driver.id);
+            
+            if (!thread) {
+              // Create new thread if it doesn't exist
+              thread = await storage.createLoadCommunicationThread({
+                loadId: load.id,
+                driverId: driver.id,
+                status: 'active',
+                messageCount: 0,
+                unreadDriverMessages: 0,
+                unreadDispatchMessages: 1,
+                lastMessageAt: new Date(),
+                lastMessageText: message,
+                lastMessageSender: 'driver',
+                assistantEnabled: false,
+                loadNumber: load.loadNumber,
+                loadOrigin: load.origin,
+                loadDestination: load.destination,
+                driverName: driver.name,
+                driverPhone: driver.phone || ''
+              });
+            }
+            
+            // Create message in the communication thread
+            await storage.createLoadMessage({
+              threadId: thread.id,
+              loadId: load.id,
+              driverId: driver.id,
+              message: message || '',
+              textContent: message || '',
+              messageType: type === 'voice_message' ? 'voice' : 'text',
+              senderRole: 'driver',
+              senderName: driver.name,
+              isFromDriver: true,
+              isRead: false,
+              isSuggested: false,
+              isSent: true,
+              attachments: audio_url ? [{
+                fileUrl: audio_url,
+                fileType: 'audio/mp3',
+                fileName: `voice_${Date.now()}.mp3`,
+                fileSize: 0
+              }] : undefined,
+              metadata: {
+                zelloChannel: channel,
+                zelloUsername: username
+              },
+              createdAt: new Date()
+            });
+            
+            // Update thread stats
+            await storage.updateLoadCommunicationThread(thread.id, {
+              messageCount: (thread.messageCount || 0) + 1,
+              unreadDispatchMessages: (thread.unreadDispatchMessages || 0) + 1,
+              lastMessageAt: new Date(),
+              lastMessageText: message?.substring(0, 100) || 'Voice message',
+              lastMessageSender: 'driver'
+            });
+            
+            console.log(`✅ Created communication message from ${driver.name} for load ${loadNumber}`);
+          }
+        }
         
         await zelloService.handleVoiceResponse({
           channel,
