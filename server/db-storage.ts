@@ -382,13 +382,28 @@ export class DatabaseStorage implements IStorage {
 
   async getEmailLog(id: string): Promise<schema.EmailLogWithRelations | undefined> { return undefined; }
   async getAllEmailLogs(): Promise<schema.EmailLogWithRelations[]> { return []; }
-  async createEmailLog(log: schema.InsertEmailLog): Promise<schema.EmailLog> { throw new Error('Not implemented'); }
+  async createEmailLog(log: schema.InsertEmailLog): Promise<schema.EmailLog> {
+    try {
+      const [result] = await db.insert(schema.emailLogs).values(log).returning();
+      return result;
+    } catch (error) {
+      console.error('Database error creating email log:', error);
+      // Return a minimal email log on error
+      const { randomUUID } = await import('crypto');
+      return {
+        ...log,
+        id: randomUUID(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as schema.EmailLog;
+    }
+  }
   async updateEmailLog(id: string, log: Partial<schema.InsertEmailLog>): Promise<schema.EmailLog | undefined> { return undefined; }
   async getEmailLogsByLoad(loadId: string): Promise<schema.EmailLogWithRelations[]> { return []; }
 
   async createOnboardingToken(token: schema.InsertOnboardingToken): Promise<schema.OnboardingToken> {
     try {
-      const [result] = await this.db.insert(schema.onboardingTokens).values(token).returning();
+      const [result] = await db.insert(schema.onboardingTokens).values(token).returning();
       return result;
     } catch (error) {
       console.error('Database error creating onboarding token:', error);

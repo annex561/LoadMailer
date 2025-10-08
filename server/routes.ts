@@ -1752,6 +1752,103 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Create and send driver onboarding link
+  app.post('/api/driver/send-onboarding-link', async (req, res) => {
+    try {
+      const { phone, email, name } = req.body;
+      
+      if (!phone) {
+        return res.status(400).json({ error: 'Phone number is required' });
+      }
+      
+      // Normalize phone number to E.164 format
+      let normalizedPhone = phone.replace(/\D/g, '');
+      if (!normalizedPhone.startsWith('+')) {
+        if (normalizedPhone.length === 10) {
+          normalizedPhone = `+1${normalizedPhone}`;
+        } else if (!normalizedPhone.startsWith('1') && normalizedPhone.length === 11) {
+          normalizedPhone = `+${normalizedPhone}`;
+        }
+      }
+      
+      // Generate onboarding token
+      const { randomUUID } = await import('crypto');
+      const token = randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Token expires in 7 days
+      
+      // Create token in database
+      const tokenData = await storage.createOnboardingToken({
+        token,
+        email: email || `${normalizedPhone}@onboarding.local`,
+        expiresAt,
+        isUsed: false
+      });
+      
+      // Generate registration link
+      const domain = process.env.REPLIT_DOMAINS ? 
+        `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 
+        'http://localhost:5000';
+      const registrationLink = `${domain}/simple-registration?token=${token}`;
+      
+      // Create SMS message
+      const smsMessage = `🚛 LAMP Logistics Driver Registration\n\n` +
+        `Hi ${name || 'Driver'}! You're invited to join our fleet.\n\n` +
+        `Complete your registration here:\n${registrationLink}\n\n` +
+        `This link expires in 7 days.\n\n` +
+        `Questions? Call dispatch at (615) 555-0123`;
+      
+      // Check if SMS service is available (Twilio)
+      const smsService = (global as any).smsService;
+      let smsSent = false;
+      let smsError = null;
+      
+      if (smsService && smsService.isServiceConfigured && smsService.isServiceConfigured()) {
+        try {
+          await smsService.sendSMS(normalizedPhone, smsMessage);
+          smsSent = true;
+          console.log(`✅ Onboarding SMS sent to ${normalizedPhone}`);
+        } catch (error) {
+          console.error('Failed to send SMS:', error);
+          smsError = 'SMS service error';
+        }
+      } else {
+        console.log('⚠️ SMS service not configured - link generated but not sent');
+        smsError = 'SMS service not configured';
+      }
+      
+      // Log the onboarding invitation
+      await storage.createEmailLog({
+        recipientEmail: email || normalizedPhone,
+        subject: "Driver Onboarding Invitation",
+        status: smsSent ? "sent" : "failed",
+        sentAt: new Date(),
+        metadata: {
+          phone: normalizedPhone,
+          token: token,
+          link: registrationLink,
+          smsError: smsError
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: smsSent ? 
+          `Onboarding link sent to ${normalizedPhone}` : 
+          'Onboarding link created (SMS not configured - send manually)',
+        link: registrationLink,
+        phone: normalizedPhone,
+        expiresAt: expiresAt,
+        smsSent: smsSent,
+        smsError: smsError
+      });
+      
+    } catch (error) {
+      console.error('❌ Error creating onboarding link:', error);
+      res.status(500).json({ error: 'Failed to create onboarding link' });
+    }
+  });
+  
   // Test SMS endpoint to send messages
   app.post('/api/test-sms', async (req, res) => {
     try {
