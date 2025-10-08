@@ -253,6 +253,7 @@ export interface IStorage {
   // Load Communication Thread operations
   getLoadCommunicationThread(id: string): Promise<LoadCommunicationThread | undefined>;
   getLoadCommunicationThreadByLoad(loadId: string): Promise<LoadCommunicationThread | undefined>;
+  getLoadCommunicationThreadByLoadAndDriver(loadId: string, driverId: string): Promise<LoadCommunicationThread | undefined>;
   getAllLoadCommunicationThreads(): Promise<LoadCommunicationThread[]>;
   createLoadCommunicationThread(thread: InsertLoadCommunicationThread): Promise<LoadCommunicationThread>;
   updateLoadCommunicationThread(id: string, thread: Partial<InsertLoadCommunicationThread>): Promise<LoadCommunicationThread | undefined>;

@@ -1627,39 +1627,38 @@ export async function registerRoutes(app: Express): Promise<void> {
         );
         
         if (driver && loadNumber) {
-          // Find the load
-          const loads = await storage.getAllLoads();
-          const load = loads.find(l => l.loadNumber === loadNumber);
+          // First try to find an existing thread by matching load number
+          const allThreads = await storage.getAllLoadCommunicationThreads();
+          let thread = allThreads.find(t => 
+            t.driverId === driver.id && 
+            (t.loadNumber === loadNumber || t.loadId === loadNumber)
+          );
           
-          if (load) {
-            // Find or create communication thread
-            let thread = await storage.getLoadCommunicationThreadByLoadAndDriver(load.id, driver.id);
+          let load = null;
+          
+          if (!thread) {
+            // If no thread exists, try to find the load
+            const loads = await storage.getAllLoads();
+            load = loads.find(l => l.loadNumber === loadNumber);
             
-            if (!thread) {
-              // Create new thread if it doesn't exist
-              thread = await storage.createLoadCommunicationThread({
-                loadId: load.id,
-                driverId: driver.id,
-                status: 'active',
-                messageCount: 0,
-                unreadDriverMessages: 0,
-                unreadDispatchMessages: 1,
-                lastMessageAt: new Date(),
-                lastMessageText: message,
-                lastMessageSender: 'driver',
-                assistantEnabled: false,
-                loadNumber: load.loadNumber,
-                loadOrigin: load.origin,
-                loadDestination: load.destination,
-                driverName: driver.name,
-                driverPhone: driver.phone || ''
-              });
+            if (load) {
+              // Check if thread exists for this load and driver
+              thread = await storage.getLoadCommunicationThreadByLoadAndDriver(load.id, driver.id);
+            }
+          }
+          
+          // If we have a thread (either found or created), save the message
+          if (thread) {
+            // Set load info if we don't have it
+            if (!load && thread.loadId) {
+              const loads = await storage.getAllLoads();
+              load = loads.find(l => l.id === thread.loadId);
             }
             
             // Create message in the communication thread
             await storage.createLoadMessage({
               threadId: thread.id,
-              loadId: load.id,
+              loadId: thread.loadId || load?.id || '',
               driverId: driver.id,
               message: message || '',
               textContent: message || '',

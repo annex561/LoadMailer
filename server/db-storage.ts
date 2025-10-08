@@ -1025,6 +1025,18 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async getLoadCommunicationThreadByLoadAndDriver(loadId: string, driverId: string): Promise<schema.LoadCommunicationThread | undefined> {
+    const result = await db.select()
+      .from(schema.loadCommunicationThreads)
+      .where(
+        and(
+          eq(schema.loadCommunicationThreads.loadId, loadId),
+          eq(schema.loadCommunicationThreads.driverId, driverId)
+        )
+      );
+    return result[0];
+  }
+
   async getAllLoadCommunicationThreads(): Promise<any[]> {
     console.log('🚀 DB Storage - getAllLoadCommunicationThreads called');
     const threads = await db
