@@ -82,6 +82,12 @@ export class SMSLoadService {
     console.log(`[SMS DISABLED] Would process batch of ${loads.length} loads`);
     return;
   }
+
+  // Add missing processNewLoad method that google-sheets-simple.ts expects
+  async processNewLoad(load: any): Promise<boolean> {
+    console.log(`[SMS DISABLED] Would process new load ${load?.loadNumber || load?.id}`);
+    return false; // Return false as if no notifications were sent
+  }
 }
 
 // Export singleton instance
