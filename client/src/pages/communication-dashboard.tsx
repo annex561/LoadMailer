@@ -10,7 +10,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { 
   MessageSquare, 
@@ -41,7 +42,15 @@ import {
   Target,
   UserPlus,
   AlertTriangle,
-  X
+  X,
+  Upload,
+  FileText,
+  Image,
+  File,
+  Download,
+  Eye,
+  Check,
+  XCircle
 } from "lucide-react";
 import { format } from "date-fns";
 import { Radio } from "lucide-react";
@@ -123,6 +132,25 @@ interface ConversationInsight {
   driverMood: string;
 }
 
+interface MessageAttachment {
+  id: string;
+  messageId?: string;
+  loadId: string;
+  driverId?: string;
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  fileType: string;
+  documentCategory: 'pod' | 'bol' | 'inspection_report' | 'damage_photos' | 'weight_ticket' | 'lumper_receipt' | 'other';
+  documentDescription?: string;
+  documentStatus: 'pending_review' | 'approved' | 'rejected';
+  uploadedBy: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+  createdAt: string;
+}
+
 interface UnassignedLoad {
   id: string;
   loadNumber: string;
@@ -158,6 +186,14 @@ export default function CommunicationDashboard() {
   const [showAiSettings, setShowAiSettings] = useState(false);
   const [showUnassignedLoads, setShowUnassignedLoads] = useState(false);
   const [selectedLoadForAssignment, setSelectedLoadForAssignment] = useState<UnassignedLoad | null>(null);
+  
+  // Document upload states
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [documentCategory, setDocumentCategory] = useState<MessageAttachment['documentCategory']>('other');
+  const [documentDescription, setDocumentDescription] = useState('');
+  const [showDocumentGallery, setShowDocumentGallery] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Fetch communication threads
   const { data: threads = [], isLoading: threadsLoading, refetch: refetchThreads } = useQuery<LoadCommunicationThread[]>({
@@ -277,6 +313,81 @@ export default function CommunicationDashboard() {
     },
     enabled: !!selectedThread?.id && selectedThread?.assistantEnabled,
     refetchInterval: 5000, // Refresh AI suggestions every 5 seconds
+  });
+
+  // Fetch document attachments for selected load
+  const { data: attachments = [], isLoading: attachmentsLoading, refetch: refetchAttachments } = useQuery<MessageAttachment[]>({
+    queryKey: ['/api/communication/attachments/load', selectedThread?.loadId],
+    queryFn: async () => {
+      if (!selectedThread?.loadId) return [];
+      const response = await fetch(`/api/communication/attachments/load/${selectedThread.loadId}`);
+      if (!response.ok) return [];
+      return response.json();
+    },
+    enabled: !!selectedThread?.loadId,
+  });
+
+  // Upload document attachment mutation
+  const uploadAttachmentMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch('/api/communication/attachments', {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) throw new Error('Failed to upload attachment');
+      return response.json();
+    },
+    onSuccess: () => {
+      setShowUploadDialog(false);
+      setUploadFile(null);
+      setDocumentCategory('other');
+      setDocumentDescription('');
+      refetchAttachments();
+      toast({ title: "Document uploaded successfully" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to upload document", description: error.message, variant: "destructive" });
+    }
+  });
+
+  // Approve document mutation
+  const approveDocumentMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes?: string }) => {
+      const response = await fetch(`/api/communication/attachments/${id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes })
+      });
+      if (!response.ok) throw new Error('Failed to approve document');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchAttachments();
+      toast({ title: "Document approved successfully" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to approve document", description: error.message, variant: "destructive" });
+    }
+  });
+
+  // Reject document mutation
+  const rejectDocumentMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const response = await fetch(`/api/communication/attachments/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes })
+      });
+      if (!response.ok) throw new Error('Failed to reject document');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchAttachments();
+      toast({ title: "Document rejected" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to reject document", description: error.message, variant: "destructive" });
+    }
   });
 
   // Get conversation insights
@@ -461,6 +572,332 @@ export default function CommunicationDashboard() {
       return <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>;
     }
     return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Archived</Badge>;
+  };
+
+  const handleFileUpload = async () => {
+    if (!uploadFile || !selectedThread) return;
+
+    // Create FormData for binary file upload simulation
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Data = e.target?.result?.toString().split(',')[1];
+      
+      const attachmentData = {
+        loadId: selectedThread.loadId,
+        driverId: selectedThread.driverId,
+        fileName: uploadFile.name,
+        fileUrl: `data:${uploadFile.type};base64,${base64Data}`, // Simulating file storage
+        fileSize: uploadFile.size,
+        fileType: uploadFile.type,
+        documentCategory,
+        documentDescription,
+        uploadedBy: 'dispatcher'
+      };
+
+      const response = await fetch('/api/communication/attachments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(attachmentData)
+      });
+
+      if (response.ok) {
+        setShowUploadDialog(false);
+        setUploadFile(null);
+        setDocumentCategory('other');
+        setDocumentDescription('');
+        refetchAttachments();
+        toast({ title: "Document uploaded successfully" });
+      } else {
+        toast({ title: "Failed to upload document", variant: "destructive" });
+      }
+    };
+
+    reader.readAsDataURL(uploadFile);
+  };
+
+  const getCategoryIcon = (category: MessageAttachment['documentCategory']) => {
+    switch (category) {
+      case 'pod': return <FileText className="w-4 h-4 text-green-600" />;
+      case 'bol': return <FileText className="w-4 h-4 text-blue-600" />;
+      case 'inspection_report': return <FileText className="w-4 h-4 text-orange-600" />;
+      case 'damage_photos': return <Image className="w-4 h-4 text-red-600" />;
+      case 'weight_ticket': return <FileText className="w-4 h-4 text-purple-600" />;
+      case 'lumper_receipt': return <FileText className="w-4 h-4 text-indigo-600" />;
+      default: return <File className="w-4 h-4 text-gray-600" />;
+    }
+  };
+
+  const getCategoryLabel = (category: MessageAttachment['documentCategory']) => {
+    switch (category) {
+      case 'pod': return 'Proof of Delivery';
+      case 'bol': return 'Bill of Lading';
+      case 'inspection_report': return 'Inspection Report';
+      case 'damage_photos': return 'Damage Photos';
+      case 'weight_ticket': return 'Weight Ticket';
+      case 'lumper_receipt': return 'Lumper Receipt';
+      default: return 'Other Document';
+    }
+  };
+
+  const getStatusColor = (status: MessageAttachment['documentStatus']) => {
+    switch (status) {
+      case 'approved': return 'bg-green-100 text-green-800 border-green-200';
+      case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    }
+  };
+
+  const handleRequestZelloDocuments = async (documentTypes: string[]) => {
+    if (!selectedThread) return;
+    
+    try {
+      const response = await fetch('/api/zello/request-documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driverId: selectedThread.driverId,
+          loadId: selectedThread.loadId,
+          documentTypes
+        })
+      });
+
+      if (response.ok) {
+        toast({ title: "Document request sent via Zello", description: "The driver will receive a voice notification to upload documents" });
+      } else {
+        toast({ title: "Failed to send document request", variant: "destructive" });
+      }
+    } catch (error) {
+      console.error('Error requesting documents:', error);
+      toast({ title: "Error sending request", variant: "destructive" });
+    }
+  };
+
+  // Document Gallery Component
+  const DocumentGallery = ({ 
+    attachments, 
+    loadId, 
+    onApprove, 
+    onReject,
+    onRequestDocuments 
+  }: {
+    attachments: MessageAttachment[];
+    loadId: string;
+    onApprove: (id: string) => void;
+    onReject: (id: string, notes: string) => void;
+    onRequestDocuments: (types: string[]) => void;
+  }) => {
+    const [selectedCategory, setSelectedCategory] = useState<string>('all');
+    const [rejectNotes, setRejectNotes] = useState('');
+    const [rejectingId, setRejectingId] = useState<string | null>(null);
+
+    const filteredAttachments = selectedCategory === 'all' 
+      ? attachments 
+      : attachments.filter(a => a.documentCategory === selectedCategory);
+
+    const requiredDocuments = ['pod', 'bol', 'inspection_report'];
+    const missingDocuments = requiredDocuments.filter(
+      type => !attachments.some(a => a.documentCategory === type && a.documentStatus === 'approved')
+    );
+
+    return (
+      <div className="space-y-4">
+        {/* Document Request Section */}
+        {missingDocuments.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-yellow-900">Missing Documents</h4>
+              <Radio className="w-4 h-4 text-yellow-600 animate-pulse" />
+            </div>
+            <p className="text-sm text-yellow-800 mb-3">
+              Request the following documents from driver via Zello voice dispatch:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {missingDocuments.map(type => (
+                <Badge key={type} className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                  {getCategoryLabel(type)}
+                </Badge>
+              ))}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 w-full border-yellow-300 hover:bg-yellow-100"
+              onClick={() => onRequestDocuments(missingDocuments)}
+              data-testid="button-request-zello-documents"
+            >
+              <Radio className="w-4 h-4 mr-2" />
+              Request via Zello Voice Channel
+            </Button>
+          </div>
+        )}
+
+        {/* Category Filter */}
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant={selectedCategory === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSelectedCategory('all')}
+          >
+            All ({attachments.length})
+          </Button>
+          {['pod', 'bol', 'inspection_report', 'damage_photos', 'weight_ticket', 'lumper_receipt', 'other'].map(category => {
+            const count = attachments.filter(a => a.documentCategory === category).length;
+            if (count === 0) return null;
+            return (
+              <Button
+                key={category}
+                variant={selectedCategory === category ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedCategory(category)}
+              >
+                {getCategoryIcon(category as MessageAttachment['documentCategory'])}
+                <span className="ml-1">{getCategoryLabel(category)} ({count})</span>
+              </Button>
+            );
+          })}
+        </div>
+
+        {/* Document Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          {filteredAttachments.map(attachment => (
+            <Card key={attachment.id} className="overflow-hidden">
+              <div className="p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    {getCategoryIcon(attachment.documentCategory)}
+                    <div>
+                      <p className="text-sm font-medium">{attachment.fileName}</p>
+                      <p className="text-xs text-gray-500">
+                        {attachment.uploadedBy.includes('zello') ? (
+                          <span className="flex items-center gap-1">
+                            <Radio className="w-3 h-3" />
+                            Via Zello
+                          </span>
+                        ) : (
+                          `Uploaded by ${attachment.uploadedBy}`
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className={getStatusColor(attachment.documentStatus)}>
+                    {attachment.documentStatus}
+                  </Badge>
+                </div>
+
+                {attachment.documentDescription && (
+                  <p className="text-sm text-gray-600 mb-2">{attachment.documentDescription}</p>
+                )}
+
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+                  <span>{(attachment.fileSize / 1024).toFixed(1)} KB</span>
+                  <span>{format(new Date(attachment.createdAt), 'MMM dd, HH:mm')}</span>
+                </div>
+
+                {/* Preview */}
+                {attachment.fileType.startsWith('image/') && (
+                  <div className="mb-3 bg-gray-100 rounded-lg p-2">
+                    <img 
+                      src={attachment.fileUrl} 
+                      alt={attachment.fileName}
+                      className="w-full h-32 object-contain"
+                    />
+                  </div>
+                )}
+
+                {/* Actions */}
+                {attachment.documentStatus === 'pending_review' && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => onApprove(attachment.id)}
+                    >
+                      <Check className="w-3 h-3 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => {
+                        setRejectingId(attachment.id);
+                        setRejectNotes('');
+                      }}
+                    >
+                      <XCircle className="w-3 h-3 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                )}
+
+                {attachment.documentStatus === 'approved' && attachment.reviewedBy && (
+                  <div className="text-xs text-green-600">
+                    <Check className="w-3 h-3 inline mr-1" />
+                    Approved by {attachment.reviewedBy}
+                    {attachment.reviewedAt && ` on ${format(new Date(attachment.reviewedAt), 'MMM dd')}`}
+                  </div>
+                )}
+
+                {attachment.documentStatus === 'rejected' && attachment.reviewNotes && (
+                  <div className="text-xs text-red-600">
+                    <XCircle className="w-3 h-3 inline mr-1" />
+                    Rejected: {attachment.reviewNotes}
+                  </div>
+                )}
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Reject Dialog */}
+        {rejectingId && (
+          <Dialog open={!!rejectingId} onOpenChange={() => setRejectingId(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Reject Document</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Rejection Notes (Required)</Label>
+                  <Textarea
+                    placeholder="Please provide a reason for rejection..."
+                    value={rejectNotes}
+                    onChange={(e) => setRejectNotes(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setRejectingId(null)}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      if (rejectNotes.trim()) {
+                        onReject(rejectingId, rejectNotes);
+                        setRejectingId(null);
+                        setRejectNotes('');
+                      }
+                    }}
+                    disabled={!rejectNotes.trim()}
+                  >
+                    Reject Document
+                  </Button>
+                </DialogFooter>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {filteredAttachments.length === 0 && (
+          <div className="text-center py-8 text-gray-500">
+            <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p>No documents uploaded yet</p>
+            <p className="text-sm mt-2">Documents uploaded via Zello will appear here</p>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -1047,13 +1484,34 @@ export default function CommunicationDashboard() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="button-attach"
-                    >
-                      <Paperclip className="w-4 h-4" />
-                    </Button>
+                    <Dialog open={showDocumentGallery} onOpenChange={setShowDocumentGallery}>
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="button-view-documents"
+                        >
+                          <FileText className="w-4 h-4" />
+                          {attachments.filter(a => a.documentStatus === 'pending_review').length > 0 && (
+                            <Badge className="ml-1 bg-yellow-100 text-yellow-800 border-yellow-200">
+                              {attachments.filter(a => a.documentStatus === 'pending_review').length}
+                            </Badge>
+                          )}
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>Load Documents</DialogTitle>
+                        </DialogHeader>
+                        <DocumentGallery 
+                          attachments={attachments}
+                          loadId={selectedThread.loadId}
+                          onApprove={(id) => approveDocumentMutation.mutate({ id, notes: '' })}
+                          onReject={(id, notes) => rejectDocumentMutation.mutate({ id, notes })}
+                          onRequestDocuments={handleRequestZelloDocuments}
+                        />
+                      </DialogContent>
+                    </Dialog>
                     <Button
                       onClick={handleSendMessage}
                       disabled={!newMessage.trim() || sendMessageMutation.isPending}

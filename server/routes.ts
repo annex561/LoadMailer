@@ -1577,12 +1577,12 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   // ===== ZELLO VOICE DISPATCH ENDPOINTS =====
   
-  // Zello webhook for voice responses
+  // Zello webhook for voice responses and document uploads
   app.post('/api/zello/webhook', async (req, res) => {
     try {
       console.log('🎙️ Zello webhook received:', req.body);
       
-      const { channel, username, message, type, audio_url } = req.body;
+      const { channel, username, message, type, audio_url, image_url, file_url, file_name, file_size, mime_type, caption } = req.body;
       
       if (!channel || !username) {
         return res.status(400).json({ error: 'Invalid webhook data' });
@@ -1604,12 +1604,101 @@ export async function registerRoutes(app: Express): Promise<void> {
         });
         
         console.log(`✅ Processed Zello response from ${username}: ${command}`);
+      } else if (type === 'image_message' || type === 'file_message') {
+        // Handle document upload through Zello
+        const imageUrl = image_url || file_url;
+        
+        // Extract load ID from caption if present
+        const loadIdMatch = (caption || '').match(/LOAD-(\d+)/i);
+        let loadId = loadIdMatch ? loadIdMatch[0] : undefined;
+        
+        // If no load ID in caption, try to find driver's active load
+        if (!loadId) {
+          // Look up driver by Zello username to find their active load
+          const drivers = await storage.getAllDrivers();
+          const driver = drivers.find(d => d.name.toLowerCase().replace(/[^a-z0-9]/g, '_').includes(username.toLowerCase()));
+          
+          if (driver) {
+            const driverLoads = await storage.getLoadsByDriver(driver.id);
+            const activeLoad = driverLoads.find(l => l.status === 'in_transit' || l.status === 'at_pickup' || l.status === 'at_delivery');
+            if (activeLoad) {
+              loadId = activeLoad.id;
+            }
+          }
+        }
+        
+        // Process the document upload
+        await zelloService.handleDocumentUpload({
+          channel,
+          from: username,
+          imageUrl,
+          fileName: file_name,
+          fileSize: file_size,
+          mimeType: mime_type,
+          caption,
+          loadId
+        });
+        
+        // Also store in message attachments
+        if (loadId) {
+          await storage.createMessageAttachment({
+            loadId,
+            driverId: null, // Will be matched from username later
+            fileName: file_name || `zello_doc_${Date.now()}.jpg`,
+            fileUrl: imageUrl,
+            fileSize: file_size || 0,
+            fileType: mime_type || 'image/jpeg',
+            documentCategory: 'other', // Will be categorized by Zello service
+            documentDescription: caption || 'Uploaded via Zello',
+            documentStatus: 'pending_review',
+            uploadedBy: username,
+            createdAt: new Date()
+          });
+        }
+        
+        console.log(`✅ Processed Zello document from ${username}: ${file_name || 'unnamed'}`);
       }
       
       res.json({ success: true, message: 'Webhook processed' });
     } catch (error) {
       console.error('❌ Error handling Zello webhook:', error);
       res.status(500).json({ error: 'Failed to process webhook' });
+    }
+  });
+  
+  // Request documents from driver via Zello
+  app.post('/api/zello/request-documents', async (req, res) => {
+    try {
+      const { driverId, loadId, documentTypes } = req.body;
+      
+      if (!driverId || !loadId || !documentTypes || !Array.isArray(documentTypes)) {
+        return res.status(400).json({ error: 'Driver ID, Load ID, and document types are required' });
+      }
+      
+      // Get driver details to find Zello username
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(404).json({ error: 'Driver not found' });
+      }
+      
+      // Generate Zello username from driver name
+      const phoneDigits = driver.phone?.replace(/\D/g, '').slice(-4) || '0000';
+      const cleanName = driver.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const zelloUsername = `${cleanName}_${phoneDigits}`;
+      
+      // Send document request through Zello
+      await zelloService.sendDocumentRequest(zelloUsername, loadId, documentTypes);
+      
+      console.log(`📨 Document request sent to ${driver.name} for load ${loadId} via Zello`);
+      res.json({ 
+        success: true, 
+        message: `Document request sent to ${driver.name} via Zello`,
+        username: zelloUsername,
+        documentTypes 
+      });
+    } catch (error) {
+      console.error('❌ Error sending document request:', error);
+      res.status(500).json({ error: 'Failed to send document request' });
     }
   });
   

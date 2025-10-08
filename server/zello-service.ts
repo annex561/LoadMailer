@@ -31,9 +31,15 @@ interface ZelloLocation {
 interface ZelloMessage {
   channel: string;
   from: string;
-  type: 'voice' | 'text' | 'image' | 'alert';
+  type: 'voice' | 'text' | 'image' | 'alert' | 'document';
   duration?: number;
   text?: string;
+  imageUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+  documentType?: 'pod' | 'bol' | 'inspection_report' | 'damage_photos' | 'weight_ticket' | 'lumper_receipt' | 'other';
+  loadId?: string;
   timestamp: Date;
 }
 
@@ -461,6 +467,111 @@ export class ZelloDispatchService extends EventEmitter {
         driver: data.from,
         channel: data.channel,
         timestamp: new Date()
+      });
+    }
+  }
+
+  async handleDocumentUpload(data: {
+    channel: string;
+    from: string;
+    imageUrl: string;
+    fileName?: string;
+    fileSize?: number;
+    mimeType?: string;
+    caption?: string;
+    loadId?: string;
+  }): Promise<void> {
+    console.log(`📄 Document upload from ${data.from} in channel: ${data.channel}`);
+    
+    // Determine document type from caption or filename
+    let documentType: ZelloMessage['documentType'] = 'other';
+    const captionLower = (data.caption || '').toLowerCase();
+    const fileNameLower = (data.fileName || '').toLowerCase();
+    
+    if (captionLower.includes('pod') || captionLower.includes('proof of delivery') || fileNameLower.includes('pod')) {
+      documentType = 'pod';
+    } else if (captionLower.includes('bol') || captionLower.includes('bill of lading') || fileNameLower.includes('bol')) {
+      documentType = 'bol';
+    } else if (captionLower.includes('inspection') || fileNameLower.includes('inspection')) {
+      documentType = 'inspection_report';
+    } else if (captionLower.includes('damage') || fileNameLower.includes('damage')) {
+      documentType = 'damage_photos';
+    } else if (captionLower.includes('weight') || captionLower.includes('ticket') || fileNameLower.includes('weight')) {
+      documentType = 'weight_ticket';
+    } else if (captionLower.includes('lumper') || captionLower.includes('receipt') || fileNameLower.includes('lumper')) {
+      documentType = 'lumper_receipt';
+    }
+    
+    // Emit document upload event
+    this.emit('document_uploaded', {
+      driver: data.from,
+      channel: data.channel,
+      imageUrl: data.imageUrl,
+      fileName: data.fileName || `zello_doc_${Date.now()}.jpg`,
+      fileSize: data.fileSize || 0,
+      mimeType: data.mimeType || 'image/jpeg',
+      documentType,
+      loadId: data.loadId,
+      caption: data.caption,
+      timestamp: new Date()
+    });
+    
+    console.log(`✅ Document categorized as ${documentType}: ${data.fileName || 'unnamed'}`);
+  }
+
+  async sendDocumentRequest(
+    driverUsername: string,
+    loadId: string,
+    documentTypes: string[]
+  ): Promise<void> {
+    if (!this.isInitialized) {
+      console.warn('⚠️ Zello service not initialized');
+      return;
+    }
+    
+    const message = `📋 Document Request for Load ${loadId}\n\n` +
+      `Please upload the following documents:\n` +
+      documentTypes.map(type => `• ${this.getDocumentTypeLabel(type)}`).join('\n') +
+      `\n\nUse Zello to send photos with captions indicating the document type.`;
+    
+    // Send to driver's personal channel or all-drivers channel
+    const targetChannel = 'all-drivers';
+    
+    console.log(`📨 Sending document request to ${driverUsername} for load ${loadId}`);
+    await this.sendCustomMessage(message, targetChannel);
+    
+    // Emit event for tracking
+    this.emit('document_request_sent', {
+      driver: driverUsername,
+      loadId,
+      documentTypes,
+      timestamp: new Date()
+    });
+  }
+
+  private getDocumentTypeLabel(type: string): string {
+    switch (type) {
+      case 'pod': return 'Proof of Delivery (POD)';
+      case 'bol': return 'Bill of Lading (BOL)';
+      case 'inspection_report': return 'Inspection Report';
+      case 'damage_photos': return 'Damage Photos';
+      case 'weight_ticket': return 'Weight Ticket';
+      case 'lumper_receipt': return 'Lumper Receipt';
+      default: return 'Document';
+    }
+  }
+
+  async handleImageMessage(message: ZelloMessage): Promise<void> {
+    if (message.type === 'image' || message.type === 'document') {
+      await this.handleDocumentUpload({
+        channel: message.channel,
+        from: message.from,
+        imageUrl: message.imageUrl || '',
+        fileName: message.fileName,
+        fileSize: message.fileSize,
+        mimeType: message.mimeType,
+        caption: message.text,
+        loadId: message.loadId
       });
     }
   }
