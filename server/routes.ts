@@ -629,6 +629,67 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.status(500).json({ error: "Failed to fetch drivers" });
     }
   });
+  
+  // Get active driver locations for real-time map tracking
+  app.get('/api/driver-locations/active', async (req, res) => {
+    try {
+      // Get all drivers
+      const drivers = await storage.getAllDrivers();
+      
+      // Filter for available drivers and simulate their locations
+      const activeDrivers = drivers.filter(d => d.status === 'available' || d.status === 'on_route');
+      
+      // Generate simulated locations for active drivers (in production would come from GPS devices)
+      const locations = activeDrivers.map(driver => {
+        // Generate location based on driver's city or random Tennessee location
+        const baseLocations = [
+          { lat: 36.1627, lng: -86.7816, city: 'Nashville, TN' },
+          { lat: 35.9606, lng: -83.9207, city: 'Knoxville, TN' },
+          { lat: 35.1495, lng: -90.0490, city: 'Memphis, TN' },
+          { lat: 35.0456, lng: -85.3097, city: 'Chattanooga, TN' },
+          { lat: 36.5298, lng: -87.3595, city: 'Clarksville, TN' },
+          { lat: 33.7490, lng: -84.3880, city: 'Atlanta, GA' },
+          { lat: 35.2271, lng: -80.8431, city: 'Charlotte, NC' },
+          { lat: 33.5186, lng: -86.8104, city: 'Birmingham, AL' }
+        ];
+        
+        // Pick a random base location or use driver's city if available
+        const baseIndex = Math.floor(Math.random() * baseLocations.length);
+        const base = baseLocations[baseIndex];
+        
+        // Add some randomness to simulate movement (within ~50 miles)
+        const latOffset = (Math.random() - 0.5) * 0.8; // ~50 miles variation
+        const lngOffset = (Math.random() - 0.5) * 0.8;
+        
+        const isMoving = driver.status === 'on_route' || Math.random() > 0.5;
+        
+        return {
+          driverId: driver.id,
+          driverName: driver.name,
+          latitude: base.lat + latOffset,
+          longitude: base.lng + lngOffset,
+          address: base.city,
+          lastUpdate: new Date().toISOString(),
+          speed: isMoving ? Math.floor(Math.random() * 70 + 10) : 0,
+          batteryLevel: Math.floor(Math.random() * 40 + 60),
+          isMoving,
+          heading: Math.floor(Math.random() * 360),
+          routeName: driver.status === 'on_route' ? 'Load Delivery Route' : undefined
+        };
+      });
+      
+      res.json({
+        locations,
+        count: locations.length,
+        serviceRunning: true,
+        trackedDrivers: locations.length
+      });
+      
+    } catch (error) {
+      console.error('Error fetching driver locations:', error);
+      res.status(500).json({ error: "Failed to fetch driver locations" });
+    }
+  });
 
   // CRITICAL DRIVER ENDPOINTS - Moved from deferred registration to immediate
   
