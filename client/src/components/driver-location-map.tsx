@@ -5,6 +5,21 @@ import { Button } from "@/components/ui/button";
 import { MapPin, Navigation, Zap, Clock, Send, Truck } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Fix Leaflet's default icon paths issue
+import icon from "leaflet/dist/images/marker-icon.png";
+import iconShadow from "leaflet/dist/images/marker-shadow.png";
+
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
 
 type DriverLocation = {
   driverId: string;
@@ -30,8 +45,8 @@ type LocationsResponse = {
 export default function DriverLocationMap() {
   const [, setLocation] = useLocation();
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markersRef = useRef<Map<string, any>>(new Map());
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<Map<string, L.Marker>>(new Map());
   
   // Fetch real-time driver locations
   const { data: response, isLoading } = useQuery<LocationsResponse>({
@@ -49,45 +64,20 @@ export default function DriverLocationMap() {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    // Check if Leaflet is loaded
-    const initializeMap = () => {
-      if (typeof window === 'undefined' || !(window as any).L) {
-        setTimeout(initializeMap, 100);
-        return;
-      }
+    // Create map centered on Tennessee/Southeast US
+    const map = L.map(mapContainerRef.current, {
+      center: [35.5175, -86.5804], // Tennessee center
+      zoom: 7,
+      zoomControl: true
+    });
 
-      const L = (window as any).L;
-      
-      // Create map centered on Tennessee/Southeast US
-      const map = L.map(mapContainerRef.current, {
-        center: [35.5175, -86.5804], // Tennessee center
-        zoom: 7,
-        zoomControl: true
-      });
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(map);
 
-      // Add OpenStreetMap tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-      }).addTo(map);
-
-      mapRef.current = map;
-    };
-
-    // Load Leaflet if not already loaded
-    if (!(window as any).L) {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = initializeMap;
-      document.head.appendChild(script);
-
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    } else {
-      initializeMap();
-    }
+    mapRef.current = map;
 
     return () => {
       if (mapRef.current) {
@@ -99,13 +89,11 @@ export default function DriverLocationMap() {
 
   // Update markers when locations change
   useEffect(() => {
-    if (!mapRef.current || !(window as any).L) return;
+    if (!mapRef.current) return;
 
-    const L = (window as any).L;
-    
     // Clear existing markers
     markersRef.current.forEach(marker => {
-      mapRef.current.removeLayer(marker);
+      mapRef.current!.removeLayer(marker);
     });
     markersRef.current.clear();
 
@@ -199,12 +187,12 @@ export default function DriverLocationMap() {
         setSelectedDriver(location.driverId);
       });
 
-      marker.addTo(mapRef.current);
+      marker.addTo(mapRef.current!);
       markersRef.current.set(location.driverId, marker);
     });
 
     // Auto-fit map to show all drivers if there are locations
-    if (locations.length > 0) {
+    if (locations.length > 0 && mapRef.current) {
       const bounds = L.latLngBounds(
         locations.map(loc => [loc.latitude, loc.longitude])
       );
@@ -286,7 +274,7 @@ export default function DriverLocationMap() {
             {/* Interactive Leaflet Map */}
             <div 
               ref={mapContainerRef}
-              className="h-[500px] rounded-lg border-2 border-gray-200 relative"
+              className="h-[500px] rounded-lg border-2 border-gray-200 relative z-10"
               data-testid="leaflet-map-container"
             />
             
@@ -302,7 +290,7 @@ export default function DriverLocationMap() {
                     setSelectedDriver(location.driverId);
                     // Open marker popup on map
                     const marker = markersRef.current.get(location.driverId);
-                    if (marker) {
+                    if (marker && mapRef.current) {
                       marker.openPopup();
                       mapRef.current.setView([location.latitude, location.longitude], 12);
                     }
