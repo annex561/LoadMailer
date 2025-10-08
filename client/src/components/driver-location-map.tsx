@@ -54,26 +54,49 @@ export default function DriverLocationMap() {
   const formatSpeed = (speed?: number) => speed ? `${speed.toFixed(0)} mph` : "0 mph";
   const formatBattery = (level?: number) => level ? `${Math.round(level)}%` : "100%";
 
-  // Initialize map
+  // Initialize map with retry logic
   const initializeMap = useCallback(() => {
-    if (!mapContainerRef.current || mapRef.current || !window.L) {
+    if (!mapContainerRef.current || mapRef.current) {
+      return;
+    }
+
+    // Ensure container has dimensions
+    const container = mapContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    
+    if (rect.width === 0 || rect.height === 0) {
+      console.log("Map container has no dimensions, retrying...");
+      setTimeout(() => initializeMap(), 100);
+      return;
+    }
+
+    if (!window.L) {
+      console.log("Leaflet not loaded yet, retrying...");
+      setTimeout(() => initializeMap(), 100);
       return;
     }
 
     try {
-      console.log("Creating Leaflet map...");
+      console.log("Creating Leaflet map with dimensions:", rect.width, "x", rect.height);
       
       // Create map with simple configuration
-      const map = window.L.map(mapContainerRef.current).setView([35.5175, -86.5804], 7);
+      const map = window.L.map(container, {
+        center: [35.5175, -86.5804],
+        zoom: 7,
+        scrollWheelZoom: true,
+        zoomControl: true
+      });
       
       // Add tile layer with proper attribution
       window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
-        maxZoom: 18
+        maxZoom: 18,
+        minZoom: 3
       }).addTo(map);
       
       mapRef.current = map;
       setMapReady(true);
+      console.log("Map created successfully");
       
       // Trigger resize after initialization
       setTimeout(() => {
@@ -85,6 +108,8 @@ export default function DriverLocationMap() {
       
     } catch (error) {
       console.error("Failed to initialize map:", error);
+      // Retry on error
+      setTimeout(() => initializeMap(), 500);
     }
   }, []);
 
@@ -96,7 +121,8 @@ export default function DriverLocationMap() {
     // Check if Leaflet is already loaded
     if (window.L) {
       console.log("Leaflet already available");
-      initializeMap();
+      // Delay initialization to ensure DOM is ready
+      setTimeout(() => initializeMap(), 50);
       return;
     }
 
@@ -109,7 +135,6 @@ export default function DriverLocationMap() {
     // Add Leaflet JS
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.async = true;
     
     script.onload = () => {
       console.log("Leaflet loaded via script tag");
@@ -123,7 +148,8 @@ export default function DriverLocationMap() {
           shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
         });
         
-        initializeMap();
+        // Delay initialization to ensure DOM is ready
+        setTimeout(() => initializeMap(), 50);
       }
     };
     
@@ -142,12 +168,36 @@ export default function DriverLocationMap() {
         try {
           mapRef.current.remove();
           mapRef.current = null;
+          setMapReady(false);
         } catch (e) {
           console.error("Error removing map:", e);
         }
       }
     };
   }, [initializeMap]);
+
+  // Trigger map initialization when container becomes visible
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+    
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !mapRef.current) {
+            console.log("Map container is visible, initializing...");
+            initializeMap();
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    
+    observer.observe(mapContainerRef.current);
+    
+    return () => {
+      observer.disconnect();
+    };
+  }, [initializeMap, locations.length]);
 
   // Update markers when locations change
   useEffect(() => {
@@ -274,13 +324,23 @@ export default function DriverLocationMap() {
             <div 
               ref={mapContainerRef}
               id="driver-map"
-              className="w-full h-[500px] rounded-lg border border-gray-300 bg-gray-50"
+              className="w-full h-[500px] rounded-lg border border-gray-300 bg-gray-50 relative"
               data-testid="leaflet-map-container"
               style={{ 
                 position: 'relative',
-                zIndex: 1
+                zIndex: 1,
+                minHeight: '500px'
               }}
-            />
+            >
+              {!mapReady && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50 rounded-lg">
+                  <div className="text-center">
+                    <MapPin className="h-8 w-8 text-gray-400 mx-auto mb-2 animate-pulse" />
+                    <p className="text-sm text-gray-500">Loading map...</p>
+                  </div>
+                </div>
+              )}
+            </div>
             
             {/* Driver Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
