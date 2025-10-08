@@ -1156,6 +1156,83 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Search drivers for communication
+  app.get('/api/communication/search-drivers', async (req, res) => {
+    try {
+      const { query } = req.query;
+      const drivers = await storage.getAllDrivers();
+      
+      // Filter drivers based on query if provided
+      let filteredDrivers = drivers;
+      if (query && typeof query === 'string') {
+        const searchQuery = query.toLowerCase();
+        filteredDrivers = drivers.filter(driver => 
+          driver.name.toLowerCase().includes(searchQuery) ||
+          driver.phone?.toLowerCase().includes(searchQuery) ||
+          driver.email?.toLowerCase().includes(searchQuery)
+        );
+      }
+      
+      // Return driver info suitable for communication
+      const result = filteredDrivers.map(driver => ({
+        id: driver.id,
+        name: driver.name,
+        phone: driver.phone,
+        email: driver.email,
+        status: driver.status,
+        equipmentType: driver.equipmentType,
+        currentMood: driver.currentMood
+      }));
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error searching drivers:', error);
+      res.status(500).json({ error: 'Failed to search drivers' });
+    }
+  });
+
+  // Get or create general communication thread with a driver
+  app.post('/api/communication/general-thread', async (req, res) => {
+    try {
+      const { driverId } = req.body;
+      
+      if (!driverId) {
+        return res.status(400).json({ error: 'Driver ID required' });
+      }
+      
+      // Check if general thread already exists
+      let thread = await storage.getGeneralCommunicationThreadByDriver(driverId);
+      
+      if (!thread) {
+        // Get driver info
+        const driver = await storage.getDriver(driverId);
+        if (!driver) {
+          return res.status(404).json({ error: 'Driver not found' });
+        }
+        
+        // Create new general thread
+        thread = await storage.createLoadCommunicationThread({
+          threadType: 'general',
+          driverId: driverId,
+          status: 'active',
+          messageCount: 0,
+          unreadDriverMessages: 0,
+          unreadDispatchMessages: 0,
+          driverName: driver.name,
+          driverPhone: driver.phone || '',
+          assistantEnabled: false,
+          assistantMode: 'off',
+          autoSendConfidence: 80
+        });
+      }
+      
+      res.json(thread);
+    } catch (error) {
+      console.error('Error creating general thread:', error);
+      res.status(500).json({ error: 'Failed to create general communication thread' });
+    }
+  });
+
   // Get messages for a specific communication thread
   app.get('/api/communication/messages/:threadId', async (req, res) => {
     try {
