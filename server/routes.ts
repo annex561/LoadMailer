@@ -1320,6 +1320,172 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // ===== MESSAGE ATTACHMENT / DOCUMENT MANAGEMENT ENDPOINTS =====
+  
+  // Upload attachment to a message/thread
+  app.post('/api/communication/attachments', async (req, res) => {
+    try {
+      const { 
+        messageId, 
+        threadId, 
+        loadId, 
+        driverId,
+        fileName,
+        fileUrl,
+        fileSize,
+        fileType,
+        documentCategory,
+        documentDescription,
+        uploadedBy
+      } = req.body;
+
+      if (!loadId || !fileName || !fileUrl) {
+        return res.status(400).json({ error: 'Load ID, file name, and file URL are required' });
+      }
+
+      // Create attachment record
+      const attachment = await storage.createMessageAttachment({
+        messageId: messageId || null,
+        loadId,
+        driverId: driverId || null,
+        fileName,
+        fileUrl,
+        fileSize: fileSize || 0,
+        fileType: fileType || 'application/octet-stream',
+        documentCategory: documentCategory || 'other',
+        documentDescription: documentDescription || '',
+        documentStatus: 'pending_review',
+        uploadedBy: uploadedBy || 'driver',
+        createdAt: new Date()
+      });
+
+      console.log(`📎 Document uploaded: ${fileName} for load ${loadId}, category: ${documentCategory}`);
+      res.json(attachment);
+    } catch (error) {
+      console.error('❌ Error uploading attachment:', error);
+      res.status(500).json({ error: 'Failed to upload attachment' });
+    }
+  });
+
+  // Get attachments for a load
+  app.get('/api/communication/attachments/load/:loadId', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const attachments = await storage.getMessageAttachmentsByLoad(loadId);
+      res.json(attachments);
+    } catch (error) {
+      console.error('❌ Error fetching load attachments:', error);
+      res.status(500).json({ error: 'Failed to fetch attachments' });
+    }
+  });
+
+  // Get attachments for a driver
+  app.get('/api/communication/attachments/driver/:driverId', async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      const attachments = await storage.getMessageAttachmentsByDriver(driverId);
+      res.json(attachments);
+    } catch (error) {
+      console.error('❌ Error fetching driver attachments:', error);
+      res.status(500).json({ error: 'Failed to fetch attachments' });
+    }
+  });
+
+  // Get attachments by category for a load
+  app.get('/api/communication/attachments/load/:loadId/category/:category', async (req, res) => {
+    try {
+      const { loadId, category } = req.params;
+      const attachments = await storage.getMessageAttachmentsByCategory(loadId, category);
+      res.json(attachments);
+    } catch (error) {
+      console.error('❌ Error fetching categorized attachments:', error);
+      res.status(500).json({ error: 'Failed to fetch attachments' });
+    }
+  });
+
+  // Get pending review attachments
+  app.get('/api/communication/attachments/pending-review', async (req, res) => {
+    try {
+      const attachments = await storage.getPendingReviewAttachments();
+      res.json(attachments);
+    } catch (error) {
+      console.error('❌ Error fetching pending review attachments:', error);
+      res.status(500).json({ error: 'Failed to fetch attachments' });
+    }
+  });
+
+  // Approve attachment
+  app.post('/api/communication/attachments/:id/approve', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reviewerId = 'dispatcher', notes } = req.body;
+      
+      const attachment = await storage.approveMessageAttachment(id, reviewerId, notes);
+      if (!attachment) {
+        return res.status(404).json({ error: 'Attachment not found' });
+      }
+      
+      console.log(`✅ Attachment ${id} approved by ${reviewerId}`);
+      res.json(attachment);
+    } catch (error) {
+      console.error('❌ Error approving attachment:', error);
+      res.status(500).json({ error: 'Failed to approve attachment' });
+    }
+  });
+
+  // Reject attachment
+  app.post('/api/communication/attachments/:id/reject', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reviewerId = 'dispatcher', notes } = req.body;
+      
+      if (!notes) {
+        return res.status(400).json({ error: 'Rejection notes are required' });
+      }
+      
+      const attachment = await storage.rejectMessageAttachment(id, reviewerId, notes);
+      if (!attachment) {
+        return res.status(404).json({ error: 'Attachment not found' });
+      }
+      
+      console.log(`❌ Attachment ${id} rejected by ${reviewerId}: ${notes}`);
+      res.json(attachment);
+    } catch (error) {
+      console.error('❌ Error rejecting attachment:', error);
+      res.status(500).json({ error: 'Failed to reject attachment' });
+    }
+  });
+
+  // Delete attachment
+  app.delete('/api/communication/attachments/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const success = await storage.deleteMessageAttachment(id);
+      
+      if (!success) {
+        return res.status(404).json({ error: 'Attachment not found' });
+      }
+      
+      console.log(`🗑️ Attachment ${id} deleted`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('❌ Error deleting attachment:', error);
+      res.status(500).json({ error: 'Failed to delete attachment' });
+    }
+  });
+
+  // Get attachments for a message
+  app.get('/api/communication/messages/:messageId/attachments', async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const attachments = await storage.getMessageAttachmentsByMessage(messageId);
+      res.json(attachments);
+    } catch (error) {
+      console.error('❌ Error fetching message attachments:', error);
+      res.status(500).json({ error: 'Failed to fetch attachments' });
+    }
+  });
+
   // ===== SMS COMMUNICATION API ENDPOINTS =====
 
   // Initialize SMS Communication Service
