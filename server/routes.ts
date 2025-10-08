@@ -1233,6 +1233,152 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Offer load to driver in general conversation
+  app.post('/api/communication/offer-load', async (req, res) => {
+    try {
+      const { threadId, loadId } = req.body;
+      console.log('🚚 Offering load to driver in thread:', threadId, 'Load:', loadId);
+
+      if (!threadId || !loadId) {
+        return res.status(400).json({ error: 'Thread ID and Load ID required' });
+      }
+
+      // Get the thread
+      const thread = await storage.getLoadCommunicationThread(threadId);
+      if (!thread) {
+        return res.status(404).json({ error: 'Thread not found' });
+      }
+
+      // Verify it's a general conversation
+      if (thread.threadType !== 'general') {
+        return res.status(400).json({ error: 'Can only offer loads in general conversations' });
+      }
+
+      // Get load info
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+
+      // Update thread with load offer
+      const updatedThread = await storage.updateLoadCommunicationThread(threadId, {
+        loadId: loadId,
+        loadOfferStatus: 'pending',
+        loadNumber: load.loadNumber,
+        loadOrigin: load.origin,
+        loadDestination: load.destination
+      });
+
+      // Create a system message about the load offer
+      await storage.createLoadMessage({
+        threadId,
+        content: `Load offered: ${load.loadNumber} - ${load.origin} → ${load.destination} - Rate: $${load.rate || 'TBD'}`,
+        sender: 'dispatch',
+        isRead: false
+      });
+      
+      console.log('✅ Load offered successfully');
+      res.json(updatedThread);
+    } catch (error) {
+      console.error('❌ Error offering load:', error);
+      res.status(500).json({ error: 'Failed to offer load' });
+    }
+  });
+
+  // Accept load offer in general conversation
+  app.post('/api/communication/accept-load', async (req, res) => {
+    try {
+      const { threadId } = req.body;
+      console.log('✅ Accepting load offer for thread:', threadId);
+
+      if (!threadId) {
+        return res.status(400).json({ error: 'Thread ID required' });
+      }
+
+      // Get the thread
+      const thread = await storage.getLoadCommunicationThread(threadId);
+      if (!thread) {
+        return res.status(404).json({ error: 'Thread not found' });
+      }
+
+      // Verify it's a general conversation with a pending offer
+      if (thread.threadType !== 'general' || thread.loadOfferStatus !== 'pending') {
+        return res.status(400).json({ error: 'No pending load offer to accept' });
+      }
+
+      // Update thread to convert to load conversation
+      const updatedThread = await storage.updateLoadCommunicationThread(threadId, {
+        threadType: 'load',
+        loadOfferStatus: 'accepted'
+      });
+
+      // Update load assignment
+      if (thread.loadId) {
+        await storage.updateLoad(thread.loadId, { driverId: thread.driverId, status: 'assigned' });
+      }
+
+      // Create a system message about the acceptance
+      await storage.createLoadMessage({
+        threadId,
+        content: `Driver accepted the load offer! Load ${thread.loadNumber} is now assigned.`,
+        sender: 'driver',
+        isRead: false
+      });
+      
+      console.log('✅ Load offer accepted');
+      res.json(updatedThread);
+    } catch (error) {
+      console.error('❌ Error accepting load offer:', error);
+      res.status(500).json({ error: 'Failed to accept load offer' });
+    }
+  });
+
+  // Decline load offer in general conversation
+  app.post('/api/communication/decline-load', async (req, res) => {
+    try {
+      const { threadId } = req.body;
+      console.log('❌ Declining load offer for thread:', threadId);
+
+      if (!threadId) {
+        return res.status(400).json({ error: 'Thread ID required' });
+      }
+
+      // Get the thread
+      const thread = await storage.getLoadCommunicationThread(threadId);
+      if (!thread) {
+        return res.status(404).json({ error: 'Thread not found' });
+      }
+
+      // Verify it's a general conversation with a pending offer
+      if (thread.threadType !== 'general' || thread.loadOfferStatus !== 'pending') {
+        return res.status(400).json({ error: 'No pending load offer to decline' });
+      }
+
+      // Update thread to decline offer
+      const updatedThread = await storage.updateLoadCommunicationThread(threadId, {
+        loadOfferStatus: 'declined',
+        loadId: null,
+        loadNumber: null,
+        loadOrigin: null,
+        loadDestination: null
+      });
+
+      // Create a system message about the decline
+      await storage.createLoadMessage({
+        threadId,
+        content: `Driver declined the load offer.`,
+        sender: 'driver',
+        isRead: false
+      });
+      
+      console.log('✅ Load offer declined');
+      res.json(updatedThread);
+    } catch (error) {
+      console.error('❌ Error declining load offer:', error);
+      res.status(500).json({ error: 'Failed to decline load offer' });
+    }
+  });
+
   // Get messages for a specific communication thread
   app.get('/api/communication/messages/:threadId', async (req, res) => {
     try {

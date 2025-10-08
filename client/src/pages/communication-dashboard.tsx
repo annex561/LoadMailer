@@ -50,7 +50,8 @@ import {
   Download,
   Eye,
   Check,
-  XCircle
+  XCircle,
+  Package
 } from "lucide-react";
 import { format } from "date-fns";
 import { Radio } from "lucide-react";
@@ -248,6 +249,70 @@ export default function CommunicationDashboard() {
     },
     onError: (error) => {
       toast({ title: "Failed to start conversation", description: error.message, variant: "destructive" });
+    }
+  });
+
+  // Offer load to driver in general conversation
+  const offerLoadMutation = useMutation({
+    mutationFn: async ({ threadId, loadId }: { threadId: string; loadId: string }) => {
+      const response = await fetch('/api/communication/offer-load', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId, loadId })
+      });
+      if (!response.ok) throw new Error('Failed to offer load');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchThreads();
+      refetchMessages();
+      setShowUnassignedLoads(false);
+      toast({ title: "Load offered", description: "Load has been offered to the driver" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to offer load", description: error.message, variant: "destructive" });
+    }
+  });
+
+  // Accept load offer in general conversation
+  const acceptLoadOfferMutation = useMutation({
+    mutationFn: async (threadId: string) => {
+      const response = await fetch('/api/communication/accept-load', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId })
+      });
+      if (!response.ok) throw new Error('Failed to accept load offer');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchThreads();
+      refetchMessages();
+      toast({ title: "Load accepted", description: "Load has been attached to this conversation" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to accept load", description: error.message, variant: "destructive" });
+    }
+  });
+
+  // Decline load offer in general conversation
+  const declineLoadOfferMutation = useMutation({
+    mutationFn: async (threadId: string) => {
+      const response = await fetch('/api/communication/decline-load', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId })
+      });
+      if (!response.ok) throw new Error('Failed to decline load offer');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetchThreads();
+      refetchMessages();
+      toast({ title: "Load declined", description: "You can offer a different load to this driver" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to decline load", description: error.message, variant: "destructive" });
     }
   });
   
@@ -1373,6 +1438,55 @@ export default function CommunicationDashboard() {
               </div>
             )}
 
+            {/* Load Offer Section for General Conversations */}
+            {selectedThread?.threadType === 'general' && (
+              <div className="p-3 border-t border-gray-200 bg-blue-50">
+                <div className="mb-3">
+                  {selectedThread.loadOfferStatus === 'pending' && selectedThread.loadId && (
+                    <Alert className="border-yellow-300 bg-yellow-50">
+                      <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                      <AlertDescription className="text-sm">
+                        <strong>Load Offered:</strong> {selectedThread.loadNumber} - {selectedThread.loadOrigin} → {selectedThread.loadDestination}
+                        <br />
+                        <span className="text-xs text-gray-600">Waiting for driver response...</span>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {selectedThread.loadOfferStatus === 'accepted' && selectedThread.loadId && (
+                    <Alert className="border-green-300 bg-green-50">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-sm">
+                        <strong>Load Accepted:</strong> {selectedThread.loadNumber} - {selectedThread.loadOrigin} → {selectedThread.loadDestination}
+                        <br />
+                        <span className="text-xs text-gray-600">Load is now attached to this conversation</span>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {selectedThread.loadOfferStatus === 'declined' && (
+                    <Alert className="border-red-300 bg-red-50">
+                      <XCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-sm">
+                        <strong>Load Declined:</strong> Driver declined the offered load
+                        <br />
+                        <span className="text-xs text-gray-600">You can offer a different load</span>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {(!selectedThread.loadOfferStatus || selectedThread.loadOfferStatus === 'declined') && (
+                    <Button 
+                      variant="default"
+                      className="w-full bg-blue-600 hover:bg-blue-700"
+                      onClick={() => setShowUnassignedLoads(true)}
+                      data-testid="button-offer-load"
+                    >
+                      <Package className="w-4 h-4 mr-2" />
+                      Offer Load to Driver
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Quick Replies */}
             <div className="p-3 border-t border-gray-200 bg-gray-50">
               <h4 className="text-xs font-medium text-gray-700 mb-2">Quick Messages</h4>
@@ -1742,6 +1856,95 @@ export default function CommunicationDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Unassigned Loads Dialog for Offering to Driver */}
+      {showUnassignedLoads && selectedThread?.threadType === 'general' && (
+        <Dialog open={showUnassignedLoads} onOpenChange={setShowUnassignedLoads}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Select Load to Offer to {selectedThread.driverName}</DialogTitle>
+            </DialogHeader>
+            <ScrollArea className="h-[500px]">
+              <div className="space-y-2">
+                {unassignedLoads.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>No unassigned loads available</p>
+                  </div>
+                ) : (
+                  unassignedLoads.map((load) => (
+                    <Card 
+                      key={load.id}
+                      className="cursor-pointer hover:bg-gray-50"
+                      onClick={() => {
+                        offerLoadMutation.mutate({ 
+                          threadId: selectedThread.id, 
+                          loadId: load.id 
+                        });
+                      }}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="font-medium text-sm">{load.loadNumber}</h4>
+                              <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                                ${load.rate || 'TBD'}
+                              </Badge>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-sm text-gray-700">
+                                <MapPin className="w-3 h-3 inline mr-1" />
+                                {load.origin} → {load.destination}
+                              </p>
+                              <p className="text-xs text-gray-600">
+                                <Truck className="w-3 h-3 inline mr-1" />
+                                {load.equipmentType || 'Any'} • {load.weight || 'N/A'} lbs
+                              </p>
+                              <p className="text-xs text-gray-600">
+                                <Clock className="w-3 h-3 inline mr-1" />
+                                Pickup: {load.pickupDate ? format(new Date(load.pickupDate), 'MMM dd, HH:mm') : 'ASAP'}
+                              </p>
+                              {load.brokerName && (
+                                <p className="text-xs text-gray-500">
+                                  Broker: {load.brokerName}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                offerLoadMutation.mutate({ 
+                                  threadId: selectedThread.id, 
+                                  loadId: load.id 
+                                });
+                              }}
+                            >
+                              Offer Load
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowUnassignedLoads(false)}
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
