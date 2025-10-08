@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -218,16 +218,23 @@ export default function CommunicationDashboard() {
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
   });
 
-  // Search drivers
-  const { data: searchedDrivers = [], isLoading: driversLoading } = useQuery<Driver[]>({
-    queryKey: ['/api/communication/search-drivers', driverSearchQuery],
-    queryFn: async () => {
-      const response = await fetch(`/api/communication/search-drivers?query=${encodeURIComponent(driverSearchQuery)}`);
-      if (!response.ok) return [];
-      return response.json();
-    },
-    enabled: showDriverSearch && driverSearchQuery.length > 0,
+  // Fetch all drivers for search
+  const { data: allDrivers = [], isLoading: driversLoading } = useQuery<Driver[]>({
+    queryKey: ['/api/drivers'],
+    enabled: showDriverSearch,
   });
+  
+  // Filter drivers based on search query
+  const searchedDrivers = useMemo(() => {
+    if (!driverSearchQuery) return allDrivers;
+    
+    const query = driverSearchQuery.toLowerCase();
+    return allDrivers.filter(driver => 
+      driver.name.toLowerCase().includes(query) ||
+      (driver.phone && driver.phone.toLowerCase().includes(query)) ||
+      (driver.email && driver.email.toLowerCase().includes(query))
+    );
+  }, [allDrivers, driverSearchQuery]);
 
   // Start general conversation with driver
   const startGeneralChatMutation = useMutation({
@@ -1801,7 +1808,7 @@ export default function CommunicationDashboard() {
                   </div>
                 )}
                 
-                {searchedDrivers.map((driver) => (
+                {!driversLoading && searchedDrivers.map((driver) => (
                   <Card 
                     key={driver.id} 
                     className="cursor-pointer hover:bg-gray-50"
@@ -1837,11 +1844,11 @@ export default function CommunicationDashboard() {
                   </Card>
                 ))}
 
-                {!driversLoading && driverSearchQuery.length === 0 && (
+                {!driversLoading && allDrivers.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>Start typing to search for drivers</p>
-                    <p className="text-sm mt-2">You can search by name, phone, or email</p>
+                    <p>No drivers available</p>
+                    <p className="text-sm mt-2">Add drivers to start conversations</p>
                   </div>
                 )}
               </div>
