@@ -1,5 +1,6 @@
 import { storage } from './storage';
 import { SMSLoadService } from './sms-service';
+import { zelloService } from './zello-service';
 
 interface LoadTemplate {
   pickupAddress: string;
@@ -140,6 +141,21 @@ export class ContinuousLoadService {
       // Immediately send to SMS notification system
       await this.smsService.processNewLoad(load);
       console.log(`📱 Load ${load.loadNumber} processed through SMS system`);
+      
+      // Also broadcast via Zello if configured
+      if (zelloService.isServiceConfigured()) {
+        await zelloService.sendLoadNotification({
+          loadNumber: load.loadNumber,
+          origin: template.pickupAddress,
+          destination: template.deliveryAddress,
+          rate: loadData.rate,
+          distance: loadData.miles,
+          equipment: template.equipmentType,
+          weight: `${loadData.weight} lbs`,
+          pickupDate: loadData.pickupDate
+        }, 'box-truck-ops');
+        console.log(`🎙️ Load ${load.loadNumber} broadcast via Zello voice dispatch`);
+      }
 
     } catch (error) {
       console.error('Error generating continuous load:', error);

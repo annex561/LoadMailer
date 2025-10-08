@@ -29,6 +29,7 @@ import { realDriverLocationService } from "./real-driver-location-service";
 import { taskMagicIntegration } from './taskmagic-integration';
 import { datScraperService as puppeteerDATService } from './dat-puppeteer-scraper';
 import { googleSheetsService } from './google-sheets-service';
+import { zelloService } from './zello-service';
 import { setupAuth, isAuthenticated } from "./replitAuth";
 
 import nodemailer from "nodemailer";
@@ -299,6 +300,29 @@ async function initializeAllServices() {
         console.log('✅ Real Driver Location Service initialized and running');
       } catch (error) {
         console.error('❌ Failed to initialize real driver location service:', error);
+      }
+    });
+
+    // Initialize Zello voice dispatch service
+    Promise.resolve().then(async () => {
+      try {
+        console.log('🎙️ Starting Zello voice dispatch initialization...');
+        await zelloService.initialize();
+        console.log('✅ Zello voice dispatch service initialized');
+        
+        // Set up Zello event handlers
+        zelloService.on('load_accepted', async (data) => {
+          console.log(`✅ Driver ${data.driver} accepted load ${data.loadNumber} via Zello`);
+          // TODO: Update load status in database
+        });
+        
+        zelloService.on('load_declined', async (data) => {
+          console.log(`❌ Driver ${data.driver} declined load ${data.loadNumber} via Zello`);
+          // TODO: Find next eligible driver
+        });
+        
+      } catch (error) {
+        console.error('❌ Failed to initialize Zello service:', error);
       }
     });
 
