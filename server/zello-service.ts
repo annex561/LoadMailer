@@ -155,6 +155,31 @@ export class ZelloDispatchService extends EventEmitter {
     
     // Load and update user locations
     await this.updateUserLocations();
+    
+    // Add users to their assigned channels
+    await this.assignUsersToChannels();
+  }
+  
+  private async assignUsersToChannels(): Promise<void> {
+    console.log('📡 Assigning users to channels...');
+    
+    // Iterate through all loaded users
+    for (const [username, user] of this.users) {
+      // Add user to their assigned channels
+      for (const channelName of user.channels) {
+        await this.addUserToChannel(username, channelName);
+      }
+      
+      // Also add the user to all-drivers channel if not already there
+      if (!user.channels.includes('all-drivers')) {
+        await this.addUserToChannel(username, 'all-drivers');
+      }
+    }
+    
+    // Log channel membership counts
+    for (const [channelName, channel] of this.channels) {
+      console.log(`📻 Channel ${channelName}: ${channel.users.length} users`);
+    }
   }
   
   async updateUserLocations(): Promise<void> {
