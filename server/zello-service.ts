@@ -74,37 +74,70 @@ export class ZelloDispatchService extends EventEmitter {
     }
 
     try {
-      const url = `https://${this.workspaceUrl}/user/gettoken`;
-      const params = new URLSearchParams({
-        username: this.username,
-        password: this.password
-      });
+      // Step 1: Get token and session ID
+      const tokenUrl = `https://${this.workspaceUrl}/user/gettoken`;
+      console.log('🔑 Step 1: Getting token from Zello...');
       
-      const response = await fetch(`${url}?${params}`, {
+      const tokenResponse = await fetch(tokenUrl, {
         method: 'GET',
         headers: {
           'X-API-Key': this.apiKey
         }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Zello authentication failed:', errorText);
+      if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        console.error('❌ Failed to get token:', errorText);
         return false;
       }
 
-      const data = await response.json();
+      const tokenData = await tokenResponse.json();
       
-      if (data.status === 'OK' && data.sid) {
-        this.sessionId = data.sid;
-        console.log('✅ Zello authentication successful - session established');
+      if (tokenData.status !== 'OK' || !tokenData.sid) {
+        console.error('❌ Invalid token response:', tokenData);
+        return false;
+      }
+      
+      this.sessionId = tokenData.sid;
+      console.log('✅ Token obtained, session ID:', this.sessionId);
+      
+      // Step 2: Login with username and password
+      const loginUrl = `https://${this.workspaceUrl}/user/login?sid=${this.sessionId}`;
+      console.log('🔐 Step 2: Logging in with credentials...');
+      
+      const loginBody = new URLSearchParams({
+        username: this.username,
+        password: this.password
+      });
+      
+      const loginResponse = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: loginBody
+      });
+
+      if (!loginResponse.ok) {
+        const errorText = await loginResponse.text();
+        console.error('❌ Login failed:', errorText);
+        this.sessionId = null;
+        return false;
+      }
+
+      const loginData = await loginResponse.json();
+      
+      if (loginData.status === 'OK') {
+        console.log('✅ Zello authentication successful - fully logged in');
         return true;
       } else {
-        console.error('❌ Zello authentication failed:', data);
+        console.error('❌ Login failed:', loginData);
+        this.sessionId = null;
         return false;
       }
     } catch (error) {
       console.error('❌ Zello authentication error:', error);
+      this.sessionId = null;
       return false;
     }
   }
@@ -133,13 +166,19 @@ export class ZelloDispatchService extends EventEmitter {
     try {
       const options: RequestInit = {
         method,
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: {}
       };
       
       if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-        options.body = JSON.stringify(body);
+        // Zello API expects form-encoded data, not JSON
+        const formData = new URLSearchParams();
+        Object.keys(body).forEach(key => {
+          formData.append(key, String(body[key]));
+        });
+        options.body = formData;
+        options.headers = {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        };
       }
       
       const response = await fetch(fullUrl, options);
@@ -308,10 +347,30 @@ export class ZelloDispatchService extends EventEmitter {
     console.log('🔄 Syncing users to real Zello Work platform...');
     
     try {
-      // Get existing users from Zello
-      const existingUsersResponse = await this.makeZelloApiCall('/user/list', 'GET');
-      const existingUsers = existingUsersResponse?.users || [];
-      const existingUsernames = new Set(existingUsers.map((u: any) => u.name));
+      // Get existing users from Zello with timeout
+      let existingUsers: any[] = [];
+      let existingUsernames = new Set<string>();
+      
+      try {
+        console.log('📋 Fetching existing users from Zello...');
+        const existingUsersResponse = await Promise.race([
+          this.makeZelloApiCall('/user/list', 'GET'),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout getting user list')), 5000))
+        ]) as any;
+        
+        if (existingUsersResponse?.users) {
+          existingUsers = existingUsersResponse.users;
+          existingUsernames = new Set(existingUsers.map((u: any) => u.name));
+        } else if (existingUsersResponse?.status === 'OK') {
+          // Empty user list
+          existingUsers = [];
+        } else {
+          console.error('❌ Unexpected response from user list:', existingUsersResponse);
+        }
+      } catch (listError) {
+        console.error('⚠️ Could not fetch existing users:', listError);
+        // Continue anyway - we'll try to create users
+      }
       
       console.log(`📋 Found ${existingUsers.length} existing users in Zello Work`);
       
