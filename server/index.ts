@@ -161,7 +161,20 @@ app.use((req, res, next) => {
       
       // Fire-and-forget approach - start each service independently without blocking anything
       
-      // 0. SMS Communication Service (immediate initialization)
+      // 0. Zello Service (initialize first for communication)
+      setTimeout(() => {
+        (async () => {
+          try {
+            const { zelloService } = await import('./zello-service.js');
+            await zelloService.initialize();
+            log('✅ Zello Service initialized automatically - bidirectional voice/text communication ready');
+          } catch (error) {
+            log(`⚠️ Zello Service failed to initialize: ${error.message || error}`);
+          }
+        })();
+      }, 100);
+      
+      // 0.5. SMS Communication Service (after Zello)
       setTimeout(() => {
         (async () => {
           try {
