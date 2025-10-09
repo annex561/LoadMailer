@@ -57,9 +57,9 @@ export class ZelloDispatchService extends EventEmitter {
   
   constructor() {
     super();
-    this.apiKey = process.env.ZELLO_API_KEY || '';
-    this.username = process.env.ZELLO_USERNAME || '';
-    this.password = process.env.ZELLO_PASSWORD || '';
+    this.apiKey = (process.env.ZELLO_API_KEY || '').trim();
+    this.username = (process.env.ZELLO_USERNAME || '').trim();
+    this.password = (process.env.ZELLO_PASSWORD || '').trim();
     console.log('🎙️ Zello Dispatch Service initializing...');
     
     if (!this.apiKey || !this.username || !this.password) {
