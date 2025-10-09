@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import * as crypto from 'crypto';
 
 interface ZelloChannel {
   name: string;
@@ -57,9 +58,11 @@ export class ZelloDispatchService extends EventEmitter {
   
   constructor() {
     super();
-    this.apiKey = (process.env.ZELLO_API_KEY || '').trim();
-    this.username = (process.env.ZELLO_USERNAME || '').trim();
-    this.password = (process.env.ZELLO_PASSWORD || '').trim();
+    // Use the correct API key from the Zello dashboard
+    this.apiKey = (process.env.ZELLO_API_KEY || '9TRA0D2GBV1OCOC657BFSPIH4QBDICH5').trim();
+    // Ensure we're using the correct API user credentials
+    this.username = (process.env.ZELLO_USERNAME || 'annexAPI').trim();
+    this.password = (process.env.ZELLO_PASSWORD || 'Anonymous#561').trim();
     console.log('🎙️ Zello Dispatch Service initializing...');
     
     if (!this.apiKey || !this.username || !this.password) {
@@ -99,15 +102,26 @@ export class ZelloDispatchService extends EventEmitter {
       }
       
       this.sessionId = tokenData.sid;
+      const token = tokenData.token;
       console.log('✅ Token obtained, session ID:', this.sessionId);
       
       // Step 2: Login with username and password
       const loginUrl = `https://${this.workspaceUrl}/user/login?sid=${this.sessionId}`;
       console.log('🔐 Step 2: Logging in with credentials...');
       
+      // Hash the password according to Zello API docs: md5(md5(password) + token + api_key)
+      const passwordMd5 = crypto.createHash('md5').update(this.password).digest('hex');
+      const combined = passwordMd5 + token + this.apiKey;
+      const hashedPassword = crypto.createHash('md5').update(combined).digest('hex');
+      
+      console.log('🔒 Using proper password hashing as per Zello API:');
+      console.log('  - Password MD5:', passwordMd5.substring(0, 8) + '...');
+      console.log('  - Token:', token.substring(0, 8) + '...');
+      console.log('  - Final hash:', hashedPassword.substring(0, 8) + '...');
+      
       const loginBody = new URLSearchParams({
         username: this.username,
-        password: this.password
+        password: hashedPassword  // Use the properly hashed password
       });
       
       const loginResponse = await fetch(loginUrl, {

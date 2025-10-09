@@ -2250,9 +2250,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Manual Zello authentication test endpoint
   app.post('/api/zello/test-auth', async (req, res) => {
     try {
-      const apiKey = process.env.ZELLO_API_KEY || '9TRA0D2GBV1OCOC657BFSPIH4QBDICH5';
-      const username = process.env.ZELLO_USERNAME || 'annexAPI';
-      const password = process.env.ZELLO_PASSWORD || 'Anonymous#561';
+      // Always use the correct API key from the Zello dashboard  
+      const apiKey = '9TRA0D2GBV1OCOC657BFSPIH4QBDICH5';
+      const username = 'annexAPI';
+      const password = 'Anonymous#561';
       
       console.log('🔐 Manual Zello authentication test starting...');
       console.log(`📝 Using credentials: ${username} (API Key: ${apiKey.substring(0, 10)}...)`);
@@ -2279,10 +2280,20 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
       
       // Step 2: Login
+      // Hash the password according to Zello API docs: md5(md5(password) + token + api_key)
+      const { createHash } = await import('crypto');
+      const passwordMd5 = createHash('md5').update(password).digest('hex');
+      const combined = passwordMd5 + tokenData.token + apiKey;
+      const hashedPassword = createHash('md5').update(combined).digest('hex');
+      
+      console.log('🔒 Password hashing for test:');
+      console.log('  - Token:', tokenData.token.substring(0, 8) + '...');
+      console.log('  - Hashed password:', hashedPassword.substring(0, 8) + '...');
+      
       const loginUrl = `https://lamp1.zellowork.com/user/login?sid=${tokenData.sid}`;
       const loginBody = new URLSearchParams({
         username: username,
-        password: password
+        password: hashedPassword  // Use the properly hashed password
       });
       
       const loginResponse = await fetch(loginUrl, {
