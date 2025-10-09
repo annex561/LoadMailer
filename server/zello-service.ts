@@ -45,6 +45,9 @@ interface ZelloMessage {
 
 export class ZelloDispatchService extends EventEmitter {
   private apiKey: string;
+  private username: string;
+  private password: string;
+  private sessionId: string | null = null;
   private baseUrl: string = 'https://api.zello.com';
   private workspaceUrl: string = 'lamp1.zellowork.com';
   private channels: Map<string, ZelloChannel> = new Map();
@@ -55,39 +58,106 @@ export class ZelloDispatchService extends EventEmitter {
   constructor() {
     super();
     this.apiKey = process.env.ZELLO_API_KEY || '';
+    this.username = process.env.ZELLO_USERNAME || '';
+    this.password = process.env.ZELLO_PASSWORD || '';
     console.log('🎙️ Zello Dispatch Service initializing...');
     
-    if (!this.apiKey) {
-      console.warn('⚠️ ZELLO_API_KEY not found in environment variables');
+    if (!this.apiKey || !this.username || !this.password) {
+      console.warn('⚠️ Zello credentials not fully configured (need API_KEY, USERNAME, and PASSWORD)');
     }
   }
   
+  private async authenticate(): Promise<boolean> {
+    if (!this.apiKey || !this.username || !this.password) {
+      console.error('❌ Missing Zello credentials');
+      return false;
+    }
+
+    try {
+      const url = `https://${this.workspaceUrl}/user/gettoken`;
+      const params = new URLSearchParams({
+        username: this.username,
+        password: this.password
+      });
+      
+      const response = await fetch(`${url}?${params}`, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': this.apiKey
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Zello authentication failed:', errorText);
+        return false;
+      }
+
+      const data = await response.json();
+      
+      if (data.status === 'OK' && data.sid) {
+        this.sessionId = data.sid;
+        console.log('✅ Zello authentication successful - session established');
+        return true;
+      } else {
+        console.error('❌ Zello authentication failed:', data);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Zello authentication error:', error);
+      return false;
+    }
+  }
+
   private async makeZelloApiCall(endpoint: string, method: string = 'GET', body?: any): Promise<any> {
-    if (!this.apiKey) {
-      throw new Error('Zello API key not configured');
+    // Ensure we have a session
+    if (!this.sessionId) {
+      console.log('🔐 No session found, authenticating...');
+      const authenticated = await this.authenticate();
+      if (!authenticated) {
+        throw new Error('Failed to authenticate with Zello Work API');
+      }
     }
     
-    const url = `https://${this.workspaceUrl}/api/v1${endpoint}`;
+    // Build URL with session ID
+    const url = `https://${this.workspaceUrl}${endpoint}`;
+    const params = new URLSearchParams({ sid: this.sessionId });
+    
+    // Add body parameters to URL for GET requests, or keep in body for POST/PUT
+    if (body && method === 'GET') {
+      Object.keys(body).forEach(key => params.append(key, body[key]));
+    }
+    
+    const fullUrl = `${url}?${params}`;
     
     try {
-      const headers: any = {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
-      };
-      
       const options: RequestInit = {
         method,
-        headers
+        headers: {
+          'Content-Type': 'application/json'
+        }
       };
       
       if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
         options.body = JSON.stringify(body);
       }
       
-      const response = await fetch(url, options);
+      const response = await fetch(fullUrl, options);
       
       if (!response.ok) {
         const errorData = await response.text();
+        
+        // If we get a 401, try to re-authenticate once
+        if (response.status === 401) {
+          console.log('🔑 Session expired, re-authenticating...');
+          this.sessionId = null;
+          const authenticated = await this.authenticate();
+          if (authenticated) {
+            // Retry the request with new session
+            return this.makeZelloApiCall(endpoint, method, body);
+          }
+        }
+        
         throw new Error(`Zello API error: ${response.status} - ${errorData}`);
       }
       
@@ -101,19 +171,29 @@ export class ZelloDispatchService extends EventEmitter {
   }
 
   async initialize(): Promise<void> {
-    if (!this.apiKey) {
-      console.error('❌ Cannot initialize Zello service without API key');
+    if (!this.apiKey || !this.username || !this.password) {
+      console.error('❌ Cannot initialize Zello service without full credentials');
       return;
     }
 
     try {
       console.log('🔐 Authenticating with Zello Work API...');
       
+      // Authenticate first
+      const authenticated = await this.authenticate();
+      if (!authenticated) {
+        console.error('❌ Failed to authenticate with Zello Work');
+        return;
+      }
+      
       // Initialize default channels
       await this.setupDefaultChannels();
       
       // Load existing users
       await this.loadUsers();
+      
+      // Try to create/sync real Zello users
+      await this.syncUsersToZello();
       
       this.isInitialized = true;
       console.log('✅ Zello Dispatch Service initialized successfully');
@@ -224,6 +304,70 @@ export class ZelloDispatchService extends EventEmitter {
     }
   }
   
+  private async syncUsersToZello(): Promise<void> {
+    console.log('🔄 Syncing users to real Zello Work platform...');
+    
+    try {
+      // Get existing users from Zello
+      const existingUsersResponse = await this.makeZelloApiCall('/user/list', 'GET');
+      const existingUsers = existingUsersResponse?.users || [];
+      const existingUsernames = new Set(existingUsers.map((u: any) => u.name));
+      
+      console.log(`📋 Found ${existingUsers.length} existing users in Zello Work`);
+      
+      // Create users that don't exist
+      let createdCount = 0;
+      let skippedCount = 0;
+      
+      for (const [username, user] of this.users) {
+        if (existingUsernames.has(username)) {
+          console.log(`⏭️ User ${username} already exists in Zello`);
+          skippedCount++;
+          continue;
+        }
+        
+        try {
+          // Create user in Zello Work
+          const createResponse = await this.makeZelloApiCall('/user/add', 'POST', {
+            name: username,
+            password: 'Driver123!', // Default password for drivers
+            email: user.email || `${username}@lampslogistics.com`,
+            full_name: user.displayName || user.name || username,
+            job: 'Driver',
+            admin: false
+          });
+          
+          if (createResponse?.status === 'OK') {
+            console.log(`✅ Created Zello user: ${username}`);
+            createdCount++;
+            
+            // Add user to channels
+            for (const channelName of user.channels) {
+              try {
+                await this.makeZelloApiCall('/user/addtochannel', 'POST', {
+                  username: username,
+                  channel: channelName
+                });
+                console.log(`  ➕ Added ${username} to channel ${channelName}`);
+              } catch (channelError) {
+                console.error(`  ❌ Failed to add ${username} to ${channelName}:`, channelError);
+              }
+            }
+          } else {
+            console.error(`❌ Failed to create user ${username}:`, createResponse);
+          }
+        } catch (error) {
+          console.error(`❌ Error creating user ${username}:`, error);
+        }
+      }
+      
+      console.log(`✅ Zello sync complete: ${createdCount} users created, ${skippedCount} already existed`);
+      
+    } catch (error) {
+      console.error('❌ Failed to sync users to Zello:', error);
+    }
+  }
+
   async updateUserLocations(): Promise<void> {
     try {
       console.log('📍 Updating Zello user locations...');
