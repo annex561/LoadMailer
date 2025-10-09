@@ -17,7 +17,6 @@ interface SimpleDriverData {
   phone: string;
   city: string;
   equipmentType: string;
-  telegramUsername: string;
   maxWeight: number;
   maxLength: number;
   loadType: string;
@@ -27,7 +26,6 @@ interface SimpleDriverData {
   licenseNumber: string;
   licenseState: string;
   token?: string;
-  telegramId?: string;
 }
 
 const US_STATES = [
@@ -49,7 +47,6 @@ export default function SimpleDriverRegistration() {
     phone: '',
     city: '',
     equipmentType: '',
-    telegramUsername: '',
     maxWeight: 26000,
     maxLength: 53,
     loadType: 'full_partial',
@@ -58,8 +55,7 @@ export default function SimpleDriverRegistration() {
     vehicleModel: '',
     licenseNumber: '',
     licenseState: '',
-    token: undefined,
-    telegramId: undefined
+    token: undefined
   });
   
   const [isComplete, setIsComplete] = useState(false);
@@ -154,7 +150,7 @@ export default function SimpleDriverRegistration() {
     // Allow registration without token for testing
     return !tokenError && 
            formData.name && formData.email && formData.phone && 
-           formData.city && formData.equipmentType && formData.telegramUsername &&
+           formData.city && formData.equipmentType &&
            formData.vehicleYear && formData.vehicleMake && formData.vehicleModel &&
            formData.licenseNumber && formData.licenseState && 
            formData.maxWeight > 0 && formData.maxLength > 0;
@@ -486,39 +482,21 @@ export default function SimpleDriverRegistration() {
             </div>
           </div>
 
-          {/* Telegram Section */}
-          <div className="border-t pt-4 mt-6">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">Communication</h3>
-            <div className="space-y-2">
-              <Label htmlFor="telegramUsername">
-                Telegram Username *
-              </Label>
-              <Input
-                id="telegramUsername"
-                value={formData.telegramUsername}
-                onChange={(e) => updateFormData('telegramUsername', e.target.value)}
-                placeholder="@username (without @)"
-                className="bg-white border border-gray-300"
-                data-testid="input-telegram-username"
-              />
-              <p className="text-xs text-gray-500">
-                Enter your Telegram username to receive instant load offers directly to your phone
-              </p>
-            </div>
+          {/* Register Button */}
+          <div className="pt-6">
+            <Button
+              onClick={handleSubmit}
+              disabled={!isFormValid() || registerDriverMutation.isPending}
+              className="w-full"
+              data-testid="button-register-driver"
+            >
+              {registerDriverMutation.isPending ? 'Registering...' : 'Complete Registration'}
+            </Button>
+            
+            <p className="text-xs text-gray-500 text-center mt-2">
+              By registering, you agree to receive load offers via SMS and Zello voice dispatch
+            </p>
           </div>
-
-          <Button
-            onClick={handleSubmit}
-            disabled={!isFormValid() || registerDriverMutation.isPending}
-            className="w-full"
-            data-testid="button-register-driver"
-          >
-            {registerDriverMutation.isPending ? 'Registering...' : 'Complete Registration'}
-          </Button>
-
-          <p className="text-xs text-gray-500 text-center">
-            By registering, you agree to receive load offers via Telegram and SMS
-          </p>
         </CardContent>
       </Card>
     </div>
