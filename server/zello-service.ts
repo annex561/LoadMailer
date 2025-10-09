@@ -149,11 +149,53 @@ export class ZelloDispatchService extends EventEmitter {
   }
 
   private async loadUsers(): Promise<void> {
-    // In production, this would fetch from Zello API
-    // For now, we'll prepare the structure for driver integration
     console.log('👥 Loading Zello users...');
     
-    // Load and update user locations
+    // First, load all drivers from database to ensure new registrations are included
+    try {
+      // Import storage dynamically to avoid circular dependencies
+      const { default: storage } = await import('./db-storage.js');
+      const drivers = await storage.getDrivers();
+      
+      console.log(`📋 Loading ${drivers.length} drivers from database into Zello service`);
+      
+      // Add each driver to Zello tracking
+      for (const driver of drivers) {
+        // Generate username same way as in createDriverAccount
+        const phoneDigits = driver.phone.replace(/\D/g, '').slice(-4);
+        const cleanName = driver.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const username = `${cleanName}_${phoneDigits}`;
+        
+        // Determine channels based on equipment type (same logic as createDriverAccount)
+        const channels = ['all-drivers'];
+        if (driver.equipmentType) {
+          const equipmentLower = driver.equipmentType.toLowerCase();
+          if (equipmentLower.includes('box') || equipmentLower.includes('straight')) {
+            channels.push('box-truck-ops');
+          } else if (equipmentLower.includes('van') || equipmentLower.includes('sprinter')) {
+            channels.push('hotshot-expedite');
+          } else if (equipmentLower.includes('flatbed')) {
+            channels.push('dispatch-priority');
+          }
+          channels.push('southeast-region');
+        }
+        
+        // Add to users map if not already present
+        if (!this.users.has(username)) {
+          this.users.set(username, {
+            username,
+            displayName: driver.name,
+            status: 'available' as const,
+            channels
+          });
+          console.log(`✅ Added driver ${driver.name} (${username}) to Zello tracking`);
+        }
+      }
+    } catch (error) {
+      console.error('⚠️ Could not load drivers from database:', error);
+    }
+    
+    // Then try to sync with Zello API (may fail due to auth issues)
     await this.updateUserLocations();
     
     // Add users to their assigned channels
@@ -684,8 +726,7 @@ export class ZelloDispatchService extends EventEmitter {
       channels.push('southeast-region');
     }
     
-    // Zello API integration (requires proper Zello Work admin credentials)
-    console.log(`📱 Preparing Zello account for driver: ${username}`);
+    console.log(`📱 Creating Zello account for driver: ${username}`);
     
     // NOTE: Real Zello Work API requires:
     // 1. Admin username/password for Basic auth or OAuth session
@@ -757,6 +798,46 @@ export class ZelloDispatchService extends EventEmitter {
     const noun = nouns[Math.floor(Math.random() * nouns.length)];
     
     return `${adj}${noun}${numbers}!`;
+  }
+
+  async syncDriverToZello(driver: {
+    name: string;
+    phone: string;
+    equipmentType?: string;
+  }): Promise<void> {
+    // Generate username same way as in createDriverAccount
+    const phoneDigits = driver.phone.replace(/\D/g, '').slice(-4);
+    const cleanName = driver.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const username = `${cleanName}_${phoneDigits}`;
+    
+    // Determine channels based on equipment type
+    const channels = ['all-drivers'];
+    if (driver.equipmentType) {
+      const equipmentLower = driver.equipmentType.toLowerCase();
+      if (equipmentLower.includes('box') || equipmentLower.includes('straight')) {
+        channels.push('box-truck-ops');
+      } else if (equipmentLower.includes('van') || equipmentLower.includes('sprinter')) {
+        channels.push('hotshot-expedite');
+      } else if (equipmentLower.includes('flatbed')) {
+        channels.push('dispatch-priority');
+      }
+      channels.push('southeast-region');
+    }
+    
+    // Add to users map
+    this.users.set(username, {
+      username,
+      displayName: driver.name,
+      status: 'available' as const,
+      channels
+    });
+    
+    // Add user to channels immediately
+    for (const channelName of channels) {
+      await this.addUserToChannel(username, channelName);
+    }
+    
+    console.log(`✅ Synced driver ${driver.name} (${username}) to Zello with channels: ${channels.join(', ')}`);
   }
 
   generateWelcomeMessage(credentials: {

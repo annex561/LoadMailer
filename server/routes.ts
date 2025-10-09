@@ -809,6 +809,13 @@ export async function registerRoutes(app: Express): Promise<void> {
           equipmentType: driver.equipmentType
         });
         
+        // Immediately sync the driver to Zello channels
+        await zelloService.syncDriverToZello({
+          name: driver.name,
+          phone: driver.phone,
+          equipmentType: driver.equipmentType
+        });
+        
         // Store Zello credentials with driver (in metadata or custom fields)
         // For now, we'll return them to the driver directly
         
