@@ -165,7 +165,7 @@ app.use((req, res, next) => {
       setTimeout(() => {
         (async () => {
           try {
-            const { zelloService } = await import('./zello-service.js');
+            const { zelloService } = await import('./zello-service');
             await zelloService.initialize();
             log('✅ Zello Service initialized automatically - bidirectional voice/text communication ready');
           } catch (error) {
@@ -178,7 +178,7 @@ app.use((req, res, next) => {
       setTimeout(() => {
         (async () => {
           try {
-            const { smsCommunicationService } = await import('./sms-communication-service.js');
+            const { smsCommunicationService } = await import('./sms-communication-service');
             await smsCommunicationService.initialize();
             log('✅ SMS Communication Service initialized - ready for bidirectional SMS communication');
           } catch (error) {
@@ -191,7 +191,7 @@ app.use((req, res, next) => {
       setTimeout(() => {
         (async () => {
           try {
-            const { googleSheetsSimple } = await import('./google-sheets-simple.js');
+            const { googleSheetsSimple } = await import('./google-sheets-simple');
             await googleSheetsSimple.start();
             log('✅ Google Sheets Simple integration started - pulling loads every 3 minutes');
           } catch (error) {
@@ -207,7 +207,7 @@ app.use((req, res, next) => {
             log('🔄 Starting session-based DAT scraper for manual authentication...');
             log('🚫 NO SAMPLE LOADS - Real DAT data only as requested');
             
-            const { sessionBasedDATScraper } = await import('./session-based-dat-scraper.js');
+            const { sessionBasedDATScraper } = await import('./session-based-dat-scraper');
             
             log('🔍 Checking for existing authenticated DAT session...');
             const isAuthenticated = await sessionBasedDATScraper.checkAuthenticatedSession();

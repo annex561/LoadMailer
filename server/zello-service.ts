@@ -154,7 +154,7 @@ export class ZelloDispatchService extends EventEmitter {
     // First, load all drivers from database to ensure new registrations are included
     try {
       // Import storage dynamically to avoid circular dependencies
-      const { default: storage } = await import('./db-storage.js');
+      const { storage } = await import('./storage');
       const drivers = await storage.getDrivers();
       
       console.log(`📋 Loading ${drivers.length} drivers from database into Zello service`);
