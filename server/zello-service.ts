@@ -328,13 +328,13 @@ export class ZelloDispatchService extends EventEmitter {
         
         try {
           // Create user in Zello Work
-          const createResponse = await this.makeZelloApiCall('/user/add', 'POST', {
+          const createResponse = await this.makeZelloApiCall('/user/save', 'POST', {
             name: username,
             password: 'Driver123!', // Default password for drivers
             email: user.email || `${username}@lampslogistics.com`,
             full_name: user.displayName || user.name || username,
             job: 'Driver',
-            admin: false
+            admin: 'false'  // Must be string 'false', not boolean
           });
           
           if (createResponse?.status === 'OK') {
