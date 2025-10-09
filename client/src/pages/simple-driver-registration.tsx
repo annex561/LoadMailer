@@ -171,21 +171,53 @@ export default function SimpleDriverRegistration() {
               <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
               <h3 className="text-2xl font-bold text-green-600">Registration Complete!</h3>
               <p className="text-muted-foreground">
-                Welcome to LoadMaster! Your driver profile has been created successfully. 
-                You can now receive load offers via SMS and voice dispatch.
+                Welcome to LAMP Logistics! Your driver profile has been created successfully. 
+                You can now receive load offers via SMS and Zello voice dispatch.
               </p>
               
+              {/* App Download Section - Always Show */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                <p className="text-sm font-medium text-blue-800 mb-3">
+                  📱 Download the Zello Work app to receive voice dispatch:
+                </p>
+                <div className="flex gap-3 justify-center">
+                  <a
+                    href="https://apps.apple.com/app/zello-work-push-to-talk-walkie/id1042031418"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+                    data-testid="link-ios-app"
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    iOS App Store
+                  </a>
+                  <a
+                    href="https://play.google.com/store/apps/details?id=com.loudtalks.work"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+                    data-testid="link-android-app"
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    Google Play
+                  </a>
+                </div>
+                <p className="text-xs text-gray-600 mt-3">
+                  Use Network: <span className="font-mono font-bold">lamp1</span>
+                </p>
+              </div>
+              
               {zelloInfo && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left space-y-3 mt-4">
-                  <h4 className="font-semibold text-blue-800 flex items-center">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left space-y-3 mt-4">
+                  <h4 className="font-semibold text-yellow-800 flex items-center">
                     <Radio className="h-5 w-5 mr-2" />
-                    Your Zello Voice Dispatch Account
+                    Your Zello Account Credentials
                   </h4>
                   
                   <div className="space-y-2 text-sm">
                     <div>
                       <span className="text-gray-600">Username:</span>
-                      <span className="ml-2 font-mono font-semibold text-blue-700">
+                      <span className="ml-2 font-mono font-semibold text-yellow-700">
                         {zelloInfo.username}
                       </span>
                     </div>
@@ -193,7 +225,7 @@ export default function SimpleDriverRegistration() {
                     {zelloInfo.password && (
                       <div>
                         <span className="text-gray-600">Password:</span>
-                        <span className="ml-2 font-mono font-semibold text-blue-700">
+                        <span className="ml-2 font-mono font-semibold text-yellow-700">
                           {zelloInfo.password}
                         </span>
                       </div>
@@ -203,7 +235,7 @@ export default function SimpleDriverRegistration() {
                       <span className="text-gray-600">Your Channels:</span>
                       <div className="ml-2 mt-1">
                         {zelloInfo.channels?.map((channel: string) => (
-                          <span key={channel} className="inline-block px-2 py-1 bg-white rounded-md text-xs font-medium text-blue-700 mr-2 mb-1">
+                          <span key={channel} className="inline-block px-2 py-1 bg-white rounded-md text-xs font-medium text-yellow-700 mr-2 mb-1">
                             #{channel}
                           </span>
                         ))}
@@ -211,40 +243,9 @@ export default function SimpleDriverRegistration() {
                     </div>
                   </div>
                   
-                  {zelloInfo.appLinks && (
-                    <div className="pt-3 border-t border-blue-200">
-                      <p className="text-sm font-medium text-blue-800 mb-2">
-                        📱 Download the Zello Work app:
-                      </p>
-                      <div className="flex gap-3 justify-center">
-                        <a
-                          href={zelloInfo.appLinks.ios}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center px-3 py-2 bg-black text-white rounded-lg text-xs font-medium hover:bg-gray-800"
-                        >
-                          <Phone className="h-4 w-4 mr-1" />
-                          iOS App Store
-                        </a>
-                        <a
-                          href={zelloInfo.appLinks.android}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"
-                        >
-                          <Phone className="h-4 w-4 mr-1" />
-                          Google Play
-                        </a>
-                      </div>
-                      <p className="text-xs text-gray-600 mt-2">
-                        Use Network: <span className="font-mono">lamp1</span>
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-2">
-                    <p className="text-xs text-yellow-800">
-                      ⚠️ Save these credentials! You'll need them to log into the Zello Work app.
+                  <div className="bg-red-50 border border-red-200 rounded-md p-2">
+                    <p className="text-xs text-red-800 font-medium">
+                      ⚠️ Important: Save these credentials! You'll need them to log into the Zello Work app.
                     </p>
                   </div>
                 </div>
