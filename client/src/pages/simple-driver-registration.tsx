@@ -47,8 +47,8 @@ export default function SimpleDriverRegistration() {
     phone: '',
     city: '',
     equipmentType: '',
-    maxWeight: 26000,
-    maxLength: 53,
+    maxWeight: 0,
+    maxLength: 0,
     loadType: 'full_partial',
     vehicleYear: '',
     vehicleMake: '',
@@ -448,7 +448,7 @@ export default function SimpleDriverRegistration() {
                 <Input
                   id="maxWeight"
                   type="number"
-                  value={formData.maxWeight}
+                  value={formData.maxWeight || ''}
                   onChange={(e) => updateFormData('maxWeight', parseInt(e.target.value) || 0)}
                   placeholder="26000"
                   className="bg-white border border-gray-300"
@@ -460,7 +460,7 @@ export default function SimpleDriverRegistration() {
                 <Input
                   id="maxLength"
                   type="number"
-                  value={formData.maxLength}
+                  value={formData.maxLength || ''}
                   onChange={(e) => updateFormData('maxLength', parseInt(e.target.value) || 0)}
                   placeholder="53"
                   className="bg-white border border-gray-300"
@@ -488,10 +488,21 @@ export default function SimpleDriverRegistration() {
             <Button
               onClick={handleSubmit}
               disabled={!isFormValid() || registerDriverMutation.isPending}
-              className="w-full"
+              className={`w-full transition-all duration-300 ${
+                isFormValid() 
+                  ? 'bg-green-600 hover:bg-green-700 text-white transform scale-105 shadow-lg font-semibold text-lg py-6' 
+                  : 'bg-gray-400 text-gray-200'
+              }`}
               data-testid="button-register-driver"
             >
-              {registerDriverMutation.isPending ? 'Registering...' : 'Complete Registration'}
+              {registerDriverMutation.isPending ? (
+                'Registering...'
+              ) : (
+                <>
+                  {isFormValid() ? '✓ ' : ''}
+                  Complete Registration
+                </>
+              )}
             </Button>
             
             <p className="text-xs text-gray-500 text-center mt-2">
