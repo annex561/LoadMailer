@@ -2246,6 +2246,101 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.status(500).json({ error: 'Failed to get Zello status' });
     }
   });
+
+  // Manual Zello authentication test endpoint
+  app.post('/api/zello/test-auth', async (req, res) => {
+    try {
+      const apiKey = process.env.ZELLO_API_KEY || '9TRA0D2GBV1OCOC657BFSPIH4QBDICH5';
+      const username = process.env.ZELLO_USERNAME || 'annexAPI';
+      const password = process.env.ZELLO_PASSWORD || 'Anonymous#561';
+      
+      console.log('🔐 Manual Zello authentication test starting...');
+      console.log(`📝 Using credentials: ${username} (API Key: ${apiKey.substring(0, 10)}...)`);
+      
+      // Step 1: Get token
+      const tokenUrl = `https://lamp1.zellowork.com/user/gettoken`;
+      const tokenResponse = await fetch(tokenUrl, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': apiKey
+        }
+      });
+      
+      const tokenData = await tokenResponse.json();
+      console.log('🔑 Token response:', tokenData);
+      
+      if (tokenData.status !== 'OK') {
+        return res.status(401).json({
+          success: false,
+          step: 'gettoken',
+          error: tokenData,
+          message: 'Failed to get token. Check API key.'
+        });
+      }
+      
+      // Step 2: Login
+      const loginUrl = `https://lamp1.zellowork.com/user/login?sid=${tokenData.sid}`;
+      const loginBody = new URLSearchParams({
+        username: username,
+        password: password
+      });
+      
+      const loginResponse = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: loginBody
+      });
+      
+      const loginData = await loginResponse.json();
+      console.log('🔐 Login response:', loginData);
+      
+      if (loginData.status === 'OK') {
+        console.log('✅ Authentication successful!');
+        return res.json({
+          success: true,
+          message: 'Authentication successful!',
+          sessionId: tokenData.sid,
+          loginData
+        });
+      } else {
+        console.error('❌ Login failed:', loginData);
+        
+        // Check if CAPTCHA is required
+        if (loginData.requireCaptchaOnFailedLoginAttempts) {
+          return res.status(401).json({
+            success: false,
+            step: 'login',
+            error: loginData,
+            message: `CAPTCHA REQUIRED: Too many failed attempts (${loginData.failedLoginAttemptsCount}). Please log into https://lamp1.zellowork.com with the API user credentials (${username}) to clear the CAPTCHA, then try again.`,
+            captchaRequired: true,
+            failedAttempts: loginData.failedLoginAttemptsCount,
+            instructions: [
+              '1. Go to https://lamp1.zellowork.com',
+              `2. Log in with username: ${username} and password: ${password.substring(0, 5)}...`,
+              '3. Complete the CAPTCHA challenge',
+              '4. Then return here and try the authentication test again'
+            ]
+          });
+        }
+        
+        return res.status(401).json({
+          success: false,
+          step: 'login',
+          error: loginData,
+          message: 'Authentication failed. Check username and password.'
+        });
+      }
+    } catch (error) {
+      console.error('❌ Test authentication error:', error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        message: 'Authentication test failed'
+      });
+    }
+  });
   
   // Create dynamic Zello channel for specific load
   app.post('/api/zello/channels', async (req, res) => {
