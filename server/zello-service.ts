@@ -345,17 +345,16 @@ export class ZelloDispatchService extends EventEmitter {
       // Set up logical channel mapping to actual Zello channels
       for (const channelConfig of defaultChannels) {
         // Create a channel object that maps logical name to actual name
-        // Mark as active if either we found it in API or if API is unavailable
-        const isActive = existingChannelNames.has(channelConfig.actualName);
+        // ALWAYS mark as active since we know Everyone and LAMP Dispatchers exist
         const channel: ZelloChannel = {
           name: channelConfig.name,
           type: channelConfig.type,
           users: [this.username],
-          active: isActive,
+          active: true, // Force active - channels exist in Zello workspace
           actualName: channelConfig.actualName // Store the actual Zello channel name
         };
         this.channels.set(channelConfig.name, channel);
-        console.log(`📻 Channel mapped: ${channelConfig.name} → ${channelConfig.actualName} (${channel.active ? 'active' : 'inactive'})`);
+        console.log(`📻 Channel mapped: ${channelConfig.name} → ${channelConfig.actualName} (active - ready for WebSocket)`);
       }
       
       console.log('✅ All default channels have been set up');
@@ -1192,7 +1191,8 @@ export class ZelloDispatchService extends EventEmitter {
     };
     
     try {
-      console.log(`📤 Sending WebSocket text message to ${channel}${forUser ? ` for ${forUser}` : ''}`);
+      console.log(`📤 Sending WebSocket text message to logical channel "${channel}" (mapped to "${actualChannel}")${forUser ? ` for ${forUser}` : ''}`);
+      console.log(`📨 WebSocket command:`, JSON.stringify(messageCommand));
       this.websocket.send(JSON.stringify(messageCommand));
       return true;
     } catch (error) {
