@@ -50,7 +50,7 @@ export class ZelloDispatchService extends EventEmitter {
   private username: string;
   private password: string;
   private sessionId: string | null = null;
-  private baseUrl: string = 'https://api.zello.com';
+  private baseUrl: string = 'https://lamp1.zellowork.com/web/api';
   private workspaceUrl: string = 'lamp1.zellowork.com';
   private channels: Map<string, ZelloChannel> = new Map();
   private users: Map<string, ZelloUser> = new Map();
