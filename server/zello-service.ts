@@ -571,6 +571,86 @@ export class ZelloDispatchService extends EventEmitter {
     return user?.location || null;
   }
 
+  // Message history polling - alternative to webhooks
+  async getMessageHistory(channelName?: string, maxMessages: number = 100): Promise<any> {
+    if (!this.isInitialized || !this.sessionId) {
+      console.warn('⚠️ Zello service not initialized, cannot fetch message history');
+      return { messages: [] };
+    }
+
+    try {
+      console.log(`📜 Fetching message history${channelName ? ` for channel: ${channelName}` : ' for all channels'}`);
+      
+      // Build query parameters
+      const params: any = {
+        sid: this.sessionId,
+        max: maxMessages
+      };
+      
+      if (channelName) {
+        params.channel = channelName;
+      }
+      
+      // Calculate timestamp for last 5 minutes (to avoid fetching old messages)
+      const fiveMinutesAgo = Math.floor((Date.now() - 5 * 60 * 1000) / 1000);
+      params.start = fiveMinutesAgo;
+      
+      const response = await axios.get(`${this.baseUrl}/history/get`, {
+        params,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+
+      if (response.data && response.data.status === 'OK') {
+        console.log(`✅ Retrieved ${response.data.returned || 0} messages from Zello history`);
+        return response.data;
+      } else {
+        console.error('❌ Failed to fetch message history:', response.data);
+        return { messages: [] };
+      }
+    } catch (error) {
+      console.error('❌ Error fetching Zello message history:', error);
+      return { messages: [] };
+    }
+  }
+
+  // Process messages from history API (similar to webhook processing)
+  async processHistoryMessages(messages: any[]): Promise<any[]> {
+    const processedMessages = [];
+    
+    for (const msg of messages) {
+      try {
+        // Convert Zello history format to our webhook format
+        const processedMsg = {
+          type: msg.type === 'text' ? 'text_message' : msg.type,
+          channel: msg.recipient_type === 'channel' ? msg.recipient : null,
+          sender: msg.sender,
+          from: msg.sender,
+          message: msg.text || '',
+          timestamp: new Date(msg.ts * 1000).toISOString(), // Convert Unix timestamp
+          messageId: msg.id,
+          processed: false
+        };
+        
+        // Handle attachments if present
+        if (msg.type === 'image' && msg.media_key) {
+          processedMsg.attachment = {
+            type: 'image',
+            mediaKey: msg.media_key,
+            timestamp: msg.image_ts ? new Date(msg.image_ts * 1000).toISOString() : processedMsg.timestamp
+          };
+        }
+        
+        processedMessages.push(processedMsg);
+      } catch (error) {
+        console.error(`❌ Error processing history message ${msg.id}:`, error);
+      }
+    }
+    
+    return processedMessages;
+  }
+
   async sendLoadNotification(
     loadData: {
       loadNumber: string;

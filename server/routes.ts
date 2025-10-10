@@ -1779,6 +1779,82 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Fetch Zello message history (alternative to webhooks)
+  app.get('/api/zello/history', async (req: Request, res: Response) => {
+    try {
+      console.log('📜 Fetching Zello message history...');
+      const { channel } = req.query;
+      
+      // Fetch history from Zello
+      const historyData = await zelloService.getMessageHistory(channel as string);
+      
+      if (!historyData || !historyData.messages || historyData.messages.length === 0) {
+        return res.json({ 
+          message: 'No new messages found',
+          count: 0,
+          messages: []
+        });
+      }
+      
+      // Process messages
+      const processedMessages = await zelloService.processHistoryMessages(historyData.messages);
+      
+      // Store messages in Communication Dashboard
+      let storedCount = 0;
+      for (const msg of processedMessages) {
+        try {
+          // Find driver by name
+          const driver = await storage.getDriverByNameOrPhone(msg.sender);
+          if (!driver) {
+            console.log(`⚠️ Unknown driver in message: ${msg.sender}`);
+            continue;
+          }
+          
+          // Find or create communication thread
+          let thread = await storage.getGeneralCommunicationThreadByDriver(driver.id);
+          if (!thread) {
+            // Create new general thread for this driver
+            thread = await storage.createLoadCommunicationThread({
+              loadId: null,
+              driverId: driver.id,
+              status: 'active'
+            });
+          }
+          
+          // Store the message
+          await storage.createLoadMessage({
+            threadId: thread.id,
+            senderId: driver.id,
+            senderType: 'driver',
+            message: msg.message || `[${msg.type}]`,
+            isRead: false,
+            metadata: {
+              zelloMessageId: msg.messageId,
+              channel: msg.channel,
+              messageType: msg.type,
+              attachment: msg.attachment
+            }
+          });
+          
+          storedCount++;
+          console.log(`✅ Stored message from ${driver.name}: ${msg.message?.substring(0, 50)}...`);
+        } catch (error) {
+          console.error(`❌ Error storing message ${msg.messageId}:`, error);
+        }
+      }
+      
+      res.json({ 
+        message: `Processed ${storedCount} new messages from Zello history`,
+        count: storedCount,
+        total: processedMessages.length,
+        messages: processedMessages
+      });
+    } catch (error) {
+      console.error('❌ Error fetching Zello history:', error);
+      res.status(500).json({ error: 'Failed to fetch Zello message history' });
+    }
+  });
+
   // Zello webhook endpoint for receiving messages from drivers
   app.post('/api/zello/webhook', async (req, res) => {
     try {
