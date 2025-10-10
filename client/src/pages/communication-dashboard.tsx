@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { 
   MessageSquare, 
+  MessageCircle,
   Send, 
   Phone, 
   Mail, 
@@ -1329,7 +1330,9 @@ export default function CommunicationDashboard() {
                   </Avatar>
                   <div>
                     <h3 className="font-medium text-gray-900">{selectedThread.driverName}</h3>
-                    <p className="text-sm text-gray-600">Load {selectedThread.loadNumber}</p>
+                    <p className="text-sm text-gray-600">
+                      {selectedThread.loadNumber ? `Load ${selectedThread.loadNumber}` : 'General Conversation'}
+                    </p>
                   </div>
                 </div>
                 
@@ -1358,12 +1361,19 @@ export default function CommunicationDashboard() {
               <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-4 text-sm text-gray-600">
+                    {selectedThread.loadOrigin && selectedThread.loadDestination ? (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        <span>{selectedThread.loadOrigin} → {selectedThread.loadDestination}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <MessageSquare className="w-4 h-4" />
+                        <span>General Discussion</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      <span>{selectedThread.loadOrigin} → {selectedThread.loadDestination}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Truck className="w-4 h-4" />
+                      <MessageCircle className="w-4 h-4" />
                       <span>{selectedThread.messageCount} messages</span>
                     </div>
                   </div>
