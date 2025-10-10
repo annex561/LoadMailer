@@ -32,7 +32,8 @@ import {
   Mail,
   Webhook,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Radio
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -66,6 +67,7 @@ import DatLogin from './dat-login';
 import AdminOverview from './admin-overview';
 import ManualDispatch from './manual-dispatch';
 import CommunicationDashboard from './communication-dashboard';
+import ZelloChannelsDashboard from './zello-channels-dashboard';
 import AICommunicationInsights from './ai-communication-insights';
 import NotFound from './not-found';
 import DriverLocationMap from '@/components/driver-location-map';
@@ -574,6 +576,8 @@ export default function LoadOpsDashboard() {
         return <ManualDispatch />;
       case '/communication-dashboard':
         return <CommunicationDashboard />;
+      case '/zello-channels':
+        return <ZelloChannelsDashboard />;
       case '/ai-communication-insights':
         return <AICommunicationInsights />;
       default:
@@ -964,6 +968,7 @@ export default function LoadOpsDashboard() {
     // Customer & Communication
     { name: 'Customers', href: '/customers', icon: Users, section: 'comm' },
     { name: 'Communication Dashboard', href: '/communication-dashboard', icon: MessageSquare, section: 'comm' },
+    { name: 'Zello Channels', href: '/zello-channels', icon: Radio, section: 'comm' },
     { name: 'AI Communication Insights', href: '/ai-communication-insights', icon: Brain, section: 'comm' },
     { name: 'LoadMailer Control', href: '/loadmailer-control', icon: Mail, section: 'comm' },
     { name: 'Telegram Dispatching', href: '/telegram-dispatching', icon: MessageSquare, section: 'comm' },

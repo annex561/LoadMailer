@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type LoadDocument, type InsertLoadDocument, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration, type LoadBid, type InsertLoadBid, type BidResponse, type InsertBidResponse, type EmailCampaign, type InsertEmailCampaign, type EmailFollowUp, type InsertEmailFollowUp, type DispatcherNotification, type InsertDispatcherNotification, type LoadBidWithRelations, type EmailCampaignWithFollowUps, type LoadCommunicationThread, type InsertLoadCommunicationThread, type LoadMessage, type InsertLoadMessage, type MessageAttachment, type InsertMessageAttachment, type QuickReplyTemplate, type InsertQuickReplyTemplate, type CommunicationLog, type InsertCommunicationLog, type User, type UpsertUser } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type LoadDocument, type InsertLoadDocument, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration, type LoadBid, type InsertLoadBid, type BidResponse, type InsertBidResponse, type EmailCampaign, type InsertEmailCampaign, type EmailFollowUp, type InsertEmailFollowUp, type DispatcherNotification, type InsertDispatcherNotification, type LoadBidWithRelations, type EmailCampaignWithFollowUps, type LoadCommunicationThread, type InsertLoadCommunicationThread, type LoadMessage, type InsertLoadMessage, type MessageAttachment, type InsertMessageAttachment, type QuickReplyTemplate, type InsertQuickReplyTemplate, type CommunicationLog, type InsertCommunicationLog, type User, type UpsertUser, type ZelloChannelMessage, type InsertZelloChannelMessage, type ZelloChannelStatus, type InsertZelloChannelStatus, type CommunicationInsights, type AiPerformanceMetrics, type DriverEngagementMetrics } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -323,6 +323,17 @@ export interface IStorage {
   // User operations - REQUIRED for Replit Auth
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+
+  // Zello Channel Operations
+  createZelloChannelMessage(message: InsertZelloChannelMessage): Promise<ZelloChannelMessage>;
+  getZelloChannelMessages(channel: string, limit?: number): Promise<ZelloChannelMessage[]>;
+  getUnreadZelloMessages(channel: string): Promise<ZelloChannelMessage[]>;
+  markZelloMessagesAsRead(channel: string, messageIds: string[]): Promise<number>;
+  getZelloChannelStatus(channel: string): Promise<ZelloChannelStatus | null>;
+  createOrUpdateZelloChannelStatus(status: InsertZelloChannelStatus): Promise<ZelloChannelStatus>;
+  updateZelloChannelUnreadCount(channel: string, delta: number): Promise<ZelloChannelStatus | null>;
+  getAllZelloChannelStatuses(): Promise<ZelloChannelStatus[]>;
+  getZelloMessageById(id: string): Promise<ZelloChannelMessage | null>;
 }
 
 export class MemStorage implements IStorage {

@@ -866,17 +866,21 @@ export class ZelloDispatchService extends EventEmitter {
     }
   }
   
-  private handleIncomingWebSocketEvent(event: any): void {
+  private async handleIncomingWebSocketEvent(event: any): Promise<void> {
     console.log('📨 Incoming WebSocket event:', event.command);
     
     switch (event.command) {
       case 'on_channel_status':
         console.log(`📻 Channel ${event.channel} status:`, event.status, 
                    `(${event.users_online} users online)`);
+        // Update channel status in database
+        await this.updateChannelStatus(event.channel, event.users_online);
         break;
         
       case 'on_text_message':
         console.log(`💬 Text message in ${event.channel} from ${event.from}: ${event.text}`);
+        // Store message in database
+        await this.storeChannelMessage(event.channel, event.from, event.text, 'text');
         // Emit event for processing
         this.emit('text_message', {
           channel: event.channel,
@@ -887,9 +891,102 @@ export class ZelloDispatchService extends EventEmitter {
         });
         break;
         
+      case 'on_voice_message':
+        console.log(`🎤 Voice message in ${event.channel} from ${event.from}`);
+        // Store voice message in database
+        await this.storeChannelMessage(event.channel, event.from, '', 'voice', {
+          duration: event.duration,
+          codecInfo: event.codecInfo
+        });
+        // Emit event for real-time updates
+        this.emit('voice_message', {
+          channel: event.channel,
+          from: event.from,
+          duration: event.duration,
+          timestamp: new Date()
+        });
+        break;
+        
       case 'on_error':
         console.error('❌ WebSocket error event:', event.error);
         break;
+    }
+  }
+
+  // Store channel messages in database
+  private async storeChannelMessage(
+    channel: string, 
+    sender: string, 
+    text: string, 
+    messageType: 'text' | 'voice' = 'text',
+    metadata?: any
+  ): Promise<void> {
+    try {
+      // Import storage here to avoid circular dependency
+      const { storage } = await import('./storage');
+      
+      // Find driver by Zello username if exists
+      const driver = await this.findDriverByZelloUsername(sender);
+      
+      // Create channel message
+      await storage.createZelloChannelMessage({
+        channel,
+        sender,
+        senderType: driver ? 'driver' : 'dispatch',
+        messageType,
+        textContent: text || null,
+        driverId: driver?.id || null,
+        driverName: driver?.name || null,
+        driverPhone: driver?.phone || null,
+        zelloTimestamp: new Date(),
+        zelloMetadata: metadata || {}
+      });
+
+      // Update channel unread count
+      await storage.updateZelloChannelUnreadCount(channel, 1);
+      
+      console.log(`✅ Stored ${messageType} message from ${sender} in channel ${channel}`);
+    } catch (error) {
+      console.error('❌ Failed to store channel message:', error);
+    }
+  }
+
+  // Update channel status in database
+  private async updateChannelStatus(channel: string, onlineUsers: number): Promise<void> {
+    try {
+      const { storage } = await import('./storage');
+      
+      await storage.createOrUpdateZelloChannelStatus({
+        channelName: channel,
+        onlineUsers,
+        totalUsers: this.channels.get(channel)?.users.length || 0,
+        userList: this.channels.get(channel)?.users || [],
+        isActive: true,
+        channelType: 'group'
+      });
+      
+      console.log(`✅ Updated status for channel ${channel}: ${onlineUsers} users online`);
+    } catch (error) {
+      console.error('❌ Failed to update channel status:', error);
+    }
+  }
+
+  // Find driver by Zello username
+  private async findDriverByZelloUsername(username: string): Promise<any> {
+    try {
+      const { storage } = await import('./storage');
+      
+      // Try to find driver by Zello username format (e.g., "john_smith_1234")
+      const drivers = await storage.getAllDrivers();
+      const driver = drivers.find(d => {
+        const expectedUsername = this.generateZelloUsername(d.name, d.phone);
+        return expectedUsername.toLowerCase() === username.toLowerCase();
+      });
+      
+      return driver;
+    } catch (error) {
+      console.error('❌ Failed to find driver by Zello username:', error);
+      return null;
     }
   }
   
@@ -933,7 +1030,12 @@ export class ZelloDispatchService extends EventEmitter {
       if (isChannel) {
         // Send to channel using WebSocket
         if (this.wsConnected) {
-          return await this.sendWebSocketTextMessage(recipient, message);
+          const success = await this.sendWebSocketTextMessage(recipient, message);
+          if (success) {
+            // Store outgoing message in database
+            await this.storeChannelMessage(recipient, this.username, message, 'text');
+          }
+          return success;
         } else {
           console.warn('⚠️ WebSocket not connected, message not sent');
           return false;
@@ -948,7 +1050,11 @@ export class ZelloDispatchService extends EventEmitter {
           // Send direct message via all-drivers channel with @mention
           // (Zello Work doesn't support direct messages via WebSocket to users not in channel)
           if (this.wsConnected) {
-            return await this.sendWebSocketTextMessage('all-drivers', message, recipient);
+            const success = await this.sendWebSocketTextMessage('all-drivers', message, recipient);
+            if (success) {
+              await this.storeChannelMessage('all-drivers', this.username, message, 'text');
+            }
+            return success;
           } else {
             console.warn('⚠️ WebSocket not connected, message not sent');
             return false;
@@ -957,7 +1063,11 @@ export class ZelloDispatchService extends EventEmitter {
           // If not a known user, try sending to all-drivers channel as fallback
           console.log(`⚠️ User ${recipient} not found, sending to all-drivers channel`);
           if (this.wsConnected) {
-            return await this.sendWebSocketTextMessage('all-drivers', `@${recipient}: ${message}`);
+            const success = await this.sendWebSocketTextMessage('all-drivers', `@${recipient}: ${message}`);
+            if (success) {
+              await this.storeChannelMessage('all-drivers', this.username, `@${recipient}: ${message}`, 'text');
+            }
+            return success;
           } else {
             console.warn('⚠️ WebSocket not connected, message not sent');
             return false;
@@ -967,6 +1077,73 @@ export class ZelloDispatchService extends EventEmitter {
     } catch (error) {
       console.error(`❌ Error sending message to ${recipient}:`, error);
       return false;
+    }
+  }
+
+  // Send message to multiple channels and/or users
+  async sendMessageToMultiple(channels: string[], users: string[], message: string): Promise<{success: string[], failed: string[]}> {
+    const results = {success: [], failed: []};
+    
+    // Send to channels
+    for (const channel of channels) {
+      const success = await this.sendMessage(channel, message);
+      if (success) {
+        results.success.push(channel);
+      } else {
+        results.failed.push(channel);
+      }
+    }
+    
+    // Send to individual users
+    for (const user of users) {
+      const success = await this.sendMessage(user, message);
+      if (success) {
+        results.success.push(user);
+      } else {
+        results.failed.push(user);
+      }
+    }
+    
+    return results;
+  }
+
+  // Get channel messages from database
+  async getChannelMessages(channel: string, limit: number = 100): Promise<any[]> {
+    try {
+      const { storage } = await import('./storage');
+      return await storage.getZelloChannelMessages(channel, limit);
+    } catch (error) {
+      console.error('❌ Failed to get channel messages:', error);
+      return [];
+    }
+  }
+
+  // Mark channel messages as read
+  async markChannelMessagesAsRead(channel: string, messageIds: string[]): Promise<number> {
+    try {
+      const { storage } = await import('./storage');
+      const updated = await storage.markZelloMessagesAsRead(channel, messageIds);
+      
+      // Update unread count
+      if (updated > 0) {
+        await storage.updateZelloChannelUnreadCount(channel, -updated);
+      }
+      
+      return updated;
+    } catch (error) {
+      console.error('❌ Failed to mark messages as read:', error);
+      return 0;
+    }
+  }
+
+  // Get all channel statuses with unread counts
+  async getAllChannelStatuses(): Promise<any[]> {
+    try {
+      const { storage } = await import('./storage');
+      return await storage.getAllZelloChannelStatuses();
+    } catch (error) {
+      console.error('❌ Failed to get channel statuses:', error);
+      return [];
     }
   }
 

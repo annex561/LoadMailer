@@ -1794,6 +1794,70 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Get Zello channel messages
+  app.get('/api/zello/channels/:channel/messages', async (req, res) => {
+    try {
+      const { channel } = req.params;
+      const { limit = 100 } = req.query;
+      
+      const messages = await zelloService.getChannelMessages(channel, Number(limit));
+      res.json(messages);
+    } catch (error) {
+      console.error('❌ Failed to fetch channel messages:', error);
+      res.status(500).json({ error: 'Failed to fetch channel messages' });
+    }
+  });
+
+  // Get all Zello channel statuses with unread counts
+  app.get('/api/zello/channels/status', async (req, res) => {
+    try {
+      const statuses = await zelloService.getAllChannelStatuses();
+      res.json(statuses);
+    } catch (error) {
+      console.error('❌ Failed to fetch channel statuses:', error);
+      res.status(500).json({ error: 'Failed to fetch channel statuses' });
+    }
+  });
+
+  // Mark Zello messages as read
+  app.post('/api/zello/channels/:channel/mark-read', async (req, res) => {
+    try {
+      const { channel } = req.params;
+      const { messageIds } = req.body;
+      
+      if (!Array.isArray(messageIds)) {
+        return res.status(400).json({ error: 'messageIds must be an array' });
+      }
+      
+      const updated = await zelloService.markChannelMessagesAsRead(channel, messageIds);
+      res.json({ success: true, updated });
+    } catch (error) {
+      console.error('❌ Failed to mark messages as read:', error);
+      res.status(500).json({ error: 'Failed to mark messages as read' });
+    }
+  });
+
+  // Send message to multiple Zello channels and/or users
+  app.post('/api/zello/broadcast', async (req, res) => {
+    try {
+      const { channels = [], users = [], message } = req.body;
+      
+      if (!message) {
+        return res.status(400).json({ error: 'Message is required' });
+      }
+      
+      if (channels.length === 0 && users.length === 0) {
+        return res.status(400).json({ error: 'At least one channel or user must be specified' });
+      }
+      
+      const results = await zelloService.sendMessageToMultiple(channels, users, message);
+      res.json(results);
+    } catch (error) {
+      console.error('❌ Failed to broadcast message:', error);
+      res.status(500).json({ error: 'Failed to broadcast message' });
+    }
+  });
+
   // Fetch Zello message history (alternative to webhooks)
   app.get('/api/zello/history', async (req: Request, res: Response) => {
     try {
