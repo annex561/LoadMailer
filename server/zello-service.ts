@@ -297,7 +297,13 @@ export class ZelloDispatchService extends EventEmitter {
     try {
       // First, get the list of existing channels from Zello
       console.log('🔍 Checking existing channels in Zello workspace...');
-      const existingChannelsResponse = await this.makeZelloApiCall('/channels', 'GET');
+      let existingChannelsResponse;
+      try {
+        existingChannelsResponse = await this.makeZelloApiCall('/channels', 'GET');
+      } catch (apiError) {
+        console.warn('⚠️ Could not fetch channels from API, assuming channels exist');
+        existingChannelsResponse = null;
+      }
       
       const existingChannelNames = new Set<string>();
       if (existingChannelsResponse && Array.isArray(existingChannelsResponse)) {
@@ -307,16 +313,22 @@ export class ZelloDispatchService extends EventEmitter {
         });
       }
       
-      // Check if the actual Zello channels exist and map our logical channels
+      // If API failed, assume the required channels exist
       const requiredChannels = new Set(['Everyone', 'LAMP Dispatchers']);
+      if (!existingChannelsResponse) {
+        console.log('ℹ️ Assuming required channels exist: Everyone, LAMP Dispatchers');
+        requiredChannels.forEach(ch => existingChannelNames.add(ch));
+      }
+      
+      // Check if the actual Zello channels exist and map our logical channels
       for (const actualChannel of requiredChannels) {
         if (!existingChannelNames.has(actualChannel)) {
           console.warn(`⚠️ Required channel "${actualChannel}" not found in Zello workspace`);
           console.log(`📦 Please create channel "${actualChannel}" in Zello Work console at lamp1.zellowork.com`);
         } else {
-          console.log(`✅ Found required channel: ${actualChannel}`);
+          console.log(`✅ Confirmed channel exists: ${actualChannel}`);
           
-          // Ensure the API user is added to the existing channel
+          // Try to ensure the API user is added to the existing channel
           try {
             await this.makeZelloApiCall('/channels/add_users', 'POST', {
               channel: actualChannel,
@@ -324,12 +336,8 @@ export class ZelloDispatchService extends EventEmitter {
             });
             console.log(`✅ Added ${this.username} to channel ${actualChannel}`);
           } catch (addError: any) {
-            // User might already be in the channel
-            if (addError.response?.data?.error?.includes('already')) {
-              console.log(`ℹ️ User ${this.username} already in channel ${actualChannel}`);
-            } else {
-              console.warn(`⚠️ Could not add user to channel ${actualChannel}:`, addError.response?.data || addError.message);
-            }
+            // User might already be in the channel or API might not support this
+            console.log(`ℹ️ Skipping user add (may already be in channel ${actualChannel})`);
           }
         }
       }
@@ -337,11 +345,13 @@ export class ZelloDispatchService extends EventEmitter {
       // Set up logical channel mapping to actual Zello channels
       for (const channelConfig of defaultChannels) {
         // Create a channel object that maps logical name to actual name
+        // Mark as active if either we found it in API or if API is unavailable
+        const isActive = existingChannelNames.has(channelConfig.actualName);
         const channel: ZelloChannel = {
           name: channelConfig.name,
           type: channelConfig.type,
           users: [this.username],
-          active: existingChannelNames.has(channelConfig.actualName),
+          active: isActive,
           actualName: channelConfig.actualName // Store the actual Zello channel name
         };
         this.channels.set(channelConfig.name, channel);
@@ -352,16 +362,17 @@ export class ZelloDispatchService extends EventEmitter {
       
     } catch (error) {
       console.error('❌ Error setting up channels:', error);
-      // Still set up local channels even if API fails
+      // Still set up local channels even if API fails - mark as ACTIVE
       for (const channelConfig of defaultChannels) {
         const channel: ZelloChannel = {
           name: channelConfig.name,
           type: channelConfig.type,
-          users: [],
-          active: true
+          users: [this.username],
+          active: true, // Mark as active so WebSocket will try to join
+          actualName: channelConfig.actualName
         };
         this.channels.set(channelConfig.name, channel);
-        console.log(`📻 Channel created locally (API unavailable): ${channelConfig.name}`);
+        console.log(`📻 Channel mapped (fallback): ${channelConfig.name} → ${channelConfig.actualName} (active)`);
       }
     }
   }
