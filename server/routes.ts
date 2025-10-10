@@ -1794,6 +1794,20 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Create bot user for WebSocket connections
+  app.post('/api/zello/create-bot-user', async (req, res) => {
+    try {
+      console.log('🤖 Creating lampDispatchBot user...');
+      const result = await zelloService.createBotUser('lampDispatchBot', 'LAMP Dispatch Bot', 'BotSecure2025!');
+      res.json(result);
+    } catch (error) {
+      console.error('❌ Failed to create bot user:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to create bot user' 
+      });
+    }
+  });
+
   // Get Zello channel messages
   app.get('/api/zello/channels/:channel/messages', async (req, res) => {
     try {

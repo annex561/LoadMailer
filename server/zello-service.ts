@@ -70,9 +70,9 @@ export class ZelloDispatchService extends EventEmitter {
     super();
     // Use the correct API key from the Zello dashboard
     this.apiKey = (process.env.ZELLO_API_KEY || '9TRA0D2GBV1OCOC657BFSPIH4QBDICH5').trim();
-    // Use dedicated bot account for WebSocket connections to avoid session conflicts
-    this.username = (process.env.ZELLO_BOT_USERNAME || 'lampDispatchBot').trim();
-    this.password = (process.env.ZELLO_BOT_PASSWORD || 'BotSecure2025!').trim();
+    // Use annexAPI credentials for REST API authentication (WebSocket disabled due to session conflicts)
+    this.username = (process.env.ZELLO_USERNAME || 'annexAPI').trim();
+    this.password = (process.env.ZELLO_PASSWORD || 'Anonymous#561').trim();
     console.log('🎙️ Zello Dispatch Service initializing...');
     
     if (!this.apiKey || !this.username || !this.password) {
@@ -231,6 +231,108 @@ export class ZelloDispatchService extends EventEmitter {
       
     } catch (error) {
       console.error(`❌ Zello API call failed for ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
+  async createBotUser(username: string, fullName: string, password: string): Promise<any> {
+    try {
+      // Authenticate first as admin (using annexAPI credentials)
+      const adminUsername = process.env.ZELLO_USERNAME || 'annexAPI';
+      const adminPassword = process.env.ZELLO_PASSWORD || 'Anonymous#561';
+      
+      console.log(`🤖 Creating bot user: ${username}`);
+      console.log(`🔐 Authenticating as admin: ${adminUsername}`);
+      
+      // Get token
+      const tokenResponse = await fetch(`${this.baseUrl}/auth/gettoken`, {
+        method: 'POST',
+        headers: { 'X-API-Key': this.apiKey }
+      });
+      
+      if (!tokenResponse.ok) {
+        throw new Error(`Failed to get token: ${tokenResponse.status}`);
+      }
+      
+      const tokenData = await tokenResponse.json();
+      const token = tokenData.token;
+      const sessionId = tokenData.sid;
+      
+      // Login as admin
+      const passwordMD5 = crypto.createHash('md5').update(adminPassword).digest('hex');
+      const loginHash = crypto.createHash('md5').update(passwordMD5 + token).digest('hex');
+      
+      const loginResponse = await fetch(`${this.baseUrl}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Cookie': `JSESSIONID=${sessionId}`
+        },
+        body: new URLSearchParams({
+          username: adminUsername,
+          password: loginHash
+        })
+      });
+      
+      if (!loginResponse.ok) {
+        throw new Error(`Admin login failed: ${loginResponse.status}`);
+      }
+      
+      console.log('✅ Logged in as admin, creating bot user...');
+      
+      // Create bot user
+      const createResponse = await fetch(`${this.baseUrl}/user/add?sid=${sessionId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          name: username,
+          full_name: fullName,
+          password: password,
+          email: `${username}@lampslogistics.com`
+        })
+      });
+      
+      const result = await createResponse.json();
+      
+      if (!createResponse.ok || result.code) {
+        console.log('⚠️ Bot user might already exist or creation returned:', result);
+        return { success: false, message: 'Bot user may already exist', details: result };
+      }
+      
+      console.log('✅ Bot user created successfully:', username);
+      
+      // Add bot to Everyone channel
+      await fetch(`${this.baseUrl}/channel/addusers?sid=${sessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          channel: 'Everyone',
+          users: username
+        })
+      });
+      
+      // Add bot to LAMP Dispatchers channel
+      await fetch(`${this.baseUrl}/channel/addusers?sid=${sessionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          channel: 'LAMP Dispatchers',
+          users: username
+        })
+      });
+      
+      console.log('✅ Bot user added to channels');
+      
+      return { 
+        success: true, 
+        username, 
+        message: 'Bot user created and added to channels successfully' 
+      };
+      
+    } catch (error) {
+      console.error('❌ Error creating bot user:', error);
       throw error;
     }
   }
@@ -1215,16 +1317,27 @@ export class ZelloDispatchService extends EventEmitter {
       const isChannel = this.channels.has(recipient);
       
       if (isChannel) {
-        // Send to channel using WebSocket
-        if (this.wsConnected) {
-          const success = await this.sendWebSocketTextMessage(recipient, message);
-          if (success) {
-            // Store outgoing message in database
+        // Use REST API for channel messages (WebSocket has session conflicts)
+        try {
+          const channelInfo = this.channels.get(recipient);
+          const actualChannel = channelInfo?.actualName || recipient;
+          
+          console.log(`📤 Sending via REST API to channel: ${actualChannel}`);
+          const response = await this.makeZelloApiCall('/text-messages/channels', 'POST', {
+            channel: actualChannel,
+            text: message
+          });
+          
+          if (response && (response.status === 'OK' || response.success)) {
+            console.log(`✅ Message sent via REST API to channel ${actualChannel}`);
             await this.storeChannelMessage(recipient, this.username, message, 'text');
+            return true;
+          } else {
+            console.error('❌ REST API channel send failed:', response);
+            return false;
           }
-          return success;
-        } else {
-          console.warn('⚠️ WebSocket not connected, message not sent');
+        } catch (restError) {
+          console.error('❌ REST API channel send error:', restError);
           return false;
         }
       } else {
@@ -1250,45 +1363,44 @@ export class ZelloDispatchService extends EventEmitter {
         }
         
         if (targetUsername) {
-          // Send direct message via all-drivers channel with @mention
-          // (Zello Work doesn't support direct messages via WebSocket to users not in channel)
-          if (this.wsConnected) {
-            const success = await this.sendWebSocketTextMessage('all-drivers', message, targetUsername);
-            if (success) {
+          // Use REST API for direct messages (avoid WebSocket session conflicts)
+          try {
+            console.log(`📤 Sending via REST API to user: ${targetUsername}`);
+            const response = await this.makeZelloApiCall('/text-messages/users', 'POST', {
+              to: targetUsername,
+              text: message
+            });
+            
+            if (response && (response.status === 'OK' || response.success)) {
+              console.log(`✅ Message sent via REST API to ${targetUsername}`);
               await this.storeChannelMessage('all-drivers', this.username, message, 'text');
+              return true;
+            } else {
+              console.error('❌ REST API user send failed:', response);
+              return false;
             }
-            return success;
-          } else {
-            console.warn('⚠️ WebSocket not connected, attempting fallback send via REST API');
-            // Try REST API as fallback
-            try {
-              const response = await this.makeZelloApiCall('/text-messages/users', 'POST', {
-                to: targetUsername,
-                text: message
-              });
-              if (response && response.status === 'OK') {
-                console.log(`✅ Message sent via REST API to ${targetUsername}`);
-                await this.storeChannelMessage('all-drivers', this.username, message, 'text');
-                return true;
-              }
-            } catch (restError) {
-              console.error('❌ REST API send failed:', restError);
-            }
+          } catch (restError) {
+            console.error('❌ REST API user send error:', restError);
             return false;
           }
         } else {
-          // If not a known user, try sending to all-drivers channel as fallback
-          console.log(`⚠️ User ${recipient} not found in users map, sending to all-drivers channel`);
-          if (this.wsConnected) {
-            const success = await this.sendWebSocketTextMessage('all-drivers', `@${recipient}: ${message}`);
-            if (success) {
+          // If not a known user, try sending to all-drivers channel with @mention
+          console.log(`⚠️ User ${recipient} not found, sending to all-drivers with mention`);
+          try {
+            const response = await this.makeZelloApiCall('/text-messages/channels', 'POST', {
+              channel: 'Everyone',
+              text: `@${recipient}: ${message}`
+            });
+            
+            if (response && (response.status === 'OK' || response.success)) {
+              console.log(`✅ Message sent via REST API to Everyone channel with mention`);
               await this.storeChannelMessage('all-drivers', this.username, `@${recipient}: ${message}`, 'text');
+              return true;
             }
-            return success;
-          } else {
-            console.warn('⚠️ WebSocket not connected, message not sent');
-            return false;
+          } catch (restError) {
+            console.error('❌ REST API fallback send error:', restError);
           }
+          return false;
         }
       }
     } catch (error) {
