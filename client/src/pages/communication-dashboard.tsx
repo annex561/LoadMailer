@@ -398,17 +398,45 @@ export default function CommunicationDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ threadId, content, sender: 'dispatch' })
       });
-      if (!response.ok) throw new Error('Failed to send message');
-      return response.json();
+      
+      const data = await response.json();
+      
+      // Check if response indicates partial success (SMS failed but Zello might work)
+      if (response.status === 409 && data.error) {
+        // Show warning instead of error for partial failures
+        toast({ 
+          title: "⚠️ Limited Delivery", 
+          description: "Message saved but couldn't be sent to driver. Zello channels may need configuration.",
+          variant: "default" 
+        });
+        return data; // Still return data to update UI
+      }
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send message');
+      }
+      
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setNewMessage("");
       refetchMessages();
       refetchThreads();
-      toast({ title: "Message sent successfully" });
+      
+      // Only show success toast if message was actually delivered
+      if (!data.error && data.success !== false) {
+        toast({ title: "✅ Message sent successfully" });
+      }
     },
     onError: (error) => {
-      toast({ title: "Failed to send message", description: error.message, variant: "destructive" });
+      // Don't show duplicate errors for already-handled cases
+      if (!error.message.includes('Limited Delivery')) {
+        toast({ 
+          title: "❌ Message delivery failed", 
+          description: "Please check driver contact information and try again.", 
+          variant: "destructive" 
+        });
+      }
     }
   });
 
