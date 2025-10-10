@@ -1575,4 +1575,112 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return user;
   }
+
+  // Zello Channel Operations - Store in memory for now, migrate to DB later
+  private zelloChannelMessages: Map<string, schema.ZelloChannelMessage> = new Map();
+  private zelloChannelStatuses: Map<string, schema.ZelloChannelStatus> = new Map();
+
+  async createZelloChannelMessage(message: schema.InsertZelloChannelMessage): Promise<schema.ZelloChannelMessage> {
+    const id = randomUUID();
+    const newMessage: schema.ZelloChannelMessage = {
+      ...message,
+      id,
+      isRead: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.zelloChannelMessages.set(id, newMessage);
+    
+    // Update channel unread count
+    const status = await this.getZelloChannelStatus(message.channel);
+    if (status) {
+      await this.updateZelloChannelUnreadCount(message.channel, 1);
+    } else {
+      await this.createOrUpdateZelloChannelStatus({
+        channelName: message.channel,
+        unreadCount: 1,
+        lastMessageAt: new Date(),
+        lastMessageSender: message.sender,
+        lastMessagePreview: message.textContent || '[Voice Message]',
+        isActive: true,
+        onlineUsers: 0,
+        totalUsers: 0,
+      });
+    }
+    
+    return newMessage;
+  }
+
+  async getZelloChannelMessages(channel: string, limit: number = 100): Promise<schema.ZelloChannelMessage[]> {
+    return Array.from(this.zelloChannelMessages.values())
+      .filter(msg => msg.channel === channel)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  }
+
+  async getUnreadZelloMessages(channel: string): Promise<schema.ZelloChannelMessage[]> {
+    return Array.from(this.zelloChannelMessages.values())
+      .filter(msg => msg.channel === channel && !msg.isRead)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async markZelloMessagesAsRead(channel: string, messageIds: string[]): Promise<number> {
+    let count = 0;
+    for (const id of messageIds) {
+      const msg = this.zelloChannelMessages.get(id);
+      if (msg && msg.channel === channel && !msg.isRead) {
+        msg.isRead = true;
+        msg.updatedAt = new Date();
+        this.zelloChannelMessages.set(id, msg);
+        count++;
+      }
+    }
+    
+    // Update channel unread count
+    if (count > 0) {
+      await this.updateZelloChannelUnreadCount(channel, -count);
+    }
+    
+    return count;
+  }
+
+  async getZelloChannelStatus(channel: string): Promise<schema.ZelloChannelStatus | null> {
+    return this.zelloChannelStatuses.get(channel) || null;
+  }
+
+  async createOrUpdateZelloChannelStatus(status: schema.InsertZelloChannelStatus): Promise<schema.ZelloChannelStatus> {
+    const existing = this.zelloChannelStatuses.get(status.channelName);
+    const id = existing?.id || randomUUID();
+    
+    const updatedStatus: schema.ZelloChannelStatus = {
+      ...existing,
+      ...status,
+      id,
+      updatedAt: new Date(),
+      createdAt: existing?.createdAt || new Date(),
+    };
+    
+    this.zelloChannelStatuses.set(status.channelName, updatedStatus);
+    return updatedStatus;
+  }
+
+  async updateZelloChannelUnreadCount(channel: string, delta: number): Promise<schema.ZelloChannelStatus | null> {
+    const status = this.zelloChannelStatuses.get(channel);
+    if (!status) return null;
+    
+    status.unreadCount = Math.max(0, status.unreadCount + delta);
+    status.updatedAt = new Date();
+    
+    this.zelloChannelStatuses.set(channel, status);
+    return status;
+  }
+
+  async getAllZelloChannelStatuses(): Promise<schema.ZelloChannelStatus[]> {
+    return Array.from(this.zelloChannelStatuses.values())
+      .sort((a, b) => a.channelName.localeCompare(b.channelName));
+  }
+
+  async getZelloMessageById(id: string): Promise<schema.ZelloChannelMessage | null> {
+    return this.zelloChannelMessages.get(id) || null;
+  }
 }
