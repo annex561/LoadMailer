@@ -79,6 +79,24 @@ export class ZelloDispatchService extends EventEmitter {
       console.warn('⚠️ Zello credentials not fully configured (need API_KEY, USERNAME, and PASSWORD)');
     }
   }
+
+  // Check if Zello is initialized and ready
+  isZelloInitialized(): boolean {
+    return this.isInitialized;
+  }
+
+  // Get comprehensive Zello status
+  getZelloStatus(): any {
+    return {
+      initialized: this.isInitialized,
+      configured: !!(this.apiKey && this.username && this.password),
+      sessionActive: !!this.sessionId,
+      channelCount: this.channels.size,
+      userCount: this.users.size,
+      authMethod: 'REST API (WebSocket disabled)',
+      lastError: this.isInitialized ? null : 'Authentication failed - check credentials'
+    };
+  }
   
   private async authenticate(): Promise<boolean> {
     if (!this.apiKey || !this.username || !this.password) {

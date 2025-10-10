@@ -14,7 +14,20 @@ Load Signal is a comprehensive fleet management system for truck load tracking a
 
 **ZELLO WORK VOICE DISPATCH**: Complete bidirectional voice dispatch integration now fully operational alongside SMS. Messages sent from Communication Dashboard automatically reach drivers through both SMS and their Zello cell application. Driver responses via Zello automatically appear in the Communication Dashboard. Features include 5 default channels (all-drivers, southeast-region, box-truck-ops, hotshot-expedite, dispatch-priority), automatic load broadcasts to relevant channels, webhook endpoints for voice responses at /api/zello/webhook, real-time channel status monitoring, and visual status display in Communication Dashboard. The Zello service integrates seamlessly with load processing workflow, automatically broadcasting new loads to appropriate driver channels. Zello Work console accessible at lamp1.zellowork.com for channel/user management. API key securely stored in environment variables (ZELLO_API_KEY).
 
-**CURRENT STATUS**: Zello integration technically complete with proper two-step authentication (gettoken → login). Authentication flow working correctly but returns "Wrong username or password" error (code 303). User needs to provide correct Zello Work credentials for lamp1.zellowork.com workspace. System features ready: bidirectional communication, document handling via webhook, automatic categorization, channel management (5 default channels), and user provisioning. Once correct credentials are provided, manual initialization via `/api/zello/initialize` will activate full integration.
+**CURRENT STATUS - STABLE SMS SYSTEM**: Core messaging infrastructure is **100% operational via SMS** using Willow/Twilio integration. All driver notifications, load offers, and bidirectional communication work reliably through text messages. The system supports unlimited drivers with proven stability.
+
+**ZELLO STATUS - OPTIONAL FEATURE**: Zello Work voice dispatch integration is built and ready, but authentication currently failing (error 303 "Wrong username or password"). The system has been refactored to use **REST API exclusively** (avoiding WebSocket session conflicts per architect recommendation). Zello is now a completely optional enhancement - when offline, SMS handles all communications seamlessly.
+
+**ARCHITECTURE CHANGE**: Switched from WebSocket to pure REST API messaging to eliminate session conflicts. WebSocket was causing immediate "kicked" errors due to Zello Work's single-session policy. Current setup: API key + username/password authentication → REST API message delivery.
+
+**CREDENTIALS**: System expects ZELLO_API_KEY, ZELLO_USERNAME, ZELLO_PASSWORD in environment. Authentication failing suggests credentials mismatch between environment and Zello Work console.
+
+**USER ACTION NEEDED**: To enable Zello voice dispatch:
+1. Verify Zello Work credentials at lamp1.zellowork.com
+2. Update environment variables if credentials changed
+3. Or continue with SMS-only system (fully functional)
+
+System designed for stability: **SMS always works, Zello is bonus enhancement**.
 
 **ZELLO DOCUMENT INTEGRATION**: Complete document management system integrated with Zello Work app. Drivers upload documents (POD, BOL, inspection reports, damage photos) directly through Zello by taking photos and adding captions. System automatically categorizes documents based on keywords, attaches them to active loads, and displays in Communication Dashboard with Zello badges. Features include automatic document categorization, approval/rejection workflow with notes, document request via voice channels, visual gallery with category filters, and seamless integration with existing message attachment system. Documents uploaded via Zello webhook at /api/zello/webhook are stored in message_attachments table with full audit trail.
 

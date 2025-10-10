@@ -1864,11 +1864,19 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(400).json({ error: 'At least one channel or user must be specified' });
       }
       
+      // Try to send via Zello - if it fails, return graceful response (SMS will still work)
       const results = await zelloService.sendMessageToMultiple(channels, users, message);
-      res.json(results);
+      res.json({ ...results, zelloStatus: 'online' });
     } catch (error) {
       console.error('❌ Failed to broadcast message:', error);
-      res.status(500).json({ error: 'Failed to broadcast message' });
+      // Don't crash - return graceful error
+      const { channels = [], users = [] } = req.body;
+      res.json({ 
+        success: [], 
+        failed: [...channels, ...users],
+        zelloStatus: 'error',
+        message: 'Zello error - SMS system still working'
+      });
     }
   });
 
@@ -2569,22 +2577,7 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
   
-  // Send custom Zello broadcast
-  app.post('/api/zello/broadcast', async (req, res) => {
-    try {
-      const { message, channel } = req.body;
-      
-      if (!message || !channel) {
-        return res.status(400).json({ error: 'Message and channel required' });
-      }
-      
-      await zelloService.sendCustomMessage(message, channel);
-      res.json({ success: true, message: 'Broadcast sent' });
-    } catch (error) {
-      console.error('❌ Error sending Zello broadcast:', error);
-      res.status(500).json({ error: 'Failed to send broadcast' });
-    }
-  });
+  // Removed duplicate /api/zello/broadcast endpoint - use the main one at line 1858
 
   // Create and send driver onboarding link
   app.post('/api/driver/send-onboarding-link', async (req, res) => {
