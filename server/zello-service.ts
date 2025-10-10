@@ -175,8 +175,10 @@ export class ZelloDispatchService extends EventEmitter {
       }
     }
     
-    // Build URL with session ID
-    const url = `https://${this.workspaceUrl}${endpoint}`;
+    // Build URL with session ID - ensure we use the web API path
+    // If the endpoint doesn't start with /web/api, add it
+    const apiPath = endpoint.startsWith('/web/api') ? endpoint : `/web/api${endpoint}`;
+    const url = `https://${this.workspaceUrl}${apiPath}`;
     const params = new URLSearchParams({ sid: this.sessionId });
     
     // Add body parameters to URL for GET requests, or keep in body for POST/PUT
@@ -272,7 +274,7 @@ export class ZelloDispatchService extends EventEmitter {
     }
   }
 
-  private async setupDefaultChannels(): Promise<void> {
+  async setupDefaultChannels(): Promise<void> {
     const defaultChannels = [
       { name: 'all-drivers', type: 'team' as const, description: 'All active drivers' },
       { name: 'southeast-region', type: 'team' as const, description: 'SE region drivers' },

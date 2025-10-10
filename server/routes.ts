@@ -2402,6 +2402,31 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Create/fix missing channels in Zello
+  app.post('/api/zello/create-channels', async (req, res) => {
+    try {
+      console.log('🔨 Manually creating/verifying Zello channels...');
+      
+      // Call the setupDefaultChannels method via public interface
+      await zelloService.setupDefaultChannels();
+      
+      const status = {
+        message: 'Channels created/verified successfully',
+        channels: zelloService.getChannelStatus().channels,
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('✅ Channel creation complete:', status);
+      res.json(status);
+    } catch (error) {
+      console.error('❌ Error creating channels:', error);
+      res.status(500).json({ 
+        error: 'Failed to create channels',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Manual Zello authentication test endpoint
   app.post('/api/zello/test-auth', async (req, res) => {
     try {
