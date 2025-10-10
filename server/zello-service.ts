@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
 import axios from 'axios';
+import WebSocket from 'ws';
 
 interface ZelloChannel {
   name: string;
@@ -56,6 +57,13 @@ export class ZelloDispatchService extends EventEmitter {
   private users: Map<string, ZelloUser> = new Map();
   private isInitialized: boolean = false;
   private reconnectInterval: NodeJS.Timeout | null = null;
+  
+  // WebSocket fields for real-time communication
+  private websocket: WebSocket | null = null;
+  private wsSequence: number = 1;
+  private wsConnected: boolean = false;
+  private wsRefreshToken: string | null = null;
+  private wsReconnectTimer: NodeJS.Timeout | null = null;
   
   constructor() {
     super();
@@ -242,6 +250,9 @@ export class ZelloDispatchService extends EventEmitter {
       
       // Initialize default channels
       await this.setupDefaultChannels();
+      
+      // Connect to WebSocket for real-time messaging
+      await this.connectWebSocket();
       
       // Load existing users
       await this.loadUsers();
@@ -727,6 +738,157 @@ export class ZelloDispatchService extends EventEmitter {
     }
   }
 
+  // WebSocket Connection for Real-time Messaging
+  private async connectWebSocket(): Promise<void> {
+    try {
+      console.log('🔌 Connecting to Zello WebSocket for real-time messaging...');
+      
+      // Connect to Zello Work WebSocket
+      const wsUrl = `wss://${this.workspaceUrl}/ws`;
+      this.websocket = new WebSocket(wsUrl);
+      
+      this.websocket.on('open', () => {
+        console.log('✅ WebSocket connected to Zello');
+        this.wsConnected = true;
+        this.wsLogon();
+      });
+      
+      this.websocket.on('message', (data: WebSocket.Data) => {
+        this.handleWebSocketMessage(data);
+      });
+      
+      this.websocket.on('close', () => {
+        console.log('❌ WebSocket disconnected');
+        this.wsConnected = false;
+        this.scheduleWebSocketReconnect();
+      });
+      
+      this.websocket.on('error', (error) => {
+        console.error('❌ WebSocket error:', error);
+        this.wsConnected = false;
+      });
+      
+    } catch (error) {
+      console.error('❌ Failed to connect WebSocket:', error);
+      this.scheduleWebSocketReconnect();
+    }
+  }
+  
+  private scheduleWebSocketReconnect(): void {
+    if (this.wsReconnectTimer) {
+      clearTimeout(this.wsReconnectTimer);
+    }
+    
+    this.wsReconnectTimer = setTimeout(() => {
+      console.log('🔄 Attempting WebSocket reconnection...');
+      this.connectWebSocket();
+    }, 5000);
+  }
+  
+  private wsLogon(): void {
+    if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+      console.error('❌ Cannot logon: WebSocket not connected');
+      return;
+    }
+    
+    // Get all channel names for the logon
+    const channelNames = Array.from(this.channels.keys());
+    
+    const logonCommand = {
+      command: 'logon',
+      seq: this.wsSequence++,
+      auth_token: this.sessionId || undefined,
+      refresh_token: this.wsRefreshToken || undefined,
+      username: this.username,
+      password: this.password,
+      channels: channelNames,
+      version: '1.0',
+      platform_type: 'nodejs',
+      platform_name: 'LoadSignal Gateway'
+    };
+    
+    console.log('🔐 Sending WebSocket logon command...');
+    this.websocket.send(JSON.stringify(logonCommand));
+  }
+  
+  private handleWebSocketMessage(data: WebSocket.Data): void {
+    try {
+      const message = JSON.parse(data.toString());
+      
+      if (message.seq && message.success !== undefined) {
+        // This is a response to our command
+        if (message.success) {
+          console.log('✅ WebSocket command successful:', message.seq);
+          
+          // Store refresh token if provided
+          if (message.refresh_token) {
+            this.wsRefreshToken = message.refresh_token;
+            console.log('🔑 Received WebSocket refresh token');
+          }
+        } else {
+          console.error('❌ WebSocket command failed:', message);
+        }
+      } else if (message.command) {
+        // This is an incoming event/message
+        this.handleIncomingWebSocketEvent(message);
+      }
+    } catch (error) {
+      // Not JSON, might be binary audio data
+      // We don't handle audio in this implementation
+    }
+  }
+  
+  private handleIncomingWebSocketEvent(event: any): void {
+    console.log('📨 Incoming WebSocket event:', event.command);
+    
+    switch (event.command) {
+      case 'on_channel_status':
+        console.log(`📻 Channel ${event.channel} status:`, event.status, 
+                   `(${event.users_online} users online)`);
+        break;
+        
+      case 'on_text_message':
+        console.log(`💬 Text message in ${event.channel} from ${event.from}: ${event.text}`);
+        // Emit event for processing
+        this.emit('text_message', {
+          channel: event.channel,
+          from: event.from,
+          text: event.text,
+          for: event.for,
+          timestamp: new Date()
+        });
+        break;
+        
+      case 'on_error':
+        console.error('❌ WebSocket error event:', event.error);
+        break;
+    }
+  }
+  
+  private async sendWebSocketTextMessage(channel: string, text: string, forUser?: string): Promise<boolean> {
+    if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+      console.error('❌ Cannot send message: WebSocket not connected');
+      return false;
+    }
+    
+    const messageCommand = {
+      command: 'send_text_message',
+      seq: this.wsSequence++,
+      channel: channel,
+      text: text,
+      for: forUser
+    };
+    
+    try {
+      console.log(`📤 Sending WebSocket text message to ${channel}${forUser ? ` for ${forUser}` : ''}`);
+      this.websocket.send(JSON.stringify(messageCommand));
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to send WebSocket message:', error);
+      return false;
+    }
+  }
+
   // Main function for sending messages to channels or users
   async sendMessage(recipient: string, message: string): Promise<boolean> {
     if (!this.isInitialized) {
@@ -741,15 +903,12 @@ export class ZelloDispatchService extends EventEmitter {
       const isChannel = this.channels.has(recipient);
       
       if (isChannel) {
-        // Send to channel using the channel text message endpoint
-        const response = await this.makeZelloApiCall('/text-messages/channels', 'POST', {
-          channel: recipient,
-          text: message
-        });
-        
-        if (response && response.status === 'OK') {
-          console.log(`✅ Message sent to Zello channel ${recipient} successfully`);
-          return true;
+        // Send to channel using WebSocket
+        if (this.wsConnected) {
+          return await this.sendWebSocketTextMessage(recipient, message);
+        } else {
+          console.warn('⚠️ WebSocket not connected, message not sent');
+          return false;
         }
       } else {
         // Try to send as direct message to user
@@ -758,33 +917,25 @@ export class ZelloDispatchService extends EventEmitter {
                           Array.from(this.users.keys()).some(u => u.toLowerCase() === recipient.toLowerCase());
         
         if (userExists) {
-          // Send direct message to user using the users text message endpoint
-          const response = await this.makeZelloApiCall('/text-messages/users', 'POST', {
-            username: recipient,
-            text: message
-          });
-          
-          if (response && response.status === 'OK') {
-            console.log(`✅ Message sent directly to Zello user ${recipient} successfully`);
-            return true;
+          // Send direct message via all-drivers channel with @mention
+          // (Zello Work doesn't support direct messages via WebSocket to users not in channel)
+          if (this.wsConnected) {
+            return await this.sendWebSocketTextMessage('all-drivers', message, recipient);
+          } else {
+            console.warn('⚠️ WebSocket not connected, message not sent');
+            return false;
           }
         } else {
           // If not a known user, try sending to all-drivers channel as fallback
           console.log(`⚠️ User ${recipient} not found, sending to all-drivers channel`);
-          const response = await this.makeZelloApiCall('/text-messages/channels', 'POST', {
-            channel: 'all-drivers',
-            text: `@${recipient}: ${message}`
-          });
-          
-          if (response && response.status === 'OK') {
-            console.log(`✅ Message broadcast to all-drivers channel for ${recipient}`);
-            return true;
+          if (this.wsConnected) {
+            return await this.sendWebSocketTextMessage('all-drivers', `@${recipient}: ${message}`);
+          } else {
+            console.warn('⚠️ WebSocket not connected, message not sent');
+            return false;
           }
         }
       }
-      
-      console.error(`❌ Failed to send message to ${recipient}`);
-      return false;
     } catch (error) {
       console.error(`❌ Error sending message to ${recipient}:`, error);
       return false;
