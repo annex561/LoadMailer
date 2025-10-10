@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
+import axios from 'axios';
 
 interface ZelloChannel {
   name: string;
