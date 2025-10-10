@@ -731,6 +731,70 @@ export class ZelloDispatchService extends EventEmitter {
     }
   }
 
+  // Main function for sending messages to channels or users
+  async sendMessage(recipient: string, message: string): Promise<boolean> {
+    if (!this.isInitialized) {
+      console.warn('⚠️ Zello service not initialized');
+      return false;
+    }
+
+    try {
+      console.log(`📻 Sending message to ${recipient}: ${message}`);
+      
+      // Check if recipient is a channel (from our channels map)
+      const isChannel = this.channels.has(recipient);
+      
+      if (isChannel) {
+        // Send to channel using the channel text message endpoint
+        const response = await this.makeZelloApiCall('/text-messages/channels', 'POST', {
+          channel: recipient,
+          text: message
+        });
+        
+        if (response && response.status === 'OK') {
+          console.log(`✅ Message sent to Zello channel ${recipient} successfully`);
+          return true;
+        }
+      } else {
+        // Try to send as direct message to user
+        // First check if the user exists in our users map
+        const userExists = this.users.has(recipient) || 
+                          Array.from(this.users.keys()).some(u => u.toLowerCase() === recipient.toLowerCase());
+        
+        if (userExists) {
+          // Send direct message to user using the users text message endpoint
+          const response = await this.makeZelloApiCall('/text-messages/users', 'POST', {
+            username: recipient,
+            text: message
+          });
+          
+          if (response && response.status === 'OK') {
+            console.log(`✅ Message sent directly to Zello user ${recipient} successfully`);
+            return true;
+          }
+        } else {
+          // If not a known user, try sending to all-drivers channel as fallback
+          console.log(`⚠️ User ${recipient} not found, sending to all-drivers channel`);
+          const response = await this.makeZelloApiCall('/text-messages/channels', 'POST', {
+            channel: 'all-drivers',
+            text: `@${recipient}: ${message}`
+          });
+          
+          if (response && response.status === 'OK') {
+            console.log(`✅ Message broadcast to all-drivers channel for ${recipient}`);
+            return true;
+          }
+        }
+      }
+      
+      console.error(`❌ Failed to send message to ${recipient}`);
+      return false;
+    } catch (error) {
+      console.error(`❌ Error sending message to ${recipient}:`, error);
+      return false;
+    }
+  }
+
   async sendCustomMessage(message: string, channel: string): Promise<boolean> {
     if (!this.isInitialized) {
       console.warn('⚠️ Zello service not initialized');
@@ -740,23 +804,27 @@ export class ZelloDispatchService extends EventEmitter {
     try {
       console.log(`📻 Sending to ${channel}: ${message}`);
       
-      // Use the Zello API to send the message
-      const response = await this.makeZelloApiCall('/channels/send', 'POST', {
-        channel,
-        message,
-        type: 'text'
+      // Use the correct Zello API endpoint for sending text messages to channels
+      const response = await this.makeZelloApiCall('/text-messages/channels', 'POST', {
+        channel: channel,
+        text: message
       });
       
-      console.log(`✅ Message sent to Zello channel ${channel}`);
-      
-      // Also emit the event for any local listeners
-      this.emit('custom_broadcast', {
-        channel,
-        message,
-        timestamp: new Date()
-      });
-      
-      return true;
+      if (response && response.status === 'OK') {
+        console.log(`✅ Message sent to Zello channel ${channel} successfully`);
+        
+        // Also emit the event for any local listeners
+        this.emit('custom_broadcast', {
+          channel,
+          message,
+          timestamp: new Date()
+        });
+        
+        return true;
+      } else {
+        console.error(`❌ Failed to send message to Zello channel ${channel}:`, response);
+        return false;
+      }
     } catch (error) {
       console.error(`❌ Failed to send message to Zello channel ${channel}:`, error);
       

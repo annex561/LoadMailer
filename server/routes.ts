@@ -1451,13 +1451,28 @@ export async function registerRoutes(app: Express): Promise<void> {
                                `${load?.origin || ''} → ${load?.destination || ''}\n\n` +
                                `${content}`;
             
-            // Send to driver's personal channel or all-drivers channel
-            const driverUsername = driver.name.toLowerCase().replace(/\s+/g, '_');
-            await zelloService.sendCustomMessage(zelloMessage, driverUsername);
+            // Generate Zello username from driver name and phone (like driver creation does)
+            // This matches the format used when creating Zello users: name_lastFourDigitsOfPhone
+            let driverUsername = driver.name.toLowerCase().replace(/\s+/g, '_');
+            if (driver.phone) {
+              const phoneDigits = driver.phone.replace(/\D/g, '').slice(-4);
+              driverUsername = `${driver.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${phoneDigits}`;
+            }
+            
+            console.log(`🔍 Attempting to send Zello message to username: ${driverUsername}`);
+            
+            // Send directly to the driver using the sendMessage function
+            const directMessageSent = await zelloService.sendMessage(driverUsername, zelloMessage);
+            
             // Also send to all-drivers channel for visibility
-            await zelloService.sendCustomMessage(zelloMessage, 'all-drivers');
-            zelloDelivered = true;
-            console.log(`✅ Message sent via Zello to driver ${driver.name}`);
+            const channelMessageSent = await zelloService.sendMessage('all-drivers', zelloMessage);
+            
+            zelloDelivered = directMessageSent || channelMessageSent;
+            if (zelloDelivered) {
+              console.log(`✅ Message sent via Zello to driver ${driver.name} (username: ${driverUsername})`);
+            } else {
+              console.log(`⚠️ Failed to send Zello message to ${driver.name} (username: ${driverUsername})`);
+            }
           }
         } catch (zelloError) {
           console.error('⚠️ Zello delivery failed:', zelloError);
