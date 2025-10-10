@@ -8,6 +8,7 @@ interface ZelloChannel {
   type: 'team' | 'private' | 'dynamic';
   users: string[];
   active: boolean;
+  actualName?: string; // The actual name on Zello platform (e.g., "Everyone" for "all-drivers")
 }
 
 interface ZelloUser {
@@ -275,12 +276,22 @@ export class ZelloDispatchService extends EventEmitter {
   }
 
   async setupDefaultChannels(): Promise<void> {
+    // Map our logical channels to actual Zello channels that exist
+    // Using "Everyone" as the main channel and "LAMP Dispatchers" for priority
+    const channelMappings = {
+      'all-drivers': 'Everyone',           // Main channel for all drivers
+      'southeast-region': 'Everyone',      // Regional drivers also use main channel
+      'box-truck-ops': 'Everyone',        // Equipment-specific use main channel  
+      'hotshot-expedite': 'Everyone',     // Expedite drivers use main channel
+      'dispatch-priority': 'LAMP Dispatchers' // Priority messages go to dispatch channel
+    };
+    
     const defaultChannels = [
-      { name: 'all-drivers', type: 'team' as const, description: 'All active drivers' },
-      { name: 'southeast-region', type: 'team' as const, description: 'SE region drivers' },
-      { name: 'box-truck-ops', type: 'team' as const, description: 'Box truck operators' },
-      { name: 'hotshot-expedite', type: 'team' as const, description: 'Expedite/hotshot drivers' },
-      { name: 'dispatch-priority', type: 'team' as const, description: 'High priority dispatch' }
+      { name: 'all-drivers', actualName: 'Everyone', type: 'team' as const, description: 'All active drivers' },
+      { name: 'southeast-region', actualName: 'Everyone', type: 'team' as const, description: 'SE region drivers' },
+      { name: 'box-truck-ops', actualName: 'Everyone', type: 'team' as const, description: 'Box truck operators' },
+      { name: 'hotshot-expedite', actualName: 'Everyone', type: 'team' as const, description: 'Expedite/hotshot drivers' },
+      { name: 'dispatch-priority', actualName: 'LAMP Dispatchers', type: 'team' as const, description: 'High priority dispatch' }
     ];
 
     try {
@@ -296,59 +307,45 @@ export class ZelloDispatchService extends EventEmitter {
         });
       }
       
-      // Create channels that don't exist yet
-      for (const channelConfig of defaultChannels) {
-        if (!existingChannelNames.has(channelConfig.name)) {
-          console.log(`📦 Creating channel in Zello: ${channelConfig.name}`);
-          
-          try {
-            const createResponse = await this.makeZelloApiCall('/channels/add', 'POST', {
-              name: channelConfig.name,
-              // Zello Work uses 'group' instead of 'team'
-              type: 'group', 
-              // Add the API user to the channel
-              add: [this.username]
-            });
-            
-            if (createResponse) {
-              console.log(`✅ Successfully created channel: ${channelConfig.name}`);
-            }
-          } catch (createError: any) {
-            if (createError.response?.data?.error === 'Channel already exists') {
-              console.log(`ℹ️ Channel ${channelConfig.name} already exists`);
-            } else {
-              console.error(`❌ Failed to create channel ${channelConfig.name}:`, createError.response?.data || createError.message);
-            }
-          }
+      // Check if the actual Zello channels exist and map our logical channels
+      const requiredChannels = new Set(['Everyone', 'LAMP Dispatchers']);
+      for (const actualChannel of requiredChannels) {
+        if (!existingChannelNames.has(actualChannel)) {
+          console.warn(`⚠️ Required channel "${actualChannel}" not found in Zello workspace`);
+          console.log(`📦 Please create channel "${actualChannel}" in Zello Work console at lamp1.zellowork.com`);
         } else {
-          console.log(`✅ Channel already exists: ${channelConfig.name}`);
+          console.log(`✅ Found required channel: ${actualChannel}`);
           
           // Ensure the API user is added to the existing channel
           try {
             await this.makeZelloApiCall('/channels/add_users', 'POST', {
-              channel: channelConfig.name,
+              channel: actualChannel,
               users: [this.username]
             });
-            console.log(`✅ Added ${this.username} to channel ${channelConfig.name}`);
+            console.log(`✅ Added ${this.username} to channel ${actualChannel}`);
           } catch (addError: any) {
             // User might already be in the channel
             if (addError.response?.data?.error?.includes('already')) {
-              console.log(`ℹ️ User ${this.username} already in channel ${channelConfig.name}`);
+              console.log(`ℹ️ User ${this.username} already in channel ${actualChannel}`);
             } else {
-              console.warn(`⚠️ Could not add user to channel ${channelConfig.name}:`, addError.response?.data || addError.message);
+              console.warn(`⚠️ Could not add user to channel ${actualChannel}:`, addError.response?.data || addError.message);
             }
           }
         }
-        
-        // Add to local channel list
+      }
+      
+      // Set up logical channel mapping to actual Zello channels
+      for (const channelConfig of defaultChannels) {
+        // Create a channel object that maps logical name to actual name
         const channel: ZelloChannel = {
           name: channelConfig.name,
           type: channelConfig.type,
           users: [this.username],
-          active: true
+          active: existingChannelNames.has(channelConfig.actualName),
+          actualName: channelConfig.actualName // Store the actual Zello channel name
         };
         this.channels.set(channelConfig.name, channel);
-        console.log(`📻 Channel registered locally: ${channelConfig.name} - ${channelConfig.description}`);
+        console.log(`📻 Channel mapped: ${channelConfig.name} → ${channelConfig.actualName} (${channel.active ? 'active' : 'inactive'})`);
       }
       
       console.log('✅ All default channels have been set up');
@@ -885,37 +882,30 @@ export class ZelloDispatchService extends EventEmitter {
       return;
     }
     
-    // Try to join the all-drivers channel first
-    const primaryChannel = 'all-drivers';
-    if (this.channels.has(primaryChannel)) {
-      console.log(`📻 Joining channel: ${primaryChannel}`);
+    // Join the actual Zello channels that exist on the platform
+    const actualChannelsToJoin = new Set<string>();
+    
+    // Collect all unique actual channel names
+    for (const [logicalName, channel] of this.channels) {
+      if (channel.active && channel.actualName) {
+        actualChannelsToJoin.add(channel.actualName);
+        console.log(`📻 Will join: ${channel.actualName} (for logical channel: ${logicalName})`);
+      }
+    }
+    
+    // Join each actual channel only once
+    for (const actualChannel of actualChannelsToJoin) {
+      console.log(`📻 Joining channel: ${actualChannel}`);
       const joinCommand = {
         command: 'channel',
         seq: this.wsSequence++,
-        channel: primaryChannel,
+        channel: actualChannel,
         add: true
       };
       this.websocket.send(JSON.stringify(joinCommand));
       
       // Small delay between channel joins
       await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    
-    // Join other channels
-    for (const [channelName, channel] of this.channels) {
-      if (channelName !== primaryChannel && channel.active) {
-        console.log(`📻 Joining channel: ${channelName}`);
-        const joinCommand = {
-          command: 'channel',
-          seq: this.wsSequence++,
-          channel: channelName,
-          add: true
-        };
-        this.websocket.send(JSON.stringify(joinCommand));
-        
-        // Small delay between channel joins
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
     }
     
     console.log('✅ Channel join requests sent');
@@ -1160,10 +1150,14 @@ export class ZelloDispatchService extends EventEmitter {
       return false;
     }
     
+    // Map logical channel name to actual Zello channel name
+    const channelInfo = this.channels.get(channel);
+    const actualChannel = channelInfo?.actualName || channel;
+    
     const messageCommand = {
       command: 'send_text_message',
       seq: this.wsSequence++,
-      channel: channel,
+      channel: actualChannel,
       text: text,
       for: forUser
     };
@@ -1348,11 +1342,15 @@ export class ZelloDispatchService extends EventEmitter {
     }
 
     try {
-      console.log(`📻 Sending to ${channel}: ${message}`);
+      // Map logical channel name to actual Zello channel name
+      const channelInfo = this.channels.get(channel);
+      const actualChannel = channelInfo?.actualName || channel;
+      
+      console.log(`📻 Sending to ${channel} (actual: ${actualChannel}): ${message}`);
       
       // Use the correct Zello API endpoint for sending text messages to channels
       const response = await this.makeZelloApiCall('/text-messages/channels', 'POST', {
-        channel: channel,
+        channel: actualChannel,
         text: message
       });
       
