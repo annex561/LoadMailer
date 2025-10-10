@@ -281,15 +281,89 @@ export class ZelloDispatchService extends EventEmitter {
       { name: 'dispatch-priority', type: 'team' as const, description: 'High priority dispatch' }
     ];
 
-    for (const channelConfig of defaultChannels) {
-      const channel: ZelloChannel = {
-        name: channelConfig.name,
-        type: channelConfig.type,
-        users: [],
-        active: true
-      };
-      this.channels.set(channelConfig.name, channel);
-      console.log(`📻 Channel created: ${channelConfig.name} - ${channelConfig.description}`);
+    try {
+      // First, get the list of existing channels from Zello
+      console.log('🔍 Checking existing channels in Zello workspace...');
+      const existingChannelsResponse = await this.makeZelloApiCall('/channels', 'GET');
+      
+      const existingChannelNames = new Set<string>();
+      if (existingChannelsResponse && Array.isArray(existingChannelsResponse)) {
+        existingChannelsResponse.forEach((ch: any) => {
+          existingChannelNames.add(ch.name);
+          console.log(`✅ Found existing channel: ${ch.name}`);
+        });
+      }
+      
+      // Create channels that don't exist yet
+      for (const channelConfig of defaultChannels) {
+        if (!existingChannelNames.has(channelConfig.name)) {
+          console.log(`📦 Creating channel in Zello: ${channelConfig.name}`);
+          
+          try {
+            const createResponse = await this.makeZelloApiCall('/channels/add', 'POST', {
+              name: channelConfig.name,
+              // Zello Work uses 'group' instead of 'team'
+              type: 'group', 
+              // Add the API user to the channel
+              add: [this.username]
+            });
+            
+            if (createResponse) {
+              console.log(`✅ Successfully created channel: ${channelConfig.name}`);
+            }
+          } catch (createError: any) {
+            if (createError.response?.data?.error === 'Channel already exists') {
+              console.log(`ℹ️ Channel ${channelConfig.name} already exists`);
+            } else {
+              console.error(`❌ Failed to create channel ${channelConfig.name}:`, createError.response?.data || createError.message);
+            }
+          }
+        } else {
+          console.log(`✅ Channel already exists: ${channelConfig.name}`);
+          
+          // Ensure the API user is added to the existing channel
+          try {
+            await this.makeZelloApiCall('/channels/add_users', 'POST', {
+              channel: channelConfig.name,
+              users: [this.username]
+            });
+            console.log(`✅ Added ${this.username} to channel ${channelConfig.name}`);
+          } catch (addError: any) {
+            // User might already be in the channel
+            if (addError.response?.data?.error?.includes('already')) {
+              console.log(`ℹ️ User ${this.username} already in channel ${channelConfig.name}`);
+            } else {
+              console.warn(`⚠️ Could not add user to channel ${channelConfig.name}:`, addError.response?.data || addError.message);
+            }
+          }
+        }
+        
+        // Add to local channel list
+        const channel: ZelloChannel = {
+          name: channelConfig.name,
+          type: channelConfig.type,
+          users: [this.username],
+          active: true
+        };
+        this.channels.set(channelConfig.name, channel);
+        console.log(`📻 Channel registered locally: ${channelConfig.name} - ${channelConfig.description}`);
+      }
+      
+      console.log('✅ All default channels have been set up');
+      
+    } catch (error) {
+      console.error('❌ Error setting up channels:', error);
+      // Still set up local channels even if API fails
+      for (const channelConfig of defaultChannels) {
+        const channel: ZelloChannel = {
+          name: channelConfig.name,
+          type: channelConfig.type,
+          users: [],
+          active: true
+        };
+        this.channels.set(channelConfig.name, channel);
+        console.log(`📻 Channel created locally (API unavailable): ${channelConfig.name}`);
+      }
     }
   }
 
