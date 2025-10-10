@@ -926,13 +926,20 @@ export class ZelloDispatchService extends EventEmitter {
             // Extract channel name from error
             const channelMatch = message.error.match(/channel not found:(\S+)/);
             const channelName = channelMatch ? channelMatch[1] : 'unknown';
-            console.warn(`⚠️ Channel "${channelName}" not found in Zello. Will attempt to create it.`);
+            console.warn(`⚠️ Channel "${channelName}" not found error received`);
             
-            // Try to create the missing channel
-            this.createMissingChannel(channelName).then(() => {
-              console.log(`🔄 Reconnecting WebSocket after creating channel ${channelName}...`);
-              this.websocket?.close();  // Trigger reconnect
-            });
+            // Check if we have this channel locally
+            if (this.channels.has(channelName)) {
+              console.log(`ℹ️ Channel ${channelName} exists locally, ignoring error`);
+              // Don't disconnect, just continue
+            } else {
+              // Only attempt to create if we don't have it locally
+              console.log(`🔨 Channel ${channelName} not in local list, attempting to create...`);
+              this.createMissingChannel(channelName).catch(err => {
+                console.error(`❌ Failed to create channel ${channelName}:`, err);
+              });
+              // Don't disconnect, continue with existing connection
+            }
           } else if (message.error.includes('not authorized')) {
             console.error('🔐 Authentication failed - check Zello Work credentials');
             this.websocket?.close();
@@ -950,12 +957,20 @@ export class ZelloDispatchService extends EventEmitter {
         if (message.error.includes('channel not found')) {
           const channelMatch = message.error.match(/channel not found:(\S+)/);
           const channelName = channelMatch ? channelMatch[1] : 'unknown';
-          console.warn(`⚠️ Channel "${channelName}" not found. Will attempt to create it.`);
+          console.warn(`⚠️ Channel "${channelName}" not found error received (standalone)`);
           
-          this.createMissingChannel(channelName).then(() => {
-            console.log(`🔄 Reconnecting after creating channel ${channelName}...`);
-            this.websocket?.close();
-          });
+          // Check if we have this channel locally
+          if (this.channels.has(channelName)) {
+            console.log(`ℹ️ Channel ${channelName} exists locally, ignoring standalone error`);
+            // Don't disconnect, just continue
+          } else {
+            // Only attempt to create if we don't have it locally
+            console.log(`🔨 Channel ${channelName} not in local list, attempting to create...`);
+            this.createMissingChannel(channelName).catch(err => {
+              console.error(`❌ Failed to create channel ${channelName}:`, err);
+            });
+            // Don't disconnect, continue with existing connection
+          }
         } else {
           console.log('📦 Unhandled WebSocket error:', message);
         }
