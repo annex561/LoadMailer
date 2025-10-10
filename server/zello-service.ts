@@ -743,9 +743,27 @@ export class ZelloDispatchService extends EventEmitter {
     try {
       console.log('🔌 Connecting to Zello WebSocket for real-time messaging...');
       
+      // Ensure we have REST API session first
+      if (!this.sessionId) {
+        console.log('⚠️ No REST session available for WebSocket, authenticating first...');
+        const authenticated = await this.authenticate();
+        if (!authenticated) {
+          console.error('❌ Cannot connect WebSocket without REST authentication');
+          return;
+        }
+      }
+      
       // Connect to Zello Work WebSocket
-      const wsUrl = `wss://${this.workspaceUrl}/ws`;
-      this.websocket = new WebSocket(wsUrl);
+      // Zello Work uses the zellowork.io domain with workspace name
+      const wsUrl = `wss://zellowork.io/ws/lamp1`;
+      console.log(`📡 Connecting to WebSocket: zellowork.io/ws/lamp1`);
+      
+      this.websocket = new WebSocket(wsUrl, {
+        headers: {
+          'Authorization': `Bearer ${this.sessionId}`,
+          'User-Agent': 'LoadSignal/1.0'
+        }
+      });
       
       this.websocket.on('open', () => {
         console.log('✅ WebSocket connected to Zello');
@@ -794,20 +812,21 @@ export class ZelloDispatchService extends EventEmitter {
     // Get all channel names for the logon
     const channelNames = Array.from(this.channels.keys());
     
+    // For Zello Work, we need username/password authentication
+    // The session ID from REST API doesn't work for WebSocket
     const logonCommand = {
       command: 'logon',
       seq: this.wsSequence++,
-      auth_token: this.sessionId || undefined,
-      refresh_token: this.wsRefreshToken || undefined,
       username: this.username,
       password: this.password,
-      channels: channelNames,
+      channels: channelNames.length > 0 ? channelNames : ['all-drivers'], // Default to all-drivers if no channels
+      listen_only: false, // We want to send and receive
       version: '1.0',
       platform_type: 'nodejs',
       platform_name: 'LoadSignal Gateway'
     };
     
-    console.log('🔐 Sending WebSocket logon command...');
+    console.log(`🔐 Sending WebSocket logon for user ${this.username} to channels: ${channelNames.join(', ')}`);
     this.websocket.send(JSON.stringify(logonCommand));
   }
   
@@ -826,11 +845,20 @@ export class ZelloDispatchService extends EventEmitter {
             console.log('🔑 Received WebSocket refresh token');
           }
         } else {
-          console.error('❌ WebSocket command failed:', message);
+          console.error('❌ WebSocket command failed:', JSON.stringify(message, null, 2));
+          
+          // If logon failed, close the connection to trigger reconnect with different credentials
+          if (message.error && message.error.includes('not authorized')) {
+            console.error('🔐 Authentication failed - check Zello Work credentials');
+            this.websocket?.close();
+          }
         }
       } else if (message.command) {
         // This is an incoming event/message
         this.handleIncomingWebSocketEvent(message);
+      } else {
+        // Log any unhandled message types for debugging
+        console.log('📦 Unhandled WebSocket message:', JSON.stringify(message, null, 2));
       }
     } catch (error) {
       // Not JSON, might be binary audio data
