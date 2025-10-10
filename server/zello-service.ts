@@ -918,18 +918,45 @@ export class ZelloDispatchService extends EventEmitter {
             this.wsRefreshToken = message.refresh_token;
             console.log('🔑 Received WebSocket refresh token');
           }
-        } else {
-          console.error('❌ WebSocket command failed:', JSON.stringify(message, null, 2));
-          
-          // If logon failed, close the connection to trigger reconnect with different credentials
-          if (message.error && message.error.includes('not authorized')) {
+        } else if (message.error) {
+          // Handle specific errors
+          if (message.error.includes('channel not found')) {
+            // Extract channel name from error
+            const channelMatch = message.error.match(/channel not found:(\S+)/);
+            const channelName = channelMatch ? channelMatch[1] : 'unknown';
+            console.warn(`⚠️ Channel "${channelName}" not found in Zello. Will attempt to create it.`);
+            
+            // Try to create the missing channel
+            this.createMissingChannel(channelName).then(() => {
+              console.log(`🔄 Reconnecting WebSocket after creating channel ${channelName}...`);
+              this.websocket?.close();  // Trigger reconnect
+            });
+          } else if (message.error.includes('not authorized')) {
             console.error('🔐 Authentication failed - check Zello Work credentials');
             this.websocket?.close();
+          } else {
+            console.error('❌ WebSocket command failed:', message.error);
           }
+        } else {
+          console.error('❌ WebSocket command failed:', JSON.stringify(message, null, 2));
         }
       } else if (message.command) {
         // This is an incoming event/message
         this.handleIncomingWebSocketEvent(message);
+      } else if (message.error) {
+        // Handle standalone error messages
+        if (message.error.includes('channel not found')) {
+          const channelMatch = message.error.match(/channel not found:(\S+)/);
+          const channelName = channelMatch ? channelMatch[1] : 'unknown';
+          console.warn(`⚠️ Channel "${channelName}" not found. Will attempt to create it.`);
+          
+          this.createMissingChannel(channelName).then(() => {
+            console.log(`🔄 Reconnecting after creating channel ${channelName}...`);
+            this.websocket?.close();
+          });
+        } else {
+          console.log('📦 Unhandled WebSocket error:', message);
+        }
       } else {
         // Log any unhandled message types for debugging
         console.log('📦 Unhandled WebSocket message:', JSON.stringify(message, null, 2));
@@ -1295,6 +1322,59 @@ export class ZelloDispatchService extends EventEmitter {
     }
     
     return true;
+  }
+
+  private async createMissingChannel(channelName: string): Promise<void> {
+    try {
+      console.log(`🔨 Attempting to create missing channel: ${channelName}`);
+      
+      // Check if we have an active session
+      if (!this.sessionId) {
+        console.log('⚠️ No session, authenticating first...');
+        const authenticated = await this.authenticate();
+        if (!authenticated) {
+          console.error('❌ Could not authenticate to create channel');
+          return;
+        }
+      }
+      
+      // Try to create the channel
+      const createResponse = await this.makeZelloApiCall('/channels/add', 'POST', {
+        name: channelName,
+        type: 'group',  // Zello Work uses 'group' type
+        add: [this.username]  // Add the API user to the channel
+      });
+      
+      if (createResponse) {
+        console.log(`✅ Successfully created channel: ${channelName}`);
+        
+        // Add to local channel list
+        const channel: ZelloChannel = {
+          name: channelName,
+          type: 'team',
+          users: [this.username],
+          active: true
+        };
+        this.channels.set(channelName, channel);
+      }
+    } catch (error: any) {
+      if (error.response?.data?.error === 'Channel already exists') {
+        console.log(`ℹ️ Channel ${channelName} already exists, adding user...`);
+        
+        // Try to add the user to the existing channel
+        try {
+          await this.makeZelloApiCall('/channels/add_users', 'POST', {
+            channel: channelName,
+            users: [this.username]
+          });
+          console.log(`✅ Added ${this.username} to channel ${channelName}`);
+        } catch (addError: any) {
+          console.warn(`⚠️ Could not add user to channel:`, addError.response?.data || addError.message);
+        }
+      } else {
+        console.error(`❌ Failed to create channel ${channelName}:`, error.response?.data || error.message);
+      }
+    }
   }
 
   private startChannelMonitoring(): void {
