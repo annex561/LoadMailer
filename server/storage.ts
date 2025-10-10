@@ -364,6 +364,8 @@ export class MemStorage implements IStorage {
   private emailFollowUps: Map<string, EmailFollowUp> = new Map();
   private dispatcherNotifications: Map<string, DispatcherNotification> = new Map();
   private loadDocuments: Map<string, LoadDocument> = new Map();
+  private zelloChannelMessages: Map<string, ZelloChannelMessage> = new Map();
+  private zelloChannelStatuses: Map<string, ZelloChannelStatus> = new Map();
   private loadCounter = 1;
 
   constructor() {
@@ -2128,6 +2130,111 @@ export class MemStorage implements IStorage {
   async getAllLoadDocuments(): Promise<LoadDocument[]> {
     return Array.from(this.loadDocuments.values())
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  // Zello Channel Operations
+  async createZelloChannelMessage(message: InsertZelloChannelMessage): Promise<ZelloChannelMessage> {
+    const id = randomUUID();
+    const newMessage: ZelloChannelMessage = {
+      ...message,
+      id,
+      isRead: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.zelloChannelMessages.set(id, newMessage);
+    
+    // Update channel unread count
+    const status = await this.getZelloChannelStatus(message.channel);
+    if (status) {
+      await this.updateZelloChannelUnreadCount(message.channel, 1);
+    } else {
+      await this.createOrUpdateZelloChannelStatus({
+        channelName: message.channel,
+        unreadCount: 1,
+        lastMessageAt: new Date(),
+        lastMessageSender: message.sender,
+        lastMessagePreview: message.textContent || '[Voice Message]',
+        isActive: true,
+        onlineUsers: 0,
+        totalUsers: 0,
+      });
+    }
+    
+    return newMessage;
+  }
+
+  async getZelloChannelMessages(channel: string, limit: number = 100): Promise<ZelloChannelMessage[]> {
+    return Array.from(this.zelloChannelMessages.values())
+      .filter(msg => msg.channel === channel)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  }
+
+  async getUnreadZelloMessages(channel: string): Promise<ZelloChannelMessage[]> {
+    return Array.from(this.zelloChannelMessages.values())
+      .filter(msg => msg.channel === channel && !msg.isRead)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async markZelloMessagesAsRead(channel: string, messageIds: string[]): Promise<number> {
+    let count = 0;
+    for (const id of messageIds) {
+      const msg = this.zelloChannelMessages.get(id);
+      if (msg && msg.channel === channel && !msg.isRead) {
+        msg.isRead = true;
+        msg.updatedAt = new Date();
+        this.zelloChannelMessages.set(id, msg);
+        count++;
+      }
+    }
+    
+    // Update channel unread count
+    if (count > 0) {
+      await this.updateZelloChannelUnreadCount(channel, -count);
+    }
+    
+    return count;
+  }
+
+  async getZelloChannelStatus(channel: string): Promise<ZelloChannelStatus | null> {
+    return this.zelloChannelStatuses.get(channel) || null;
+  }
+
+  async createOrUpdateZelloChannelStatus(status: InsertZelloChannelStatus): Promise<ZelloChannelStatus> {
+    const existing = this.zelloChannelStatuses.get(status.channelName);
+    const id = existing?.id || randomUUID();
+    
+    const updatedStatus: ZelloChannelStatus = {
+      ...existing,
+      ...status,
+      id,
+      updatedAt: new Date(),
+      createdAt: existing?.createdAt || new Date(),
+    };
+    
+    this.zelloChannelStatuses.set(status.channelName, updatedStatus);
+    return updatedStatus;
+  }
+
+  async updateZelloChannelUnreadCount(channel: string, delta: number): Promise<ZelloChannelStatus | null> {
+    const status = this.zelloChannelStatuses.get(channel);
+    if (!status) return null;
+    
+    status.unreadCount = Math.max(0, status.unreadCount + delta);
+    status.updatedAt = new Date();
+    
+    this.zelloChannelStatuses.set(channel, status);
+    return status;
+  }
+
+  async getAllZelloChannelStatuses(): Promise<ZelloChannelStatus[]> {
+    return Array.from(this.zelloChannelStatuses.values())
+      .sort((a, b) => a.channelName.localeCompare(b.channelName));
+  }
+
+  async getZelloMessageById(id: string): Promise<ZelloChannelMessage | null> {
+    return this.zelloChannelMessages.get(id) || null;
   }
 }
 
