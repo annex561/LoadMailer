@@ -1144,27 +1144,57 @@ export class ZelloDispatchService extends EventEmitter {
           return false;
         }
       } else {
-        // Try to send as direct message to user
-        // First check if the user exists in our users map
-        const userExists = this.users.has(recipient) || 
-                          Array.from(this.users.keys()).some(u => u.toLowerCase() === recipient.toLowerCase());
+        // Try to find user by username OR display name
+        let targetUsername: string | null = null;
         
-        if (userExists) {
+        // Check if recipient matches a username directly
+        if (this.users.has(recipient)) {
+          targetUsername = recipient;
+        } else {
+          // Search by display name or partial match
+          for (const [username, user] of this.users) {
+            if (user.displayName && (
+              user.displayName === recipient ||
+              user.displayName.toLowerCase() === recipient.toLowerCase() ||
+              username.toLowerCase() === recipient.toLowerCase()
+            )) {
+              targetUsername = username;
+              console.log(`✅ Found user ${recipient} as ${username}`);
+              break;
+            }
+          }
+        }
+        
+        if (targetUsername) {
           // Send direct message via all-drivers channel with @mention
           // (Zello Work doesn't support direct messages via WebSocket to users not in channel)
           if (this.wsConnected) {
-            const success = await this.sendWebSocketTextMessage('all-drivers', message, recipient);
+            const success = await this.sendWebSocketTextMessage('all-drivers', message, targetUsername);
             if (success) {
               await this.storeChannelMessage('all-drivers', this.username, message, 'text');
             }
             return success;
           } else {
-            console.warn('⚠️ WebSocket not connected, message not sent');
+            console.warn('⚠️ WebSocket not connected, attempting fallback send via REST API');
+            // Try REST API as fallback
+            try {
+              const response = await this.makeZelloApiCall('/text-messages/users', 'POST', {
+                to: targetUsername,
+                text: message
+              });
+              if (response && response.status === 'OK') {
+                console.log(`✅ Message sent via REST API to ${targetUsername}`);
+                await this.storeChannelMessage('all-drivers', this.username, message, 'text');
+                return true;
+              }
+            } catch (restError) {
+              console.error('❌ REST API send failed:', restError);
+            }
             return false;
           }
         } else {
           // If not a known user, try sending to all-drivers channel as fallback
-          console.log(`⚠️ User ${recipient} not found, sending to all-drivers channel`);
+          console.log(`⚠️ User ${recipient} not found in users map, sending to all-drivers channel`);
           if (this.wsConnected) {
             const success = await this.sendWebSocketTextMessage('all-drivers', `@${recipient}: ${message}`);
             if (success) {
