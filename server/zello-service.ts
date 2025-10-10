@@ -879,30 +879,70 @@ export class ZelloDispatchService extends EventEmitter {
     }, 5000);
   }
   
+  private async joinWebSocketChannels(): Promise<void> {
+    if (!this.websocket || !this.wsConnected) {
+      console.log('⚠️ Cannot join channels: WebSocket not connected');
+      return;
+    }
+    
+    // Try to join the all-drivers channel first
+    const primaryChannel = 'all-drivers';
+    if (this.channels.has(primaryChannel)) {
+      console.log(`📻 Joining channel: ${primaryChannel}`);
+      const joinCommand = {
+        command: 'channel',
+        seq: this.wsSequence++,
+        channel: primaryChannel,
+        add: true
+      };
+      this.websocket.send(JSON.stringify(joinCommand));
+      
+      // Small delay between channel joins
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // Join other channels
+    for (const [channelName, channel] of this.channels) {
+      if (channelName !== primaryChannel && channel.active) {
+        console.log(`📻 Joining channel: ${channelName}`);
+        const joinCommand = {
+          command: 'channel',
+          seq: this.wsSequence++,
+          channel: channelName,
+          add: true
+        };
+        this.websocket.send(JSON.stringify(joinCommand));
+        
+        // Small delay between channel joins
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    console.log('✅ Channel join requests sent');
+  }
+  
   private wsLogon(): void {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
       console.error('❌ Cannot logon: WebSocket not connected');
       return;
     }
     
-    // Get all channel names for the logon
-    const channelNames = Array.from(this.channels.keys());
-    
     // For Zello Work, we need username/password authentication
     // The session ID from REST API doesn't work for WebSocket
+    // Don't include channels in initial logon to avoid channel not found errors
     const logonCommand = {
       command: 'logon',
       seq: this.wsSequence++,
       username: this.username,
       password: this.password,
-      channels: channelNames.length > 0 ? channelNames : ['all-drivers'], // Default to all-drivers if no channels
+      channels: [], // Start with no channels to avoid issues
       listen_only: false, // We want to send and receive
       version: '1.0',
       platform_type: 'nodejs',
       platform_name: 'LoadSignal Gateway'
     };
     
-    console.log(`🔐 Sending WebSocket logon for user ${this.username} to channels: ${channelNames.join(', ')}`);
+    console.log(`🔐 Sending WebSocket logon for user ${this.username} (no initial channels)`);
     this.websocket.send(JSON.stringify(logonCommand));
   }
   
@@ -919,6 +959,12 @@ export class ZelloDispatchService extends EventEmitter {
           if (message.refresh_token) {
             this.wsRefreshToken = message.refresh_token;
             console.log('🔑 Received WebSocket refresh token');
+          }
+          
+          // If this was the logon command, now try to join channels
+          if (message.command === 'logon' || (message.seq === 1 && this.wsConnected)) {
+            console.log('✅ Logon successful, attempting to join channels...');
+            this.joinWebSocketChannels();
           }
         } else if (message.error) {
           // Handle specific errors
