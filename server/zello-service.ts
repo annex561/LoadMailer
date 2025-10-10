@@ -582,10 +582,9 @@ export class ZelloDispatchService extends EventEmitter {
     try {
       console.log(`📜 Fetching message history${channelName ? ` for channel: ${channelName}` : ' for all channels'}`);
       
-      // Build query parameters
+      // Build query parameters for Zello Work API
       const params: any = {
-        sid: this.sessionId,
-        max: maxMessages
+        max: maxMessages.toString()
       };
       
       if (channelName) {
@@ -594,20 +593,16 @@ export class ZelloDispatchService extends EventEmitter {
       
       // Calculate timestamp for last 5 minutes (to avoid fetching old messages)
       const fiveMinutesAgo = Math.floor((Date.now() - 5 * 60 * 1000) / 1000);
-      params.start = fiveMinutesAgo;
+      params.start = fiveMinutesAgo.toString();
       
-      const response = await axios.get(`${this.baseUrl}/history/get`, {
-        params,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
+      // Use the proper Zello Work API endpoint
+      const response = await this.makeZelloApiCall('/web/api/history/get', 'GET', params);
 
-      if (response.data && response.data.status === 'OK') {
-        console.log(`✅ Retrieved ${response.data.returned || 0} messages from Zello history`);
-        return response.data;
+      if (response && response.status === 'OK') {
+        console.log(`✅ Retrieved ${response.returned || 0} messages from Zello history`);
+        return response;
       } else {
-        console.error('❌ Failed to fetch message history:', response.data);
+        console.error('❌ Failed to fetch message history:', response);
         return { messages: [] };
       }
     } catch (error) {
