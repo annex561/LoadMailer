@@ -904,11 +904,22 @@ export class ZelloDispatchService extends EventEmitter {
       };
       this.websocket.send(JSON.stringify(joinCommand));
       
-      // Small delay between channel joins
+      // After joining, send start_channel command to activate it for messaging
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const startCommand = {
+        command: 'start_channel',
+        seq: this.wsSequence++,
+        channel: actualChannel
+      };
+      console.log(`🚀 Starting channel: ${actualChannel}`);
+      this.websocket.send(JSON.stringify(startCommand));
+      
+      // Small delay between channel operations
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    console.log('✅ Channel join requests sent');
+    console.log('✅ Channel join and start requests sent');
   }
   
   private wsLogon(): void {
@@ -1123,6 +1134,13 @@ export class ZelloDispatchService extends EventEmitter {
     } catch (error) {
       console.error('❌ Failed to update channel status:', error);
     }
+  }
+
+  // Generate Zello username from driver name and phone
+  private generateZelloUsername(name: string, phone: string): string {
+    const phoneDigits = phone.replace(/\D/g, '').slice(-4);
+    const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    return `${cleanName}_${phoneDigits}`;
   }
 
   // Find driver by Zello username
