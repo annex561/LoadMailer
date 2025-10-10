@@ -70,9 +70,9 @@ export class ZelloDispatchService extends EventEmitter {
     super();
     // Use the correct API key from the Zello dashboard
     this.apiKey = (process.env.ZELLO_API_KEY || '9TRA0D2GBV1OCOC657BFSPIH4QBDICH5').trim();
-    // Ensure we're using the correct API user credentials
-    this.username = (process.env.ZELLO_USERNAME || 'annexAPI').trim();
-    this.password = (process.env.ZELLO_PASSWORD || 'Anonymous#561').trim();
+    // Use dedicated bot account for WebSocket connections to avoid session conflicts
+    this.username = (process.env.ZELLO_BOT_USERNAME || 'lampDispatchBot').trim();
+    this.password = (process.env.ZELLO_BOT_PASSWORD || 'BotSecure2025!').trim();
     console.log('🎙️ Zello Dispatch Service initializing...');
     
     if (!this.apiKey || !this.username || !this.password) {
