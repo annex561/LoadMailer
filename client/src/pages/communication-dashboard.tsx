@@ -327,28 +327,6 @@ export default function CommunicationDashboard() {
       toast({ title: "Failed to decline load", description: error.message, variant: "destructive" });
     }
   });
-  
-  // Fetch Zello voice dispatch status
-  const { data: zelloStatus } = useQuery({
-    queryKey: ['/api/zello/status'],
-    queryFn: async () => {
-      const response = await fetch('/api/zello/status');
-      if (!response.ok) return null;
-      return response.json();
-    },
-    refetchInterval: 30000, // Refresh every 30 seconds
-  });
-
-  // Fetch recent Zello WebSocket broadcasts
-  const { data: zelloBroadcasts } = useQuery({
-    queryKey: ['/api/zello/broadcasts'],
-    queryFn: async () => {
-      const response = await fetch('/api/zello/broadcasts?limit=20');
-      if (!response.ok) return { broadcasts: [], count: 0, queueSize: 0 };
-      return response.json();
-    },
-    refetchInterval: 3000, // Refresh every 3 seconds for real-time broadcasts
-  });
 
   // Debug logging
   useEffect(() => {
@@ -842,29 +820,13 @@ export default function CommunicationDashboard() {
     }
   };
 
-  const handleRequestZelloDocuments = async (documentTypes: string[]) => {
+  const handleRequestDocuments = async (documentTypes: string[]) => {
     if (!selectedThread) return;
     
-    try {
-      const response = await fetch('/api/zello/request-documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          driverId: selectedThread.driverId,
-          loadId: selectedThread.loadId,
-          documentTypes
-        })
-      });
-
-      if (response.ok) {
-        toast({ title: "Document request sent via Zello", description: "The driver will receive a voice notification to upload documents" });
-      } else {
-        toast({ title: "Failed to send document request", variant: "destructive" });
-      }
-    } catch (error) {
-      console.error('Error requesting documents:', error);
-      toast({ title: "Error sending request", variant: "destructive" });
-    }
+    const documentNames = documentTypes.map(type => getCategoryLabel(type)).join(', ');
+    const message = `📄 Please send the following documents via SMS/MMS: ${documentNames}. You can take photos and send them directly to this number.`;
+    
+    sendMessageMutation.mutate({ threadId: selectedThread.id, content: message });
   };
 
   // Document Gallery Component
@@ -901,10 +863,10 @@ export default function CommunicationDashboard() {
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-sm font-medium text-yellow-900">Missing Documents</h4>
-              <Radio className="w-4 h-4 text-yellow-600 animate-pulse" />
+              <MessageSquare className="w-4 h-4 text-yellow-600 animate-pulse" />
             </div>
             <p className="text-sm text-yellow-800 mb-3">
-              Request the following documents from driver via Zello voice dispatch:
+              Request the following documents from driver via SMS:
             </p>
             <div className="flex flex-wrap gap-2">
               {missingDocuments.map(type => (
@@ -918,10 +880,10 @@ export default function CommunicationDashboard() {
               size="sm"
               className="mt-3 w-full border-yellow-300 hover:bg-yellow-100"
               onClick={() => onRequestDocuments(missingDocuments)}
-              data-testid="button-request-zello-documents"
+              data-testid="button-request-documents"
             >
-              <Radio className="w-4 h-4 mr-2" />
-              Request via Zello Voice Channel
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Request via SMS
             </Button>
           </div>
         )}
@@ -1219,78 +1181,6 @@ export default function CommunicationDashboard() {
                   </button>
                 ))}
               </div>
-            </div>
-          )}
-          
-          {/* Zello Voice Dispatch Status */}
-          {zelloStatus && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-900">Zello WebSocket</span>
-                </div>
-                <Badge className={zelloStatus.wsConnected ? "bg-green-100 text-green-800 border-green-200" : "bg-yellow-100 text-yellow-800 border-yellow-200"}>
-                  {zelloStatus.wsConnected ? 'Connected' : 'Connecting'}
-                </Badge>
-              </div>
-              <div className="space-y-1">
-                {zelloStatus.channels?.map((channel: any) => (
-                  <div key={channel.name} className="flex items-center justify-between text-xs">
-                    <span className="text-gray-700">#{channel.name}</span>
-                    <span className="text-gray-500">{channel.userCount} users</span>
-                  </div>
-                ))}
-                {zelloStatus.queueSize > 0 && (
-                  <div className="text-xs text-orange-600 mt-2 pt-2 border-t border-blue-100">
-                    📥 {zelloStatus.queueSize} messages queued
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Zello WebSocket Recent Broadcasts */}
-          {zelloBroadcasts && zelloBroadcasts.broadcasts && zelloBroadcasts.broadcasts.length > 0 && (
-            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Package className="w-4 h-4 text-green-600" />
-                  <span className="text-sm font-medium text-green-900">Recent Broadcasts</span>
-                </div>
-                <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
-                  {zelloBroadcasts.count} sent
-                </Badge>
-              </div>
-              <ScrollArea className="h-48">
-                <div className="space-y-2">
-                  {zelloBroadcasts.broadcasts.slice(0, 10).map((broadcast: any, idx: number) => (
-                    <div key={idx} className="p-2 bg-white rounded border border-green-100">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-medium text-gray-900">{broadcast.loadNumber || 'Unknown Load'}</span>
-                            <Badge className={
-                              broadcast.status === 'sent' ? "bg-green-100 text-green-800 border-green-200" : 
-                              broadcast.status === 'queued' ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
-                              "bg-red-100 text-red-800 border-red-200"
-                            }>
-                              {broadcast.status}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-gray-600 truncate">{broadcast.message.substring(0, 60)}...</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs text-gray-500">#{broadcast.channel}</span>
-                            <span className="text-xs text-gray-400">
-                              {new Date(broadcast.timestamp).toLocaleTimeString()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
             </div>
           )}
         </div>
@@ -1890,7 +1780,7 @@ export default function CommunicationDashboard() {
                           loadId={selectedThread.loadId}
                           onApprove={(id) => approveDocumentMutation.mutate({ id, notes: '' })}
                           onReject={(id, notes) => rejectDocumentMutation.mutate({ id, notes })}
-                          onRequestDocuments={handleRequestZelloDocuments}
+                          onRequestDocuments={handleRequestDocuments}
                         />
                       </DialogContent>
                     </Dialog>
