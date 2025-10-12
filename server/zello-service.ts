@@ -76,6 +76,14 @@ export class ZelloDispatchService extends EventEmitter {
   private reconnectAttempts: number = 0;
   private readonly maxReconnectDelay: number = 60000; // Max 1 minute backoff
   private readonly initialReconnectDelay: number = 1000; // Start with 1 second
+  private recentBroadcasts: Array<{
+    channel: string;
+    message: string;
+    timestamp: Date;
+    status: 'sent' | 'queued' | 'failed';
+    loadNumber?: string;
+  }> = [];
+  private readonly maxBroadcastHistory: number = 100; // Keep last 100 broadcasts
   
   constructor() {
     super();
@@ -1041,6 +1049,9 @@ export class ZelloDispatchService extends EventEmitter {
           retries: 0
         });
         console.log(`📥 Message queued (${this.messageQueue.length} messages in queue)`);
+        
+        // Track queued broadcast
+        this.trackBroadcast(channelName, message, 'queued');
       }
       return false;
     }
@@ -1059,6 +1070,9 @@ export class ZelloDispatchService extends EventEmitter {
       
       console.log(`📤 Sending text message to ${actualChannelName}: "${message.substring(0, 50)}${message.length > 50 ? '...' : ''}"`);
       this.websocket.send(JSON.stringify(textCommand));
+      
+      // Track successful broadcast
+      this.trackBroadcast(channelName, message, 'sent');
       
       return true;
     } catch (error) {
@@ -1115,6 +1129,40 @@ export class ZelloDispatchService extends EventEmitter {
     } else {
       console.log(`✅ All queued messages delivered successfully`);
     }
+  }
+  
+  private trackBroadcast(channel: string, message: string, status: 'sent' | 'queued' | 'failed', loadNumber?: string): void {
+    // Extract load number from message if not provided
+    if (!loadNumber) {
+      const loadMatch = message.match(/LOAD-(\d+)/);
+      if (loadMatch) {
+        loadNumber = `LOAD-${loadMatch[1]}`;
+      }
+    }
+    
+    this.recentBroadcasts.unshift({
+      channel,
+      message,
+      timestamp: new Date(),
+      status,
+      loadNumber
+    });
+    
+    // Keep only the most recent broadcasts
+    if (this.recentBroadcasts.length > this.maxBroadcastHistory) {
+      this.recentBroadcasts = this.recentBroadcasts.slice(0, this.maxBroadcastHistory);
+    }
+  }
+  
+  // Get recent broadcast history
+  getRecentBroadcasts(limit: number = 50): Array<{
+    channel: string;
+    message: string;
+    timestamp: Date;
+    status: 'sent' | 'queued' | 'failed';
+    loadNumber?: string;
+  }> {
+    return this.recentBroadcasts.slice(0, limit);
   }
   
   private wsLogon(): void {

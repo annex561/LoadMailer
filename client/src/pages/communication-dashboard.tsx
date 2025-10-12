@@ -339,6 +339,17 @@ export default function CommunicationDashboard() {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Fetch recent Zello WebSocket broadcasts
+  const { data: zelloBroadcasts } = useQuery({
+    queryKey: ['/api/zello/broadcasts'],
+    queryFn: async () => {
+      const response = await fetch('/api/zello/broadcasts?limit=20');
+      if (!response.ok) return { broadcasts: [], count: 0, queueSize: 0 };
+      return response.json();
+    },
+    refetchInterval: 3000, // Refresh every 3 seconds for real-time broadcasts
+  });
+
   // Debug logging
   useEffect(() => {
     console.log('Communication Dashboard - Threads data:', threads);
@@ -1217,10 +1228,10 @@ export default function CommunicationDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Radio className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-900">Zello Voice Dispatch</span>
+                  <span className="text-sm font-medium text-blue-900">Zello WebSocket</span>
                 </div>
-                <Badge className={zelloStatus.initialized ? "bg-green-100 text-green-800 border-green-200" : "bg-yellow-100 text-yellow-800 border-yellow-200"}>
-                  {zelloStatus.initialized ? 'Active' : 'Connecting'}
+                <Badge className={zelloStatus.wsConnected ? "bg-green-100 text-green-800 border-green-200" : "bg-yellow-100 text-yellow-800 border-yellow-200"}>
+                  {zelloStatus.wsConnected ? 'Connected' : 'Connecting'}
                 </Badge>
               </div>
               <div className="space-y-1">
@@ -1230,12 +1241,56 @@ export default function CommunicationDashboard() {
                     <span className="text-gray-500">{channel.userCount} users</span>
                   </div>
                 ))}
-                {zelloStatus.totalUsers > 0 && (
-                  <div className="text-xs text-gray-600 mt-2 pt-2 border-t border-blue-100">
-                    Total drivers on Zello: {zelloStatus.totalUsers}
+                {zelloStatus.queueSize > 0 && (
+                  <div className="text-xs text-orange-600 mt-2 pt-2 border-t border-blue-100">
+                    📥 {zelloStatus.queueSize} messages queued
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Zello WebSocket Recent Broadcasts */}
+          {zelloBroadcasts && zelloBroadcasts.broadcasts && zelloBroadcasts.broadcasts.length > 0 && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-900">Recent Broadcasts</span>
+                </div>
+                <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+                  {zelloBroadcasts.count} sent
+                </Badge>
+              </div>
+              <ScrollArea className="h-48">
+                <div className="space-y-2">
+                  {zelloBroadcasts.broadcasts.slice(0, 10).map((broadcast: any, idx: number) => (
+                    <div key={idx} className="p-2 bg-white rounded border border-green-100">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-medium text-gray-900">{broadcast.loadNumber || 'Unknown Load'}</span>
+                            <Badge className={
+                              broadcast.status === 'sent' ? "bg-green-100 text-green-800 border-green-200" : 
+                              broadcast.status === 'queued' ? "bg-yellow-100 text-yellow-800 border-yellow-200" :
+                              "bg-red-100 text-red-800 border-red-200"
+                            }>
+                              {broadcast.status}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-600 truncate">{broadcast.message.substring(0, 60)}...</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs text-gray-500">#{broadcast.channel}</span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(broadcast.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
           )}
         </div>

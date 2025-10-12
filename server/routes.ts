@@ -340,24 +340,11 @@ async function initializeAllServices() {
       }
     }, 2000);  // Wait 2 seconds for server to be fully ready
 
-    Promise.resolve().then(async () => {
-      try {
-        // Initialize SMS Load Service
-        await smsLoadService.initializeLoadService();
-        console.log('✅ SMS Load Service initialized');
-        
-        // Initialize SMS communication service
-        await smsCommunicationService.initialize();
-        console.log('✅ SMS Communication Service initialized');
-        
-        // Initialize dependent services after SMS service is ready
-        setTimeout(() => {
-          initializeDependentServices();
-        }, 2000);
-      } catch (error) {
-        console.error('Failed to initialize Telegram Load Service:', error);
-      }
-    });
+    // SMS/Twilio removed - using ONLY Zello WebSocket for all driver communication
+    // Initialize dependent services (without SMS dependency)
+    setTimeout(() => {
+      initializeDependentServices();
+    }, 2000);
 
     Promise.resolve().then(async () => {
       try {
@@ -2424,6 +2411,27 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error('❌ Error getting Zello status:', error);
       res.status(500).json({ error: 'Failed to get Zello status' });
+    }
+  });
+
+  // Get recent Zello broadcasts (with cache disabled to prevent 304 responses)
+  app.get('/api/zello/broadcasts', async (req, res) => {
+    try {
+      // Disable HTTP caching to ensure React Query always gets fresh data
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+      
+      const limit = parseInt(req.query.limit as string) || 50;
+      const broadcasts = zelloService.getRecentBroadcasts(limit);
+      res.json({
+        broadcasts,
+        count: broadcasts.length,
+        queueSize: zelloService.getChannelStatus().queueSize || 0
+      });
+    } catch (error) {
+      console.error('❌ Error getting Zello broadcasts:', error);
+      res.status(500).json({ error: 'Failed to get Zello broadcasts' });
     }
   });
 
