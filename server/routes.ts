@@ -1836,6 +1836,58 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // SMS Webhook endpoints for receiving messages from drivers
+  app.post('/api/sms/webhook', async (req, res) => {
+    try {
+      // Verify Twilio signature for security (required for production)
+      const twilioSignature = req.headers['x-twilio-signature'] as string;
+      if (process.env.NODE_ENV === 'production' && process.env.TWILIO_AUTH_TOKEN) {
+        if (!twilioSignature) {
+          console.log('🔒 Missing Twilio signature in production - request rejected');
+          return res.status(403).send('Forbidden: Missing signature');
+        }
+        
+        const webhookUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+        const isValidSignature = twilio.validateRequest(
+          process.env.TWILIO_AUTH_TOKEN,
+          twilioSignature,
+          webhookUrl,
+          req.body
+        );
+        
+        if (!isValidSignature) {
+          console.log('🔒 Invalid Twilio signature - request rejected');
+          return res.status(403).send('Forbidden: Invalid signature');
+        }
+        
+        console.log('🔒 Twilio signature verified successfully');
+      }
+      
+      console.log('📱 SMS webhook received:', req.body);
+      
+      const { From, Body, MessageSid } = req.body;
+      
+      if (!From || !Body) {
+        console.log('⚠️ Invalid SMS webhook data - missing From or Body');
+        console.log('📋 Request body keys:', Object.keys(req.body));
+        return res.status(400).send('Invalid webhook data');
+      }
+
+      // Handle incoming SMS through communication service
+      await smsCommunicationService.handleIncomingSMS(From, Body, MessageSid);
+      
+      // Respond with TwiML to acknowledge receipt
+      res.set('Content-Type', 'text/xml');
+      res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Message>Message received</Message>
+</Response>`);
+    } catch (error) {
+      console.error('❌ Error handling SMS webhook:', error);
+      res.status(500).send('Error processing SMS');
+    }
+  });
+
   // SMS status webhook to track delivery status
   app.post('/api/sms/status', async (req, res) => {
     try {
