@@ -6,8 +6,6 @@ import { storage } from "./storage";
 import { analyticsService } from "./analytics-service";
 import { schedulerService } from "./scheduler-service";
 import { loadExpirationService } from "./load-expiration-service";
-import { smsService as smsLoadService } from "./sms-service";
-import { smsCommunicationService } from "./sms-communication-service";
 import { gpsTrackingService } from "./gps-tracking-service";
 import { loadBoardService } from "./load-board-service";
 import { biddingService } from "./bidding-service";
@@ -34,8 +32,8 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
-import twilio from "twilio";
 // Database-backed token service handled by storage interface
+// NOTE: Twilio/SMS removed - system uses ONLY Zello WebSocket for all driver communication
 
 // Initialize prediction confidence service
 const predictionConfidenceService = new PredictionConfidenceService();
@@ -264,13 +262,13 @@ async function initializeDependentServices() {
   try {
     console.log('🚀 Initializing dependent services...');
     
-    // Initialize services only if Telegram is running or if they can work without it
-    continuousLoadService = new ContinuousLoadService(smsLoadService);
-    datScraperService = new DATScraperService(smsLoadService);
-    realLoadService = new RealLoadIntegrationService(smsLoadService);
-    datAPIService = new DATAPIService(smsLoadService);
-    datWebsiteScraper = new DATWebsiteScraper(smsLoadService);
-    realDATScraper = new RealDATScraper(smsLoadService);
+    // Initialize services (Zello-only communication - no SMS/Telegram)
+    continuousLoadService = new ContinuousLoadService();
+    datScraperService = new DATScraperService();
+    realLoadService = new RealLoadIntegrationService();
+    datAPIService = new DATAPIService();
+    datWebsiteScraper = new DATWebsiteScraper();
+    realDATScraper = new RealDATScraper();
     
     console.log('✅ Dependent services initialized');
   } catch (error) {
@@ -1007,8 +1005,13 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Send automated emails for new load
       await sendAutomatedEmails(load, "load_created");
       
-      // Send load to drivers via SMS if it matches preferences
-      await smsLoadService.processNewLoad(load);
+      // Send load to drivers via Zello WebSocket
+      try {
+        await zelloService.sendLoadNotification(load);
+        console.log(`🎙️ Load ${load.loadNumber} broadcast via Zello to drivers`);
+      } catch (error) {
+        console.error(`❌ Failed to broadcast load via Zello:`, error);
+      }
       
       res.status(201).json(load);
     } catch (error) {
@@ -1050,12 +1053,12 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       // Send SMS notifications for driver assignments
       if (validatedData.driverId && validatedData.driverId !== originalLoad.driverId) {
-        console.log(`🚛 Load ${id} assigned to driver ${validatedData.driverId} - sending SMS notification`);
+        console.log(`🚛 Load ${id} assigned to driver ${validatedData.driverId} - sending Zello notification`);
         try {
-          await smsLoadService.processNewLoad(updatedLoad);
-          console.log(`✅ SMS notification sent for load assignment ${id}`);
+          await zelloService.sendLoadNotification(updatedLoad);
+          console.log(`✅ Zello notification sent for load assignment ${id}`);
         } catch (error) {
-          console.error(`❌ Failed to send SMS notification for load ${id}:`, error);
+          console.error(`❌ Failed to send Zello notification for load ${id}:`, error);
         }
       }
       
@@ -1118,13 +1121,13 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: 'Load not found' });
       }
       
-      // Send SMS notification for driver assignment
-      console.log(`🚛 Load ${id} assigned to driver ${driverId} - sending SMS notification`);
+      // Send Zello notification for driver assignment
+      console.log(`🚛 Load ${id} assigned to driver ${driverId} - sending Zello notification`);
       try {
-        await smsLoadService.processNewLoad(updatedLoad);
-        console.log(`✅ SMS notification sent for load assignment ${id}`);
+        await zelloService.sendLoadNotification(updatedLoad);
+        console.log(`✅ Zello notification sent for load assignment ${id}`);
       } catch (error) {
-        console.error(`❌ Failed to send SMS notification for load ${id}:`, error);
+        console.error(`❌ Failed to send Zello notification for load ${id}:`, error);
       }
       
       res.json(updatedLoad);

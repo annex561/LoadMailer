@@ -1,5 +1,5 @@
 import { storage } from './storage';
-import { TelegramLoadService } from './telegram-service';
+import { zelloService } from './zello-service';
 
 interface DATAPIConfig {
   apiKey: string;
@@ -73,13 +73,12 @@ interface DATSearchParams {
 
 export class DATAPIService {
   private config: DATAPIConfig;
-  private telegramService: TelegramLoadService;
   private isRunning = false;
   private searchInterval: NodeJS.Timeout | null = null;
   private lastSearchTime: Date | null = null;
 
-  constructor(telegramService: TelegramLoadService) {
-    this.telegramService = telegramService;
+  constructor() {
+    // Zello-only communication - no other services needed
     this.config = {
       apiKey: process.env.DAT_API_KEY || '',
       clientId: process.env.DAT_CLIENT_ID || '',
@@ -248,9 +247,13 @@ export class DATAPIService {
       const load = await storage.createLoad(loadData);
       console.log(`📋 [DAT LIVE] Created load ${load.loadNumber}: ${originAddress} → ${destinationAddress} ($${datLoad.rate.amount})`);
 
-      // Send to Telegram notification system
-      await this.telegramService.processNewLoad(load);
-      console.log(`📱 [DAT LIVE] Load ${load.loadNumber} sent to eligible drivers`);
+      // Send to Zello WebSocket notification system
+      try {
+        await zelloService.sendLoadNotification(load);
+        console.log(`🎙️ [DAT LIVE] Load ${load.loadNumber} broadcast via Zello to drivers`);
+      } catch (error) {
+        console.error(`❌ Failed to broadcast load ${load.loadNumber} via Zello:`, error);
+      }
 
     } catch (error) {
       console.error('Error processing DAT load:', error);

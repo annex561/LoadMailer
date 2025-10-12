@@ -943,7 +943,7 @@ export class ZelloDispatchService extends EventEmitter {
       parts.push(`Pickup: ${loadData.pickupDate}`);
     }
     
-    parts.push('Reply BOOK to accept or check SMS for details');
+    parts.push('Reply BOOK to accept this load');
     
     return parts.join('. ');
   }

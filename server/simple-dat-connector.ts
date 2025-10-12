@@ -1,16 +1,15 @@
 import { storage } from './storage.js';
+import { zelloService } from './zello-service.js';
 
 // Simple DAT connector that works without browser automation
 // This creates realistic Tennessee loads until DAT API integration is complete
 export class SimpleDATConnector {
   private isRunning = false;
   private interval?: NodeJS.Timeout;
-  private telegramService: any;
 
-  async startRealLoadGeneration(telegramService?: any): Promise<void> {
+  async startRealLoadGeneration(): Promise<void> {
     console.log('🚚 Starting real DAT load simulation for Tennessee region...');
     this.isRunning = true;
-    this.telegramService = telegramService;
 
     // Create initial batch of Tennessee loads
     await this.createTennesseeLoads();
@@ -124,21 +123,12 @@ export class SimpleDATConnector {
         const load = await storage.createLoad(loadData);
         console.log(`✅ [TN LOAD] Created ${load.loadNumber}: ${selectedLoad.origin} → ${selectedLoad.destination} ($${selectedLoad.rate}) - ${selectedLoad.company}`);
         
-        // Send Tennessee load to Telegram only if there are drivers with valid Telegram IDs
-        if (this.telegramService && load) {
-          try {
-            const telegramDrivers = await storage.getDriversWithTelegramEnabled();
-            const validTelegramDrivers = telegramDrivers.filter(d => d.telegramId && d.telegramId !== null && d.telegramId !== '123456789');
-            
-            if (validTelegramDrivers.length > 0) {
-              await this.telegramService.processNewLoad(load);
-              console.log(`📱 Sent Tennessee load ${load.loadNumber} to ${validTelegramDrivers.length} drivers via Telegram`);
-            } else {
-              console.log(`📱 Load ${load.loadNumber} created but no valid Telegram drivers to notify`);
-            }
-          } catch (error) {
-            console.error(`❌ Failed to send load ${load.loadNumber} to Telegram:`, error);
-          }
+        // Send Tennessee load to drivers via Zello WebSocket
+        try {
+          await zelloService.sendLoadNotification(load);
+          console.log(`🎙️ [TN LOAD] Load ${load.loadNumber} broadcast via Zello to drivers`);
+        } catch (error) {
+          console.error(`❌ Failed to broadcast load ${load.loadNumber} via Zello:`, error);
         }
       }
 

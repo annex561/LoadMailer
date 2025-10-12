@@ -1,5 +1,5 @@
 import { storage } from './storage';
-import { TelegramLoadService } from './telegram-service';
+import { zelloService } from './zello-service';
 import { DAT_EQUIPMENT_MAPPING, mapDATEquipmentType } from '../shared/equipment-types.js';
 
 interface ScrapedLoad {
@@ -17,15 +17,14 @@ interface ScrapedLoad {
 }
 
 export class DATWebsiteScraper {
-  private telegramService: TelegramLoadService;
   private isRunning = false;
   private scrapeInterval: NodeJS.Timeout | null = null;
   private lastScrapeTime: Date | null = null;
   private seenLoadIds = new Set<string>();
   private scrapeIntervalSeconds = 10; // Start with 10 seconds
 
-  constructor(telegramService: TelegramLoadService) {
-    this.telegramService = telegramService;
+  constructor() {
+    // Zello-only communication - no other services needed
   }
 
   async startScraping(intervalSeconds: number = 10): Promise<void> {
@@ -196,9 +195,13 @@ export class DATWebsiteScraper {
       const load = await storage.createLoad(loadData);
       console.log(`📋 [DAT LIVE] Scraped load ${load.loadNumber}: ${scrapedLoad.origin} → ${scrapedLoad.destination} ($${scrapedLoad.rate})`);
 
-      // Immediately send to Telegram
-      await this.telegramService.processNewLoad(load);
-      console.log(`📱 [DAT LIVE] Load ${load.loadNumber} pushed to eligible drivers`);
+      // Immediately send to Zello WebSocket
+      try {
+        await zelloService.sendLoadNotification(load);
+        console.log(`🎙️ [DAT LIVE] Load ${load.loadNumber} broadcast via Zello to drivers`);
+      } catch (error) {
+        console.error(`❌ Failed to broadcast load ${load.loadNumber} via Zello:`, error);
+      }
 
     } catch (error) {
       console.error('Error processing scraped load:', error);

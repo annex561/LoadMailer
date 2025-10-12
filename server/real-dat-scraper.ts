@@ -1,5 +1,5 @@
 import { storage } from './storage';
-import { TelegramLoadService } from './telegram-service';
+import { zelloService } from './zello-service';
 
 interface DATCredentials {
   username: string;
@@ -23,7 +23,6 @@ interface RealDATLoad {
 }
 
 export class RealDATScraper {
-  private telegramService: TelegramLoadService;
   private credentials: DATCredentials | null = null;
   private isRunning = false;
   private scrapeInterval: NodeJS.Timeout | null = null;
@@ -34,8 +33,8 @@ export class RealDATScraper {
   private currentPage: any = null;
   private authenticatedSession: any = null;
 
-  constructor(telegramService: TelegramLoadService) {
-    this.telegramService = telegramService;
+  constructor() {
+    // Zello-only communication - no other services needed
   }
 
   setCredentials(username: string, password: string): void {
@@ -147,9 +146,13 @@ export class RealDATScraper {
       const load = await storage.createLoad(loadData);
       console.log(`📋 [DAT REAL] Created ${load.loadNumber}: ${datLoad.origin} → ${datLoad.destination} ($${datLoad.rate}) - ${datLoad.company}`);
 
-      // Send to Telegram immediately 
-      await this.telegramService.processNewLoad(load);
-      console.log(`📱 [DAT REAL] Load ${load.loadNumber} sent to eligible drivers`);
+      // Send to Zello WebSocket immediately 
+      try {
+        await zelloService.sendLoadNotification(load);
+        console.log(`🎙️ [DAT REAL] Load ${load.loadNumber} broadcast via Zello to drivers`);
+      } catch (error) {
+        console.error(`❌ Failed to broadcast load ${load.loadNumber} via Zello:`, error);
+      }
 
     } catch (error) {
       console.error('Error processing real DAT load:', error);
@@ -830,9 +833,12 @@ All dummy/test data must be replaced with authentic DAT LoadLink data.
 
       console.log(`✅ Stored DAT load: ${loadData.origin} → ${loadData.destination} ($${loadData.rate})`);
       
-      // Send to eligible drivers via Telegram
-      if (this.telegramService) {
-        await this.telegramService.processNewLoad(newLoad);
+      // Send to eligible drivers via Zello WebSocket
+      try {
+        await zelloService.sendLoadNotification(newLoad);
+        console.log(`🎙️ Load ${newLoad.loadNumber} broadcast via Zello to drivers`);
+      } catch (error) {
+        console.error(`❌ Failed to broadcast load via Zello:`, error);
       }
       
     } catch (error) {

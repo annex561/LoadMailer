@@ -4,7 +4,7 @@ let googleSheetsLoads: any[] = [];
 let processedLoadIds = new Set<string>(); // Track processed loads to avoid duplicates
 
 // Import necessary services for driver notifications
-import { smsService as smsLoadService } from './sms-service.js';
+import { zelloService } from './zello-service.js';
 import { storage } from './storage.js';
 import type { LoadWithRelations, InsertLoad } from './storage';
 import { randomUUID } from 'crypto';
@@ -258,12 +258,12 @@ class GoogleSheetsSimple {
               if (properLoad) {
                 console.log(`🚛 NEW LOAD FOR DRIVERS: ${properLoad.loadNumber} - ${load.origin} → ${load.destination} ($${load.rate})`);
                 
-                // Send to SMS notification system for driver proximity matching
-                const notificationSent = await smsLoadService.processNewLoad(properLoad);
-                if (notificationSent) {
-                  console.log(`📱 Load ${properLoad.loadNumber} sent to eligible drivers via SMS`);
-                } else {
-                  console.log(`❌ No eligible drivers found for load ${properLoad.loadNumber}`);
+                // Send to Zello WebSocket for driver notifications
+                try {
+                  await zelloService.sendLoadNotification(properLoad);
+                  console.log(`🎙️ Load ${properLoad.loadNumber} broadcast via Zello to drivers`);
+                } catch (error) {
+                  console.error(`❌ Failed to broadcast load ${properLoad.loadNumber} via Zello:`, error);
                 }
               }
             } catch (error) {
