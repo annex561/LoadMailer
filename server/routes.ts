@@ -1272,8 +1272,8 @@ export async function registerRoutes(app: Express): Promise<void> {
           return res.status(404).json({ error: 'Load not found' });
         }
         loadNumber = load.loadNumber;
-        loadOrigin = load.origin || load.pickupLocation || null;
-        loadDestination = load.destination || load.deliveryLocation || null;
+        loadOrigin = load.pickupAddress || null;
+        loadDestination = load.deliveryAddress || null;
       }
       
       // Create thread
@@ -2064,20 +2064,46 @@ export async function registerRoutes(app: Express): Promise<void> {
           
           let thread = null;
           
-          // First, check if driver has an active load thread (most recent with active status)
+          // Get all driver's threads
           const allThreads = await storage.getAllLoadCommunicationThreads();
-          const driverLoadThreads = allThreads
-            .filter(t => t.driverId === driver.id && t.status === 'active' && t.threadType === 'load')
-            .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+          const driverThreads = allThreads.filter(t => t.driverId === driver.id && t.status === 'active');
           
-          if (driverLoadThreads.length > 0) {
-            // Use most recent active load thread
-            thread = driverLoadThreads[0];
-            console.log(`📦 Routing to load thread ${thread.id} for load ${thread.loadNumber || 'unknown'}`);
-          } else {
-            // No active load thread, check for general thread
-            const generalThreads = allThreads
-              .filter(t => t.driverId === driver.id && t.threadType === 'general')
+          // Check if message mentions a specific load number
+          const loadNumberMatch = messageContent.match(/LOAD-[A-Z0-9]+|TEST-[A-Z0-9]+/i);
+          
+          if (loadNumberMatch) {
+            // Message mentions a load - find the specific load thread
+            const mentionedLoadNumber = loadNumberMatch[0].toUpperCase();
+            console.log(`🔍 Message mentions load ${mentionedLoadNumber}, searching for specific thread...`);
+            
+            const specificLoadThread = driverThreads.find(t => 
+              t.threadType === 'load' && 
+              t.loadNumber && 
+              t.loadNumber.toUpperCase() === mentionedLoadNumber
+            );
+            
+            if (specificLoadThread) {
+              thread = specificLoadThread;
+              console.log(`✅ Matched to load thread ${thread.id} for ${thread.loadNumber}`);
+            }
+          }
+          
+          // If no specific load thread found, use most recent active load thread
+          if (!thread) {
+            const driverLoadThreads = driverThreads
+              .filter(t => t.threadType === 'load')
+              .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+            
+            if (driverLoadThreads.length > 0) {
+              thread = driverLoadThreads[0];
+              console.log(`📦 Using most recent load thread ${thread.id} for ${thread.loadNumber || 'unknown'}`);
+            }
+          }
+          
+          // If still no thread, check for general thread
+          if (!thread) {
+            const generalThreads = driverThreads
+              .filter(t => t.threadType === 'general')
               .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
             
             if (generalThreads.length > 0) {
@@ -2093,7 +2119,9 @@ export async function registerRoutes(app: Express): Promise<void> {
                 threadType: 'general',
                 messageCount: 0,
                 unreadDriverMessages: 0,
-                unreadDispatchMessages: 0
+                unreadDispatchMessages: 0,
+                driverName: driver.name,
+                driverPhone: driver.phone || ''
               });
             }
           }
