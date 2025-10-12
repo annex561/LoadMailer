@@ -37,8 +37,6 @@ import AdminOverview from "@/pages/admin-overview";
 import SMSStatus from "@/pages/sms-status";
 import DebugToken from "@/pages/debug-token";
 import GoogleSheetsImport from "@/pages/google-sheets-import";
-import ZelloTest from "@/pages/zello-test";
-import ZelloIntegrationTest from "@/pages/zello-integration-test";
 import TwilioSettings from "@/pages/twilio-settings";
 
 import Sidebar from "@/components/sidebar";
@@ -96,8 +94,6 @@ function App() {
           <Route path="/driver-profile" component={DriverProfile} />
           <Route path="/sms-status" component={SMSStatus} />
           <Route path="/debug-token" component={DebugToken} />
-          <Route path="/zello-test" component={ZelloTest} />
-          <Route path="/zello-integration-test" component={ZelloIntegrationTest} />
           <Route path="/twilio-settings" component={TwilioSettings} />
           
           {/* All routes use LoadOps dashboard layout */}

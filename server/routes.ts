@@ -27,7 +27,6 @@ import { realDriverLocationService } from "./real-driver-location-service";
 import { taskMagicIntegration } from './taskmagic-integration';
 import { datScraperService as puppeteerDATService } from './dat-puppeteer-scraper';
 import { googleSheetsService } from './google-sheets-service';
-import { zelloService } from './zello-service';
 import { setupAuth, isAuthenticated } from "./replitAuth";
 
 import nodemailer from "nodemailer";
@@ -287,12 +286,10 @@ async function sendAutomatedEmails(load: LoadWithRelations, trigger: string) {
   }
 }
 
-// Function to initialize services that depend on Telegram service
 async function initializeDependentServices() {
   try {
     console.log('🚀 Initializing dependent services...');
     
-    // Initialize services (Zello-only communication - no SMS/Telegram)
     continuousLoadService = new ContinuousLoadService();
     datScraperService = new DATScraperService();
     realLoadService = new RealLoadIntegrationService();
@@ -331,200 +328,7 @@ async function initializeAllServices() {
       }
     });
 
-    // Initialize Zello voice dispatch service immediately
-    setTimeout(async () => {
-      try {
-        console.log('🎙️ Starting Zello voice dispatch initialization...');
-        await zelloService.initialize();
-        const status = {
-          initialized: zelloService.isServiceRunning(),
-          configured: zelloService.isServiceConfigured(),
-          channels: zelloService.channels,
-          totalUsers: zelloService.users.size
-        };
-        console.log('✅ Zello voice dispatch service initialized:', status);
-        
-        // Set up Zello event handlers
-        zelloService.on('load_accepted', async (data) => {
-          console.log(`✅ Driver ${data.driver} accepted load ${data.loadNumber} via Zello`);
-          // Update load status in database
-          const load = await storage.getLoadByNumber(data.loadNumber);
-          if (load && load.status === 'available') {
-            const driver = await storage.getDriverByNameOrPhone(data.driver);
-            if (driver) {
-              await storage.updateLoad(load.id, {
-                status: 'assigned',
-                driverId: driver.id
-              });
-            }
-          }
-        });
-        
-        zelloService.on('load_declined', async (data) => {
-          console.log(`❌ Driver ${data.driver} declined load ${data.loadNumber} via Zello`);
-          // TODO: Find next eligible driver
-        });
-        
-        // Handle incoming text messages from Zello WebSocket
-        zelloService.on('text_message', async (data) => {
-          try {
-            console.log(`💬 WebSocket text message from ${data.from} in ${data.channel}: ${data.text}`);
-            
-            const messageContent = data.text || '';
-            const fromUser = data.from || '';
-            
-            if (!fromUser || !messageContent) {
-              console.log('⚠️ Invalid Zello WebSocket message - missing sender or content');
-              return;
-            }
-
-            // Find driver by Zello username or display name
-            const driver = await storage.getDriverByNameOrPhone(fromUser);
-            if (!driver) {
-              console.log(`⚠️ Unknown driver in Zello WebSocket message: ${fromUser}`);
-              return;
-            }
-
-            // Check if message is a load response (ACCEPT/DECLINE)
-            const upperMessage = messageContent.toUpperCase();
-            if (upperMessage.includes('ACCEPT') || upperMessage.includes('BOOK')) {
-              // Driver accepting a load - handled by load_accepted event
-              return;
-            } else if (upperMessage.includes('DECLINE') || upperMessage.includes('PASS')) {
-              // Driver declining a load - handled by load_declined event
-              return;
-            }
-            
-            // Regular message - route to correct thread (load-specific or general)
-            console.log(`💬 Routing incoming WebSocket message from ${driver.name}: ${messageContent.substring(0, 50)}...`);
-            
-            let thread = null;
-            
-            // Get all driver's threads
-            const allThreads = await storage.getAllLoadCommunicationThreads();
-            const driverThreads = allThreads.filter(t => t.driverId === driver.id && t.status === 'active');
-            
-            // Enhanced regex to match various load number formats:
-            // - Standard: LOAD-123, TEST-LOAD-001, LM-1234
-            // - Numeric only: 603006, 602951
-            // - Custom prefixes: BOL-123, REF-456
-            const loadNumberMatch = messageContent.match(/(?:(?:LOAD|TEST|LM|BOL|REF|TN)-[A-Z0-9-]+|\b\d{6}\b)/i);
-            
-            if (loadNumberMatch) {
-              // Message mentions a load - find the specific load thread
-              const mentionedLoadNumber = loadNumberMatch[0].toUpperCase();
-              console.log(`🔍 Message mentions load ${mentionedLoadNumber}, searching for specific thread...`);
-              
-              // Normalize function to strip prefixes for comparison
-              const normalizeLoadNumber = (num: string) => {
-                if (!num) return '';
-                return num.toUpperCase().replace(/^(LOAD|TEST|LM|BOL|REF|TN)-/, '');
-              };
-              
-              const normalizedMention = normalizeLoadNumber(mentionedLoadNumber);
-              
-              // Pre-fetch all load numbers for performance (caching)
-              const loadNumberCache = new Map<string, string>();
-              for (const t of driverThreads.filter(t => t.threadType === 'load' && t.loadId)) {
-                if (!loadNumberCache.has(t.loadId)) {
-                  try {
-                    const load = await storage.getLoad(t.loadId);
-                    if (load) {
-                      loadNumberCache.set(t.loadId, load.loadNumber);
-                    }
-                  } catch (error) {
-                    console.error(`⚠️ Error fetching load ${t.loadId}:`, error);
-                  }
-                }
-              }
-              
-              // Check threads using normalized comparison
-              for (const t of driverThreads.filter(t => t.threadType === 'load')) {
-                const threadLoadNumber = t.loadNumber || (t as any).loadNumberFromLoad || (t.loadId && loadNumberCache.get(t.loadId));
-                const normalizedThread = normalizeLoadNumber(threadLoadNumber || '');
-                
-                if (normalizedThread && normalizedThread === normalizedMention) {
-                  thread = t;
-                  console.log(`✅ Matched to load thread ${thread.id} for ${threadLoadNumber} (normalized: ${normalizedMention})`);
-                  break;
-                }
-              }
-            }
-            
-            // If no specific load thread found, use most recent active load thread
-            if (!thread) {
-              const driverLoadThreads = driverThreads
-                .filter(t => t.threadType === 'load')
-                .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-              
-              if (driverLoadThreads.length > 0) {
-                thread = driverLoadThreads[0];
-                console.log(`📦 Using most recent load thread ${thread.id}`);
-              }
-            }
-            
-            // If still no thread, check for general thread
-            if (!thread) {
-              const generalThreads = driverThreads
-                .filter(t => t.threadType === 'general')
-                .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-              
-              if (generalThreads.length > 0) {
-                thread = generalThreads[0];
-                console.log(`💬 Routing to general thread ${thread.id}`);
-              } else {
-                // No threads exist, create new general thread
-                console.log(`🆕 Creating new general thread for ${driver.name}`);
-                thread = await storage.createLoadCommunicationThread({
-                  driverId: driver.id,
-                  loadId: null,
-                  status: 'active',
-                  threadType: 'general',
-                  messageCount: 0,
-                  unreadDriverMessages: 0,
-                  unreadDispatchMessages: 0,
-                  driverName: driver.name,
-                  driverPhone: driver.phone || ''
-                });
-              }
-            }
-
-            // Store message in communication thread
-            await storage.createLoadMessage({
-              threadId: thread.id,
-              loadId: thread.loadId || null,
-              senderId: driver.id,
-              senderRole: 'driver',
-              senderName: driver.name,
-              messageType: 'text',
-              textContent: messageContent,
-              isRead: false,
-              isSuggested: false,
-              isSent: true
-            });
-
-            // Update thread stats
-            await storage.updateLoadCommunicationThread(thread.id, {
-              messageCount: (thread.messageCount || 0) + 1,
-              lastMessageAt: new Date(),
-              lastMessageText: messageContent.substring(0, 100),
-              lastMessageSender: 'driver',
-              unreadDispatchMessages: (thread.unreadDispatchMessages || 0) + 1
-            });
-
-            console.log(`✅ WebSocket message stored in ${thread.threadType} thread ${thread.id}`);
-          } catch (error) {
-            console.error('❌ Error processing WebSocket text message:', error);
-          }
-        });
-        
-      } catch (error) {
-        console.error('❌ Failed to initialize Zello service:', error);
-      }
-    }, 2000);  // Wait 2 seconds for server to be fully ready
-
-    // SMS/Twilio removed - using ONLY Zello WebSocket for all driver communication
-    // Initialize dependent services (without SMS dependency)
+    // Initialize dependent services
     setTimeout(() => {
       initializeDependentServices();
     }, 2000);
@@ -813,97 +617,60 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Get active driver locations for real-time map tracking
   app.get('/api/driver-locations/active', async (req, res) => {
     try {
-      console.log('📋 Fetching driver locations from database and Zello...');
+      console.log('📋 Fetching driver locations from database...');
       
       // Get all drivers from database
       const drivers = await storage.getAllDrivers();
       console.log(`📋 Database returned ${drivers.length} drivers:`, 
         drivers.map(d => `${d.name} (${d.id})`));
       
-      // Get GPS locations from Zello service for active users
-      const zelloLocations = await zelloService.getUserLocations();
-      console.log(`📍 Zello returned ${zelloLocations.length} user locations`);
-      
-      // Create a map of Zello locations by display name for quick lookup
-      const zelloLocationMap = new Map<string, any>();
-      zelloLocations.forEach(loc => {
-        if (loc.location) {
-          zelloLocationMap.set(loc.displayName.toLowerCase(), loc);
-        }
-      });
-      
       // Filter for available/on_route drivers and get their locations
       const activeDrivers = drivers.filter(d => d.status === 'available' || d.status === 'on_route');
       
-      // Map drivers to locations, prioritizing Zello GPS data
+      // Map drivers to locations using database or fallback
       const locations = activeDrivers.map(driver => {
-        // Try to find Zello GPS data for this driver
-        const zelloUser = zelloLocationMap.get(driver.name.toLowerCase());
+        console.log(`📍 Using database/fallback location for driver: ${driver.name}`);
         
-        if (zelloUser && zelloUser.location) {
-          // Use real Zello GPS data
-          console.log(`✅ Using Zello GPS for driver: ${driver.name}`);
-          const loc = zelloUser.location;
-          
-          return {
-            driverId: driver.id,
-            driverName: driver.name,
-            latitude: loc.latitude,
-            longitude: loc.longitude,
-            address: loc.address || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`,
-            lastUpdate: loc.timestamp,
-            speed: loc.speed || 0,
-            batteryLevel: loc.batteryLevel || 100,
-            isMoving: (loc.speed || 0) > 5,
-            heading: loc.heading || 0,
-            routeName: driver.status === 'on_route' ? 'Load Delivery Route' : undefined,
-            source: 'zello' // Track data source
-          };
-        } else {
-          // Fallback to simulated location for drivers without Zello GPS
-          console.log(`⚠️ No Zello GPS for driver: ${driver.name}, using fallback`);
-          
-          // Use driver's city if available, otherwise default to Tennessee locations
-          const cityLocations = {
-            'nashville': { lat: 36.1627, lng: -86.7816, city: 'Nashville, TN' },
-            'knoxville': { lat: 35.9606, lng: -83.9207, city: 'Knoxville, TN' },
-            'memphis': { lat: 35.1495, lng: -90.0490, city: 'Memphis, TN' },
-            'chattanooga': { lat: 35.0456, lng: -85.3097, city: 'Chattanooga, TN' },
-            'clarksville': { lat: 36.5298, lng: -87.3595, city: 'Clarksville, TN' },
-            'atlanta': { lat: 33.7490, lng: -84.3880, city: 'Atlanta, GA' },
-            'charlotte': { lat: 35.2271, lng: -80.8431, city: 'Charlotte, NC' },
-            'birmingham': { lat: 33.5186, lng: -86.8104, city: 'Birmingham, AL' }
-          };
-          
-          // Try to match driver's city
-          let baseLocation = cityLocations['nashville']; // Default
-          if (driver.city) {
-            const cityKey = driver.city.toLowerCase().split(',')[0].trim();
-            if (cityLocations[cityKey]) {
-              baseLocation = cityLocations[cityKey];
-            }
+        // Use driver's city if available, otherwise default to Tennessee locations
+        const cityLocations = {
+          'nashville': { lat: 36.1627, lng: -86.7816, city: 'Nashville, TN' },
+          'knoxville': { lat: 35.9606, lng: -83.9207, city: 'Knoxville, TN' },
+          'memphis': { lat: 35.1495, lng: -90.0490, city: 'Memphis, TN' },
+          'chattanooga': { lat: 35.0456, lng: -85.3097, city: 'Chattanooga, TN' },
+          'clarksville': { lat: 36.5298, lng: -87.3595, city: 'Clarksville, TN' },
+          'atlanta': { lat: 33.7490, lng: -84.3880, city: 'Atlanta, GA' },
+          'charlotte': { lat: 35.2271, lng: -80.8431, city: 'Charlotte, NC' },
+          'birmingham': { lat: 33.5186, lng: -86.8104, city: 'Birmingham, AL' }
+        };
+        
+        // Try to match driver's city
+        let baseLocation = cityLocations['nashville']; // Default
+        if (driver.city) {
+          const cityKey = driver.city.toLowerCase().split(',')[0].trim();
+          if (cityLocations[cityKey]) {
+            baseLocation = cityLocations[cityKey];
           }
-          
-          // Add small random offset for variety
-          const latOffset = (Math.random() - 0.5) * 0.05; 
-          const lngOffset = (Math.random() - 0.5) * 0.05;
-          
-          return {
-            driverId: driver.id,
-            driverName: driver.name,
-            latitude: baseLocation.lat + latOffset,
-            longitude: baseLocation.lng + lngOffset,
-            address: baseLocation.city,
-            lastUpdate: new Date().toISOString(),
-            speed: 0,
-            batteryLevel: 85,
-            isMoving: false,
-            heading: 0,
-            routeName: driver.status === 'on_route' ? 'Load Delivery Route' : undefined,
-            source: 'fallback' // Track data source
-          };
         }
-      }).filter(location => location !== null); // Filter out any null locations
+        
+        // Add small random offset for variety
+        const latOffset = (Math.random() - 0.5) * 0.05; 
+        const lngOffset = (Math.random() - 0.5) * 0.05;
+        
+        return {
+          driverId: driver.id,
+          driverName: driver.name,
+          latitude: baseLocation.lat + latOffset,
+          longitude: baseLocation.lng + lngOffset,
+          address: baseLocation.city,
+          lastUpdate: new Date().toISOString(),
+          speed: 0,
+          batteryLevel: 85,
+          isMoving: false,
+          heading: 0,
+          routeName: driver.status === 'on_route' ? 'Load Delivery Route' : undefined,
+          source: 'database'
+        };
+      }).filter(location => location !== null)
       
       res.json({
         locations,
@@ -920,10 +687,10 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   // CRITICAL DRIVER ENDPOINTS - Moved from deferred registration to immediate
   
-  // Simple driver registration with Zello integration
+  // Simple driver registration
   app.post("/api/simple-driver-registration", async (req, res) => {
     try {
-      console.log('📱 Processing driver registration with Zello integration...');
+      console.log('📱 Processing driver registration...');
       
       // Extract token and driver data
       const { token, ...driverData } = req.body;
@@ -959,69 +726,35 @@ export async function registerRoutes(app: Express): Promise<void> {
         });
       }
       
-      // Create driver in database first
+      // Create driver in database
       const driver = await storage.createDriver(driverRecord);
       
       console.log(`✅ Driver created: ${driver.name} (${driver.id})`);
       
-      // Create Zello account for the driver
-      try {
-        const zelloCredentials = await zelloService.createDriverAccount({
-          name: driver.name,
-          email: driver.email,
-          phone: driver.phone,
-          equipmentType: driver.equipmentType
-        });
-        
-        // Immediately sync the driver to Zello channels
-        await zelloService.syncDriverToZello({
-          name: driver.name,
-          phone: driver.phone,
-          equipmentType: driver.equipmentType
-        });
-        
-        // Store Zello credentials with driver (in metadata or custom fields)
-        // For now, we'll return them to the driver directly
-        
-        // Send welcome SMS with Zello credentials
-        const welcomeMessage = zelloService.generateWelcomeMessage(zelloCredentials);
-        
-        // Try to send SMS with Zello credentials using normalized phone
-        const normalizedPhone = normalizePhoneToE164(driver.phone);
-        if (normalizedPhone && twilioPhoneNumber) {
-          try {
-            await twilioClient.messages.create({
-              to: normalizedPhone,
-              from: twilioPhoneNumber,
-              body: welcomeMessage
-            });
-            console.log(`📱 Sent Zello welcome SMS to driver (${normalizedPhone})`);
-          } catch (smsError) {
-            console.error('⚠️ Failed to send welcome SMS:', smsError);
-            // Continue even if SMS fails - they still get the info on screen
-          }
+      // Send welcome SMS if Twilio is configured
+      const normalizedPhone = normalizePhoneToE164(driver.phone);
+      if (normalizedPhone && twilioPhoneNumber) {
+        try {
+          const welcomeMessage = `Welcome to LAMP Logistics, ${driver.name}!\n\n` +
+            `Your driver account has been created successfully.\n` +
+            `You'll receive load notifications via SMS.\n\n` +
+            `Questions? Contact dispatch.`;
+          
+          await twilioClient.messages.create({
+            to: normalizedPhone,
+            from: twilioPhoneNumber,
+            body: welcomeMessage
+          });
+          console.log(`📱 Sent welcome SMS to driver (${normalizedPhone})`);
+        } catch (smsError) {
+          console.error('⚠️ Failed to send welcome SMS:', smsError);
         }
-        
-        console.log(`🎙️ Zello account created for ${driver.name}: ${zelloCredentials.username}`);
-        
-        res.status(201).json({
-          ...driver,
-          zelloAccount: {
-            username: zelloCredentials.username,
-            password: zelloCredentials.password, // Show password once during registration
-            channels: zelloCredentials.channels,
-            appLinks: zelloCredentials.appDownloadLinks
-          },
-          message: 'Registration complete! Check your phone for Zello app download links.'
-        });
-      } catch (zelloError) {
-        console.error('⚠️ Failed to create Zello account:', zelloError);
-        // Still return success for driver creation even if Zello fails
-        res.status(201).json({
-          ...driver,
-          message: 'Driver registered successfully. Voice dispatch setup pending.'
-        });
       }
+      
+      res.status(201).json({
+        ...driver,
+        message: 'Driver registered successfully!'
+      });
       
     } catch (error) {
       console.error('❌ Registration error:', error);
@@ -1176,14 +909,6 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Send automated emails for new load
       await sendAutomatedEmails(load, "load_created");
       
-      // Send load to drivers via Zello WebSocket
-      try {
-        await zelloService.sendLoadNotification(load);
-        console.log(`🎙️ Load ${load.loadNumber} broadcast via Zello to drivers`);
-      } catch (error) {
-        console.error(`❌ Failed to broadcast load via Zello:`, error);
-      }
-      
       res.status(201).json(load);
     } catch (error) {
       console.error('Load validation error:', error);
@@ -1224,13 +949,8 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       // Send SMS notifications for driver assignments
       if (validatedData.driverId && validatedData.driverId !== originalLoad.driverId) {
-        console.log(`🚛 Load ${id} assigned to driver ${validatedData.driverId} - sending Zello notification`);
-        try {
-          await zelloService.sendLoadNotification(updatedLoad);
-          console.log(`✅ Zello notification sent for load assignment ${id}`);
-        } catch (error) {
-          console.error(`❌ Failed to send Zello notification for load ${id}:`, error);
-        }
+        console.log(`🚛 Load ${id} assigned to driver ${validatedData.driverId}`);
+        // SMS notifications handled separately
       }
       
       console.log(`Successfully updated load ${id}`);
@@ -1290,15 +1010,6 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       if (!updatedLoad) {
         return res.status(404).json({ error: 'Load not found' });
-      }
-      
-      // Send Zello notification for driver assignment
-      console.log(`🚛 Load ${id} assigned to driver ${driverId} - sending Zello notification`);
-      try {
-        await zelloService.sendLoadNotification(updatedLoad);
-        console.log(`✅ Zello notification sent for load assignment ${id}`);
-      } catch (error) {
-        console.error(`❌ Failed to send Zello notification for load ${id}:`, error);
       }
       
       res.json(updatedLoad);
@@ -1646,7 +1357,7 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // Send message to thread (Zello primary, Twilio SMS fallback)
+  // Send message to thread via SMS
   app.post('/api/communication/messages', async (req, res) => {
     try {
       const { threadId, content, sender = 'dispatch' } = req.body;
@@ -1670,72 +1381,45 @@ export async function registerRoutes(app: Express): Promise<void> {
           return res.status(404).json({ error: 'Driver not found for this thread' });
         }
 
-        // Generate Zello username from driver name and phone
-        let driverUsername = driver.name.toLowerCase().replace(/\s+/g, '_');
-        if (driver.phone) {
-          const phoneDigits = driver.phone.replace(/\D/g, '').slice(-4);
-          driverUsername = `${driver.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${phoneDigits}`;
-        }
-
         // Format message based on thread type
-        let zelloMessage: string;
         let smsMessage: string;
         
         if (thread.threadType === 'general') {
           // General chat: Simple message format
-          zelloMessage = `💬 Message from Dispatch:\n\n${content}`;
           smsMessage = `Message from Dispatch: ${content}`;
         } else {
           // Load communication: Include load context
           const load = thread.loadId ? await storage.getLoad(thread.loadId) : null;
-          zelloMessage = `📨 Message for Load ${load?.loadNumber || 'Unknown'}\n` +
-                        `${load?.origin || ''} → ${load?.destination || ''}\n\n` +
-                        `${content}`;
           smsMessage = `Load ${load?.loadNumber || 'Unknown'}: ${content}`;
         }
         
-        // Try Zello first
-        console.log(`📤 Attempting Zello delivery to ${driver.name} (${driverUsername})`);
-        const directMessageSent = await zelloService.sendMessage(driverUsername, zelloMessage);
-        const channelMessageSent = await zelloService.sendMessage('all-drivers', 
-          `📨 ${driver.name}: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`
-        );
+        // Send via Twilio SMS - check both phone fields and normalize
+        const driverPhone = driver.phoneNumber || driver.phone;
+        const normalizedPhone = normalizePhoneToE164(driverPhone);
         
-        if (directMessageSent || channelMessageSent) {
-          console.log(`✅ Message delivered via Zello to ${driver.name}`);
-          deliveryMethod = 'zello';
-          deliverySuccess = true;
-        } else {
-          console.log(`⚠️ Zello delivery failed, trying Twilio SMS...`);
-          
-          // Fallback to Twilio SMS - check both phone fields and normalize
-          const driverPhone = driver.phoneNumber || driver.phone;
-          const normalizedPhone = normalizePhoneToE164(driverPhone);
-          
-          if (normalizedPhone && twilioPhoneNumber) {
-            try {
-              console.log(`📱 Sending SMS to ${driver.name} (${normalizedPhone})`);
-              
-              const smsResult = await twilioClient.messages.create({
-                body: smsMessage,
-                from: twilioPhoneNumber,
-                to: normalizedPhone
-              });
-              
-              console.log(`✅ Message delivered via SMS to ${driver.name} (${normalizedPhone})`);
-              deliveryMethod = 'sms';
-              deliverySuccess = true;
-            } catch (smsError) {
-              console.error(`❌ SMS delivery failed:`, smsError);
-            }
-          } else {
-            console.log(`❌ Cannot send SMS - invalid phone (phoneNumber: ${driver.phoneNumber}, phone: ${driver.phone}) or missing Twilio number`);
+        if (normalizedPhone && twilioPhoneNumber) {
+          try {
+            console.log(`📱 Sending SMS to ${driver.name} (${normalizedPhone})`);
+            
+            const smsResult = await twilioClient.messages.create({
+              body: smsMessage,
+              from: twilioPhoneNumber,
+              to: normalizedPhone
+            });
+            
+            console.log(`✅ Message delivered via SMS to ${driver.name} (${normalizedPhone})`);
+            deliveryMethod = 'sms';
+            deliverySuccess = true;
+          } catch (smsError) {
+            console.error(`❌ SMS delivery failed:`, smsError);
           }
+        } else {
+          console.log(`❌ Cannot send SMS - invalid phone (phoneNumber: ${driver.phoneNumber}, phone: ${driver.phone}) or missing Twilio number`);
         }
         
         if (!deliverySuccess) {
           return res.status(503).json({ 
-            error: 'Message could not be delivered via Zello or SMS',
+            error: 'Message could not be delivered via SMS',
             success: false 
           });
         }
@@ -2019,1103 +1703,6 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // ===== ZELLO VOICE DISPATCH API ENDPOINTS =====
-
-  // Initialize Zello Voice Dispatch Service
-  app.post('/api/zello/initialize', async (req, res) => {
-    try {
-      console.log('🎙️ Manual Zello initialization requested');
-      await zelloService.initialize();
-      const status = {
-        initialized: zelloService.isServiceRunning(),
-        configured: zelloService.isServiceConfigured(),
-        channels: zelloService.channels,
-        totalUsers: zelloService.users.size
-      };
-      console.log('✅ Zello initialization complete:', status);
-      res.json(status);
-    } catch (error) {
-      console.error('❌ Zello initialization failed:', error);
-      res.status(500).json({ 
-        error: error instanceof Error ? error.message : 'Failed to initialize Zello' 
-      });
-    }
-  });
-
-  // Create bot user for WebSocket connections
-  app.post('/api/zello/create-bot-user', async (req, res) => {
-    try {
-      console.log('🤖 Creating lampDispatchBot user...');
-      const result = await zelloService.createBotUser('lampDispatchBot', 'LAMP Dispatch Bot', 'BotSecure2025!');
-      res.json(result);
-    } catch (error) {
-      console.error('❌ Failed to create bot user:', error);
-      res.status(500).json({ 
-        error: error instanceof Error ? error.message : 'Failed to create bot user' 
-      });
-    }
-  });
-
-  // Get Zello channel messages
-  app.get('/api/zello/channels/:channel/messages', async (req, res) => {
-    try {
-      const { channel } = req.params;
-      const { limit = 100 } = req.query;
-      
-      const messages = await zelloService.getChannelMessages(channel, Number(limit));
-      res.json(messages);
-    } catch (error) {
-      console.error('❌ Failed to fetch channel messages:', error);
-      res.status(500).json({ error: 'Failed to fetch channel messages' });
-    }
-  });
-
-  // Get all Zello channel statuses with unread counts
-  app.get('/api/zello/channels/status', async (req, res) => {
-    try {
-      const statuses = await zelloService.getAllChannelStatuses();
-      res.json(statuses);
-    } catch (error) {
-      console.error('❌ Failed to fetch channel statuses:', error);
-      res.status(500).json({ error: 'Failed to fetch channel statuses' });
-    }
-  });
-
-  // Mark Zello messages as read
-  app.post('/api/zello/channels/:channel/mark-read', async (req, res) => {
-    try {
-      const { channel } = req.params;
-      const { messageIds } = req.body;
-      
-      if (!Array.isArray(messageIds)) {
-        return res.status(400).json({ error: 'messageIds must be an array' });
-      }
-      
-      const updated = await zelloService.markChannelMessagesAsRead(channel, messageIds);
-      res.json({ success: true, updated });
-    } catch (error) {
-      console.error('❌ Failed to mark messages as read:', error);
-      res.status(500).json({ error: 'Failed to mark messages as read' });
-    }
-  });
-
-  // Send message to multiple Zello channels and/or users
-  app.post('/api/zello/broadcast', async (req, res) => {
-    try {
-      const { channels = [], users = [], message } = req.body;
-      
-      if (!message) {
-        return res.status(400).json({ error: 'Message is required' });
-      }
-      
-      if (channels.length === 0 && users.length === 0) {
-        return res.status(400).json({ error: 'At least one channel or user must be specified' });
-      }
-      
-      // Try to send via Zello - if it fails, return graceful response (SMS will still work)
-      const results = await zelloService.sendMessageToMultiple(channels, users, message);
-      res.json({ ...results, zelloStatus: 'online' });
-    } catch (error) {
-      console.error('❌ Failed to broadcast message:', error);
-      // Don't crash - return graceful error
-      const { channels = [], users = [] } = req.body;
-      res.json({ 
-        success: [], 
-        failed: [...channels, ...users],
-        zelloStatus: 'error',
-        message: 'Zello error - SMS system still working'
-      });
-    }
-  });
-
-  // Fetch Zello message history (alternative to webhooks)
-  app.get('/api/zello/history', async (req: Request, res: Response) => {
-    try {
-      console.log('📜 Fetching Zello message history...');
-      const { channel } = req.query;
-      
-      // Fetch history from Zello
-      const historyData = await zelloService.getMessageHistory(channel as string);
-      
-      if (!historyData || !historyData.messages || historyData.messages.length === 0) {
-        return res.json({ 
-          message: 'No new messages found',
-          count: 0,
-          messages: []
-        });
-      }
-      
-      // Process messages
-      const processedMessages = await zelloService.processHistoryMessages(historyData.messages);
-      
-      // Store messages in Communication Dashboard
-      let storedCount = 0;
-      for (const msg of processedMessages) {
-        try {
-          // Find driver by name
-          const driver = await storage.getDriverByNameOrPhone(msg.sender);
-          if (!driver) {
-            console.log(`⚠️ Unknown driver in message: ${msg.sender}`);
-            continue;
-          }
-          
-          // Find or create communication thread
-          let thread = await storage.getGeneralCommunicationThreadByDriver(driver.id);
-          if (!thread) {
-            // Create new general thread for this driver
-            thread = await storage.createLoadCommunicationThread({
-              loadId: null,
-              driverId: driver.id,
-              status: 'active'
-            });
-          }
-          
-          // Store the message
-          await storage.createLoadMessage({
-            threadId: thread.id,
-            senderId: driver.id,
-            senderType: 'driver',
-            message: msg.message || `[${msg.type}]`,
-            isRead: false,
-            metadata: {
-              zelloMessageId: msg.messageId,
-              channel: msg.channel,
-              messageType: msg.type,
-              attachment: msg.attachment
-            }
-          });
-          
-          storedCount++;
-          console.log(`✅ Stored message from ${driver.name}: ${msg.message?.substring(0, 50)}...`);
-        } catch (error) {
-          console.error(`❌ Error storing message ${msg.messageId}:`, error);
-        }
-      }
-      
-      res.json({ 
-        message: `Processed ${storedCount} new messages from Zello history`,
-        count: storedCount,
-        total: processedMessages.length,
-        messages: processedMessages
-      });
-    } catch (error) {
-      console.error('❌ Error fetching Zello history:', error);
-      res.status(500).json({ error: 'Failed to fetch Zello message history' });
-    }
-  });
-
-  // Zello webhook endpoint for receiving messages from drivers
-  app.post('/api/zello/webhook', async (req, res) => {
-    try {
-      console.log('🎙️ Zello webhook received:', JSON.stringify(req.body, null, 2));
-      
-      const { 
-        type, 
-        channel, 
-        sender, 
-        message, 
-        text, 
-        attachment,
-        timestamp 
-      } = req.body;
-
-      // Handle different Zello event types
-      if (type === 'message' || type === 'text_message') {
-        // Text or voice message from driver
-        const messageContent = message || text || '';
-        const fromDriver = sender || req.body.from || req.body.user || '';
-        
-        if (!fromDriver || !messageContent) {
-          console.log('⚠️ Invalid Zello message - missing sender or content');
-          return res.status(400).json({ error: 'Invalid message data' });
-        }
-
-        // Find driver by name or phone
-        const driver = await storage.getDriverByNameOrPhone(fromDriver);
-        if (!driver) {
-          console.log(`⚠️ Unknown driver in Zello message: ${fromDriver}`);
-          return res.json({ status: 'ignored', reason: 'Unknown driver' });
-        }
-
-        // Check if message is a load response (ACCEPT/DECLINE)
-        const upperMessage = messageContent.toUpperCase();
-        if (upperMessage.includes('ACCEPT') || upperMessage.includes('BOOK')) {
-          // Driver accepting a load
-          const loadNumberMatch = messageContent.match(/LOAD-\d+/i);
-          if (loadNumberMatch) {
-            const loadNumber = loadNumberMatch[0].toUpperCase();
-            console.log(`✅ Driver ${driver.name} accepted load ${loadNumber} via Zello`);
-            
-            // Update load status
-            const load = await storage.getLoadByNumber(loadNumber);
-            if (load && load.status === 'available') {
-              await storage.updateLoad(load.id, {
-                status: 'assigned',
-                driverId: driver.id
-              });
-              
-              // Send confirmation back through Zello
-              await zelloService.sendMessage(
-                channel || 'all-drivers',
-                `✅ Load ${loadNumber} confirmed for ${driver.name}. Check Communication Dashboard for details.`
-              );
-            }
-          }
-        } else if (upperMessage.includes('DECLINE') || upperMessage.includes('PASS')) {
-          // Driver declining a load
-          const loadNumberMatch = messageContent.match(/LOAD-\d+/i);
-          if (loadNumberMatch) {
-            const loadNumber = loadNumberMatch[0].toUpperCase();
-            console.log(`❌ Driver ${driver.name} declined load ${loadNumber} via Zello`);
-            // TODO: Find next eligible driver
-          }
-        } else {
-          // Regular message - route to correct thread (load-specific or general)
-          console.log(`💬 Routing incoming message from ${driver.name}: ${messageContent.substring(0, 50)}...`);
-          
-          let thread = null;
-          
-          // Get all driver's threads
-          const allThreads = await storage.getAllLoadCommunicationThreads();
-          const driverThreads = allThreads.filter(t => t.driverId === driver.id && t.status === 'active');
-          
-          // Enhanced regex to match various load number formats:
-          // - Standard: LOAD-123, TEST-LOAD-001, LM-1234
-          // - Numeric only: 603006, 602951
-          // - Custom prefixes: BOL-123, REF-456
-          const loadNumberMatch = messageContent.match(/(?:(?:LOAD|TEST|LM|BOL|REF|TN)-[A-Z0-9-]+|\b\d{6}\b)/i);
-          
-          if (loadNumberMatch) {
-            // Message mentions a load - find the specific load thread
-            const mentionedLoadNumber = loadNumberMatch[0].toUpperCase();
-            console.log(`🔍 Message mentions load ${mentionedLoadNumber}, searching for specific thread...`);
-            
-            // Normalize function to strip prefixes for comparison
-            const normalizeLoadNumber = (num: string) => {
-              if (!num) return '';
-              return num.toUpperCase().replace(/^(LOAD|TEST|LM|BOL|REF|TN)-/, '');
-            };
-            
-            const normalizedMention = normalizeLoadNumber(mentionedLoadNumber);
-            
-            // Pre-fetch all load numbers for performance (caching)
-            const loadNumberCache = new Map<string, string>();
-            for (const t of driverThreads.filter(t => t.threadType === 'load' && t.loadId)) {
-              if (!loadNumberCache.has(t.loadId)) {
-                try {
-                  const load = await storage.getLoad(t.loadId);
-                  if (load) {
-                    loadNumberCache.set(t.loadId, load.loadNumber);
-                  }
-                } catch (error) {
-                  console.error(`⚠️ Error fetching load ${t.loadId}:`, error);
-                }
-              }
-            }
-            
-            // Check threads using normalized comparison
-            for (const t of driverThreads.filter(t => t.threadType === 'load')) {
-              const threadLoadNumber = t.loadNumber || (t as any).loadNumberFromLoad || (t.loadId && loadNumberCache.get(t.loadId));
-              const normalizedThread = normalizeLoadNumber(threadLoadNumber || '');
-              
-              if (normalizedThread && normalizedThread === normalizedMention) {
-                thread = t;
-                console.log(`✅ Matched to load thread ${thread.id} for ${threadLoadNumber} (normalized: ${normalizedMention})`);
-                break;
-              }
-            }
-          }
-          
-          // If no specific load thread found, use most recent active load thread
-          if (!thread) {
-            const driverLoadThreads = driverThreads
-              .filter(t => t.threadType === 'load')
-              .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-            
-            if (driverLoadThreads.length > 0) {
-              thread = driverLoadThreads[0];
-              console.log(`📦 Using most recent load thread ${thread.id} for ${thread.loadNumber || 'unknown'}`);
-            }
-          }
-          
-          // If still no thread, check for general thread
-          if (!thread) {
-            const generalThreads = driverThreads
-              .filter(t => t.threadType === 'general')
-              .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-            
-            if (generalThreads.length > 0) {
-              thread = generalThreads[0];
-              console.log(`💬 Routing to general thread ${thread.id}`);
-            } else {
-              // No threads exist, create new general thread
-              console.log(`🆕 Creating new general thread for ${driver.name}`);
-              thread = await storage.createLoadCommunicationThread({
-                driverId: driver.id,
-                loadId: null,
-                status: 'active',
-                threadType: 'general',
-                messageCount: 0,
-                unreadDriverMessages: 0,
-                unreadDispatchMessages: 0,
-                driverName: driver.name,
-                driverPhone: driver.phone || ''
-              });
-            }
-          }
-
-          // Store message using the same method as outgoing messages for consistency
-          await storage.createLoadMessage({
-            threadId: thread.id,
-            loadId: thread.loadId || null,
-            senderId: driver.id,
-            senderRole: 'driver',
-            senderName: driver.name,
-            messageType: 'text',
-            textContent: messageContent,
-            isRead: false,
-            isSuggested: false,
-            isSent: true
-          });
-
-          // Update thread stats
-          await storage.updateLoadCommunicationThread(thread.id, {
-            messageCount: (thread.messageCount || 0) + 1,
-            lastMessageAt: new Date(),
-            lastMessageText: messageContent.substring(0, 100),
-            lastMessageSender: 'driver',
-            unreadDispatchMessages: (thread.unreadDispatchMessages || 0) + 1
-          });
-
-          console.log(`✅ Zello message stored in ${thread.threadType} thread ${thread.id}`);
-        }
-
-        // Handle attachments (documents, photos)
-        if (attachment) {
-          console.log('📎 Processing Zello attachment:', attachment);
-          
-          // Determine document type from caption or filename
-          const caption = attachment.caption || attachment.name || '';
-          let documentType = 'other';
-          
-          if (caption.match(/pod|delivery|proof/i)) {
-            documentType = 'proof_of_delivery';
-          } else if (caption.match(/bol|bill|lading/i)) {
-            documentType = 'bill_of_lading';  
-          } else if (caption.match(/inspect|report/i)) {
-            documentType = 'inspection_report';
-          } else if (caption.match(/damage|claim/i)) {
-            documentType = 'damage_photo';
-          }
-
-          // Find the most recent load for this driver
-          const recentLoad = await storage.getMostRecentLoadForDriver(driver.id);
-          
-          if (recentLoad) {
-            // Store attachment
-            await storage.createMessageAttachment({
-              messageId: null, // Will be linked to message if in thread
-              loadId: recentLoad.id,
-              driverId: driver.id,
-              fileUrl: attachment.url || attachment.path || '',
-              fileName: attachment.name || `zello_${Date.now()}.jpg`,
-              fileType: attachment.type || 'image/jpeg',
-              fileSize: attachment.size || 0,
-              uploadedBy: 'driver',
-              documentType: documentType,
-              metadata: {
-                source: 'zello',
-                channel: channel,
-                caption: caption,
-                timestamp: timestamp
-              }
-            });
-            
-            console.log(`📎 Zello document stored: ${documentType} for load ${recentLoad.loadNumber}`);
-          }
-        }
-        
-        res.json({ status: 'received', processed: true });
-        
-      } else if (type === 'channel_status') {
-        // Channel status update
-        console.log(`📻 Zello channel status: ${channel} - ${req.body.status}`);
-        res.json({ status: 'acknowledged' });
-        
-      } else if (type === 'user_status') {
-        // User online/offline status
-        console.log(`👤 Zello user status: ${req.body.user} - ${req.body.status}`);
-        res.json({ status: 'acknowledged' });
-        
-      } else {
-        console.log(`❓ Unknown Zello event type: ${type}`);
-        res.json({ status: 'ignored', reason: 'Unknown event type' });
-      }
-      
-    } catch (error) {
-      console.error('❌ Error handling Zello webhook:', error);
-      res.status(500).json({ error: 'Failed to process Zello webhook' });
-    }
-  });
-
-  // ===== SMS COMMUNICATION API ENDPOINTS =====
-
-  // Initialize SMS Communication Service
-  app.post('/api/communication/initialize', async (req, res) => {
-    try {
-      await smsCommunicationService.initialize();
-      res.json({ success: true, message: 'SMS Communication Service initialized' });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      });
-    }
-  });
-
-  // Debug endpoint to test SMS communication service
-  app.get('/api/communication/debug', async (req, res) => {
-    try {
-      const isRunning = smsCommunicationService.serviceRunning;
-      const smsConfigured = smsLoadService.isServiceConfigured();
-      
-      console.log('🔧 SMS Communication Debug Check:');
-      console.log(`📡 Service running: ${isRunning}`);
-      console.log(`📱 SMS service configured: ${smsConfigured}`);
-      
-      res.json({
-        serviceRunning: isRunning,
-        smsConfigured: smsConfigured,
-        communicationType: 'SMS',
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('❌ SMS Communication debug error:', error);
-      res.status(500).json({ error: 'Debug check failed' });
-    }
-  });
-
-  // SMS Webhook endpoints for receiving messages from drivers (Twilio)
-  app.post('/api/sms/webhook', async (req, res) => {
-    try {
-      console.log('='.repeat(80));
-      console.log('📱 INCOMING SMS WEBHOOK - Twilio');
-      console.log('='.repeat(80));
-      console.log('📱 Full webhook payload:', JSON.stringify(req.body, null, 2));
-      console.log('📱 Headers:', JSON.stringify(req.headers, null, 2));
-      
-      const { From, Body, MessageSid, NumMedia } = req.body;
-      
-      if (!From || !Body) {
-        console.log('⚠️ Invalid SMS webhook data - missing From or Body');
-        return res.status(400).send('Invalid webhook data');
-      }
-
-      // Normalize phone number to E.164 format for consistent matching
-      const normalizedPhone = normalizePhoneToE164(From);
-      const messageText = Body.trim();
-      
-      console.log(`📲 SMS from ${From} (normalized: ${normalizedPhone}): "${messageText}"`);
-
-      // Find driver by normalized phone number
-      const drivers = await storage.getAllDrivers();
-      const driver = drivers.find(d => normalizePhoneToE164(d.phone || '') === normalizedPhone);
-      
-      if (!driver) {
-        console.log(`⚠️ Unknown driver phone number: ${normalizedPhone}`);
-        // Still acknowledge receipt
-        res.set('Content-Type', 'text/xml');
-        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
-        return;
-      }
-
-      console.log(`👤 Driver identified: ${driver.name} (${driver.id})`);
-
-      // Use the SAME load number detection logic we built for Zello
-      const loadNumberPattern = /(?:LOAD[-\s]?|TEST[-\s]?LOAD[-\s]?|LM[-\s]?|BOL[-\s]?|REF[-\s]?|TN[-\s]?)?(\d{3,6})/gi;
-      const matches = [...messageText.matchAll(loadNumberPattern)];
-      
-      let targetThread = null;
-      let detectedLoadNumber = null;
-
-      if (matches.length > 0) {
-        for (const match of matches) {
-          const fullMatch = match[0];
-          const numericPart = match[1];
-          
-          // Normalize: strip prefix and convert to uppercase
-          const normalizedFromMessage = fullMatch.replace(/^(LOAD|TEST|LM|BOL|REF|TN)[-\s]?/i, '').toUpperCase();
-          
-          console.log(`🔍 SMS mentions load number: ${fullMatch} (normalized: ${normalizedFromMessage})`);
-          
-          // Find matching thread by normalized load number
-          const threads = await storage.getAllLoadCommunicationThreads();
-          const thread = threads.find(t => {
-            if (t.driverId !== driver.id) return false;
-            
-            // Get load number from thread (either direct or from load)
-            const threadLoadNumber = t.loadNumber || t.loadNumberFromLoad;
-            if (!threadLoadNumber) return false;
-            
-            // Normalize thread load number for comparison
-            const normalizedThreadNumber = threadLoadNumber.replace(/^(LOAD|TEST|LM|BOL|REF|TN)[-\s]?/i, '').toUpperCase();
-            
-            return normalizedThreadNumber === normalizedFromMessage;
-          });
-          
-          if (thread) {
-            targetThread = thread;
-            detectedLoadNumber = fullMatch;
-            console.log(`✅ SMS matched to load thread: ${thread.id} (${threadLoadNumber})`);
-            break;
-          }
-        }
-      }
-
-      // If no load-specific thread found, use/create general thread
-      if (!targetThread) {
-        console.log(`💬 No load number detected, routing to general thread for driver ${driver.name}`);
-        const generalThreads = await storage.getAllLoadCommunicationThreads();
-        targetThread = generalThreads.find(t => 
-          t.driverId === driver.id && t.threadType === 'general'
-        );
-        
-        if (!targetThread) {
-          // Create general thread for this driver
-          targetThread = await storage.createLoadCommunicationThread({
-            driverId: driver.id,
-            threadType: 'general',
-            status: 'active'
-          });
-          console.log(`✨ Created general SMS thread for ${driver.name}: ${targetThread.id}`);
-        }
-      }
-
-      // Store message in the thread
-      await storage.createLoadMessage({
-        threadId: targetThread.id,
-        loadId: targetThread.loadId || null,
-        driverId: driver.id,
-        message: messageText,
-        textContent: messageText,
-        messageType: 'text',
-        senderRole: 'driver',
-        senderName: driver.name,
-        isFromDriver: true,
-        isRead: false,
-        isSuggested: false,
-        isSent: true,
-        communicationMethod: 'sms',
-        metadata: {
-          twilioMessageSid: MessageSid,
-          from: From,
-          hasMedia: NumMedia && parseInt(NumMedia) > 0
-        }
-      });
-
-      // Update thread with last message info
-      await storage.updateLoadCommunicationThread(targetThread.id, {
-        lastMessageAt: new Date(),
-        messageCount: (targetThread.messageCount || 0) + 1,
-        unreadDriverMessages: (targetThread.unreadDriverMessages || 0) + 1
-      });
-
-      console.log(`✅ SMS stored in thread ${targetThread.id}${detectedLoadNumber ? ` (${detectedLoadNumber})` : ''}`);
-
-      // Handle MMS image attachments if present
-      if (NumMedia && parseInt(NumMedia) > 0) {
-        const numMediaFiles = parseInt(NumMedia);
-        console.log(`📎 Processing ${numMediaFiles} MMS attachments`);
-        
-        for (let i = 0; i < numMediaFiles; i++) {
-          const mediaUrl = req.body[`MediaUrl${i}`];
-          const mediaType = req.body[`MediaContentType${i}`];
-          
-          if (mediaUrl) {
-            try {
-              console.log(`📥 Downloading MMS attachment ${i + 1}: ${mediaUrl}`);
-              
-              // Download image from Twilio with authentication
-              const response = await fetch(mediaUrl, {
-                headers: {
-                  'Authorization': 'Basic ' + Buffer.from(
-                    `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
-                  ).toString('base64')
-                }
-              });
-              
-              if (!response.ok) {
-                throw new Error(`Failed to download media: ${response.statusText}`);
-              }
-              
-              const imageBuffer = Buffer.from(await response.arrayBuffer());
-              
-              // Generate unique filename
-              const fileExtension = mediaType?.split('/')[1] || 'jpg';
-              const fileName = `sms-${driver.id}-${Date.now()}-${i}.${fileExtension}`;
-              
-              // Upload to object storage (private directory for BOL documents)
-              const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
-              const objectPath = `${privateDir}/bol-documents/${fileName}`;
-              const { bucketName, objectName } = parseObjectPath(objectPath);
-              
-              const bucket = objectStorageClient.bucket(bucketName);
-              const file = bucket.file(objectName);
-              
-              await file.save(imageBuffer, {
-                metadata: {
-                  contentType: mediaType || 'image/jpeg',
-                  metadata: {
-                    source: 'sms',
-                    driverId: driver.id,
-                    uploadedAt: new Date().toISOString()
-                  }
-                }
-              });
-              
-              // Set public read access for the file
-              await file.makePublic();
-              
-              const fileUrl = `https://storage.googleapis.com/${bucketName}/${objectName}`;
-              
-              console.log(`✅ MMS attachment uploaded to: ${fileUrl}`);
-              
-              // Determine document type based on message content or load context
-              let documentType = 'bill_of_lading'; // Default to BOL for SMS images
-              if (messageText.match(/pod|delivery|proof/i)) {
-                documentType = 'proof_of_delivery';
-              } else if (messageText.match(/damage|accident/i)) {
-                documentType = 'damage_photo';
-              } else if (messageText.match(/inspect/i)) {
-                documentType = 'inspection_report';
-              }
-              
-              // Create attachment record
-              await storage.createMessageAttachment({
-                messageId: null, // Could be linked to the message if needed
-                loadId: targetThread.loadId || null,
-                driverId: driver.id,
-                fileUrl: fileUrl,
-                fileName: fileName,
-                fileType: mediaType || 'image/jpeg',
-                fileSize: imageBuffer.length,
-                uploadedBy: 'driver',
-                documentType: documentType,
-                metadata: {
-                  source: 'sms',
-                  twilioMediaUrl: mediaUrl,
-                  threadId: targetThread.id,
-                  messageText: messageText
-                }
-              });
-              
-              console.log(`📎 MMS attachment saved: ${documentType} for load ${targetThread.loadId || 'none'}`);
-              
-            } catch (error) {
-              console.error(`❌ Failed to process MMS attachment ${i}:`, error);
-            }
-          }
-        }
-      }
-      
-      // Respond with TwiML to acknowledge receipt
-      res.set('Content-Type', 'text/xml');
-      res.send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
-      
-    } catch (error) {
-      console.error('❌ Error handling SMS webhook:', error);
-      res.status(500).send('Error processing SMS');
-    }
-  });
-
-  // ===== ZELLO VOICE DISPATCH ENDPOINTS =====
-  
-  // Zello webhook for voice responses and document uploads
-  app.post('/api/zello/webhook', async (req, res) => {
-    try {
-      console.log('🎙️ Zello webhook received:', req.body);
-      
-      const { channel, username, message, type, audio_url, image_url, file_url, file_name, file_size, mime_type, caption } = req.body;
-      
-      if (!channel || !username) {
-        return res.status(400).json({ error: 'Invalid webhook data' });
-      }
-      
-      // Handle different types of Zello events
-      if (type === 'voice_message' || type === 'text_message') {
-        const command = message?.toUpperCase() || '';
-        
-        // Extract load number from message if present
-        const loadNumberMatch = command.match(/LOAD-(\d+)/);
-        const loadNumber = loadNumberMatch ? loadNumberMatch[0] : undefined;
-        
-        // Find driver by Zello username
-        const drivers = await storage.getAllDrivers();
-        const driver = drivers.find(d => 
-          d.name.toLowerCase().replace(/[^a-z0-9]/g, '_').includes(username.toLowerCase())
-        );
-        
-        if (driver && loadNumber) {
-          // First try to find an existing thread by matching load number
-          const allThreads = await storage.getAllLoadCommunicationThreads();
-          let thread = allThreads.find(t => 
-            t.driverId === driver.id && 
-            (t.loadNumber === loadNumber || t.loadId === loadNumber)
-          );
-          
-          let load = null;
-          
-          if (!thread) {
-            // If no thread exists, try to find the load
-            const loads = await storage.getAllLoads();
-            load = loads.find(l => l.loadNumber === loadNumber);
-            
-            if (load) {
-              // Check if thread exists for this load and driver
-              thread = await storage.getLoadCommunicationThreadByLoadAndDriver(load.id, driver.id);
-            }
-          }
-          
-          // If we have a thread (either found or created), save the message
-          if (thread) {
-            // Set load info if we don't have it
-            if (!load && thread.loadId) {
-              const loads = await storage.getAllLoads();
-              load = loads.find(l => l.id === thread.loadId);
-            }
-            
-            // Create message in the communication thread
-            await storage.createLoadMessage({
-              threadId: thread.id,
-              loadId: thread.loadId || load?.id || '',
-              driverId: driver.id,
-              message: message || '',
-              textContent: message || '',
-              messageType: type === 'voice_message' ? 'voice' : 'text',
-              senderRole: 'driver',
-              senderName: driver.name,
-              isFromDriver: true,
-              isRead: false,
-              isSuggested: false,
-              isSent: true,
-              attachments: audio_url ? [{
-                fileUrl: audio_url,
-                fileType: 'audio/mp3',
-                fileName: `voice_${Date.now()}.mp3`,
-                fileSize: 0
-              }] : undefined,
-              metadata: {
-                zelloChannel: channel,
-                zelloUsername: username
-              },
-              createdAt: new Date()
-            });
-            
-            // Update thread stats
-            await storage.updateLoadCommunicationThread(thread.id, {
-              messageCount: (thread.messageCount || 0) + 1,
-              unreadDispatchMessages: (thread.unreadDispatchMessages || 0) + 1,
-              lastMessageAt: new Date(),
-              lastMessageText: message?.substring(0, 100) || 'Voice message',
-              lastMessageSender: 'driver'
-            });
-            
-            console.log(`✅ Created communication message from ${driver.name} for load ${loadNumber}`);
-          }
-        }
-        
-        await zelloService.handleVoiceResponse({
-          channel,
-          from: username,
-          command,
-          loadNumber
-        });
-        
-        console.log(`✅ Processed Zello response from ${username}: ${command}`);
-      } else if (type === 'image_message' || type === 'file_message') {
-        // Handle document upload through Zello
-        const imageUrl = image_url || file_url;
-        
-        // Extract load ID from caption if present
-        const loadIdMatch = (caption || '').match(/LOAD-(\d+)/i);
-        let loadId = loadIdMatch ? loadIdMatch[0] : undefined;
-        
-        // If no load ID in caption, try to find driver's active load
-        if (!loadId) {
-          // Look up driver by Zello username to find their active load
-          const drivers = await storage.getAllDrivers();
-          const driver = drivers.find(d => d.name.toLowerCase().replace(/[^a-z0-9]/g, '_').includes(username.toLowerCase()));
-          
-          if (driver) {
-            const driverLoads = await storage.getLoadsByDriver(driver.id);
-            const activeLoad = driverLoads.find(l => l.status === 'in_transit' || l.status === 'at_pickup' || l.status === 'at_delivery');
-            if (activeLoad) {
-              loadId = activeLoad.id;
-            }
-          }
-        }
-        
-        // Process the document upload
-        await zelloService.handleDocumentUpload({
-          channel,
-          from: username,
-          imageUrl,
-          fileName: file_name,
-          fileSize: file_size,
-          mimeType: mime_type,
-          caption,
-          loadId
-        });
-        
-        // Also store in message attachments
-        if (loadId) {
-          await storage.createMessageAttachment({
-            loadId,
-            driverId: null, // Will be matched from username later
-            fileName: file_name || `zello_doc_${Date.now()}.jpg`,
-            fileUrl: imageUrl,
-            fileSize: file_size || 0,
-            fileType: mime_type || 'image/jpeg',
-            documentCategory: 'other', // Will be categorized by Zello service
-            documentDescription: caption || 'Uploaded via Zello',
-            documentStatus: 'pending_review',
-            uploadedBy: username,
-            createdAt: new Date()
-          });
-        }
-        
-        console.log(`✅ Processed Zello document from ${username}: ${file_name || 'unnamed'}`);
-      }
-      
-      res.json({ success: true, message: 'Webhook processed' });
-    } catch (error) {
-      console.error('❌ Error handling Zello webhook:', error);
-      res.status(500).json({ error: 'Failed to process webhook' });
-    }
-  });
-  
-  // Request documents from driver via Zello
-  app.post('/api/zello/request-documents', async (req, res) => {
-    try {
-      const { driverId, loadId, documentTypes } = req.body;
-      
-      if (!driverId || !loadId || !documentTypes || !Array.isArray(documentTypes)) {
-        return res.status(400).json({ error: 'Driver ID, Load ID, and document types are required' });
-      }
-      
-      // Get driver details to find Zello username
-      const driver = await storage.getDriver(driverId);
-      if (!driver) {
-        return res.status(404).json({ error: 'Driver not found' });
-      }
-      
-      // Generate Zello username from driver name
-      const phoneDigits = driver.phone?.replace(/\D/g, '').slice(-4) || '0000';
-      const cleanName = driver.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      const zelloUsername = `${cleanName}_${phoneDigits}`;
-      
-      // Send document request through Zello
-      await zelloService.sendDocumentRequest(zelloUsername, loadId, documentTypes);
-      
-      console.log(`📨 Document request sent to ${driver.name} for load ${loadId} via Zello`);
-      res.json({ 
-        success: true, 
-        message: `Document request sent to ${driver.name} via Zello`,
-        username: zelloUsername,
-        documentTypes 
-      });
-    } catch (error) {
-      console.error('❌ Error sending document request:', error);
-      res.status(500).json({ error: 'Failed to send document request' });
-    }
-  });
-  
-  // Get Zello channel status
-  app.get('/api/zello/status', async (req, res) => {
-    try {
-      const status = zelloService.getChannelStatus();
-      res.json(status);
-    } catch (error) {
-      console.error('❌ Error getting Zello status:', error);
-      res.status(500).json({ error: 'Failed to get Zello status' });
-    }
-  });
-
-  // Get recent Zello broadcasts (with cache disabled to prevent 304 responses)
-  app.get('/api/zello/broadcasts', async (req, res) => {
-    try {
-      // Disable HTTP caching to ensure React Query always gets fresh data
-      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.set('Pragma', 'no-cache');
-      res.set('Expires', '0');
-      
-      const limit = parseInt(req.query.limit as string) || 50;
-      const broadcasts = zelloService.getRecentBroadcasts(limit);
-      res.json({
-        broadcasts,
-        count: broadcasts.length,
-        queueSize: zelloService.getChannelStatus().queueSize || 0
-      });
-    } catch (error) {
-      console.error('❌ Error getting Zello broadcasts:', error);
-      res.status(500).json({ error: 'Failed to get Zello broadcasts' });
-    }
-  });
-
-  // Create/fix missing channels in Zello
-  app.post('/api/zello/create-channels', async (req, res) => {
-    try {
-      console.log('🔨 Manually creating/verifying Zello channels...');
-      
-      // Call the setupDefaultChannels method via public interface
-      await zelloService.setupDefaultChannels();
-      
-      const status = {
-        message: 'Channels created/verified successfully',
-        channels: zelloService.getChannelStatus().channels,
-        timestamp: new Date().toISOString()
-      };
-      
-      console.log('✅ Channel creation complete:', status);
-      res.json(status);
-    } catch (error) {
-      console.error('❌ Error creating channels:', error);
-      res.status(500).json({ 
-        error: 'Failed to create channels',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  });
-
-  // Manual Zello authentication test endpoint
-  app.post('/api/zello/test-auth', async (req, res) => {
-    try {
-      // Always use the correct API key from the Zello dashboard  
-      const apiKey = '9TRA0D2GBV1OCOC657BFSPIH4QBDICH5';
-      const username = 'annexAPI';
-      const password = 'Anonymous#561';
-      
-      console.log('🔐 Manual Zello authentication test starting...');
-      console.log(`📝 Using credentials: ${username} (API Key: ${apiKey.substring(0, 10)}...)`);
-      
-      // Step 1: Get token
-      const tokenUrl = `https://lamp1.zellowork.com/user/gettoken`;
-      const tokenResponse = await fetch(tokenUrl, {
-        method: 'GET',
-        headers: {
-          'X-API-Key': apiKey
-        }
-      });
-      
-      const tokenData = await tokenResponse.json();
-      console.log('🔑 Token response:', tokenData);
-      
-      if (tokenData.status !== 'OK') {
-        return res.status(401).json({
-          success: false,
-          step: 'gettoken',
-          error: tokenData,
-          message: 'Failed to get token. Check API key.'
-        });
-      }
-      
-      // Step 2: Login
-      // Hash the password according to Zello API docs: md5(md5(password) + token + api_key)
-      const { createHash } = await import('crypto');
-      const passwordMd5 = createHash('md5').update(password).digest('hex');
-      const combined = passwordMd5 + tokenData.token + apiKey;
-      const hashedPassword = createHash('md5').update(combined).digest('hex');
-      
-      console.log('🔒 Password hashing for test:');
-      console.log('  - Token:', tokenData.token.substring(0, 8) + '...');
-      console.log('  - Hashed password:', hashedPassword.substring(0, 8) + '...');
-      
-      const loginUrl = `https://lamp1.zellowork.com/user/login?sid=${tokenData.sid}`;
-      const loginBody = new URLSearchParams({
-        username: username,
-        password: hashedPassword  // Use the properly hashed password
-      });
-      
-      const loginResponse = await fetch(loginUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: loginBody
-      });
-      
-      const loginData = await loginResponse.json();
-      console.log('🔐 Login response:', loginData);
-      
-      if (loginData.status === 'OK') {
-        console.log('✅ Authentication successful!');
-        return res.json({
-          success: true,
-          message: 'Authentication successful!',
-          sessionId: tokenData.sid,
-          loginData
-        });
-      } else {
-        console.error('❌ Login failed:', loginData);
-        
-        // Check if CAPTCHA is required
-        if (loginData.requireCaptchaOnFailedLoginAttempts) {
-          return res.status(401).json({
-            success: false,
-            step: 'login',
-            error: loginData,
-            message: `CAPTCHA REQUIRED: Too many failed attempts (${loginData.failedLoginAttemptsCount}). Please log into https://lamp1.zellowork.com with the API user credentials (${username}) to clear the CAPTCHA, then try again.`,
-            captchaRequired: true,
-            failedAttempts: loginData.failedLoginAttemptsCount,
-            instructions: [
-              '1. Go to https://lamp1.zellowork.com',
-              `2. Log in with username: ${username} and password: ${password.substring(0, 5)}...`,
-              '3. Complete the CAPTCHA challenge',
-              '4. Then return here and try the authentication test again'
-            ]
-          });
-        }
-        
-        return res.status(401).json({
-          success: false,
-          step: 'login',
-          error: loginData,
-          message: 'Authentication failed. Check username and password.'
-        });
-      }
-    } catch (error) {
-      console.error('❌ Test authentication error:', error);
-      res.status(500).json({
-        success: false,
-        error: error.message,
-        message: 'Authentication test failed'
-      });
-    }
-  });
-  
-  // Create dynamic Zello channel for specific load
-  app.post('/api/zello/channels', async (req, res) => {
-    try {
-      const { name, users } = req.body;
-      
-      if (!name || !users || !Array.isArray(users)) {
-        return res.status(400).json({ error: 'Invalid channel data' });
-      }
-      
-      const success = await zelloService.createDynamicChannel(name, users);
-      
-      if (success) {
-        res.json({ success: true, message: `Channel ${name} created` });
-      } else {
-        res.status(400).json({ error: 'Failed to create channel' });
-      }
-    } catch (error) {
-      console.error('❌ Error creating Zello channel:', error);
-      res.status(500).json({ error: 'Failed to create channel' });
-    }
-  });
-  
-  // Removed duplicate /api/zello/broadcast endpoint - use the main one at line 1858
 
   // Create and send driver onboarding link
   app.post('/api/driver/send-onboarding-link', async (req, res) => {
