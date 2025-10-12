@@ -2498,7 +2498,11 @@ export async function registerRoutes(app: Express): Promise<void> {
   // SMS Webhook endpoints for receiving messages from drivers (Twilio)
   app.post('/api/sms/webhook', async (req, res) => {
     try {
-      console.log('📱 Twilio SMS webhook received:', req.body);
+      console.log('='.repeat(80));
+      console.log('📱 INCOMING SMS WEBHOOK - Twilio');
+      console.log('='.repeat(80));
+      console.log('📱 Full webhook payload:', JSON.stringify(req.body, null, 2));
+      console.log('📱 Headers:', JSON.stringify(req.headers, null, 2));
       
       const { From, Body, MessageSid, NumMedia } = req.body;
       

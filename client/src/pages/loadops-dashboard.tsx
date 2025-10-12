@@ -991,7 +991,7 @@ export default function LoadOpsDashboard() {
     { name: 'Document Management', href: '/document-management', icon: FileText, section: 'system' },
     { name: 'DAT Scraper', href: '/dat-scraper', icon: Bot, section: 'system' },
     { name: 'DAT Login', href: '/dat-login', icon: Webhook, section: 'system' },
-    { name: 'Settings', href: '/settings', icon: Settings, section: 'system' }
+    { name: 'Twilio Settings', href: '/twilio-settings', icon: Settings, section: 'system' }
   ];
 
   return (
