@@ -34,17 +34,15 @@ Preferred communication style: Simple, everyday language.
 - **Schema Structure**: Includes Drivers, Customers, Loads, Email Templates, and Email Logs with defined relationships.
 
 ## Communication System
-- **Dual-Channel Strategy**: Zello Work WebSocket attempted first, with automatic Twilio SMS fallback for reliable delivery
-- **Bidirectional Communication**: Both Zello and SMS support incoming messages with smart routing to correct communication threads
-- **Message Routing**: Automatic routing of incoming messages (SMS or Zello) to appropriate communication threads (load-specific or general) based on load number detection
+- **SMS-Only Architecture**: Twilio SMS for all driver communications and notifications
+- **Bidirectional Communication**: SMS supports incoming messages with smart routing to correct communication threads
+- **Message Routing**: Automatic routing of incoming SMS messages to appropriate communication threads (load-specific or general) based on load number detection
 - **Smart Load Number Detection**: Universal regex pattern supporting multiple formats:
   - Standard prefixed: LOAD-123, TEST-LOAD-001, LM-1234, BOL-123, REF-456, TN-789
   - Numeric only: 603006, 602951 (automatically matched to LOAD-603006, LOAD-602951)
   - Normalized comparison strips prefixes to ensure accurate thread matching
-- **Delivery Strategy**: 
-  1. Attempts Zello WebSocket first for instant delivery
-  2. Falls back to Twilio SMS if Zello unavailable or fails
-  3. All phone numbers normalized to E.164 format (+1XXXXXXXXXX) for Twilio compatibility
+- **SMS Delivery**: All phone numbers normalized to E.164 format (+1XXXXXXXXXX) for Twilio compatibility
+- **MMS Support**: Drivers can send images via SMS (proof of delivery, BOL photos) that automatically link to loads and appear in the BOL document section
 - **Performance Optimization**: Load number caching to minimize database queries during message routing
 - **Email System**: Nodemailer for automated email notifications based on load status changes, using dynamic templates.
 
@@ -56,11 +54,11 @@ Preferred communication style: Simple, everyday language.
 ## Feature Specifications
 - **Driver Management**: Comprehensive onboarding, status tracking, and payment workflows.
 - **Load Matching**: Location-based (150-mile radius), equipment type compatibility, weight capacity checks, and driver availability filtering.
-- **Automated Communication**: Zello WebSocket notifications for all load offers and driver communications.
+- **Automated Communication**: SMS notifications for all load offers and driver communications via Twilio.
 - **Load Workflow**: Intelligent load retry system, post-confirmation messaging, and manual load entry for VA input.
 - **UI/UX**: Consistent styling for forms and dropdowns, integrated document viewing, and a professional dashboard.
-- **Zello Document Integration**: Drivers upload documents via Zello, which are categorized and attached to loads, viewable in the Communication Dashboard.
-- **Two-Tier Communication System**: Bidirectional platform with distinct modes for general driver discussions and load-specific communications, featuring driver search and automatic thread type conversion.
+- **MMS Document Integration**: Drivers upload documents via SMS/MMS, which are automatically categorized and attached to loads, viewable in the Communication Dashboard and BOL document section.
+- **Two-Tier Communication System**: Bidirectional SMS platform with distinct modes for general driver discussions and load-specific communications, featuring driver search and automatic thread type conversion.
 
 # External Dependencies
 
@@ -69,8 +67,7 @@ Preferred communication style: Simple, everyday language.
 - **Drizzle Kit**: Database migration and schema management.
 
 ## Messaging & Email Services
-- **Zello Work WebSocket**: Primary communication attempt for all driver notifications (wss://zellowork.io/ws/lamp1).
-- **Twilio SMS**: Automatic fallback for reliable message delivery when Zello unavailable. Supports bidirectional communication with smart thread routing.
+- **Twilio SMS**: Primary communication for all driver notifications. Supports bidirectional communication with smart thread routing.
 - **Nodemailer**: SMTP email delivery for load lifecycle notifications.
 
 ## UI Libraries
