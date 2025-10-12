@@ -1299,15 +1299,15 @@ export default function CommunicationDashboard() {
         <ScrollArea className="flex-1">
           <div className="p-2">
             {filteredThreads.map((thread) => (
-              <Card
+              <button
                 key={thread.id}
-                className={`mb-2 cursor-pointer transition-colors hover:bg-gray-50 ${
-                  selectedThread?.id === thread.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                className={`w-full mb-2 cursor-pointer transition-colors hover:bg-gray-50 rounded-lg border ${
+                  selectedThread?.id === thread.id ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-200' : 'border-gray-200 bg-white'
                 }`}
                 onClick={() => setSelectedThread(thread)}
-                data-testid={`thread-${thread.id}`}
+                data-testid={`button-thread-${thread.id}`}
               >
-                <CardContent className="p-3">
+                <div className="p-3">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -1355,8 +1355,8 @@ export default function CommunicationDashboard() {
                       </p>
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </button>
             ))}
             
             {filteredThreads.length === 0 && !threadsLoading && (

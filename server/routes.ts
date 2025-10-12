@@ -1246,6 +1246,62 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Create communication thread (generic - supports both general and load threads)
+  app.post('/api/communication/threads', async (req, res) => {
+    try {
+      const { driverId, loadId, threadType } = req.body;
+      
+      if (!driverId) {
+        return res.status(400).json({ error: 'Driver ID required' });
+      }
+      
+      // Get driver info
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(404).json({ error: 'Driver not found' });
+      }
+      
+      // If loadId provided, verify it exists and get load details
+      let loadNumber = null;
+      let loadOrigin = null;
+      let loadDestination = null;
+      
+      if (loadId) {
+        const load = await storage.getLoad(loadId);
+        if (!load) {
+          return res.status(404).json({ error: 'Load not found' });
+        }
+        loadNumber = load.loadNumber;
+        loadOrigin = load.origin || load.pickupLocation || null;
+        loadDestination = load.destination || load.deliveryLocation || null;
+      }
+      
+      // Create thread
+      const thread = await storage.createLoadCommunicationThread({
+        threadType: threadType || (loadId ? 'load' : 'general'),
+        driverId: driverId,
+        loadId: loadId || null,
+        status: 'active',
+        messageCount: 0,
+        unreadDriverMessages: 0,
+        unreadDispatchMessages: 0,
+        driverName: driver.name,
+        driverPhone: driver.phone || '',
+        loadNumber: loadNumber,
+        loadOrigin: loadOrigin,
+        loadDestination: loadDestination,
+        assistantEnabled: false,
+        assistantMode: 'off',
+        autoSendConfidence: 80
+      });
+      
+      res.json(thread);
+    } catch (error) {
+      console.error('Error creating communication thread:', error);
+      res.status(500).json({ error: 'Failed to create communication thread' });
+    }
+  });
+
   // Offer load to driver in general conversation
   app.post('/api/communication/offer-load', async (req, res) => {
     try {
