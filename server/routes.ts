@@ -21,7 +21,7 @@ import { DATLoadPoster } from "./dat-load-poster";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
 import { aiCommunicationService } from "./ai-communication-service";
 import { DocumentUploadService } from "./document-upload-service";
-import { ObjectStorageService } from "./objectStorage";
+import { ObjectStorageService, objectStorageClient, parseObjectPath } from "./objectStorage";
 import { PredictiveMaintenanceService } from "./predictive-maintenance-service";
 import { realDriverLocationService } from "./real-driver-location-service";
 import { taskMagicIntegration } from './taskmagic-integration';
@@ -2621,6 +2621,102 @@ export async function registerRoutes(app: Express): Promise<void> {
       });
 
       console.log(`✅ SMS stored in thread ${targetThread.id}${detectedLoadNumber ? ` (${detectedLoadNumber})` : ''}`);
+
+      // Handle MMS image attachments if present
+      if (NumMedia && parseInt(NumMedia) > 0) {
+        const numMediaFiles = parseInt(NumMedia);
+        console.log(`📎 Processing ${numMediaFiles} MMS attachments`);
+        
+        for (let i = 0; i < numMediaFiles; i++) {
+          const mediaUrl = req.body[`MediaUrl${i}`];
+          const mediaType = req.body[`MediaContentType${i}`];
+          
+          if (mediaUrl) {
+            try {
+              console.log(`📥 Downloading MMS attachment ${i + 1}: ${mediaUrl}`);
+              
+              // Download image from Twilio with authentication
+              const response = await fetch(mediaUrl, {
+                headers: {
+                  'Authorization': 'Basic ' + Buffer.from(
+                    `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
+                  ).toString('base64')
+                }
+              });
+              
+              if (!response.ok) {
+                throw new Error(`Failed to download media: ${response.statusText}`);
+              }
+              
+              const imageBuffer = Buffer.from(await response.arrayBuffer());
+              
+              // Generate unique filename
+              const fileExtension = mediaType?.split('/')[1] || 'jpg';
+              const fileName = `sms-${driver.id}-${Date.now()}-${i}.${fileExtension}`;
+              
+              // Upload to object storage (private directory for BOL documents)
+              const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
+              const objectPath = `${privateDir}/bol-documents/${fileName}`;
+              const { bucketName, objectName } = parseObjectPath(objectPath);
+              
+              const bucket = objectStorageClient.bucket(bucketName);
+              const file = bucket.file(objectName);
+              
+              await file.save(imageBuffer, {
+                metadata: {
+                  contentType: mediaType || 'image/jpeg',
+                  metadata: {
+                    source: 'sms',
+                    driverId: driver.id,
+                    uploadedAt: new Date().toISOString()
+                  }
+                }
+              });
+              
+              // Set public read access for the file
+              await file.makePublic();
+              
+              const fileUrl = `https://storage.googleapis.com/${bucketName}/${objectName}`;
+              
+              console.log(`✅ MMS attachment uploaded to: ${fileUrl}`);
+              
+              // Determine document type based on message content or load context
+              let documentType = 'bill_of_lading'; // Default to BOL for SMS images
+              if (messageText.match(/pod|delivery|proof/i)) {
+                documentType = 'proof_of_delivery';
+              } else if (messageText.match(/damage|accident/i)) {
+                documentType = 'damage_photo';
+              } else if (messageText.match(/inspect/i)) {
+                documentType = 'inspection_report';
+              }
+              
+              // Create attachment record
+              await storage.createMessageAttachment({
+                messageId: null, // Could be linked to the message if needed
+                loadId: targetThread.loadId || null,
+                driverId: driver.id,
+                fileUrl: fileUrl,
+                fileName: fileName,
+                fileType: mediaType || 'image/jpeg',
+                fileSize: imageBuffer.length,
+                uploadedBy: 'driver',
+                documentType: documentType,
+                metadata: {
+                  source: 'sms',
+                  twilioMediaUrl: mediaUrl,
+                  threadId: targetThread.id,
+                  messageText: messageText
+                }
+              });
+              
+              console.log(`📎 MMS attachment saved: ${documentType} for load ${targetThread.loadId || 'none'}`);
+              
+            } catch (error) {
+              console.error(`❌ Failed to process MMS attachment ${i}:`, error);
+            }
+          }
+        }
+      }
       
       // Respond with TwiML to acknowledge receipt
       res.set('Content-Type', 'text/xml');
