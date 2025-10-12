@@ -461,66 +461,6 @@ export const messageAttachments = pgTable("message_attachments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Zello Channel Messages - Messages from specific Zello channels
-export const zelloChannelMessages = pgTable("zello_channel_messages", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  channel: text("channel").notNull(), // Channel name: all-drivers, southeast-region, etc.
-  sender: text("sender").notNull(), // Zello username
-  senderType: text("sender_type").notNull().default("driver"), // driver, dispatch, system
-  
-  // Message content
-  messageType: text("message_type").notNull().default("text"), // text, voice, image, location
-  textContent: text("text_content"),
-  voiceUrl: text("voice_url"), // For voice messages
-  voiceDuration: integer("voice_duration"), // Duration in seconds
-  
-  // Read status tracking - per dispatcher
-  isRead: boolean("is_read").notNull().default(false),
-  readBy: jsonb("read_by").default([]), // Array of dispatcher IDs who have read
-  readAt: timestamp("read_at"),
-  
-  // Driver association
-  driverId: varchar("driver_id").references(() => drivers.id),
-  driverName: text("driver_name"),
-  driverPhone: text("driver_phone"),
-  
-  // Load association (if message relates to a load)
-  loadId: varchar("load_id").references(() => loads.id),
-  loadNumber: text("load_number"),
-  
-  // Original Zello metadata
-  zelloMessageId: text("zello_message_id"),
-  zelloTimestamp: timestamp("zello_timestamp"),
-  zelloMetadata: jsonb("zello_metadata").default({}), // Additional Zello-specific data
-  
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Zello Channel Status - Track channel information and unread counts
-export const zelloChannelStatus = pgTable("zello_channel_status", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  channelName: text("channel_name").notNull().unique(),
-  channelDescription: text("channel_description"),
-  
-  // Unread message tracking
-  unreadCount: integer("unread_count").notNull().default(0),
-  lastMessageAt: timestamp("last_message_at"),
-  lastMessageSender: text("last_message_sender"),
-  lastMessagePreview: text("last_message_preview"),
-  
-  // Channel configuration
-  isActive: boolean("is_active").notNull().default(true),
-  channelType: text("channel_type").notNull().default("group"), // group, direct, broadcast
-  
-  // User count and status
-  onlineUsers: integer("online_users").notNull().default(0),
-  totalUsers: integer("total_users").notNull().default(0),
-  userList: jsonb("user_list").default([]), // Array of user objects
-  
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 // Quick Reply Templates - Predefined responses for common updates
 export const quickReplyTemplates = pgTable("quick_reply_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2048,31 +1988,16 @@ export const insertDriverEngagementMetricsSchema = createInsertSchema(driverEnga
   createdAt: true,
 });
 
-// Insert Schemas for Zello Channel Messages
-export const insertZelloChannelMessageSchema = createInsertSchema(zelloChannelMessages).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertZelloChannelStatusSchema = createInsertSchema(zelloChannelStatus).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
 
 // Insert Types
 export type InsertCommunicationInsights = z.infer<typeof insertCommunicationInsightsSchema>;
 export type InsertAiPerformanceMetrics = z.infer<typeof insertAiPerformanceMetricsSchema>;
 export type InsertDriverEngagementMetrics = z.infer<typeof insertDriverEngagementMetricsSchema>;
-export type InsertZelloChannelMessage = z.infer<typeof insertZelloChannelMessageSchema>;
-export type InsertZelloChannelStatus = z.infer<typeof insertZelloChannelStatusSchema>;
 
 // Select Types
 export type CommunicationInsights = typeof communicationInsights.$inferSelect;
 export type AiPerformanceMetrics = typeof aiPerformanceMetrics.$inferSelect;
 export type DriverEngagementMetrics = typeof driverEngagementMetrics.$inferSelect;
-export type ZelloChannelMessage = typeof zelloChannelMessages.$inferSelect;
-export type ZelloChannelStatus = typeof zelloChannelStatus.$inferSelect;
 
 // Session storage table - REQUIRED for Replit Auth
 export const sessions = pgTable(
