@@ -35,6 +35,12 @@ Preferred communication style: Simple, everyday language.
 
 ## Communication System
 - **Primary Communication**: Zello Work WebSocket for all driver notifications and load offers. This is the exclusive channel for load-related communications, replacing SMS and other services.
+- **WebSocket Message Routing**: Automatic routing of incoming Zello messages to appropriate communication threads (load-specific or general) based on load number detection
+- **Smart Load Number Detection**: Universal regex pattern supporting multiple formats:
+  - Standard prefixed: LOAD-123, TEST-LOAD-001, LM-1234, BOL-123, REF-456, TN-789
+  - Numeric only: 603006, 602951 (automatically matched to LOAD-603006, LOAD-602951)
+  - Normalized comparison strips prefixes to ensure accurate thread matching
+- **Performance Optimization**: Load number caching to minimize database queries during message routing
 - **Email System**: Nodemailer for automated email notifications based on load status changes, using dynamic templates.
 
 ## API Design

@@ -335,6 +335,159 @@ async function initializeAllServices() {
           // TODO: Find next eligible driver
         });
         
+        // Handle incoming text messages from Zello WebSocket
+        zelloService.on('text_message', async (data) => {
+          try {
+            console.log(`💬 WebSocket text message from ${data.from} in ${data.channel}: ${data.text}`);
+            
+            const messageContent = data.text || '';
+            const fromUser = data.from || '';
+            
+            if (!fromUser || !messageContent) {
+              console.log('⚠️ Invalid Zello WebSocket message - missing sender or content');
+              return;
+            }
+
+            // Find driver by Zello username or display name
+            const driver = await storage.getDriverByNameOrPhone(fromUser);
+            if (!driver) {
+              console.log(`⚠️ Unknown driver in Zello WebSocket message: ${fromUser}`);
+              return;
+            }
+
+            // Check if message is a load response (ACCEPT/DECLINE)
+            const upperMessage = messageContent.toUpperCase();
+            if (upperMessage.includes('ACCEPT') || upperMessage.includes('BOOK')) {
+              // Driver accepting a load - handled by load_accepted event
+              return;
+            } else if (upperMessage.includes('DECLINE') || upperMessage.includes('PASS')) {
+              // Driver declining a load - handled by load_declined event
+              return;
+            }
+            
+            // Regular message - route to correct thread (load-specific or general)
+            console.log(`💬 Routing incoming WebSocket message from ${driver.name}: ${messageContent.substring(0, 50)}...`);
+            
+            let thread = null;
+            
+            // Get all driver's threads
+            const allThreads = await storage.getAllLoadCommunicationThreads();
+            const driverThreads = allThreads.filter(t => t.driverId === driver.id && t.status === 'active');
+            
+            // Enhanced regex to match various load number formats:
+            // - Standard: LOAD-123, TEST-LOAD-001, LM-1234
+            // - Numeric only: 603006, 602951
+            // - Custom prefixes: BOL-123, REF-456
+            const loadNumberMatch = messageContent.match(/(?:(?:LOAD|TEST|LM|BOL|REF|TN)-[A-Z0-9-]+|\b\d{6}\b)/i);
+            
+            if (loadNumberMatch) {
+              // Message mentions a load - find the specific load thread
+              const mentionedLoadNumber = loadNumberMatch[0].toUpperCase();
+              console.log(`🔍 Message mentions load ${mentionedLoadNumber}, searching for specific thread...`);
+              
+              // Normalize function to strip prefixes for comparison
+              const normalizeLoadNumber = (num: string) => {
+                if (!num) return '';
+                return num.toUpperCase().replace(/^(LOAD|TEST|LM|BOL|REF|TN)-/, '');
+              };
+              
+              const normalizedMention = normalizeLoadNumber(mentionedLoadNumber);
+              
+              // Pre-fetch all load numbers for performance (caching)
+              const loadNumberCache = new Map<string, string>();
+              for (const t of driverThreads.filter(t => t.threadType === 'load' && t.loadId)) {
+                if (!loadNumberCache.has(t.loadId)) {
+                  try {
+                    const load = await storage.getLoad(t.loadId);
+                    if (load) {
+                      loadNumberCache.set(t.loadId, load.loadNumber);
+                    }
+                  } catch (error) {
+                    console.error(`⚠️ Error fetching load ${t.loadId}:`, error);
+                  }
+                }
+              }
+              
+              // Check threads using normalized comparison
+              for (const t of driverThreads.filter(t => t.threadType === 'load')) {
+                const threadLoadNumber = t.loadNumber || (t as any).loadNumberFromLoad || (t.loadId && loadNumberCache.get(t.loadId));
+                const normalizedThread = normalizeLoadNumber(threadLoadNumber || '');
+                
+                if (normalizedThread && normalizedThread === normalizedMention) {
+                  thread = t;
+                  console.log(`✅ Matched to load thread ${thread.id} for ${threadLoadNumber} (normalized: ${normalizedMention})`);
+                  break;
+                }
+              }
+            }
+            
+            // If no specific load thread found, use most recent active load thread
+            if (!thread) {
+              const driverLoadThreads = driverThreads
+                .filter(t => t.threadType === 'load')
+                .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+              
+              if (driverLoadThreads.length > 0) {
+                thread = driverLoadThreads[0];
+                console.log(`📦 Using most recent load thread ${thread.id}`);
+              }
+            }
+            
+            // If still no thread, check for general thread
+            if (!thread) {
+              const generalThreads = driverThreads
+                .filter(t => t.threadType === 'general')
+                .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+              
+              if (generalThreads.length > 0) {
+                thread = generalThreads[0];
+                console.log(`💬 Routing to general thread ${thread.id}`);
+              } else {
+                // No threads exist, create new general thread
+                console.log(`🆕 Creating new general thread for ${driver.name}`);
+                thread = await storage.createLoadCommunicationThread({
+                  driverId: driver.id,
+                  loadId: null,
+                  status: 'active',
+                  threadType: 'general',
+                  messageCount: 0,
+                  unreadDriverMessages: 0,
+                  unreadDispatchMessages: 0,
+                  driverName: driver.name,
+                  driverPhone: driver.phone || ''
+                });
+              }
+            }
+
+            // Store message in communication thread
+            await storage.createLoadMessage({
+              threadId: thread.id,
+              loadId: thread.loadId || null,
+              senderId: driver.id,
+              senderRole: 'driver',
+              senderName: driver.name,
+              messageType: 'text',
+              textContent: messageContent,
+              isRead: false,
+              isSuggested: false,
+              isSent: true
+            });
+
+            // Update thread stats
+            await storage.updateLoadCommunicationThread(thread.id, {
+              messageCount: (thread.messageCount || 0) + 1,
+              lastMessageAt: new Date(),
+              lastMessageText: messageContent.substring(0, 100),
+              lastMessageSender: 'driver',
+              unreadDispatchMessages: (thread.unreadDispatchMessages || 0) + 1
+            });
+
+            console.log(`✅ WebSocket message stored in ${thread.threadType} thread ${thread.id}`);
+          } catch (error) {
+            console.error('❌ Error processing WebSocket text message:', error);
+          }
+        });
+        
       } catch (error) {
         console.error('❌ Failed to initialize Zello service:', error);
       }
@@ -2068,37 +2221,48 @@ export async function registerRoutes(app: Express): Promise<void> {
           const allThreads = await storage.getAllLoadCommunicationThreads();
           const driverThreads = allThreads.filter(t => t.driverId === driver.id && t.status === 'active');
           
-          // Check if message mentions a specific load number (supports hyphens like TEST-LOAD-001)
-          const loadNumberMatch = messageContent.match(/(?:LOAD|TEST)-[A-Z0-9-]+/i);
+          // Enhanced regex to match various load number formats:
+          // - Standard: LOAD-123, TEST-LOAD-001, LM-1234
+          // - Numeric only: 603006, 602951
+          // - Custom prefixes: BOL-123, REF-456
+          const loadNumberMatch = messageContent.match(/(?:(?:LOAD|TEST|LM|BOL|REF|TN)-[A-Z0-9-]+|\b\d{6}\b)/i);
           
           if (loadNumberMatch) {
             // Message mentions a load - find the specific load thread
             const mentionedLoadNumber = loadNumberMatch[0].toUpperCase();
             console.log(`🔍 Message mentions load ${mentionedLoadNumber}, searching for specific thread...`);
             
-            // Check threads, using cached or joined load numbers
-            for (const t of driverThreads.filter(t => t.threadType === 'load')) {
-              // Try thread's cached loadNumber first, then joined loadNumberFromLoad, then fetch from DB
-              let threadLoadNumber = t.loadNumber || (t as any).loadNumberFromLoad;
-              
-              // If still no loadNumber, fetch from load table and update cache
-              if (!threadLoadNumber && t.loadId) {
+            // Normalize function to strip prefixes for comparison
+            const normalizeLoadNumber = (num: string) => {
+              if (!num) return '';
+              return num.toUpperCase().replace(/^(LOAD|TEST|LM|BOL|REF|TN)-/, '');
+            };
+            
+            const normalizedMention = normalizeLoadNumber(mentionedLoadNumber);
+            
+            // Pre-fetch all load numbers for performance (caching)
+            const loadNumberCache = new Map<string, string>();
+            for (const t of driverThreads.filter(t => t.threadType === 'load' && t.loadId)) {
+              if (!loadNumberCache.has(t.loadId)) {
                 try {
                   const load = await storage.getLoad(t.loadId);
                   if (load) {
-                    threadLoadNumber = load.loadNumber;
-                    // Update thread cache for future lookups
-                    await storage.updateLoadCommunicationThread(t.id, { loadNumber: load.loadNumber });
-                    console.log(`📝 Updated thread ${t.id} with loadNumber: ${load.loadNumber}`);
+                    loadNumberCache.set(t.loadId, load.loadNumber);
                   }
                 } catch (error) {
-                  console.error(`⚠️ Error fetching load ${t.loadId} for thread ${t.id}:`, error);
+                  console.error(`⚠️ Error fetching load ${t.loadId}:`, error);
                 }
               }
+            }
+            
+            // Check threads using normalized comparison
+            for (const t of driverThreads.filter(t => t.threadType === 'load')) {
+              const threadLoadNumber = t.loadNumber || (t as any).loadNumberFromLoad || (t.loadId && loadNumberCache.get(t.loadId));
+              const normalizedThread = normalizeLoadNumber(threadLoadNumber || '');
               
-              if (threadLoadNumber && threadLoadNumber.toUpperCase() === mentionedLoadNumber) {
+              if (normalizedThread && normalizedThread === normalizedMention) {
                 thread = t;
-                console.log(`✅ Matched to load thread ${thread.id} for ${threadLoadNumber}`);
+                console.log(`✅ Matched to load thread ${thread.id} for ${threadLoadNumber} (normalized: ${normalizedMention})`);
                 break;
               }
             }
