@@ -85,6 +85,17 @@ export class ZelloDispatchService extends EventEmitter {
   }> = [];
   private readonly maxBroadcastHistory: number = 100; // Keep last 100 broadcasts
   
+  // Voice stream tracking for transcription
+  private activeVoiceStreams: Map<number, {
+    streamId: number;
+    channel: string;
+    from: string;
+    codec: string;
+    packetDuration: number;
+    audioBuffers: Buffer[];
+    startTime: Date;
+  }> = new Map();
+  
   constructor() {
     super();
     // Use the correct API key from the Zello dashboard
@@ -213,9 +224,11 @@ export class ZelloDispatchService extends EventEmitter {
       }
     }
     
-    // Build URL with session ID - ensure we use the web API path
-    // If the endpoint doesn't start with /web/api, add it
-    const apiPath = endpoint.startsWith('/web/api') ? endpoint : `/web/api${endpoint}`;
+    // Build URL with session ID
+    // Some endpoints need /web/api prefix, others don't (like /history/messages)
+    const apiPath = endpoint.startsWith('/web/api') || endpoint.startsWith('/history/') 
+      ? endpoint 
+      : `/web/api${endpoint}`;
     const url = `https://${this.workspaceUrl}${apiPath}`;
     const params = new URLSearchParams({ sid: this.sessionId });
     
@@ -828,8 +841,8 @@ export class ZelloDispatchService extends EventEmitter {
       const fiveMinutesAgo = Math.floor((Date.now() - 5 * 60 * 1000) / 1000);
       params.start = fiveMinutesAgo.toString();
       
-      // Use the proper Zello Work API endpoint
-      const response = await this.makeZelloApiCall('/web/api/history/get', 'GET', params);
+      // Use the correct Zello Work API endpoint for message history
+      const response = await this.makeZelloApiCall('/history/messages', 'GET', params);
 
       if (response && response.status === 'OK') {
         console.log(`✅ Retrieved ${response.returned || 0} messages from Zello history`);
@@ -844,15 +857,21 @@ export class ZelloDispatchService extends EventEmitter {
     }
   }
 
-  // Process messages from history API (similar to webhook processing)
+  // Process messages from history API and emit events for routing
   async processHistoryMessages(messages: any[]): Promise<any[]> {
     const processedMessages = [];
     
     for (const msg of messages) {
       try {
+        // Skip non-text messages for now (voice messages are handled via WebSocket transcription)
+        if (msg.type !== 'text') {
+          console.log(`ℹ️ Skipping non-text message type: ${msg.type} from ${msg.sender}`);
+          continue;
+        }
+        
         // Convert Zello history format to our webhook format
         const processedMsg = {
-          type: msg.type === 'text' ? 'text_message' : msg.type,
+          type: 'text_message',
           channel: msg.recipient_type === 'channel' ? msg.recipient : null,
           sender: msg.sender,
           from: msg.sender,
@@ -862,15 +881,23 @@ export class ZelloDispatchService extends EventEmitter {
           processed: false
         };
         
-        // Handle attachments if present
-        if (msg.type === 'image' && msg.media_key) {
-          processedMsg.attachment = {
-            type: 'image',
-            mediaKey: msg.media_key,
-            timestamp: msg.image_ts ? new Date(msg.image_ts * 1000).toISOString() : processedMsg.timestamp
-          };
-        }
+        // Store in channel messages table
+        await this.storeChannelMessage(
+          processedMsg.channel || 'Everyone',
+          processedMsg.sender,
+          processedMsg.message,
+          'text'
+        );
         
+        // Emit text_message event for routing to communication threads
+        this.emit('text_message', {
+          channel: processedMsg.channel || 'Everyone',
+          from: processedMsg.sender,
+          text: processedMsg.message,
+          timestamp: new Date(msg.ts * 1000)
+        });
+        
+        console.log(`📬 Polled text message from ${processedMsg.sender}: "${processedMsg.message}"`);
         processedMessages.push(processedMsg);
       } catch (error) {
         console.error(`❌ Error processing history message ${msg.id}:`, error);
@@ -1204,6 +1231,13 @@ export class ZelloDispatchService extends EventEmitter {
   
   private handleWebSocketMessage(data: WebSocket.Data): void {
     try {
+      // Check if this is binary audio data or JSON control message
+      if (Buffer.isBuffer(data) && data.length > 0 && data[0] !== 0x7B) { // 0x7B is '{'
+        // This is binary audio data
+        this.handleAudioPacket(data);
+        return;
+      }
+      
       const message = JSON.parse(data.toString());
       
       if (message.seq && message.success !== undefined) {
@@ -1326,6 +1360,32 @@ export class ZelloDispatchService extends EventEmitter {
           duration: event.duration,
           timestamp: new Date()
         });
+        break;
+        
+      case 'on_stream_start':
+        console.log(`🎙️ Voice stream starting in ${event.channel} from ${event.from} (stream ${event.stream_id})`);
+        // Initialize voice stream buffer
+        this.activeVoiceStreams.set(event.stream_id, {
+          streamId: event.stream_id,
+          channel: event.channel,
+          from: event.from,
+          codec: event.codec,
+          packetDuration: event.packet_duration,
+          audioBuffers: [],
+          startTime: new Date()
+        });
+        break;
+        
+      case 'on_stream_stop':
+        console.log(`🎙️ Voice stream stopped (stream ${event.stream_id})`);
+        // Process the completed voice stream
+        const stream = this.activeVoiceStreams.get(event.stream_id);
+        if (stream) {
+          this.transcribeVoiceStream(stream).catch(err => {
+            console.error(`❌ Failed to transcribe voice stream ${event.stream_id}:`, err);
+          });
+          this.activeVoiceStreams.delete(event.stream_id);
+        }
         break;
         
       case 'on_error':
@@ -2106,6 +2166,121 @@ Login and start receiving load broadcasts via voice!`;
 
   isServiceRunning(): boolean {
     return this.isInitialized;
+  }
+
+  // Handle incoming binary audio packets from WebSocket
+  private handleAudioPacket(data: Buffer): void {
+    try {
+      // Zello audio packets start with stream_id (variable length integer)
+      // For simplicity, we'll extract stream_id from the first 4 bytes
+      if (data.length < 5) {
+        return; // Packet too small
+      }
+      
+      // Read stream_id (assuming it's in the first 4 bytes as uint32)
+      const streamId = data.readUInt32BE(0);
+      
+      const stream = this.activeVoiceStreams.get(streamId);
+      if (stream) {
+        // Buffer the audio data (skip the stream_id header)
+        const audioData = data.slice(4);
+        stream.audioBuffers.push(audioData);
+        console.log(`📦 Buffered ${audioData.length} bytes for stream ${streamId} (total packets: ${stream.audioBuffers.length})`);
+      } else {
+        console.warn(`⚠️ Received audio packet for unknown stream ${streamId}`);
+      }
+    } catch (error) {
+      console.error('❌ Error handling audio packet:', error);
+    }
+  }
+
+  // Transcribe voice stream using OpenAI Whisper
+  private async transcribeVoiceStream(stream: {
+    streamId: number;
+    channel: string;
+    from: string;
+    codec: string;
+    packetDuration: number;
+    audioBuffers: Buffer[];
+    startTime: Date;
+  }): Promise<void> {
+    try {
+      console.log(`🎤 Transcribing voice stream ${stream.streamId} from ${stream.from} (${stream.audioBuffers.length} packets)`);
+      
+      if (stream.audioBuffers.length === 0) {
+        console.warn(`⚠️ No audio data to transcribe for stream ${stream.streamId}`);
+        return;
+      }
+      
+      // Import required modules
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      const OpenAI = (await import('openai')).default;
+      
+      // Create temp directory if it doesn't exist
+      const tmpDir = path.join(process.cwd(), 'tmp', 'audio');
+      await fs.mkdir(tmpDir, { recursive: true });
+      
+      // Save raw audio to temp file (Opus format)
+      const opusFilePath = path.join(tmpDir, `stream_${stream.streamId}.opus`);
+      const combinedAudio = Buffer.concat(stream.audioBuffers);
+      await fs.writeFile(opusFilePath, combinedAudio);
+      
+      // Convert Opus to WAV using ffmpeg
+      const wavFilePath = path.join(tmpDir, `stream_${stream.streamId}.wav`);
+      try {
+        await execAsync(`ffmpeg -y -i "${opusFilePath}" -ar 16000 -ac 1 "${wavFilePath}"`);
+        console.log(`✅ Converted Opus to WAV: ${wavFilePath}`);
+      } catch (conversionError) {
+        console.error('❌ FFmpeg conversion failed:', conversionError);
+        // Clean up
+        await fs.unlink(opusFilePath).catch(() => {});
+        return;
+      }
+      
+      // Transcribe using OpenAI Whisper
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+      });
+      
+      const audioFile = await fs.readFile(wavFilePath);
+      const audioBlob = new Blob([audioFile], { type: 'audio/wav' });
+      const audioFileObj = new File([audioBlob], 'audio.wav', { type: 'audio/wav' });
+      
+      const transcription = await openai.audio.transcriptions.create({
+        file: audioFileObj,
+        model: 'whisper-1',
+        language: 'en'
+      });
+      
+      const transcribedText = transcription.text.trim();
+      console.log(`📝 Transcribed: "${transcribedText}"`);
+      
+      // Clean up temp files
+      await fs.unlink(opusFilePath).catch(() => {});
+      await fs.unlink(wavFilePath).catch(() => {});
+      
+      if (transcribedText) {
+        // Store the transcribed message
+        await this.storeChannelMessage(stream.channel, stream.from, transcribedText, 'voice');
+        
+        // Emit text_message event so it gets routed to communication threads
+        this.emit('text_message', {
+          channel: stream.channel,
+          from: stream.from,
+          text: transcribedText,
+          timestamp: new Date()
+        });
+        
+        console.log(`✅ Voice message transcribed and routed: "${transcribedText}"`);
+      }
+      
+    } catch (error) {
+      console.error(`❌ Failed to transcribe voice stream ${stream.streamId}:`, error);
+    }
   }
 
   shutdown(): void {
