@@ -2068,23 +2068,39 @@ export async function registerRoutes(app: Express): Promise<void> {
           const allThreads = await storage.getAllLoadCommunicationThreads();
           const driverThreads = allThreads.filter(t => t.driverId === driver.id && t.status === 'active');
           
-          // Check if message mentions a specific load number
-          const loadNumberMatch = messageContent.match(/LOAD-[A-Z0-9]+|TEST-[A-Z0-9]+/i);
+          // Check if message mentions a specific load number (supports hyphens like TEST-LOAD-001)
+          const loadNumberMatch = messageContent.match(/(?:LOAD|TEST)-[A-Z0-9-]+/i);
           
           if (loadNumberMatch) {
             // Message mentions a load - find the specific load thread
             const mentionedLoadNumber = loadNumberMatch[0].toUpperCase();
             console.log(`🔍 Message mentions load ${mentionedLoadNumber}, searching for specific thread...`);
             
-            const specificLoadThread = driverThreads.find(t => 
-              t.threadType === 'load' && 
-              t.loadNumber && 
-              t.loadNumber.toUpperCase() === mentionedLoadNumber
-            );
-            
-            if (specificLoadThread) {
-              thread = specificLoadThread;
-              console.log(`✅ Matched to load thread ${thread.id} for ${thread.loadNumber}`);
+            // Check threads, using cached or joined load numbers
+            for (const t of driverThreads.filter(t => t.threadType === 'load')) {
+              // Try thread's cached loadNumber first, then joined loadNumberFromLoad, then fetch from DB
+              let threadLoadNumber = t.loadNumber || (t as any).loadNumberFromLoad;
+              
+              // If still no loadNumber, fetch from load table and update cache
+              if (!threadLoadNumber && t.loadId) {
+                try {
+                  const load = await storage.getLoad(t.loadId);
+                  if (load) {
+                    threadLoadNumber = load.loadNumber;
+                    // Update thread cache for future lookups
+                    await storage.updateLoadCommunicationThread(t.id, { loadNumber: load.loadNumber });
+                    console.log(`📝 Updated thread ${t.id} with loadNumber: ${load.loadNumber}`);
+                  }
+                } catch (error) {
+                  console.error(`⚠️ Error fetching load ${t.loadId} for thread ${t.id}:`, error);
+                }
+              }
+              
+              if (threadLoadNumber && threadLoadNumber.toUpperCase() === mentionedLoadNumber) {
+                thread = t;
+                console.log(`✅ Matched to load thread ${thread.id} for ${threadLoadNumber}`);
+                break;
+              }
             }
           }
           

@@ -1107,6 +1107,7 @@ export class DatabaseStorage implements IStorage {
         id: schema.loadCommunicationThreads.id,
         loadId: schema.loadCommunicationThreads.loadId,
         driverId: schema.loadCommunicationThreads.driverId,
+        threadType: schema.loadCommunicationThreads.threadType,
         status: schema.loadCommunicationThreads.status,
         messageCount: schema.loadCommunicationThreads.messageCount,
         unreadDriverMessages: schema.loadCommunicationThreads.unreadDriverMessages,
@@ -1120,8 +1121,10 @@ export class DatabaseStorage implements IStorage {
         // Driver info
         driverName: schema.drivers.name,
         driverPhone: schema.drivers.phone,
-        // Load info
-        loadNumber: schema.loads.loadNumber,
+        // Load info from threads table (cached) - preferred
+        loadNumber: schema.loadCommunicationThreads.loadNumber,
+        // Load info from loads table (fallback for null values)
+        loadNumberFromLoad: schema.loads.loadNumber,
       })
       .from(schema.loadCommunicationThreads)
       .leftJoin(schema.drivers, eq(schema.loadCommunicationThreads.driverId, schema.drivers.id))
