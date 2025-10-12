@@ -27,6 +27,7 @@ import { realDriverLocationService } from "./real-driver-location-service";
 import { taskMagicIntegration } from './taskmagic-integration';
 import { datScraperService as puppeteerDATService } from './dat-puppeteer-scraper';
 import { googleSheetsService } from './google-sheets-service';
+import { smsLoadService } from './sms-service';
 import { setupAuth, isAuthenticated } from "./replitAuth";
 
 import nodemailer from "nodemailer";

@@ -1,5 +1,4 @@
 import { storage } from './storage';
-import { zelloService } from './zello-service';
 import { DAT_EQUIPMENT_MAPPING, mapDATEquipmentType } from '../shared/equipment-types.js';
 
 interface LoadBoardAPIConfig {
@@ -39,7 +38,7 @@ export class RealLoadIntegrationService {
   ];
 
   constructor() {
-    // Zello-only communication - no SMS
+    // SMS-only communication via Twilio
   }
 
   /**
@@ -85,21 +84,6 @@ export class RealLoadIntegrationService {
 
       const load = await storage.createLoad(realLoad);
       console.log(`📋 [REAL DAT] Added verified load ${load.loadNumber}: ${loadData.origin} → ${loadData.destination} ($${loadData.rate})`);
-
-      // Broadcast via Zello Work WebSocket (Zello-only communication)
-      const channel = loadData.equipmentType.includes('VAN') ? 'box-truck-ops' : 'hotshot-expedite';
-      await zelloService.sendLoadNotification({
-        loadNumber: load.loadNumber,
-        origin: loadData.origin,
-        destination: loadData.destination,
-        rate: loadData.rate,
-        distance: loadData.miles,
-        equipment: loadData.equipmentType,
-        weight: loadData.weight ? `${loadData.weight} lbs` : 'Standard',
-        pickupDate: loadData.pickupDate,
-        commodity: loadData.description
-      }, channel);
-      console.log(`🎙️ [REAL DAT] Load ${load.loadNumber} broadcast via Zello WebSocket to channel: ${channel}`);
 
       return {
         success: true,

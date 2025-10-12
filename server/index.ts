@@ -161,35 +161,7 @@ app.use((req, res, next) => {
       
       // Fire-and-forget approach - start each service independently without blocking anything
       
-      // 0. Zello Service (initialize first for communication)
-      setTimeout(() => {
-        (async () => {
-          try {
-            const { zelloService } = await import('./zello-service');
-            await zelloService.initialize();
-            log('✅ Zello Service initialized automatically - bidirectional voice/text communication ready');
-            
-            // Start Zello message history polling (alternative to webhooks)
-            log('📡 Starting Zello message polling (webhook alternative)...');
-            setInterval(async () => {
-              try {
-                const response = await fetch('http://localhost:5000/api/zello/history');
-                const result = await response.json();
-                if (result.count > 0) {
-                  log(`📨 Fetched ${result.count} new Zello messages`);
-                }
-              } catch (error) {
-                // Silent fail to avoid log spam
-              }
-            }, 5000); // Poll every 5 seconds
-            
-          } catch (error) {
-            log(`⚠️ Zello Service failed to initialize: ${error.message || error}`);
-          }
-        })();
-      }, 100);
-      
-      // 0.5. SMS Communication Service (after Zello)
+      // 0. SMS Communication Service (primary communication channel)
       setTimeout(() => {
         (async () => {
           try {

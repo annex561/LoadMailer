@@ -1,5 +1,4 @@
 import { storage } from './storage';
-import { zelloService } from './zello-service';
 
 interface DATCredentials {
   username: string;
@@ -34,7 +33,7 @@ export class RealDATScraper {
   private authenticatedSession: any = null;
 
   constructor() {
-    // Zello-only communication - no other services needed
+    // SMS-only communication via Twilio
   }
 
   setCredentials(username: string, password: string): void {
@@ -145,14 +144,6 @@ export class RealDATScraper {
 
       const load = await storage.createLoad(loadData);
       console.log(`📋 [DAT REAL] Created ${load.loadNumber}: ${datLoad.origin} → ${datLoad.destination} ($${datLoad.rate}) - ${datLoad.company}`);
-
-      // Send to Zello WebSocket immediately 
-      try {
-        await zelloService.sendLoadNotification(load);
-        console.log(`🎙️ [DAT REAL] Load ${load.loadNumber} broadcast via Zello to drivers`);
-      } catch (error) {
-        console.error(`❌ Failed to broadcast load ${load.loadNumber} via Zello:`, error);
-      }
 
     } catch (error) {
       console.error('Error processing real DAT load:', error);

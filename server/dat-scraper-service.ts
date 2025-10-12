@@ -1,6 +1,5 @@
 import puppeteer from 'puppeteer';
 import { storage } from './storage';
-import { zelloService } from './zello-service';
 
 interface DATLoad {
   origin: string;
@@ -21,7 +20,7 @@ export class DATScraperService {
   private scrapeInterval: NodeJS.Timeout | null = null;
 
   constructor() {
-    // Zello-only communication - no SMS service needed
+    // SMS-only communication via Twilio
   }
 
   async initialize(): Promise<void> {
@@ -186,14 +185,6 @@ export class DATScraperService {
 
       const load = await storage.createLoad(loadData);
       console.log(`📋 [DAT] Scraped load ${load.loadNumber}: ${datLoad.origin} → ${datLoad.destination} ($${datLoad.rate})`);
-
-      // Send to Zello WebSocket notification system
-      try {
-        await zelloService.sendLoadNotification(load);
-        console.log(`🎙️ [DAT] Load ${load.loadNumber} broadcast via Zello to drivers`);
-      } catch (error) {
-        console.error(`❌ Failed to broadcast load ${load.loadNumber} via Zello:`, error);
-      }
 
     } catch (error) {
       console.error('Error processing scraped DAT load:', error);

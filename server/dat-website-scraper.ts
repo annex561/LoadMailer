@@ -1,5 +1,4 @@
 import { storage } from './storage';
-import { zelloService } from './zello-service';
 import { DAT_EQUIPMENT_MAPPING, mapDATEquipmentType } from '../shared/equipment-types.js';
 
 interface ScrapedLoad {
@@ -24,7 +23,7 @@ export class DATWebsiteScraper {
   private scrapeIntervalSeconds = 10; // Start with 10 seconds
 
   constructor() {
-    // Zello-only communication - no other services needed
+    // SMS-only communication via Twilio
   }
 
   async startScraping(intervalSeconds: number = 10): Promise<void> {
@@ -194,14 +193,6 @@ export class DATWebsiteScraper {
 
       const load = await storage.createLoad(loadData);
       console.log(`📋 [DAT LIVE] Scraped load ${load.loadNumber}: ${scrapedLoad.origin} → ${scrapedLoad.destination} ($${scrapedLoad.rate})`);
-
-      // Immediately send to Zello WebSocket
-      try {
-        await zelloService.sendLoadNotification(load);
-        console.log(`🎙️ [DAT LIVE] Load ${load.loadNumber} broadcast via Zello to drivers`);
-      } catch (error) {
-        console.error(`❌ Failed to broadcast load ${load.loadNumber} via Zello:`, error);
-      }
 
     } catch (error) {
       console.error('Error processing scraped load:', error);

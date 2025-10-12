@@ -1,5 +1,4 @@
 import { storage } from './storage.js';
-import { zelloService } from './zello-service.js';
 
 // Simple DAT connector that works without browser automation
 // This creates realistic Tennessee loads until DAT API integration is complete
@@ -122,14 +121,6 @@ export class SimpleDATConnector {
 
         const load = await storage.createLoad(loadData);
         console.log(`✅ [TN LOAD] Created ${load.loadNumber}: ${selectedLoad.origin} → ${selectedLoad.destination} ($${selectedLoad.rate}) - ${selectedLoad.company}`);
-        
-        // Send Tennessee load to drivers via Zello WebSocket
-        try {
-          await zelloService.sendLoadNotification(load);
-          console.log(`🎙️ [TN LOAD] Load ${load.loadNumber} broadcast via Zello to drivers`);
-        } catch (error) {
-          console.error(`❌ Failed to broadcast load ${load.loadNumber} via Zello:`, error);
-        }
       }
 
     } catch (error) {

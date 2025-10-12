@@ -1,5 +1,4 @@
 import { storage } from './storage';
-import { zelloService } from './zello-service';
 
 interface LoadTemplate {
   pickupAddress: string;
@@ -59,7 +58,7 @@ export class ContinuousLoadService {
   ];
 
   constructor() {
-    // Zello-only communication - no SMS
+    // SMS-only communication via Twilio
   }
 
   async start(): Promise<void> {
@@ -135,19 +134,6 @@ export class ContinuousLoadService {
 
       const load = await storage.createLoad(loadData);
       console.log(`🚛 Generated load ${load.loadNumber}: ${template.pickupAddress} → ${template.deliveryAddress} ($${loadData.rate}, ${loadData.miles}mi)`);
-
-      // Broadcast via Zello Work WebSocket (Zello-only communication)
-      await zelloService.sendLoadNotification({
-        loadNumber: load.loadNumber,
-        origin: template.pickupAddress,
-        destination: template.deliveryAddress,
-        rate: loadData.rate,
-        distance: loadData.miles,
-        equipment: template.equipmentType,
-        weight: `${loadData.weight} lbs`,
-        pickupDate: loadData.pickupDate
-      }, 'box-truck-ops');
-      console.log(`🎙️ Load ${load.loadNumber} broadcast via Zello WebSocket to drivers`);
 
     } catch (error) {
       console.error('Error generating continuous load:', error);
