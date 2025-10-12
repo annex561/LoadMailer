@@ -47,6 +47,13 @@ interface ZelloMessage {
   timestamp: Date;
 }
 
+interface QueuedMessage {
+  channel: string;
+  message: string;
+  timestamp: Date;
+  retries: number;
+}
+
 export class ZelloDispatchService extends EventEmitter {
   private apiKey: string;
   private username: string;
@@ -65,6 +72,10 @@ export class ZelloDispatchService extends EventEmitter {
   private wsConnected: boolean = false;
   private wsRefreshToken: string | null = null;
   private wsReconnectTimer: NodeJS.Timeout | null = null;
+  private messageQueue: QueuedMessage[] = [];
+  private reconnectAttempts: number = 0;
+  private readonly maxReconnectDelay: number = 60000; // Max 1 minute backoff
+  private readonly initialReconnectDelay: number = 1000; // Start with 1 second
   
   constructor() {
     super();
@@ -971,6 +982,7 @@ export class ZelloDispatchService extends EventEmitter {
         console.log('✅ WebSocket connection established to Zello');
         this.wsConnected = true;
         this.wsSequence = 1; // Reset sequence counter
+        this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
         
         // Send logon command immediately upon connection
         this.wsLogon();
@@ -1002,15 +1014,34 @@ export class ZelloDispatchService extends EventEmitter {
       clearTimeout(this.wsReconnectTimer);
     }
     
+    // Exponential backoff: delay = min(initialDelay * 2^attempts, maxDelay)
+    const delay = Math.min(
+      this.initialReconnectDelay * Math.pow(2, this.reconnectAttempts),
+      this.maxReconnectDelay
+    );
+    
+    this.reconnectAttempts++;
+    console.log(`🔄 Scheduling WebSocket reconnection in ${delay}ms (attempt ${this.reconnectAttempts})...`);
+    
     this.wsReconnectTimer = setTimeout(() => {
       console.log('🔄 Attempting WebSocket reconnection...');
       this.connectWebSocket();
-    }, 5000);
+    }, delay);
   }
   
-  async sendTextMessage(channelName: string, message: string): Promise<boolean> {
+  async sendTextMessage(channelName: string, message: string, skipQueue: boolean = false): Promise<boolean> {
+    // Queue message if WebSocket is not connected (unless skipQueue is true for flush operations)
     if (!this.websocket || !this.wsConnected) {
-      console.log('⚠️ Cannot send message: WebSocket not connected');
+      if (!skipQueue) {
+        console.log('⚠️ WebSocket not connected - queuing message for later delivery');
+        this.messageQueue.push({
+          channel: channelName,
+          message: message,
+          timestamp: new Date(),
+          retries: 0
+        });
+        console.log(`📥 Message queued (${this.messageQueue.length} messages in queue)`);
+      }
       return false;
     }
     
@@ -1032,7 +1063,57 @@ export class ZelloDispatchService extends EventEmitter {
       return true;
     } catch (error) {
       console.error(`❌ Failed to send text message:`, error);
+      // Queue message for retry (only if not already from queue to avoid duplicates)
+      if (!skipQueue) {
+        this.messageQueue.push({
+          channel: channelName,
+          message: message,
+          timestamp: new Date(),
+          retries: 0
+        });
+      }
       return false;
+    }
+  }
+  
+  private async flushMessageQueue(): Promise<void> {
+    if (this.messageQueue.length === 0) {
+      return;
+    }
+    
+    console.log(`📤 Flushing ${this.messageQueue.length} queued messages...`);
+    
+    // Process all queued messages
+    const queue = [...this.messageQueue];
+    this.messageQueue = []; // Clear the queue
+    
+    for (const queuedMsg of queue) {
+      // Skip messages that are too old (> 5 minutes) - use ORIGINAL timestamp
+      const messageAge = Date.now() - queuedMsg.timestamp.getTime();
+      if (messageAge > 5 * 60 * 1000) {
+        console.log(`⏰ Skipping old queued message (${Math.round(messageAge / 1000)}s old)`);
+        continue;
+      }
+      
+      // Try to send the message with skipQueue=true to avoid duplicate queueing
+      const success = await this.sendTextMessage(queuedMsg.channel, queuedMsg.message, true);
+      if (!success && queuedMsg.retries < 3) {
+        // Re-queue if failed and hasn't exceeded retry limit - preserve original timestamp and increment retries
+        queuedMsg.retries++;
+        this.messageQueue.push(queuedMsg);
+        console.log(`🔄 Re-queued message (retry ${queuedMsg.retries}/3, age: ${Math.round(messageAge / 1000)}s)`);
+      } else if (!success) {
+        console.log(`❌ Dropping message after ${queuedMsg.retries} retries`);
+      }
+      
+      // Small delay between messages to avoid flooding
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    if (this.messageQueue.length > 0) {
+      console.log(`📥 ${this.messageQueue.length} messages still queued after flush`);
+    } else {
+      console.log(`✅ All queued messages delivered successfully`);
     }
   }
   
@@ -1091,6 +1172,8 @@ export class ZelloDispatchService extends EventEmitter {
           // If this was the logon command, channels are now automatically connected
           if (message.command === 'logon' || (message.seq === 1 && this.wsConnected)) {
             console.log('✅ Logon successful - channels automatically connected and ready for messaging');
+            // Flush any queued messages now that we're connected
+            this.flushMessageQueue();
           }
         } else if (message.error) {
           // Handle specific errors
