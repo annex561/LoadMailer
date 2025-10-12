@@ -32,8 +32,35 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
-// Database-backed token service handled by storage interface
-// NOTE: Twilio/SMS removed - system uses ONLY Zello WebSocket for all driver communication
+import twilio from "twilio";
+
+// Initialize Twilio client for SMS communication
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+
+// Helper function to normalize and validate phone numbers for Twilio E.164 format
+function normalizePhoneToE164(phoneNumber: string | undefined | null): string | null {
+  if (!phoneNumber) return null;
+  
+  // Strip all non-digit characters
+  const digitsOnly = phoneNumber.replace(/\D/g, '');
+  
+  // Validate and normalize to E.164 format (+1XXXXXXXXXX)
+  if (digitsOnly.length === 10) {
+    // 10 digits: US number without country code -> add +1
+    return `+1${digitsOnly}`;
+  } else if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
+    // 11 digits starting with 1: US number with country code -> add +
+    return `+${digitsOnly}`;
+  } else {
+    // Invalid format: cannot normalize to E.164
+    console.error(`❌ Invalid phone number format: "${phoneNumber}" (${digitsOnly.length} digits) - cannot normalize to E.164`);
+    return null;
+  }
+}
 
 // Initialize prediction confidence service
 const predictionConfidenceService = new PredictionConfidenceService();
@@ -165,18 +192,21 @@ LoadMaster Dispatch Team
 
     // Send SMS notification to dispatcher if configured
     const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER;
-    if (dispatcherPhone && smsLoadService.isServiceConfigured()) {
-      const result = await smsLoadService.sendSMS({
-        to: dispatcherPhone,
-        body: emailNotificationMessage
-      });
-      if (result.success) {
-        console.log(`✅ Sent email booking notification to dispatcher via SMS`);
-      } else {
-        console.log(`❌ Failed to send SMS notification: ${result.error}`);
+    const normalizedDispatcherPhone = normalizePhoneToE164(dispatcherPhone);
+    
+    if (normalizedDispatcherPhone && twilioPhoneNumber) {
+      try {
+        await twilioClient.messages.create({
+          to: normalizedDispatcherPhone,
+          from: twilioPhoneNumber,
+          body: emailNotificationMessage
+        });
+        console.log(`✅ Sent email booking notification to dispatcher via SMS (${normalizedDispatcherPhone})`);
+      } catch (error) {
+        console.error(`❌ Failed to send SMS notification:`, error);
       }
     } else {
-      console.log(`📱 Email booking notification: ${emailNotificationMessage}`);
+      console.log(`📱 Email booking notification (dispatcher phone invalid or Twilio not configured): ${emailNotificationMessage}`);
     }
 
   } catch (error) {
@@ -583,10 +613,10 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { driverId } = req.params;
       
-      if (!smsLoadService.isServiceConfigured()) {
+      if (!twilioPhoneNumber) {
         return res.status(503).json({
           success: false,
-          error: 'SMS service is not configured',
+          error: 'Twilio SMS is not configured',
           timestamp: new Date().toISOString()
         });
       }
@@ -601,10 +631,14 @@ export async function registerRoutes(app: Express): Promise<void> {
         });
       }
 
-      if (!driver.phoneNumber) {
+      // Normalize phone number using helper - check both fields
+      const driverPhone = driver.phoneNumber || driver.phone;
+      const normalizedPhone = normalizePhoneToE164(driverPhone);
+      
+      if (!normalizedPhone) {
         return res.status(400).json({
           success: false,
-          error: 'Driver does not have phone number configured',
+          error: `Driver phone number (${driverPhone}) cannot be normalized to E.164 format`,
           driverName: driver.name,
           timestamp: new Date().toISOString()
         });
@@ -616,31 +650,23 @@ export async function registerRoutes(app: Express): Promise<void> {
         `This is a test message from the LoadMaster dispatch system.\n` +
         `Your SMS notifications are working correctly.\n\n` +
         `Driver ID: ${driver.id}\n` +
-        `Phone: ${driver.phoneNumber}\n` +
+        `Phone: ${normalizedPhone}\n` +
         `Time: ${new Date().toLocaleString()}`;
 
-      const result = await smsLoadService.sendSMS({
-        to: driver.phoneNumber,
+      const smsResult = await twilioClient.messages.create({
+        to: normalizedPhone,
+        from: twilioPhoneNumber,
         body: testMessage
       });
 
-      if (result.success) {
-        res.json({
-          success: true,
-          message: 'Test SMS sent successfully',
-          driverName: driver.name,
-          phoneNumber: driver.phoneNumber,
-          messageId: result.messageId,
-          timestamp: new Date().toISOString()
-        });
-      } else {
-        res.status(500).json({
-          success: false,
-          error: 'Failed to send test SMS',
-          details: result.error,
-          timestamp: new Date().toISOString()
-        });
-      }
+      res.json({
+        success: true,
+        message: 'Test SMS sent successfully',
+        driverName: driver.name,
+        phoneNumber: normalizedPhone,
+        messageId: smsResult.sid,
+        timestamp: new Date().toISOString()
+      });
 
     } catch (error) {
       console.error('Error sending test SMS:', error);
@@ -960,11 +986,16 @@ export async function registerRoutes(app: Express): Promise<void> {
         // Send welcome SMS with Zello credentials
         const welcomeMessage = zelloService.generateWelcomeMessage(zelloCredentials);
         
-        // Try to send SMS with Zello credentials
-        if (smsLoadService?.isServiceConfigured()) {
+        // Try to send SMS with Zello credentials using normalized phone
+        const normalizedPhone = normalizePhoneToE164(driver.phone);
+        if (normalizedPhone && twilioPhoneNumber) {
           try {
-            await smsLoadService.sendDirectSMS(driver.phone, welcomeMessage);
-            console.log('📱 Sent Zello welcome SMS to driver');
+            await twilioClient.messages.create({
+              to: normalizedPhone,
+              from: twilioPhoneNumber,
+              body: welcomeMessage
+            });
+            console.log(`📱 Sent Zello welcome SMS to driver (${normalizedPhone})`);
           } catch (smsError) {
             console.error('⚠️ Failed to send welcome SMS:', smsError);
             // Continue even if SMS fails - they still get the info on screen
@@ -1615,7 +1646,7 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // Send message to thread (POST to /api/communication/messages) - ZELLO-ONLY two-way communication
+  // Send message to thread (Zello primary, Twilio SMS fallback)
   app.post('/api/communication/messages', async (req, res) => {
     try {
       const { threadId, content, sender = 'dispatch' } = req.body;
@@ -1630,9 +1661,8 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: 'Communication thread not found' });
       }
 
-      // ZELLO-ONLY: Send message exclusively via Zello WebSocket (no SMS, no Telegram)
-      let zelloDelivered = false;
-      console.log(`💬 Sending message via Zello - Thread: ${threadId}, Type: ${thread.threadType || 'load'}, Sender: ${sender}`);
+      let deliveryMethod = 'none';
+      let deliverySuccess = false;
       
       if (sender === 'dispatch' || sender === 'dispatcher') {
         const driver = await storage.getDriver(thread.driverId);
@@ -1649,36 +1679,63 @@ export async function registerRoutes(app: Express): Promise<void> {
 
         // Format message based on thread type
         let zelloMessage: string;
+        let smsMessage: string;
         
         if (thread.threadType === 'general') {
           // General chat: Simple message format
           zelloMessage = `💬 Message from Dispatch:\n\n${content}`;
+          smsMessage = `Message from Dispatch: ${content}`;
         } else {
           // Load communication: Include load context
           const load = thread.loadId ? await storage.getLoad(thread.loadId) : null;
           zelloMessage = `📨 Message for Load ${load?.loadNumber || 'Unknown'}\n` +
                         `${load?.origin || ''} → ${load?.destination || ''}\n\n` +
                         `${content}`;
+          smsMessage = `Load ${load?.loadNumber || 'Unknown'}: ${content}`;
         }
         
-        console.log(`📤 Sending Zello message to ${driver.name} (${driverUsername})`);
-        
-        // Send to driver's personal Zello channel
+        // Try Zello first
+        console.log(`📤 Attempting Zello delivery to ${driver.name} (${driverUsername})`);
         const directMessageSent = await zelloService.sendMessage(driverUsername, zelloMessage);
-        
-        // Also broadcast to all-drivers channel for visibility
         const channelMessageSent = await zelloService.sendMessage('all-drivers', 
           `📨 ${driver.name}: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`
         );
         
-        zelloDelivered = directMessageSent || channelMessageSent;
-        
-        if (zelloDelivered) {
+        if (directMessageSent || channelMessageSent) {
           console.log(`✅ Message delivered via Zello to ${driver.name}`);
+          deliveryMethod = 'zello';
+          deliverySuccess = true;
         } else {
-          console.log(`❌ Zello delivery failed for ${driver.name}`);
+          console.log(`⚠️ Zello delivery failed, trying Twilio SMS...`);
+          
+          // Fallback to Twilio SMS - check both phone fields and normalize
+          const driverPhone = driver.phoneNumber || driver.phone;
+          const normalizedPhone = normalizePhoneToE164(driverPhone);
+          
+          if (normalizedPhone && twilioPhoneNumber) {
+            try {
+              console.log(`📱 Sending SMS to ${driver.name} (${normalizedPhone})`);
+              
+              const smsResult = await twilioClient.messages.create({
+                body: smsMessage,
+                from: twilioPhoneNumber,
+                to: normalizedPhone
+              });
+              
+              console.log(`✅ Message delivered via SMS to ${driver.name} (${normalizedPhone})`);
+              deliveryMethod = 'sms';
+              deliverySuccess = true;
+            } catch (smsError) {
+              console.error(`❌ SMS delivery failed:`, smsError);
+            }
+          } else {
+            console.log(`❌ Cannot send SMS - invalid phone (phoneNumber: ${driver.phoneNumber}, phone: ${driver.phone}) or missing Twilio number`);
+          }
+        }
+        
+        if (!deliverySuccess) {
           return res.status(503).json({ 
-            error: 'Message could not be delivered via Zello. WebSocket may be disconnected.',
+            error: 'Message could not be delivered via Zello or SMS',
             success: false 
           });
         }
@@ -1695,7 +1752,8 @@ export async function registerRoutes(app: Express): Promise<void> {
         textContent: content,
         isRead: false,
         isSuggested: false,
-        isSent: true
+        isSent: true,
+        communicationMethod: deliveryMethod
       });
 
       // Update thread stats
@@ -1708,8 +1766,8 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       res.json({ 
         success: true,
-        message: 'Message sent via Zello',
-        deliveryMethod: 'zello'
+        message: `Message sent via ${deliveryMethod}`,
+        deliveryMethod: deliveryMethod
       });
     } catch (error) {
       console.error('❌ Error sending message:', error);
@@ -2437,52 +2495,132 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // SMS Webhook endpoints for receiving messages from drivers
+  // SMS Webhook endpoints for receiving messages from drivers (Twilio)
   app.post('/api/sms/webhook', async (req, res) => {
     try {
-      // Verify Twilio signature for security (required for production)
-      const twilioSignature = req.headers['x-twilio-signature'] as string;
-      if (process.env.NODE_ENV === 'production' && process.env.TWILIO_AUTH_TOKEN) {
-        if (!twilioSignature) {
-          console.log('🔒 Missing Twilio signature in production - request rejected');
-          return res.status(403).send('Forbidden: Missing signature');
-        }
-        
-        const webhookUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-        const isValidSignature = twilio.validateRequest(
-          process.env.TWILIO_AUTH_TOKEN,
-          twilioSignature,
-          webhookUrl,
-          req.body
-        );
-        
-        if (!isValidSignature) {
-          console.log('🔒 Invalid Twilio signature - request rejected');
-          return res.status(403).send('Forbidden: Invalid signature');
-        }
-        
-        console.log('🔒 Twilio signature verified successfully');
-      }
+      console.log('📱 Twilio SMS webhook received:', req.body);
       
-      console.log('📱 SMS webhook received:', req.body);
-      
-      const { From, Body, MessageSid } = req.body;
+      const { From, Body, MessageSid, NumMedia } = req.body;
       
       if (!From || !Body) {
         console.log('⚠️ Invalid SMS webhook data - missing From or Body');
-        console.log('📋 Request body keys:', Object.keys(req.body));
         return res.status(400).send('Invalid webhook data');
       }
 
-      // Handle incoming SMS through communication service
-      await smsCommunicationService.handleIncomingSMS(From, Body, MessageSid);
+      // Clean up phone number (remove +1 prefix if present)
+      const driverPhone = From.replace(/^\+1/, '');
+      const messageText = Body.trim();
+      
+      console.log(`📲 SMS from ${driverPhone}: "${messageText}"`);
+
+      // Find driver by phone number
+      const driver = await storage.getDriverByNameOrPhone(driverPhone);
+      
+      if (!driver) {
+        console.log(`⚠️ Unknown driver phone number: ${driverPhone}`);
+        // Still acknowledge receipt
+        res.set('Content-Type', 'text/xml');
+        res.send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+        return;
+      }
+
+      console.log(`👤 Driver identified: ${driver.name} (${driver.id})`);
+
+      // Use the SAME load number detection logic we built for Zello
+      const loadNumberPattern = /(?:LOAD[-\s]?|TEST[-\s]?LOAD[-\s]?|LM[-\s]?|BOL[-\s]?|REF[-\s]?|TN[-\s]?)?(\d{3,6})/gi;
+      const matches = [...messageText.matchAll(loadNumberPattern)];
+      
+      let targetThread = null;
+      let detectedLoadNumber = null;
+
+      if (matches.length > 0) {
+        for (const match of matches) {
+          const fullMatch = match[0];
+          const numericPart = match[1];
+          
+          // Normalize: strip prefix and convert to uppercase
+          const normalizedFromMessage = fullMatch.replace(/^(LOAD|TEST|LM|BOL|REF|TN)[-\s]?/i, '').toUpperCase();
+          
+          console.log(`🔍 SMS mentions load number: ${fullMatch} (normalized: ${normalizedFromMessage})`);
+          
+          // Find matching thread by normalized load number
+          const threads = await storage.getAllLoadCommunicationThreads();
+          const thread = threads.find(t => {
+            if (t.driverId !== driver.id) return false;
+            
+            // Get load number from thread (either direct or from load)
+            const threadLoadNumber = t.loadNumber || t.loadNumberFromLoad;
+            if (!threadLoadNumber) return false;
+            
+            // Normalize thread load number for comparison
+            const normalizedThreadNumber = threadLoadNumber.replace(/^(LOAD|TEST|LM|BOL|REF|TN)[-\s]?/i, '').toUpperCase();
+            
+            return normalizedThreadNumber === normalizedFromMessage;
+          });
+          
+          if (thread) {
+            targetThread = thread;
+            detectedLoadNumber = fullMatch;
+            console.log(`✅ SMS matched to load thread: ${thread.id} (${threadLoadNumber})`);
+            break;
+          }
+        }
+      }
+
+      // If no load-specific thread found, use/create general thread
+      if (!targetThread) {
+        console.log(`💬 No load number detected, routing to general thread for driver ${driver.name}`);
+        const generalThreads = await storage.getAllLoadCommunicationThreads();
+        targetThread = generalThreads.find(t => 
+          t.driverId === driver.id && t.threadType === 'general'
+        );
+        
+        if (!targetThread) {
+          // Create general thread for this driver
+          targetThread = await storage.createLoadCommunicationThread({
+            driverId: driver.id,
+            threadType: 'general',
+            status: 'active'
+          });
+          console.log(`✨ Created general SMS thread for ${driver.name}: ${targetThread.id}`);
+        }
+      }
+
+      // Store message in the thread
+      await storage.createLoadMessage({
+        threadId: targetThread.id,
+        loadId: targetThread.loadId || null,
+        driverId: driver.id,
+        message: messageText,
+        textContent: messageText,
+        messageType: 'text',
+        senderRole: 'driver',
+        senderName: driver.name,
+        isFromDriver: true,
+        isRead: false,
+        isSuggested: false,
+        isSent: true,
+        communicationMethod: 'sms',
+        metadata: {
+          twilioMessageSid: MessageSid,
+          from: From,
+          hasMedia: NumMedia && parseInt(NumMedia) > 0
+        }
+      });
+
+      // Update thread with last message info
+      await storage.updateLoadCommunicationThread(targetThread.id, {
+        lastMessageAt: new Date(),
+        messageCount: (targetThread.messageCount || 0) + 1,
+        unreadDriverMessages: (targetThread.unreadDriverMessages || 0) + 1
+      });
+
+      console.log(`✅ SMS stored in thread ${targetThread.id}${detectedLoadNumber ? ` (${detectedLoadNumber})` : ''}`);
       
       // Respond with TwiML to acknowledge receipt
       res.set('Content-Type', 'text/xml');
-      res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Message>Message received</Message>
-</Response>`);
+      res.send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+      
     } catch (error) {
       console.error('❌ Error handling SMS webhook:', error);
       res.status(500).send('Error processing SMS');

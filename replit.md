@@ -34,12 +34,17 @@ Preferred communication style: Simple, everyday language.
 - **Schema Structure**: Includes Drivers, Customers, Loads, Email Templates, and Email Logs with defined relationships.
 
 ## Communication System
-- **Primary Communication**: Zello Work WebSocket for all driver notifications and load offers. This is the exclusive channel for load-related communications, replacing SMS and other services.
-- **WebSocket Message Routing**: Automatic routing of incoming Zello messages to appropriate communication threads (load-specific or general) based on load number detection
+- **Dual-Channel Strategy**: Zello Work WebSocket attempted first, with automatic Twilio SMS fallback for reliable delivery
+- **Bidirectional Communication**: Both Zello and SMS support incoming messages with smart routing to correct communication threads
+- **Message Routing**: Automatic routing of incoming messages (SMS or Zello) to appropriate communication threads (load-specific or general) based on load number detection
 - **Smart Load Number Detection**: Universal regex pattern supporting multiple formats:
   - Standard prefixed: LOAD-123, TEST-LOAD-001, LM-1234, BOL-123, REF-456, TN-789
   - Numeric only: 603006, 602951 (automatically matched to LOAD-603006, LOAD-602951)
   - Normalized comparison strips prefixes to ensure accurate thread matching
+- **Delivery Strategy**: 
+  1. Attempts Zello WebSocket first for instant delivery
+  2. Falls back to Twilio SMS if Zello unavailable or fails
+  3. All phone numbers normalized to E.164 format (+1XXXXXXXXXX) for Twilio compatibility
 - **Performance Optimization**: Load number caching to minimize database queries during message routing
 - **Email System**: Nodemailer for automated email notifications based on load status changes, using dynamic templates.
 
@@ -64,7 +69,8 @@ Preferred communication style: Simple, everyday language.
 - **Drizzle Kit**: Database migration and schema management.
 
 ## Messaging & Email Services
-- **Zello Work WebSocket**: Primary communication system for all driver notifications and load offers (wss://zellowork.io/ws/lamp1).
+- **Zello Work WebSocket**: Primary communication attempt for all driver notifications (wss://zellowork.io/ws/lamp1).
+- **Twilio SMS**: Automatic fallback for reliable message delivery when Zello unavailable. Supports bidirectional communication with smart thread routing.
 - **Nodemailer**: SMTP email delivery for load lifecycle notifications.
 
 ## UI Libraries
