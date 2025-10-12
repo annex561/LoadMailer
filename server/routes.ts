@@ -2511,17 +2511,18 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(400).send('Invalid webhook data');
       }
 
-      // Clean up phone number (remove +1 prefix if present)
-      const driverPhone = From.replace(/^\+1/, '');
+      // Normalize phone number to E.164 format for consistent matching
+      const normalizedPhone = normalizePhoneToE164(From);
       const messageText = Body.trim();
       
-      console.log(`📲 SMS from ${driverPhone}: "${messageText}"`);
+      console.log(`📲 SMS from ${From} (normalized: ${normalizedPhone}): "${messageText}"`);
 
-      // Find driver by phone number
-      const driver = await storage.getDriverByNameOrPhone(driverPhone);
+      // Find driver by normalized phone number
+      const drivers = await storage.getAllDrivers();
+      const driver = drivers.find(d => normalizePhoneToE164(d.phone || '') === normalizedPhone);
       
       if (!driver) {
-        console.log(`⚠️ Unknown driver phone number: ${driverPhone}`);
+        console.log(`⚠️ Unknown driver phone number: ${normalizedPhone}`);
         // Still acknowledge receipt
         res.set('Content-Type', 'text/xml');
         res.send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
