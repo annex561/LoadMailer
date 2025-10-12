@@ -103,11 +103,21 @@ export class SMSLoadService {
     config: SmsConfig | null;
   } {
     return {
-      isConfigured: false,
-      isRunning: false,
-      phoneNumbers: [],
-      config: null
+      isConfigured: this.isConfigured,
+      isRunning: this.isRunning,
+      phoneNumbers: this.twilioPhoneNumber ? [this.twilioPhoneNumber] : [],
+      config: this.config
     };
+  }
+
+  // Public method to check if service is configured
+  isServiceConfigured(): boolean {
+    return this.isConfigured;
+  }
+
+  // Public method to check if load service is running
+  isLoadServiceRunning(): boolean {
+    return this.isRunning;
   }
 
   // Stub methods to maintain interface compatibility
