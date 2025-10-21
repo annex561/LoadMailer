@@ -1395,28 +1395,31 @@ export async function registerRoutes(app: Express): Promise<void> {
           smsMessage = `Load ${load?.loadNumber || 'Unknown'}: ${content}`;
         }
         
-        // Send via Twilio SMS - check both phone fields and normalize
+        // Send via SMS using the SMS service (handles Messaging Service SID and delivery status)
         const driverPhone = driver.phoneNumber || driver.phone;
         const normalizedPhone = normalizePhoneToE164(driverPhone);
         
-        if (normalizedPhone && twilioPhoneNumber) {
+        if (normalizedPhone) {
           try {
             console.log(`📱 Sending SMS to ${driver.name} (${normalizedPhone})`);
             
-            const smsResult = await twilioClient.messages.create({
-              body: smsMessage,
-              from: twilioPhoneNumber,
-              to: normalizedPhone
+            const smsResult = await smsService.sendSMS({
+              to: normalizedPhone,
+              body: smsMessage
             });
             
-            console.log(`✅ Message delivered via SMS to ${driver.name} (${normalizedPhone})`);
-            deliveryMethod = 'sms';
-            deliverySuccess = true;
+            if (smsResult.success) {
+              console.log(`✅ Message sent via SMS to ${driver.name} (${normalizedPhone})${smsResult.messageSid ? ` - SID: ${smsResult.messageSid}` : ''}`);
+              deliveryMethod = 'sms';
+              deliverySuccess = true;
+            } else {
+              console.error(`❌ SMS delivery failed: ${smsResult.error}`);
+            }
           } catch (smsError) {
-            console.error(`❌ SMS delivery failed:`, smsError);
+            console.error(`❌ SMS delivery error:`, smsError);
           }
         } else {
-          console.log(`❌ Cannot send SMS - invalid phone (phoneNumber: ${driver.phoneNumber}, phone: ${driver.phone}) or missing Twilio number`);
+          console.log(`❌ Cannot send SMS - invalid phone (phoneNumber: ${driver.phoneNumber}, phone: ${driver.phone})`);
         }
         
         if (!deliverySuccess) {
@@ -1889,8 +1892,8 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // SMS status webhook to track delivery status
-  app.post('/api/sms/status', async (req, res) => {
+  // SMS status webhook to track delivery status (both endpoints for compatibility)
+  const handleSmsStatus = async (req: any, res: any) => {
     try {
       // Verify Twilio signature for security (required for production)
       const twilioSignature = req.headers['x-twilio-signature'] as string;
@@ -1916,14 +1919,27 @@ export async function registerRoutes(app: Express): Promise<void> {
         console.log('🔒 Twilio signature verified for status webhook');
       }
       
-      console.log('📱 SMS status update:', req.body);
+      const { MessageSid, MessageStatus, ErrorCode, ErrorMessage, To } = req.body;
       
-      const { MessageSid, MessageStatus, ErrorCode, ErrorMessage } = req.body;
+      console.log(`📱 SMS Status Update - SID: ${MessageSid}, Status: ${MessageStatus}, To: ${To}`);
       
       if (MessageStatus === 'delivered') {
-        console.log(`✅ SMS ${MessageSid} delivered successfully`);
-      } else if (MessageStatus === 'failed') {
-        console.log(`❌ SMS ${MessageSid} delivery failed: ${ErrorCode} - ${ErrorMessage}`);
+        console.log(`✅ SMS ${MessageSid} delivered successfully to ${To}`);
+      } else if (MessageStatus === 'failed' || MessageStatus === 'undelivered') {
+        console.log(`❌ SMS ${MessageSid} to ${To} failed with status: ${MessageStatus}`);
+        if (ErrorCode) {
+          console.log(`   Error Code: ${ErrorCode} - ${ErrorMessage}`);
+          // Log common error codes with explanations
+          if (ErrorCode === '21610') {
+            console.log('   ⚠️ Recipient has opted out (sent STOP). They must text START to re-enable.');
+          } else if (ErrorCode === '30007') {
+            console.log('   ⚠️ Carrier filtering/blocking. Ensure A2P 10DLC campaign is approved.');
+          } else if (ErrorCode === '21408' || ErrorCode === '21608') {
+            console.log('   ⚠️ Permission to send to this number not enabled or trial account restriction.');
+          }
+        }
+      } else if (MessageStatus === 'sent' || MessageStatus === 'queued') {
+        console.log(`📤 SMS ${MessageSid} ${MessageStatus} to ${To}`);
       }
       
       // Just acknowledge receipt
@@ -1932,7 +1948,10 @@ export async function registerRoutes(app: Express): Promise<void> {
       console.error('❌ Error handling SMS status webhook:', error);
       res.status(500).send('Error processing status');
     }
-  });
+  };
+
+  app.post('/api/sms/status', handleSmsStatus);
+  app.post('/api/sms/status-callback', handleSmsStatus);
 
   console.log('✅ Essential routes registered - server ready for startup');
   

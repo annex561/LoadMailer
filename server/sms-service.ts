@@ -23,17 +23,24 @@ export class SMSLoadService {
   private config: SmsConfig | null = null;
   private twilioClient: any = null;
   private twilioPhoneNumber: string = '';
+  private twilioMessagingServiceSid: string = '';
   
   constructor() {
     // Initialize Twilio if credentials are available
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     this.twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || '';
+    this.twilioMessagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID || '';
     
-    if (accountSid && authToken && this.twilioPhoneNumber) {
+    if (accountSid && authToken) {
       this.twilioClient = twilio(accountSid, authToken);
       this.isConfigured = true;
       console.log('✅ SMS service initialized with Twilio');
+      if (this.twilioMessagingServiceSid) {
+        console.log(`✅ Using Messaging Service SID: ${this.twilioMessagingServiceSid}`);
+      } else {
+        console.log('⚠️ No Messaging Service SID - using direct phone number (may have delivery issues)');
+      }
     } else {
       console.log('⚠️ SMS service not configured - missing Twilio credentials');
     }
@@ -47,7 +54,7 @@ export class SMSLoadService {
     console.log('✅ SMS Load Dispatcher ready');
   }
 
-  async sendSMS(toOrParams: string | { to: string, body: string }, bodyParam?: string): Promise<{ success: boolean, error?: string }> {
+  async sendSMS(toOrParams: string | { to: string, body: string }, bodyParam?: string): Promise<{ success: boolean, error?: string, messageSid?: string }> {
     // Handle both calling patterns: sendSMS(to, body) or sendSMS({ to, body })
     const to = typeof toOrParams === 'string' ? toOrParams : toOrParams.to;
     const body = typeof toOrParams === 'string' ? bodyParam! : toOrParams.body;
@@ -61,14 +68,32 @@ export class SMSLoadService {
       // Normalize phone number
       const normalizedPhone = to.startsWith('+') ? to : `+1${to.replace(/\D/g, '')}`;
       
-      await this.twilioClient.messages.create({
+      // Build message params - use Messaging Service SID if available, otherwise use phone number
+      const messageParams: any = {
         body: body,
-        from: this.twilioPhoneNumber,
         to: normalizedPhone
-      });
+      };
+
+      // Get the base URL for status callbacks
+      const baseUrl = process.env.REPL_SLUG 
+        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+        : process.env.REPLIT_DEV_DOMAIN 
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+          : 'http://localhost:5000';
       
-      console.log(`✅ SMS sent to ${normalizedPhone}: ${body.substring(0, 50)}...`);
-      return { success: true };
+      // Prefer Messaging Service SID (required for A2P 10DLC compliance)
+      if (this.twilioMessagingServiceSid) {
+        messageParams.messagingServiceSid = this.twilioMessagingServiceSid;
+        messageParams.statusCallback = `${baseUrl}/api/sms/status-callback`;
+      } else {
+        // Fallback to direct phone number
+        messageParams.from = this.twilioPhoneNumber;
+      }
+      
+      const message = await this.twilioClient.messages.create(messageParams);
+      
+      console.log(`✅ SMS sent to ${normalizedPhone} (SID: ${message.sid}): ${body.substring(0, 50)}...`);
+      return { success: true, messageSid: message.sid };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error(`❌ Failed to send SMS to ${to}:`, error);
