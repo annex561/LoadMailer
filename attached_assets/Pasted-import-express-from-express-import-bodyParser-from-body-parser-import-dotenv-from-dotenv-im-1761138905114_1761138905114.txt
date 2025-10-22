@@ -1,0 +1,139 @@
+import express from "express";
+import bodyParser from "body-parser";
+import dotenv from "dotenv";
+import { createClient } from "@supabase/supabase-js";
+import Twilio from "twilio";
+dotenv.config();
+
+const app = express();
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// ──────────────────────────────
+//  INIT
+// ──────────────────────────────
+const PORT = process.env.PORT || 3000;
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+const tw = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const MSG = process.env.TWILIO_MESSAGING_SERVICE_SID;
+const PROXY = process.env.TWILIO_PROXY_SERVICE_SID;
+
+// ──────────────────────────────
+//  SAVE message helper
+// ──────────────────────────────
+async function saveMsg(driverId, body, direction) {
+  try {
+    await supabase.from("messages").insert({
+      driver_id: driverId,
+      body,
+      direction,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("DB save error →", e.message);
+  }
+}
+
+// ──────────────────────────────
+// 1️⃣ SEND message (dispatcher→driver)
+// body { driverId, text, loadId(optional) }
+// ──────────────────────────────
+app.post("/api/send", async (req, res) => {
+  try {
+    const { driverId, text, loadId } = req.body;
+    if (!driverId || !text) return res.status(400).send("Missing fields");
+
+    const { data: d } = await supabase.from("drivers").select("*").eq("id", driverId).single();
+    if (!d) return res.status(404).send("Driver not found");
+
+    // compose message
+    let body = text;
+    if (loadId) {
+      body += `\nAccept: ${process.env.APP_BASE_URL}/accept/${loadId}`;
+      body += `\nDecline: ${process.env.APP_BASE_URL}/decline/${loadId}`;
+    }
+
+    await saveMsg(d.id, body, "outbound");
+
+    const msg = await tw.messages.create({
+      to: d.phone,
+      body,
+      messagingServiceSid: MSG,
+    });
+
+    res.json({ success: true, sid: msg.sid });
+  } catch (e) {
+    console.error("send error →", e.message);
+    res.status(500).send("send error");
+  }
+});
+
+// ──────────────────────────────
+// 2️⃣ INBOUND SMS from Twilio
+// configure Messaging Service → webhook = https://yourapp/api/inbound
+// ──────────────────────────────
+app.post("/api/inbound", async (req, res) => {
+  try {
+    const from = req.body.From;
+    const body = req.body.Body?.trim() || "";
+    console.log("Inbound SMS from", from, body);
+
+    let { data: drv } = await supabase.from("drivers").select("*").eq("phone", from).single();
+    if (!drv) {
+      const { data: newDrv } = await supabase.from("drivers")
+        .insert({ phone: from, name: from })
+        .select()
+        .single();
+      drv = newDrv;
+    }
+
+    await saveMsg(drv.id, body, "inbound");
+
+    // keyword logic
+    if (/^\s*(stop|unsubscribe|cancel)\s*$/i.test(body)) {
+      await supabase.from("drivers").update({ status: "opted_out" }).eq("id", drv.id);
+      await tw.messages.create({
+        to: from,
+        body: "You have been unsubscribed. Reply START to resubscribe.",
+        messagingServiceSid: MSG,
+      });
+    }
+
+    if (/^\s*accept\s+([A-Za-z0-9_-]+)/i.test(body)) {
+      const id = body.match(/accept\s+([A-Za-z0-9_-]+)/i)[1];
+      await supabase.from("loads").update({ status: "accepted", driver_id: drv.id }).eq("id", id);
+      await tw.messages.create({
+        to: from,
+        body: `Load ${id} accepted. Dispatcher will confirm.`,
+        messagingServiceSid: MSG,
+      });
+    }
+
+    res.type("text/xml").send("<Response></Response>");
+  } catch (e) {
+    console.error("Inbound error →", e.message);
+    res.status(500).send("Inbound error");
+  }
+});
+
+// ──────────────────────────────
+// 3️⃣ (OPTIONAL) MASKED COMMUNICATION via Twilio Proxy
+// body {sessionName, driverPhone, dispatcherPhone}
+// ──────────────────────────────
+app.post("/api/proxy/session", async (req, res) => {
+  try {
+    if (!PROXY) return res.status(400).send("Proxy SID missing");
+    const { sessionName, driverPhone, dispatcherPhone } = req.body;
+    const s = await tw.proxy.services(PROXY).sessions.create({ uniqueName: sessionName || `s-${Date.now()}` });
+    await tw.proxy.services(PROXY).sessions(s.sid).participants.create({ identifier: driverPhone });
+    await tw.proxy.services(PROXY).sessions(s.sid).participants.create({ identifier: dispatcherPhone });
+    res.json({ success: true, sessionSid: s.sid });
+  } catch (e) {
+    console.error("Proxy error →", e.message);
+    res.status(500).send("Proxy error");
+  }
+});
+
+// root
+app.get("/", (_, r) => r.send("✅ Twilio Dispatch Server Live"));
+app.listen(PORT, () => console.log(`Server running → ${PORT}`));
