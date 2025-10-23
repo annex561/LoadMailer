@@ -938,19 +938,26 @@ export class DatabaseStorage implements IStorage {
         fileSize: schema.loadDocuments.fileSize,
         version: schema.loadDocuments.version,
         isLatestVersion: schema.loadDocuments.isLatestVersion,
-        load: {
-          id: schema.loads.id,
-          loadNumber: schema.loads.loadNumber,
-          pickupLocation: schema.loads.pickupLocation,
-          deliveryLocation: schema.loads.deliveryLocation,
-          status: schema.loads.status,
-        }
+        loadTableId: schema.loads.id,
+        loadNumber: schema.loads.loadNumber,
+        pickupLocation: schema.loads.pickupLocation,
+        deliveryLocation: schema.loads.deliveryLocation,
+        loadStatus: schema.loads.status,
       })
       .from(schema.loadDocuments)
       .leftJoin(schema.loads, eq(schema.loadDocuments.loadId, schema.loads.id))
       .orderBy(desc(schema.loadDocuments.createdAt));
       
-      return result;
+      return result.map(row => ({
+        ...row,
+        load: row.loadTableId ? {
+          id: row.loadTableId,
+          loadNumber: row.loadNumber,
+          pickupLocation: row.pickupLocation,
+          deliveryLocation: row.deliveryLocation,
+          status: row.loadStatus,
+        } : null
+      }));
     } catch (error) {
       console.error('Error getting all documents with load details:', error);
       return [];
