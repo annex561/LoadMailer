@@ -2,9 +2,12 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
 import { eq, and, or, desc, sql as drizzleSql, notInArray } from 'drizzle-orm';
 import * as schema from '@shared/schema';
-import { generateSecureTrackingToken } from '@shared/schema';
 import { IStorage } from './storage';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
+
+function generateSecureTrackingToken(): string {
+  return randomBytes(32).toString('hex');
+}
 
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql, { schema });
