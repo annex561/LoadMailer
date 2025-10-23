@@ -82,8 +82,14 @@ Preferred communication style: Simple, everyday language.
     - Rate limiting: 120 requests/hour per IP address
     - IP logging for all location updates and authentication failures
     - Token-driver ID binding validation (tokens only work for their assigned driver)
-  - **Database Storage**: Driver locations stored as `lastLat` and `lastLon` in drivers table
+  - **Database Storage**: Driver locations stored in `driverLocations` table with full metadata (lat, lon, speed, heading, battery, timestamp)
+  - **Real-Time Synchronization**: Location updates trigger React Query cache invalidation, immediately refreshing all components
+    - Dashboard map refreshes instantly (no polling delay)
+    - GPS tracking page updates immediately
+    - Manual dispatch page shows current locations
+    - All components query `/api/driver-locations/active` which returns real GPS data when available
   - **Dispatch Visibility**: Real-time driver locations visible on dispatch dashboard map at `/loadops-dashboard`
+  - **Manual Update Button**: One-tap "Update Location Now" button for instant location sharing without automatic tracking
 
 # External Dependencies
 
