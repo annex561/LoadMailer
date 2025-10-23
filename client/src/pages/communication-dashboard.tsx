@@ -214,11 +214,110 @@ export default function CommunicationDashboard() {
   const [showDocumentGallery, setShowDocumentGallery] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Track previous threads for notification detection
+  const previousThreadsRef = useRef<LoadCommunicationThread[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const isAudioUnlockedRef = useRef(false);
+  
+  // Initialize audio context on first user interaction
+  useEffect(() => {
+    const unlockAudio = async () => {
+      if (isAudioUnlockedRef.current) return;
+      
+      try {
+        // Create AudioContext if not exists
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        
+        // Resume the AudioContext (required for autoplay policy)
+        if (audioContextRef.current.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+        
+        isAudioUnlockedRef.current = true;
+        console.log('🔊 Audio notifications enabled');
+      } catch (error) {
+        console.error('Failed to unlock audio:', error);
+      }
+    };
+    
+    // Unlock audio on any user interaction
+    const events = ['click', 'touchstart', 'keydown'];
+    events.forEach(event => {
+      document.addEventListener(event, unlockAudio, { once: true });
+    });
+    
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, unlockAudio);
+      });
+    };
+  }, []);
+  
   // Fetch communication threads
   const { data: threads = [], isLoading: threadsLoading, refetch: refetchThreads } = useQuery<LoadCommunicationThread[]>({
     queryKey: ['/api/communication/threads'],
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
   });
+  
+  // Monitor for new messages and play notification sound
+  useEffect(() => {
+    if (!threads || threads.length === 0) {
+      previousThreadsRef.current = threads;
+      return;
+    }
+    
+    const previousThreads = previousThreadsRef.current;
+    
+    // Only check if we have previous data (skip first load)
+    if (previousThreads.length > 0) {
+      let hasNewMessages = false;
+      
+      // Check each thread for new messages
+      threads.forEach(currentThread => {
+        const previousThread = previousThreads.find(t => t.id === currentThread.id);
+        
+        if (previousThread) {
+          // Check if there are new unread dispatch messages
+          if (currentThread.unreadDispatchMessages > previousThread.unreadDispatchMessages) {
+            hasNewMessages = true;
+            console.log(`🔔 New message from ${currentThread.driverName}`);
+          }
+        } else {
+          // New thread appeared (new conversation started)
+          if (currentThread.unreadDispatchMessages > 0) {
+            hasNewMessages = true;
+            console.log(`🔔 New conversation with ${currentThread.driverName}`);
+          }
+        }
+      });
+      
+      // Play notification sound if there are new messages
+      if (hasNewMessages && isAudioUnlockedRef.current && audioContextRef.current) {
+        try {
+          const context = audioContextRef.current;
+          const oscillator = context.createOscillator();
+          const gainNode = context.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(context.destination);
+          
+          oscillator.frequency.value = 800; // Frequency in Hz
+          gainNode.gain.setValueAtTime(0.3, context.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
+          
+          oscillator.start(context.currentTime);
+          oscillator.stop(context.currentTime + 0.5);
+        } catch (error) {
+          console.error('Failed to play notification sound:', error);
+        }
+      }
+    }
+    
+    // Update the reference with current threads
+    previousThreadsRef.current = threads;
+  }, [threads]);
 
   // Fetch all drivers for search
   const { data: allDrivers = [], isLoading: driversLoading } = useQuery<Driver[]>({

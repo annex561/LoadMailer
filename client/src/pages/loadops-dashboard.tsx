@@ -113,12 +113,12 @@ interface Driver {
   telegramId?: string;
 }
 
-function CommunicationCard({ thread, drivers, loads, onSendMessage }: { 
+const CommunicationCard: React.FC<{ 
   thread: any; 
   drivers: Driver[];
   loads: any[];
   onSendMessage: (driverId: string, message: string) => void;
-}) {
+}> = ({ thread, drivers, loads, onSendMessage }) => {
   const [messageText, setMessageText] = useState("");
   const [showMediaGallery, setShowMediaGallery] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<any>(null);
@@ -510,7 +510,7 @@ function CommunicationCard({ thread, drivers, loads, onSendMessage }: {
       </div>
     </div>
   );
-}
+};
 
 export default function LoadOpsDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
