@@ -264,6 +264,8 @@ export interface IStorage {
   getRequiredDocuments(loadId: string): Promise<LoadDocument[]>;
   getDocumentAuditLog(documentId: string): Promise<LoadDocument[]>;
   recategorizeDocument(documentId: string, newCategory: string): Promise<LoadDocument | undefined>;
+  getAllDocuments(): Promise<any[]>; // Returns documents with load details
+  createDocument(data: Partial<InsertLoadDocument>): Promise<LoadDocument>;
 
   // Load Communication Thread operations
   getLoadCommunicationThread(id: string): Promise<LoadCommunicationThread | undefined>;
@@ -2142,6 +2144,31 @@ export class MemStorage implements IStorage {
   async getAllLoadDocuments(): Promise<LoadDocument[]> {
     return Array.from(this.loadDocuments.values())
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  // Get all documents with load details for document management page
+  async getAllDocuments(): Promise<any[]> {
+    const documents = Array.from(this.loadDocuments.values());
+    return documents.map(doc => {
+      const load = doc.loadId ? this.loads.get(doc.loadId) : null;
+      return {
+        ...doc,
+        uploadedAt: doc.createdAt,
+        approvalNotes: doc.dispatcherNotes,
+        load: load ? {
+          id: load.id,
+          loadNumber: load.loadNumber,
+          pickupLocation: load.pickupLocation,
+          deliveryLocation: load.deliveryLocation,
+          status: load.status,
+        } : null
+      };
+    }).sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  }
+
+  // Create document - wrapper around createLoadDocument
+  async createDocument(data: Partial<InsertLoadDocument>): Promise<LoadDocument> {
+    return this.createLoadDocument(data as InsertLoadDocument);
   }
 
   // Zello Channel Operations

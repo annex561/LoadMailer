@@ -915,6 +915,53 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Get all documents with load details for document management page
+  async getAllDocuments(): Promise<any[]> {
+    try {
+      const result = await db.select({
+        id: schema.loadDocuments.id,
+        loadId: schema.loadDocuments.loadId,
+        driverId: schema.loadDocuments.driverId,
+        documentType: schema.loadDocuments.documentType,
+        imageUrl: schema.loadDocuments.imageUrl,
+        uploadedAt: schema.loadDocuments.createdAt,
+        uploadedBy: schema.loadDocuments.uploadedBy,
+        approvalStatus: schema.loadDocuments.approvalStatus,
+        approvedBy: schema.loadDocuments.approvedBy,
+        rejectedBy: schema.loadDocuments.rejectedBy,
+        approvedAt: schema.loadDocuments.approvedAt,
+        rejectedAt: schema.loadDocuments.rejectedAt,
+        approvalNotes: schema.loadDocuments.dispatcherNotes,
+        rejectionReason: schema.loadDocuments.rejectionReason,
+        qualityScore: schema.loadDocuments.qualityScore,
+        resolution: schema.loadDocuments.resolution,
+        fileSize: schema.loadDocuments.fileSize,
+        version: schema.loadDocuments.version,
+        isLatestVersion: schema.loadDocuments.isLatestVersion,
+        load: {
+          id: schema.loads.id,
+          loadNumber: schema.loads.loadNumber,
+          pickupLocation: schema.loads.pickupLocation,
+          deliveryLocation: schema.loads.deliveryLocation,
+          status: schema.loads.status,
+        }
+      })
+      .from(schema.loadDocuments)
+      .leftJoin(schema.loads, eq(schema.loadDocuments.loadId, schema.loads.id))
+      .orderBy(desc(schema.loadDocuments.createdAt));
+      
+      return result;
+    } catch (error) {
+      console.error('Error getting all documents with load details:', error);
+      return [];
+    }
+  }
+
+  // Create document - wrapper around createLoadDocument
+  async createDocument(data: Partial<schema.InsertLoadDocument>): Promise<schema.LoadDocument> {
+    return this.createLoadDocument(data as schema.InsertLoadDocument);
+  }
+
   async createGeofence(geofence: schema.InsertGeofence): Promise<schema.Geofence> { throw new Error('Not implemented'); }
   async getGeofence(id: string): Promise<schema.Geofence | undefined> { return undefined; }
   async updateGeofence(id: string, geofence: Partial<schema.InsertGeofence>): Promise<schema.Geofence | undefined> { return undefined; }

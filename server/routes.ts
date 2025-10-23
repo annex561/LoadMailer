@@ -1433,6 +1433,36 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // GET /api/documents/all - Get all documents across all loads with load details
+  app.get('/api/documents/all', async (req, res) => {
+    try {
+      const documents = await storage.getAllDocuments();
+      res.json(documents);
+    } catch (error) {
+      console.error('Error fetching all documents:', error);
+      res.status(500).json({ error: 'Failed to fetch documents' });
+    }
+  });
+
+  // POST /api/documents - Create a new document record
+  app.post('/api/documents', async (req, res) => {
+    try {
+      // Validate request body with Zod schema
+      const validatedData = insertLoadDocumentSchema.parse(req.body);
+
+      const document = await storage.createDocument(validatedData);
+
+      console.log(`✅ Document created: ${validatedData.documentType} for load ${validatedData.loadId}`);
+      res.json(document);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Invalid document data', details: error.errors });
+      }
+      console.error('Error creating document:', error);
+      res.status(500).json({ error: 'Failed to create document' });
+    }
+  });
+
   // ==================== DOCUMENT APPROVAL WORKFLOW API ENDPOINTS ====================
   
   // 1. POST /api/documents/:documentId/approve - Approve a document
