@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LAMP Driver GPS Tracker</title>
+  <link rel="manifest" href="/manifest.json" />
+  <style>
+    body { font-family: system-ui, sans-serif; background:#0f172a; color:#e2e8f0; margin:0; padding:1rem; }
+    h2 { color:#14b8a6; }
+    #map { width:100%; height:60vh; border-radius:1rem; margin-top:1rem; }
+    .status { margin-top:1rem; }
+    button { background:#14b8a6; color:#fff; border:none; padding:0.75rem 1.25rem; border-radius:0.5rem; font-size:1rem; cursor:pointer; }
+    button:disabled { opacity:0.5; cursor:not-allowed; }
+  </style>
+</head>
+<body>
+  <h2>📍 LAMP Driver GPS Tracker</h2>
+  <p>This page will automatically update your location every 60 seconds.</p>
+  <div id="map"></div>
+  <div class="status">
+    <p><strong>Status:</strong> <span id="statusText">Starting…</span></p>
+    <p><strong>Last update:</strong> <span id="timeText">–</span></p>
+  </div>
+  <button id="startBtn">Start Tracking</button>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <script>
+  // ------------- CONFIG -------------
+  const DRIVER_ID = "drv_001";     // ← replace dynamically per driver
+  const UPDATE_INTERVAL = 60000;   // 60 000 ms = 60 s
+  const ENDPOINT = "/api/update-location";
+  // ----------------------------------
+
+  let map, marker, watchTimer, wakeLock;
+  const statusText = document.getElementById("statusText");
+  const timeText   = document.getElementById("timeText");
+  const btn        = document.getElementById("startBtn");
+
+  // Wake-lock helper
+  async function keepScreenAwake(){
+    try{
+      if ('wakeLock' in navigator){ 
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release',()=>console.log('Wake lock released'));
+      }
+    }catch(e){ console.warn("Wake lock not supported", e); }
+  }
+
+  async function sendLocation(lat, lon){
+    try{
+      await fetch(ENDPOINT,{
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({ driverId:DRIVER_ID, lat, lon })
+      });
+      const t = new Date().toLocaleTimeString();
+      statusText.textContent = `Sent ✓ (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+      timeText.textContent = t;
+    }catch(e){
+      statusText.textContent = "⚠️ Error sending";
+      console.error(e);
+    }
+  }
+
+  function updateMap(lat, lon){
+    if(!map){
+      map = L.map('map').setView([lat, lon], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      }).addTo(map);
+      marker = L.marker([lat, lon]).addTo(map);
+    }else{
+      marker.setLatLng([lat, lon]);
+      map.setView([lat, lon]);
+    }
+  }
+
+  async function getAndSend(){
+    if(!navigator.geolocation){
+      statusText.textContent = "GPS not supported";
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const {latitude, longitude} = pos.coords;
+      updateMap(latitude, longitude);
+      sendLocation(latitude, longitude);
+    }, err=>{
+      statusText.textContent = "GPS error: " + err.message;
+    }, { enableHighAccuracy:true, timeout:10000 });
+  }
+
+  function startAutoUpdates(){
+    btn.disabled = true;
+    keepScreenAwake();
+    getAndSend(); // immediate
+    watchTimer = setInterval(getAndSend, UPDATE_INTERVAL);
+    statusText.textContent = "Tracking active…";
+  }
+
+  btn.addEventListener("click", startAutoUpdates);
+  </script>
+</body>
+</html>
