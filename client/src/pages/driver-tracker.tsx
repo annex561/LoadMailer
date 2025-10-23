@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Truck, Navigation, Clock, Power, Wifi, WifiOff, MapPin, RefreshCw } from 'lucide-react';
+import { queryClient } from '@/lib/queryClient';
 
 // Fix Leaflet default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -179,6 +180,10 @@ export default function DriverTracker() {
       const time = new Date().toLocaleTimeString();
       setStatus(`✓ Location sent (${lat.toFixed(4)}, ${lon.toFixed(4)})`);
       setLastUpdate(time);
+      
+      // Invalidate all driver location queries to sync across the app
+      queryClient.invalidateQueries({ queryKey: ['/api/driver-locations/active'] });
+      
       return true;
     } catch (err) {
       console.error('Error sending location:', err);

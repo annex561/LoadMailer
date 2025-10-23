@@ -755,11 +755,31 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Filter for available/on_route drivers and get their locations
       const activeDrivers = drivers.filter(d => d.status === 'available' || d.status === 'on_route');
       
-      // Map drivers to locations using database or fallback
-      const locations = activeDrivers.map(driver => {
-        console.log(`📍 Using database/fallback location for driver: ${driver.name}`);
+      // Get real GPS locations from driverLocations table
+      const locationPromises = activeDrivers.map(async (driver) => {
+        // Get driver's current (most recent active) location from database
+        const currentLocation = await storage.getDriverCurrentLocation(driver.id);
         
-        // Use driver's city if available, otherwise default to Tennessee locations
+        if (currentLocation && currentLocation.isActive) {
+          console.log(`📍 Using real GPS location for driver: ${driver.name}`);
+          return {
+            driverId: driver.id,
+            driverName: driver.name,
+            latitude: currentLocation.latitude,
+            longitude: currentLocation.longitude,
+            address: currentLocation.address || `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`,
+            lastUpdate: currentLocation.timestamp.toISOString(),
+            speed: currentLocation.speed || 0,
+            batteryLevel: currentLocation.batteryLevel || 85,
+            isMoving: (currentLocation.speed || 0) > 0,
+            heading: currentLocation.heading || 0,
+            routeName: driver.status === 'on_route' ? 'Load Delivery Route' : undefined,
+            source: 'gps'
+          };
+        }
+        
+        // Fallback to city-based location if no GPS data
+        console.log(`📍 Using fallback location for driver: ${driver.name}`);
         const cityLocations = {
           'nashville': { lat: 36.1627, lng: -86.7816, city: 'Nashville, TN' },
           'knoxville': { lat: 35.9606, lng: -83.9207, city: 'Knoxville, TN' },
@@ -771,8 +791,7 @@ export async function registerRoutes(app: Express): Promise<void> {
           'birmingham': { lat: 33.5186, lng: -86.8104, city: 'Birmingham, AL' }
         };
         
-        // Try to match driver's city
-        let baseLocation = cityLocations['nashville']; // Default
+        let baseLocation = cityLocations['nashville'];
         if (driver.city) {
           const cityKey = driver.city.toLowerCase().split(',')[0].trim();
           if (cityLocations[cityKey]) {
@@ -780,7 +799,6 @@ export async function registerRoutes(app: Express): Promise<void> {
           }
         }
         
-        // Add small random offset for variety
         const latOffset = (Math.random() - 0.5) * 0.05; 
         const lngOffset = (Math.random() - 0.5) * 0.05;
         
@@ -796,9 +814,11 @@ export async function registerRoutes(app: Express): Promise<void> {
           isMoving: false,
           heading: 0,
           routeName: driver.status === 'on_route' ? 'Load Delivery Route' : undefined,
-          source: 'database'
+          source: 'fallback'
         };
-      }).filter(location => location !== null)
+      });
+      
+      const locations = await Promise.all(locationPromises);
       
       res.json({
         locations,
@@ -891,8 +911,28 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Security audit log - log all location updates with IP for monitoring
       console.log(`🔒 SECURITY AUDIT: GPS update - Driver: ${driverId}, IP: ${ip}, Coordinates: (${lat}, ${lon}), Time: ${new Date().toISOString()}`);
 
-      // Update driver location in database
-      await storage.updateDriverLocation(driverId, lat, lon);
+      // Create new driver location record in database
+      await storage.createDriverLocation({
+        driverId,
+        latitude: lat,
+        longitude: lon,
+        timestamp: timestamp ? new Date(timestamp) : new Date(),
+        isActive: true,
+        accuracy: undefined,
+        speed: undefined,
+        heading: undefined,
+        altitude: undefined,
+        batteryLevel: undefined,
+        signalStrength: undefined,
+        address: undefined,
+        loadId: undefined
+      });
+
+      // Deactivate old locations to keep only the latest active
+      const oldLocations = await storage.getDriverLocations(driverId, 10);
+      for (const loc of oldLocations.slice(1)) {
+        await storage.updateDriverLocation(loc.id, { isActive: false });
+      }
 
       console.log(`✅ GPS location updated successfully for driver ${driverId}`);
 
