@@ -38,6 +38,7 @@ const navigation = [
   { name: "Payment Workflow", href: "/payments", icon: DollarSign, section: "smart" },
   
   // System & Reports
+  { name: "Document Management", href: "/document-management", icon: FileText, section: "system" },
   { name: "TaskMagic Status", href: "/taskmagic-status", icon: Webhook, section: "system" },
   { name: "Analytics", href: "/analytics", icon: BarChart3, section: "system" },
   { name: "Email Logs", href: "/email-logs", icon: FileText, section: "system" },
