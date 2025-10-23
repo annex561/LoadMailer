@@ -400,6 +400,8 @@ export const loadMessages = pgTable("load_messages", {
   // Message content
   messageType: text("message_type").notNull().default("text"), // text, image, document, location, status_update
   textContent: text("text_content"),
+  mediaUrl: text("media_url"), // MMS image/media URL from Twilio
+  mediaType: text("media_type"), // MIME type of the media (e.g., image/jpeg, video/mp4)
   
   // SMS integration
   smsMessageId: text("sms_message_id"),
