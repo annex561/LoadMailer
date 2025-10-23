@@ -3,6 +3,11 @@ import { pgTable, text, varchar, timestamp, boolean, integer, real, jsonb, index
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { randomBytes } from "crypto";
+
+export function generateSecureTrackingToken(): string {
+  return randomBytes(32).toString('hex');
+}
 
 export const drivers = pgTable("drivers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -47,6 +52,8 @@ export const drivers = pgTable("drivers", {
   fuelEfficiency: real("fuel_efficiency").default(0.0), // miles per gallon
   maintenanceScore: real("maintenance_score").default(100.0), // 0-100 health score
   safetyScore: real("safety_score").default(100.0), // 0-100 safety rating
+  
+  trackingToken: varchar("tracking_token", { length: 64 }).unique(),
   
   createdAt: timestamp("created_at").defaultNow(),
 });

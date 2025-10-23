@@ -34,6 +34,8 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
 import twilio from "twilio";
+import rateLimit from "express-rate-limit";
+import { z } from "zod";
 
 // Initialize Twilio client for SMS communication
 const twilioClient = twilio(
@@ -41,6 +43,35 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+
+// GPS Location Update Validation Schema
+const gpsLocationUpdateSchema = z.object({
+  driverId: z.string().min(1, "Driver ID is required"),
+  lat: z.number()
+    .min(-90, "Latitude must be between -90 and 90")
+    .max(90, "Latitude must be between -90 and 90"),
+  lon: z.number()
+    .min(-180, "Longitude must be between -180 and 180")
+    .max(180, "Longitude must be between -180 and 180"),
+  timestamp: z.string().optional()
+});
+
+// Rate limiter for GPS location updates - max 120 requests per hour per IP
+const gpsLocationRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 120, // max 120 requests per hour (one every 30 seconds with buffer)
+  message: { error: "Too many location updates. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const ip = req.ip || req.socket.remoteAddress;
+    console.log(`⚠️ SECURITY: Rate limit exceeded for GPS updates from IP: ${ip}`);
+    res.status(429).json({ 
+      error: "Too many location updates. Please try again later.",
+      retryAfter: 60 
+    });
+  }
+});
 
 // Helper function to normalize and validate phone numbers for Twilio E.164 format
 function normalizePhoneToE164(phoneNumber: string | undefined | null): string | null {
@@ -684,6 +715,103 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error('Error fetching driver locations:', error);
       res.status(500).json({ error: "Failed to fetch driver locations" });
+    }
+  });
+
+  // Generate tracking token for driver GPS authentication
+  app.post('/api/drivers/:driverId/generate-tracking-token', async (req, res) => {
+    const { driverId } = req.params;
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    
+    try {
+      console.log(`🔐 SECURITY: Generating tracking token for driver ${driverId} from IP ${ip}`);
+      
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        console.log(`⚠️ SECURITY: Token generation failed - driver ${driverId} not found (IP: ${ip})`);
+        return res.status(404).json({ error: 'Driver not found' });
+      }
+      
+      const result = await storage.generateTrackingToken(driverId);
+      
+      if (!result) {
+        console.log(`❌ SECURITY: Token generation failed for driver ${driverId} (IP: ${ip})`);
+        return res.status(500).json({ error: 'Failed to generate tracking token' });
+      }
+      
+      console.log(`✅ SECURITY: Tracking token generated successfully for driver ${driverId} (IP: ${ip})`);
+      
+      res.json({
+        success: true,
+        token: result.token,
+        driverId
+      });
+    } catch (error) {
+      console.error(`❌ SECURITY: Error generating tracking token for driver ${driverId} (IP: ${ip}):`, error);
+      res.status(500).json({ error: 'Failed to generate tracking token' });
+    }
+  });
+
+  // Update driver location from GPS tracker
+  // SECURITY: Token-based authentication, rate limited, validated, and logged endpoint
+  app.post('/api/driver-location/update', gpsLocationRateLimiter, async (req, res) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    
+    try {
+      // Validate request payload using Zod schema
+      const validationResult = gpsLocationUpdateSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        const errors = validationResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+        console.log(`⚠️ SECURITY: Invalid GPS update rejected from IP ${ip}: ${errors}`);
+        return res.status(400).json({ 
+          error: 'Invalid request data',
+          details: errors
+        });
+      }
+
+      const { driverId, lat, lon, timestamp } = validationResult.data;
+      const { trackingToken } = req.body;
+
+      // CRITICAL SECURITY CHECK: Validate tracking token
+      if (!trackingToken) {
+        console.log(`🚨 SECURITY ALERT: GPS update rejected - missing tracking token for driver ${driverId} from IP ${ip}`);
+        return res.status(401).json({ 
+          error: 'Unauthorized: Tracking token required',
+          message: 'GPS tracking requires authentication. Please restart tracking from your dashboard.'
+        });
+      }
+
+      // Validate that the token matches the driver ID
+      const isValidToken = await storage.validateTrackingToken(driverId, trackingToken);
+      
+      if (!isValidToken) {
+        console.log(`🚨 SECURITY ALERT: GPS update rejected - invalid/mismatched tracking token for driver ${driverId} from IP ${ip}`);
+        return res.status(401).json({ 
+          error: 'Unauthorized: Invalid tracking token',
+          message: 'Authentication failed. Please restart tracking from your dashboard.'
+        });
+      }
+
+      // Security audit log - log all location updates with IP for monitoring
+      console.log(`🔒 SECURITY AUDIT: GPS update - Driver: ${driverId}, IP: ${ip}, Coordinates: (${lat}, ${lon}), Time: ${new Date().toISOString()}`);
+
+      // Update driver location in database
+      await storage.updateDriverLocation(driverId, lat, lon);
+
+      console.log(`✅ GPS location updated successfully for driver ${driverId}`);
+
+      res.json({
+        success: true,
+        message: 'Location updated successfully',
+        driverId,
+        lat,
+        lon,
+        timestamp: timestamp || new Date().toISOString()
+      });
+    } catch (error) {
+      console.error(`❌ SECURITY: GPS update error for IP ${ip}:`, error);
+      res.status(500).json({ error: "Failed to update driver location" });
     }
   });
 

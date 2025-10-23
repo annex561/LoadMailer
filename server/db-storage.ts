@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
 import { eq, and, or, desc, sql as drizzleSql, notInArray } from 'drizzle-orm';
 import * as schema from '@shared/schema';
+import { generateSecureTrackingToken } from '@shared/schema';
 import { IStorage } from './storage';
 import { randomUUID } from 'crypto';
 
@@ -108,6 +109,30 @@ export class DatabaseStorage implements IStorage {
       moodUpdatedAt: new Date() 
     }).where(eq(schema.drivers.id, driverId));
     return this.getDriver(driverId);
+  }
+
+  async generateTrackingToken(driverId: string): Promise<{ token: string } | undefined> {
+    const token = generateSecureTrackingToken();
+    await db.update(schema.drivers).set({ trackingToken: token }).where(eq(schema.drivers.id, driverId));
+    console.log(`🔐 Generated tracking token for driver ${driverId}`);
+    return { token };
+  }
+
+  async validateTrackingToken(driverId: string, token: string): Promise<boolean> {
+    const driver = await this.getDriver(driverId);
+    if (!driver) {
+      console.log(`⚠️ SECURITY: Token validation failed - driver ${driverId} not found`);
+      return false;
+    }
+    if (!driver.trackingToken) {
+      console.log(`⚠️ SECURITY: Token validation failed - driver ${driverId} has no tracking token`);
+      return false;
+    }
+    const isValid = driver.trackingToken === token;
+    if (!isValid) {
+      console.log(`🚨 SECURITY: Token validation failed - invalid token for driver ${driverId}`);
+    }
+    return isValid;
   }
 
   async getDriverByTelegramId(telegramId: string): Promise<schema.Driver | undefined> {

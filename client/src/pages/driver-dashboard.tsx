@@ -146,6 +146,35 @@ export default function DriverDashboard() {
     }
   });
 
+  const handleStartGPSTracking = async () => {
+    try {
+      toast({
+        title: 'Initializing GPS Tracking',
+        description: 'Generating secure authentication token...'
+      });
+
+      const response = await fetch(`/api/drivers/${driverId}/generate-tracking-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate tracking token');
+      }
+
+      const { token } = await response.json();
+      
+      window.location.href = `/driver-tracker?driver=${driverId}&token=${token}`;
+    } catch (error) {
+      console.error('Error starting GPS tracking:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to start GPS tracking. Please try again.',
+        variant: 'destructive'
+      });
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -186,6 +215,15 @@ export default function DriverDashboard() {
           <p className="text-muted-foreground">Welcome back, {driver?.name || 'Driver'}</p>
         </div>
         <div className="flex items-center gap-4">
+          <Button 
+            variant="default" 
+            className="flex items-center gap-2 bg-teal-500 hover:bg-teal-600" 
+            data-testid="button-gps-tracking"
+            onClick={handleStartGPSTracking}
+          >
+            <MapPin className="h-4 w-4" />
+            Start GPS Tracking
+          </Button>
           <Link href="/driver-profile">
             <Button variant="outline" className="flex items-center gap-2" data-testid="button-profile">
               <Settings className="h-4 w-4" />

@@ -13,6 +13,10 @@ export interface IStorage {
   
   // Driver mood tracking
   updateDriverMood(driverId: string, mood: string, note?: string): Promise<Driver | undefined>;
+  
+  // GPS tracking token operations
+  generateTrackingToken(driverId: string): Promise<{ token: string } | undefined>;
+  validateTrackingToken(driverId: string, token: string): Promise<boolean>;
 
   // Customer operations
   getCustomer(id: string): Promise<Customer | undefined>;

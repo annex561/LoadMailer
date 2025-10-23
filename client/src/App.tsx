@@ -39,6 +39,7 @@ import DebugToken from "@/pages/debug-token";
 import GoogleSheetsImport from "@/pages/google-sheets-import";
 import TwilioSettings from "@/pages/twilio-settings";
 import UnifiedMessaging from "@/pages/unified-messaging";
+import DriverTracker from "@/pages/driver-tracker";
 
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
@@ -98,6 +99,7 @@ function App() {
           <Route path="/twilio-settings" component={TwilioSettings} />
           <Route path="/unified-messaging" component={UnifiedMessaging} />
           <Route path="/driver-chat" component={UnifiedMessaging} />
+          <Route path="/driver-tracker" component={DriverTracker} />
           
           {/* All routes use LoadOps dashboard layout */}
           <Route>
