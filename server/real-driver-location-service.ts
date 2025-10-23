@@ -242,6 +242,14 @@ export class RealDriverLocationService {
 
   private async updateDriverPosition(driverId: string, state: DriverLocationState): Promise<void> {
     try {
+      // Check if driver has switched to real GPS tracking - if so, skip simulation
+      const currentLocation = await this.getDriverCurrentLocation(driverId);
+      if (currentLocation && currentLocation.source === 'gps') {
+        console.log(`🔒 Driver ${driverId} is now using real GPS - stopping simulation`);
+        state.isMoving = false; // Stop simulated movement
+        return;
+      }
+
       if (state.isMoving) {
         // Calculate movement towards target
         const latDiff = state.targetLat - state.currentLat;
@@ -300,7 +308,8 @@ export class RealDriverLocationService {
         address: address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
         batteryLevel: Math.floor(this.driverStates.get(driverId)?.batteryLevel || 90),
         signalStrength: Math.floor(80 + Math.random() * 20), // Signal strength 80-100%
-        isActive: true
+        isActive: true,
+        source: 'simulated' // Mark as simulated data
       });
 
       // Deactivate old locations
