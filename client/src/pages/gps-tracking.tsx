@@ -294,6 +294,10 @@ export default function GPSTrackingPage() {
             <Navigation className="w-4 h-4 mr-2" />
             Manual Update
           </TabsTrigger>
+          <TabsTrigger value="gps-link" data-testid="tab-gps-link">
+            <Send className="w-4 h-4 mr-2" />
+            Manual GPS Link
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="tracking" className="space-y-4">
@@ -538,7 +542,7 @@ export default function GPSTrackingPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="manual" className="space-y-4">
+        <TabsContent value="gps-link" className="space-y-4">
           <Card data-testid="card-send-gps-link">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -629,7 +633,9 @@ export default function GPSTrackingPage() {
               </form>
             </CardContent>
           </Card>
+        </TabsContent>
 
+        <TabsContent value="manual" className="space-y-4">
           <Card data-testid="card-manual-update">
             <CardHeader>
               <CardTitle>Manual Location Update</CardTitle>
