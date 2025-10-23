@@ -322,7 +322,7 @@ function CommunicationCard({ thread, drivers, loads, onSendMessage }: {
     <div className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-gray-900">{thread.loadNumber || thread.threadId}</span>
+          <span className="font-semibold text-gray-900">{driver?.name || "Unknown Driver"}</span>
           <Badge variant={priority === "HIGH" ? "destructive" : priority === "MEDIUM" ? "secondary" : "outline"}>
             {priority}
           </Badge>
@@ -346,17 +346,24 @@ function CommunicationCard({ thread, drivers, loads, onSendMessage }: {
       </div>
       
       <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
-        <div><span className="font-medium">Driver:</span> {driver?.name || "Unknown"}</div>
-        <div><span className="font-medium">Load:</span> {thread.loadNumber || "General"}</div>
-        <div><span className="font-medium">Messages:</span> {thread.messageCount || 0}</div>
+        <div><span className="font-medium">Phone:</span> {driver?.phone || "Not provided"}</div>
+        <div><span className="font-medium">Status:</span> {driver?.status || "Unknown"}</div>
+        <div><span className="font-medium">Total Messages:</span> {thread.messageCount || 0}</div>
         <div><span className="font-medium">Last Contact:</span> {lastMessage ? new Date(lastMessage.createdAt).toLocaleString() : "No messages"}</div>
       </div>
       
       {lastMessage && (
-        <p className="text-sm text-gray-700 mb-3 p-2 bg-gray-50 rounded border-l-4 border-gray-300">
-          <span className="font-medium">{lastMessage.isFromDriver ? "Driver: " : "Dispatch: "}</span>
-          {lastMessage.message}
-        </p>
+        <div className="text-sm text-gray-700 mb-3 p-2 bg-gray-50 rounded border-l-4 border-gray-300">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-medium">{lastMessage.isFromDriver ? "Driver" : "Dispatch"}</span>
+            {lastMessage.loadNumber && (
+              <Badge variant="outline" className="text-xs">
+                Load: {lastMessage.loadNumber}
+              </Badge>
+            )}
+          </div>
+          <p>{lastMessage.message}</p>
+        </div>
       )}
 
       {/* AI Assistant Panel */}
@@ -710,7 +717,7 @@ export default function LoadOpsDashboard() {
             <CardHeader className="pb-4">
               <CardTitle className="text-lg font-semibold flex items-center gap-2">
                 <MessageSquare className="w-5 h-5" />
-                Active Communication Threads
+                Driver Conversations (Unified Messaging)
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -731,8 +738,8 @@ export default function LoadOpsDashboard() {
               ) : (
                 <div className="text-center py-8 text-gray-500">
                   <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>No active communication threads</p>
-                  <p className="text-sm mt-2">Threads will appear when drivers send messages</p>
+                  <p>No driver conversations yet</p>
+                  <p className="text-sm mt-2">Unified conversations will appear when drivers send messages</p>
                 </div>
               )}
             </CardContent>

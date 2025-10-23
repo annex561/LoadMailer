@@ -60,7 +60,7 @@ import { Radio } from "lucide-react";
 // Types
 interface LoadCommunicationThread {
   id: string;
-  threadType?: 'general' | 'load';
+  threadType?: 'unified' | 'general' | 'load'; // Support legacy types during migration
   loadId?: string;
   driverId: string;
   driverName: string;
@@ -220,15 +220,14 @@ export default function CommunicationDashboard() {
     refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
   });
 
-  // Fetch all drivers for search when in general tab
+  // Fetch all drivers for search
   const { data: allDrivers = [], isLoading: driversLoading } = useQuery<Driver[]>({
     queryKey: ['/api/drivers'],
-    enabled: activeTab === 'general',
   });
   
   // Filter drivers based on search term (focusing on first name)
   const filteredDrivers = useMemo(() => {
-    if (!searchTerm || activeTab !== 'general') return [];
+    if (!searchTerm) return [];
     
     const query = searchTerm.toLowerCase();
     return allDrivers.filter(driver => {
@@ -239,7 +238,7 @@ export default function CommunicationDashboard() {
       // Also check full name
       return driver.name.toLowerCase().includes(query);
     });
-  }, [allDrivers, searchTerm, activeTab]);
+  }, [allDrivers, searchTerm]);
 
   // Start general conversation with driver
   const startGeneralChatMutation = useMutation({
@@ -683,13 +682,8 @@ export default function CommunicationDashboard() {
     }
   }, [selectedThread]);
 
-  // Filter and search threads
+  // Filter and search threads - UNIFIED VIEW (no tab filtering)
   const filteredThreads = threads.filter(thread => {
-    // Filter by tab (general vs load conversations)
-    const matchesTab = activeTab === 'general' 
-      ? thread.threadType === 'general' 
-      : (!thread.threadType || thread.threadType === 'load');
-    
     const matchesSearch = searchTerm === "" || 
       thread.driverName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (thread.loadNumber && thread.loadNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -701,14 +695,13 @@ export default function CommunicationDashboard() {
       (filterStatus === "unread" && thread.unreadDispatchMessages > 0) ||
       (filterStatus === "archived" && thread.status === "archived");
     
-    return matchesTab && matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
 
-  // Get recent general conversations for quick access
-  const recentGeneralThreads = threads
-    .filter(t => t.threadType === 'general')
-    .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
-    .slice(0, 5);
+  // Sort threads by most recent activity for unified view
+  const sortedThreads = [...filteredThreads].sort((a, b) => 
+    new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+  );
 
   const handleSendMessage = () => {
     if (!selectedThread || !newMessage.trim()) return;
@@ -1080,32 +1073,26 @@ export default function CommunicationDashboard() {
             </Button>
           </div>
 
-          {/* Tabs for General vs Load Communications */}
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'general' | 'loads')} className="mb-3">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="general" data-testid="tab-general">
-                <MessageSquare className="w-4 h-4 mr-1" />
-                General Chats
-              </TabsTrigger>
-              <TabsTrigger value="loads" data-testid="tab-loads">
-                <Truck className="w-4 h-4 mr-1" />
-                Load Communications
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {/* Unified Messaging - One conversation per driver */}
+          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Unified Driver Conversations
+            </p>
+          </div>
           
           {/* Search and Filter */}
           <div className="space-y-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
-                placeholder={activeTab === 'general' ? "Search drivers by name..." : "Search loads, drivers..."}
+                placeholder="Search drivers, loads, routes..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-                  setShowDriverDropdown(activeTab === 'general' && e.target.value.length > 0);
+                  setShowDriverDropdown(e.target.value.length > 0);
                 }}
-                onFocus={() => setShowDriverDropdown(activeTab === 'general' && searchTerm.length > 0)}
+                onFocus={() => setShowDriverDropdown(searchTerm.length > 0)}
                 onBlur={() => setTimeout(() => setShowDriverDropdown(false), 200)}
                 className="pl-10"
                 data-testid="input-search"
@@ -1160,35 +1147,12 @@ export default function CommunicationDashboard() {
               </SelectContent>
             </Select>
           </div>
-
-          {/* Recent Drivers (shown in General tab) */}
-          {activeTab === 'general' && recentGeneralThreads.length > 0 && (
-            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Recent Drivers</h3>
-              <div className="space-y-1">
-                {recentGeneralThreads.map((thread) => (
-                  <button
-                    key={thread.id}
-                    onClick={() => setSelectedThread(thread)}
-                    className={`w-full text-left p-2 rounded hover:bg-white transition-colors flex items-center justify-between ${
-                      selectedThread?.id === thread.id ? 'bg-white shadow-sm' : ''
-                    }`}
-                  >
-                    <span className="text-sm text-gray-800">{thread.driverName}</span>
-                    {thread.unreadDispatchMessages > 0 && (
-                      <Badge className="bg-red-500 text-white text-xs">{thread.unreadDispatchMessages}</Badge>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Thread List */}
+        {/* Thread List - Unified Conversations */}
         <ScrollArea className="flex-1">
           <div className="p-2">
-            {filteredThreads.map((thread) => (
+            {sortedThreads.map((thread) => (
               <button
                 key={thread.id}
                 className={`w-full mb-2 cursor-pointer transition-colors hover:bg-gray-50 rounded-lg border ${
@@ -1201,25 +1165,19 @@ export default function CommunicationDashboard() {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        {thread.threadType === 'general' ? (
-                          <>
-                            <h4 className="font-medium text-sm text-gray-900">{thread.driverName}</h4>
-                            <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-xs">General</Badge>
-                          </>
-                        ) : (
-                          <>
-                            <h4 className="font-medium text-sm text-gray-900">{thread.loadNumber}</h4>
-                            {getThreadStatusBadge(thread)}
-                          </>
+                        <h4 className="font-medium text-sm text-gray-900">{thread.driverName}</h4>
+                        {getThreadStatusBadge(thread)}
+                        {thread.loadNumber && (
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                            {thread.loadNumber}
+                          </Badge>
                         )}
                       </div>
-                      {thread.threadType !== 'general' && (
-                        <>
-                          <p className="text-xs text-gray-600">{thread.driverName}</p>
-                          <p className="text-xs text-gray-500">
-                            {thread.loadOrigin} → {thread.loadDestination}
-                          </p>
-                        </>
+                      <p className="text-xs text-gray-600">{thread.driverPhone || 'No phone'}</p>
+                      {thread.loadOrigin && thread.loadDestination && (
+                        <p className="text-xs text-gray-500">
+                          {thread.loadOrigin} → {thread.loadDestination}
+                        </p>
                       )}
                       {thread.loadOfferStatus === 'pending' && (
                         <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs mt-1">
@@ -1276,7 +1234,8 @@ export default function CommunicationDashboard() {
                   <div>
                     <h3 className="font-medium text-gray-900">{selectedThread.driverName}</h3>
                     <p className="text-sm text-gray-600">
-                      {selectedThread.loadNumber ? `Load ${selectedThread.loadNumber}` : 'General Conversation'}
+                      {selectedThread.driverPhone || 'No phone'} 
+                      {selectedThread.loadNumber && ` • Load ${selectedThread.loadNumber}`}
                     </p>
                   </div>
                 </div>
