@@ -328,7 +328,7 @@ export default function UnifiedMessaging() {
                   onClick={handleSendMessage}
                   disabled={!messageText.trim() || sendMessageMutation.isPending}
                   className="gap-2"
-                  data-testid="button-send-message"
+                  data-testid="button-send"
                 >
                   <Send className="w-4 h-4" />
                   Send
