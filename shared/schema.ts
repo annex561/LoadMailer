@@ -152,6 +152,7 @@ export const driverLocations = pgTable("driver_locations", {
   isActive: boolean("is_active").notNull().default(true), // Current location vs historical
   batteryLevel: integer("battery_level"), // Device battery percentage
   signalStrength: integer("signal_strength"), // GPS signal strength
+  source: text("source").notNull().default("simulated"), // 'gps' for real device GPS, 'simulated' for background service
 });
 
 export const geofences = pgTable("geofences", {
