@@ -70,6 +70,13 @@ Preferred communication style: Simple, everyday language.
   - **Token-Based Security**: Cryptographically secure tracking tokens (64-character hex) generated per driver to prevent location spoofing
   - **Authentication Flow**: Driver clicks "Start GPS Tracking" → Token generated via `POST /api/drivers/:driverId/generate-tracking-token` → Redirect to tracker with token in URL
   - **Location Updates**: `POST /api/driver-location/update` endpoint validates token before accepting GPS coordinates
+  - **GPS Health Monitor**: Automatic background service that monitors GPS tracking health and sends reminders when tracking stops
+    - Runs every 3 minutes checking loads with status "in_transit"
+    - Detects stale GPS data (no updates in last 5 minutes)
+    - Sends SMS reminder with tracking link when GPS tracking stops
+    - Spam prevention: Maximum 1 reminder every 15 minutes per driver
+    - SMS Format: "🚨 GPS tracking stopped for Load [NUMBER]. Please reopen: [tracking-link]"
+    - Protocol detection: HTTP for localhost, HTTPS for production
   - **Security Features**:
     - Zod schema validation for all location data (lat: -90 to 90, lon: -180 to 180)
     - Rate limiting: 120 requests/hour per IP address
