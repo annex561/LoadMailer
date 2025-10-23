@@ -92,10 +92,15 @@ export class SMSCommunicationService {
       const loadNumberPattern = /(?:LOAD[-\s]?)?(\d{6})|(?:LOAD[-\s]?)(\d+)|([A-Z]{2,4}[-\s]?\d+)/gi;
       const matches = message.match(loadNumberPattern);
       
+      // Cache loads for this detection to avoid multiple DB calls
+      const allLoads = await storage.getAllLoads();
+      
       if (!matches || matches.length === 0) {
-        // No load number detected - check driver's current active load
-        const activeLoads = await storage.getLoadsByStatus('assigned');
-        const driverLoad = activeLoads.find(load => load.driverId === driver.id);
+        // No load number detected - check driver's current active load across all active statuses
+        const driverLoad = allLoads.find(load => 
+          load.driverId === driver.id && 
+          (load.status === 'assigned' || load.status === 'in_transit' || load.status === 'at_pickup' || load.status === 'at_delivery')
+        );
         
         if (driverLoad) {
           return {
@@ -107,12 +112,11 @@ export class SMSCommunicationService {
         return null;
       }
       
-      // Try to find a matching load
+      // Try to find a matching load from the cached list
       for (const match of matches) {
-        const loads = await storage.getAllLoads();
         const normalizedMatch = match.replace(/[-\s]/g, '').toUpperCase();
         
-        const load = loads.find(l => {
+        const load = allLoads.find(l => {
           const normalized = l.loadNumber.replace(/[-\s]/g, '').toUpperCase();
           return normalized.includes(normalizedMatch) || normalizedMatch.includes(normalized);
         });

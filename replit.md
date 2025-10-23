@@ -34,16 +34,16 @@ Preferred communication style: Simple, everyday language.
 - **Schema Structure**: Includes Drivers, Customers, Loads, Email Templates, and Email Logs with defined relationships.
 
 ## Communication System
-- **SMS-Only Architecture**: Twilio SMS for all driver communications and notifications
-- **Bidirectional Communication**: SMS supports incoming messages with smart routing to correct communication threads
-- **Message Routing**: Automatic routing of incoming SMS messages to appropriate communication threads (load-specific or general) based on load number detection
-- **Smart Load Number Detection**: Universal regex pattern supporting multiple formats:
-  - Standard prefixed: LOAD-123, TEST-LOAD-001, LM-1234, BOL-123, REF-456, TN-789
-  - Numeric only: 603006, 602951 (automatically matched to LOAD-603006, LOAD-602951)
-  - Normalized comparison strips prefixes to ensure accurate thread matching
+- **Unified Messaging Architecture**: One conversation stream per driver for all communications (load-specific and general)
+- **SMS-Only Communication**: Twilio SMS for all driver communications and notifications via Messaging Service (MG759c5b67bf8baed3da1d6b031efbe62c)
+- **Bidirectional SMS**: Drivers reply via SMS, messages automatically routed to their unified conversation thread
+- **Smart Load Context Detection**: Automatically detects load numbers in messages and associates them with relevant loads
+  - Supports multiple formats: LOAD-123, 603006, TN-789, etc.
+  - Falls back to driver's current active load if no number detected
+- **Thread Management**: One thread per driver (threadType='unified'), optional load context per message
 - **SMS Delivery**: All phone numbers normalized to E.164 format (+1XXXXXXXXXX) for Twilio compatibility
-- **MMS Support**: Drivers can send images via SMS (proof of delivery, BOL photos) that automatically link to loads and appear in the BOL document section
-- **Performance Optimization**: Load number caching to minimize database queries during message routing
+- **MMS Support**: Drivers can send images via SMS (proof of delivery, BOL photos) that automatically link to loads
+- **Sleek UI**: Modern chat interface at `/unified-messaging` optimized for dispatcher-driver communication
 - **Email System**: Nodemailer for automated email notifications based on load status changes, using dynamic templates.
 
 ## API Design
@@ -58,7 +58,7 @@ Preferred communication style: Simple, everyday language.
 - **Load Workflow**: Intelligent load retry system, post-confirmation messaging, and manual load entry for VA input.
 - **UI/UX**: Consistent styling for forms and dropdowns, integrated document viewing, and a professional dashboard.
 - **MMS Document Integration**: Drivers upload documents via SMS/MMS, which are automatically categorized and attached to loads, viewable in the Communication Dashboard and BOL document section.
-- **Two-Tier Communication System**: Bidirectional SMS platform with distinct modes for general driver discussions and load-specific communications, featuring driver search and automatic thread type conversion.
+- **Unified Messaging System**: Sleek dispatcher interface with one conversation per driver, smart load context detection, and real-time SMS integration for seamless communication.
 
 # External Dependencies
 
