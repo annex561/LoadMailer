@@ -1352,7 +1352,34 @@ export async function registerRoutes(app: Express): Promise<void> {
       console.log(`🚀 Getting messages for thread: ${threadId}`);
       const messages = await storage.getLoadMessagesByThread(threadId);
       console.log(`📋 Retrieved ${messages.length} messages for thread ${threadId}`);
-      res.json(messages);
+      
+      // Transform snake_case DB fields to camelCase for frontend
+      const transformedMessages = messages.map((msg: any) => ({
+        id: msg.id,
+        threadId: msg.threadId || msg.thread_id,
+        loadId: msg.loadId || msg.load_id,
+        senderId: msg.senderId || msg.sender_id,
+        senderRole: msg.senderRole || msg.sender_role,
+        senderName: msg.senderName || msg.sender_name,
+        messageType: msg.messageType || msg.message_type,
+        content: msg.textContent || msg.text_content || '',
+        textContent: msg.textContent || msg.text_content,
+        mediaUrl: msg.mediaUrl || msg.media_url,  // Read snake_case field from DB
+        mediaType: msg.mediaType || msg.media_type, // Read snake_case field from DB
+        smsMessageId: msg.smsMessageId || msg.sms_message_id,
+        isRead: msg.isRead ?? msg.is_read ?? false,
+        readAt: msg.readAt || msg.read_at,
+        deliveryStatus: msg.deliveryStatus || msg.delivery_status,
+        deliveryMethod: msg.deliveryMethod || msg.delivery_method,
+        isSuggested: msg.isSuggested ?? msg.is_suggested ?? false,
+        isSent: msg.isSent ?? msg.is_sent ?? false,
+        approvedBy: msg.approvedBy || msg.approved_by,
+        approvedAt: msg.approvedAt || msg.approved_at,
+        sender: (msg.senderRole || msg.sender_role) === 'driver' ? 'driver' : 'dispatch',
+        createdAt: msg.createdAt || msg.created_at
+      }));
+      
+      res.json(transformedMessages);
     } catch (error) {
       console.error('❌ Error fetching messages:', error);
       res.status(500).json({ error: "Failed to fetch messages" });
