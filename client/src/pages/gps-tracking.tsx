@@ -108,7 +108,7 @@ export default function GPSTrackingPage() {
   });
 
   const activeLoads = loads.filter((load: any) => 
-    ['available', 'assigned', 'in_transit'].includes(load.status)
+    ['scheduled', 'available', 'assigned', 'in_transit'].includes(load.status)
   );
 
   const sendGpsLinkMutation = useMutation({
