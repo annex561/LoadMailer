@@ -112,10 +112,11 @@ function getBaseUrl(): string {
   return `https://${domain}`;
 }
 
-// Helper function to send GPS tracking link SMS to driver when load is assigned
-async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<{ success: boolean; error?: string }> {
+// Helper function to send GPS tracking link SMS to driver
+// loadId is optional - if null, sends general fleet tracking link instead of load-specific
+async function sendGPSTrackingSMS(driverId: string, loadId: string | null): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log(`📍 GPS TRACKING SMS: Starting for driver ${driverId}, load ${loadId}`);
+    console.log(`📍 GPS TRACKING SMS: Starting for driver ${driverId}${loadId ? `, load ${loadId}` : ' (general tracking)'}`);
     
     // Generate GPS tracking token for the driver
     const tokenResult = await storage.generateTrackingToken(driverId);
@@ -142,20 +143,29 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<{ s
       return { success: false, error: "Driver has no valid phone number" };
     }
     
-    // Get load details
-    const load = await storage.getLoad(loadId);
-    if (!load) {
-      console.error(`❌ GPS TRACKING SMS: Load ${loadId} not found`);
-      return { success: false, error: "Load not found" };
-    }
-    
     // Create tracking URL
     const trackingUrl = `${getBaseUrl()}/driver-tracker?driver=${driverId}&token=${token}`;
     
     // Create GPS tracking SMS message
-    const smsMessage = `📍 Load ${load.loadNumber} assigned! Start GPS tracking: ${trackingUrl}\n\nClick the link to share your location with dispatch.`;
+    let smsMessage: string;
+    let logContext: string;
     
-    console.log(`📱 GPS TRACKING SMS: Sending to ${driver.name} (${normalizedPhone})`);
+    if (loadId) {
+      // Load-specific tracking message
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        console.error(`❌ GPS TRACKING SMS: Load ${loadId} not found`);
+        return { success: false, error: "Load not found" };
+      }
+      smsMessage = `📍 Load ${load.loadNumber} assigned! Start GPS tracking: ${trackingUrl}\n\nClick the link to share your location with dispatch.`;
+      logContext = `load ${load.loadNumber}`;
+    } else {
+      // General fleet tracking message
+      smsMessage = `📍 GPS Tracking Request: Please share your location with dispatch: ${trackingUrl}\n\nClick the link to enable location tracking.`;
+      logContext = 'general tracking';
+    }
+    
+    console.log(`📱 GPS TRACKING SMS: Sending to ${driver.name} (${normalizedPhone}) for ${logContext}`);
     console.log(`📱 GPS TRACKING SMS: URL: ${trackingUrl}`);
     
     // Send SMS using existing SMS service
@@ -165,7 +175,7 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<{ s
     });
     
     if (smsResult.success) {
-      console.log(`✅ GPS TRACKING SMS: Successfully sent to ${driver.name} for load ${load.loadNumber}`);
+      console.log(`✅ GPS TRACKING SMS: Successfully sent to ${driver.name} for ${logContext}`);
       console.log(`✅ GPS TRACKING SMS: Tracking URL: ${trackingUrl}`);
       return { success: true };
     } else {
@@ -174,7 +184,7 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<{ s
     }
     
   } catch (error) {
-    console.error(`❌ GPS TRACKING SMS: Error sending GPS tracking SMS for driver ${driverId}, load ${loadId}:`, error);
+    console.error(`❌ GPS TRACKING SMS: Error sending GPS tracking SMS for driver ${driverId}${loadId ? `, load ${loadId}` : ''}:`, error);
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
@@ -901,18 +911,20 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Manual GPS Tracking Link Sender
-  // Allows dispatchers to manually send GPS tracking links to drivers for specific loads
+  // Allows dispatchers to manually send GPS tracking links to drivers
+  // loadId is optional - used for delivery tracking or general fleet visibility
   app.post("/api/gps/send-tracking-link", async (req, res) => {
     try {
       const { driverId, loadId } = req.body;
       
-      if (!driverId || !loadId) {
+      if (!driverId) {
         return res.status(400).json({ 
-          error: "Both driverId and loadId are required" 
+          error: "driverId is required" 
         });
       }
       
-      const result = await sendGPSTrackingSMS(driverId, loadId);
+      // loadId is optional - if not provided, it's for general fleet tracking
+      const result = await sendGPSTrackingSMS(driverId, loadId || null);
       
       if (result.success) {
         res.json({ 

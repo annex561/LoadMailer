@@ -112,18 +112,16 @@ export default function GPSTrackingPage() {
   );
 
   const sendGpsLinkMutation = useMutation({
-    mutationFn: async (data: { driverId: string; loadId: string }) => {
-      const response = await apiRequest("/api/gps/send-tracking-link", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+    mutationFn: async (data: { driverId: string; loadId?: string }) => {
+      const response = await apiRequest("POST", "/api/gps/send-tracking-link", data);
+      const result = await response.json();
       
-      // Check if the response indicates failure
-      if (!response.success) {
-        throw new Error(response.error || "Failed to send GPS tracking link");
+      // Check if the backend indicates failure
+      if (!result.success) {
+        throw new Error(result.error || "Failed to send GPS tracking link");
       }
       
-      return response;
+      return result;
     },
     onSuccess: () => {
       toast({
@@ -550,16 +548,16 @@ export default function GPSTrackingPage() {
                 Send GPS Tracking Link
               </CardTitle>
               <CardDescription>
-                Manually send GPS tracking link to a driver for a specific load
+                Send GPS tracking link to a driver (load is optional - use for general fleet tracking)
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={(e) => {
                 e.preventDefault();
-                if (!gpsLinkData.driverId || !gpsLinkData.loadId) {
+                if (!gpsLinkData.driverId) {
                   toast({
                     title: "Validation Error",
-                    description: "Please select both driver and load.",
+                    description: "Please select a driver.",
                     variant: "destructive",
                   });
                   return;
@@ -590,7 +588,7 @@ export default function GPSTrackingPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="gps-load">Load</Label>
+                    <Label htmlFor="gps-load">Load (Optional)</Label>
                     <Select
                       value={gpsLinkData.loadId}
                       onValueChange={(value) => 
@@ -599,7 +597,7 @@ export default function GPSTrackingPage() {
                     >
                       <SelectTrigger id="gps-load" data-testid="select-gps-load"
                         className="bg-white border border-gray-300">
-                        <SelectValue placeholder="Select load" />
+                        <SelectValue placeholder="None (general tracking)" />
                       </SelectTrigger>
                       <SelectContent className="bg-white border border-gray-300 shadow-lg">
                         {activeLoads.map((load: any) => (

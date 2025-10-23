@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Truck, Navigation, Clock, Power, Wifi, WifiOff } from 'lucide-react';
+import { Truck, Navigation, Clock, Power, Wifi, WifiOff, MapPin, RefreshCw } from 'lucide-react';
 
 // Fix Leaflet default marker icon
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -28,6 +28,7 @@ export default function DriverTracker() {
   const [lastUpdate, setLastUpdate] = useState<string>('—');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [wakeLock, setWakeLock] = useState<WakeLockSentinel | null>(null);
+  const [isUpdatingManually, setIsUpdatingManually] = useState(false);
   
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -142,15 +143,15 @@ export default function DriverTracker() {
   };
 
   // Send location to server with authentication token
-  const sendLocation = async (lat: number, lon: number) => {
+  const sendLocation = async (lat: number, lon: number): Promise<boolean> => {
     if (!driverId) {
       setStatus('❌ No driver ID');
-      return;
+      return false;
     }
 
     if (!trackingToken) {
       setStatus('❌ No tracking token. Please restart from dashboard.');
-      return;
+      return false;
     }
 
     try {
@@ -170,7 +171,7 @@ export default function DriverTracker() {
         if (response.status === 401) {
           setStatus('🔒 Authentication failed. Please restart tracking from dashboard.');
           stopTracking();
-          return;
+          return false;
         }
         throw new Error('Failed to update location');
       }
@@ -178,9 +179,11 @@ export default function DriverTracker() {
       const time = new Date().toLocaleTimeString();
       setStatus(`✓ Location sent (${lat.toFixed(4)}, ${lon.toFixed(4)})`);
       setLastUpdate(time);
+      return true;
     } catch (err) {
       console.error('Error sending location:', err);
       setStatus('⚠️ Failed to send location');
+      return false;
     }
   };
 
@@ -270,6 +273,80 @@ export default function DriverTracker() {
     setStatus('⏸️ Tracking stopped');
   };
 
+  // Manual location update - quick one-tap update
+  const updateLocationNow = async () => {
+    if (!driverId || !trackingToken) {
+      setStatus('❌ Missing authentication');
+      return;
+    }
+
+    if (!isOnline) {
+      setStatus('❌ No internet connection');
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setStatus('❌ GPS not supported');
+      return;
+    }
+
+    setIsUpdatingManually(true);
+    setStatus('📍 Getting your location...');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setLocation({
+          lat: latitude,
+          lon: longitude,
+          timestamp: new Date()
+        });
+        
+        // Send location and check if successful
+        const success = await sendLocation(latitude, longitude);
+        
+        if (success) {
+          setStatus('✅ Location sent!');
+          // Reset status after 3 seconds
+          setTimeout(() => {
+            if (!isTracking) {
+              setStatus('Tap button to share your location');
+            }
+          }, 3000);
+        } else {
+          // sendLocation already set appropriate error status
+          // Just keep the error message visible
+        }
+        
+        setIsUpdatingManually(false);
+      },
+      (error) => {
+        console.error('GPS error:', error);
+        let errorMsg = '❌ GPS error';
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMsg = '❌ Please enable location access';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMsg = '⚠️ GPS unavailable';
+            break;
+          case error.TIMEOUT:
+            errorMsg = '⏱️ GPS timeout';
+            break;
+        }
+        
+        setStatus(errorMsg);
+        setIsUpdatingManually(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -307,19 +384,34 @@ export default function DriverTracker() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {/* Instructions */}
-        {!isTracking && (
-          <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
-            <h2 className="font-semibold text-white mb-2 flex items-center gap-2">
-              <Navigation className="w-5 h-5 text-teal-400" />
-              How it works
-            </h2>
-            <ul className="text-sm text-slate-300 space-y-1 list-disc list-inside">
-              <li>Tap "Start Tracking" to begin sending your location</li>
-              <li>Your location updates automatically every 60 seconds</li>
-              <li>Keep this page open while driving</li>
-              <li>Battery optimized for all-day tracking</li>
-            </ul>
+        {/* Quick Update Button - Prominent and Clean */}
+        <div className="flex justify-center">
+          <button
+            onClick={updateLocationNow}
+            disabled={!driverId || !trackingToken || !isOnline || isUpdatingManually}
+            className="flex items-center gap-3 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white px-10 py-6 rounded-xl font-bold text-xl shadow-2xl transition-all transform hover:scale-105 active:scale-95"
+            data-testid="button-update-location"
+          >
+            {isUpdatingManually ? (
+              <>
+                <RefreshCw className="w-7 h-7 animate-spin" />
+                Updating...
+              </>
+            ) : (
+              <>
+                <MapPin className="w-7 h-7" />
+                Update Location Now
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Simple Instructions */}
+        {!location && (
+          <div className="text-center">
+            <p className="text-slate-400 text-sm">
+              Tap the button above to share your location with dispatch
+            </p>
           </div>
         )}
 
@@ -371,26 +463,26 @@ export default function DriverTracker() {
           </div>
         </div>
 
-        {/* Control Button */}
-        <div className="flex justify-center">
+        {/* Additional Options - Auto Tracking */}
+        <div className="flex flex-col gap-4">
           {!isTracking ? (
             <button
               onClick={startTracking}
-              disabled={!driverId || !isOnline}
-              className="flex items-center gap-2 bg-teal-500 hover:bg-teal-600 disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-8 py-4 rounded-lg font-semibold text-lg shadow-lg transition-all"
-              data-testid="button-start-tracking"
+              disabled={!driverId || !isOnline || !trackingToken}
+              className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:cursor-not-allowed text-white px-6 py-3 rounded-lg font-medium text-sm shadow-lg transition-all border border-slate-600"
+              data-testid="button-start-auto-tracking"
             >
-              <Power className="w-5 h-5" />
-              Start Tracking
+              <Power className="w-4 h-4" />
+              Start Auto-Tracking (60s intervals)
             </button>
           ) : (
             <button
               onClick={stopTracking}
-              className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-8 py-4 rounded-lg font-semibold text-lg shadow-lg transition-all"
-              data-testid="button-stop-tracking"
+              className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium text-sm shadow-lg transition-all"
+              data-testid="button-stop-auto-tracking"
             >
-              <Power className="w-5 h-5" />
-              Stop Tracking
+              <Power className="w-4 h-4" />
+              Stop Auto-Tracking
             </button>
           )}
         </div>
@@ -398,16 +490,16 @@ export default function DriverTracker() {
         {!isOnline && (
           <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
             <p className="text-red-400 text-sm text-center">
-              ⚠️ No internet connection. Location updates will resume when connection is restored.
+              ⚠️ No internet connection
             </p>
           </div>
         )}
 
         {/* Tips */}
-        {isTracking && (
+        {location && (
           <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
             <p className="text-xs text-slate-400 text-center">
-              💡 Tip: Bookmark this page for quick access. Updates happen automatically every 60 seconds.
+              💡 Bookmark this page for easy access. {isTracking && 'Auto-tracking updates every 60 seconds.'}
             </p>
           </div>
         )}
