@@ -1418,6 +1418,21 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // ==================== DOCUMENT UPLOAD & OBJECT STORAGE ====================
+  
+  // POST /api/documents/upload-url - Get presigned URL for document upload
+  app.post('/api/documents/upload-url', async (req, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
+      
+      res.json({ uploadUrl });
+    } catch (error) {
+      console.error('Error generating upload URL:', error);
+      res.status(500).json({ error: 'Failed to generate upload URL' });
+    }
+  });
+
   // ==================== DOCUMENT APPROVAL WORKFLOW API ENDPOINTS ====================
   
   // 1. POST /api/documents/:documentId/approve - Approve a document
