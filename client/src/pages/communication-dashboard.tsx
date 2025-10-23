@@ -258,7 +258,7 @@ export default function CommunicationDashboard() {
   // Fetch communication threads
   const { data: threads = [], isLoading: threadsLoading, refetch: refetchThreads } = useQuery<LoadCommunicationThread[]>({
     queryKey: ['/api/communication/threads'],
-    refetchInterval: 5000, // Refresh every 5 seconds for real-time updates
+    refetchInterval: 2000, // Refresh every 2 seconds for real-time updates
   });
   
   // Monitor for new messages and play notification sound
@@ -1449,7 +1449,17 @@ export default function CommunicationDashboard() {
                           : 'bg-white border border-gray-200 text-gray-900'
                       }`}
                     >
-                      <p className="text-sm">{message.content}</p>
+                      {message.mediaUrl && message.mediaType?.startsWith('image/') && (
+                        <div className="mb-2">
+                          <img 
+                            src={message.mediaUrl} 
+                            alt="MMS attachment"
+                            className="rounded-lg max-w-full h-auto max-h-64 object-contain"
+                            data-testid={`message-image-${message.id}`}
+                          />
+                        </div>
+                      )}
+                      {message.content && <p className="text-sm">{message.content}</p>}
                       <div className={`flex items-center justify-between mt-1 text-xs ${
                         message.sender === 'dispatch' ? 'text-blue-100' : 'text-gray-500'
                       }`}>

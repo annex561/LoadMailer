@@ -1869,16 +1869,34 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       console.log('📱 SMS webhook received:', req.body);
       
-      const { From, Body, MessageSid } = req.body;
+      const { From, Body, MessageSid, NumMedia } = req.body;
       
-      if (!From || !Body) {
-        console.log('⚠️ Invalid SMS webhook data - missing From or Body');
+      if (!From) {
+        console.log('⚠️ Invalid SMS webhook data - missing From');
         console.log('📋 Request body keys:', Object.keys(req.body));
         return res.status(400).send('Invalid webhook data');
       }
 
-      // Handle incoming SMS through communication service
-      await smsCommunicationService.handleIncomingSMS(From, Body, MessageSid);
+      // Extract MMS media attachments if present
+      const mediaUrls: string[] = [];
+      const mediaTypes: string[] = [];
+      const numMedia = parseInt(NumMedia || '0', 10);
+      
+      if (numMedia > 0) {
+        console.log(`📎 MMS received with ${numMedia} media attachment(s)`);
+        for (let i = 0; i < numMedia; i++) {
+          const mediaUrl = req.body[`MediaUrl${i}`];
+          const mediaType = req.body[`MediaContentType${i}`];
+          if (mediaUrl) {
+            mediaUrls.push(mediaUrl);
+            mediaTypes.push(mediaType || 'unknown');
+            console.log(`  📷 Media ${i}: ${mediaType} - ${mediaUrl}`);
+          }
+        }
+      }
+
+      // Handle incoming SMS/MMS through communication service
+      await smsCommunicationService.handleIncomingSMS(From, Body || '', MessageSid, mediaUrls, mediaTypes);
       
       // Respond with TwiML to acknowledge receipt
       res.set('Content-Type', 'text/xml');

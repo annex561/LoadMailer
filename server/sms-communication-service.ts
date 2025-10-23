@@ -31,9 +31,18 @@ export class SMSCommunicationService {
   }
 
   // Handle incoming SMS messages from drivers (will be called by webhook)
-  async handleIncomingSMS(fromPhone: string, message: string, smsId: string): Promise<void> {
+  async handleIncomingSMS(
+    fromPhone: string, 
+    message: string, 
+    smsId: string, 
+    mediaUrls: string[] = [], 
+    mediaTypes: string[] = []
+  ): Promise<void> {
     try {
       console.log(`📱 Incoming SMS from ${fromPhone}: ${message.substring(0, 50)}...`);
+      if (mediaUrls.length > 0) {
+        console.log(`📎 With ${mediaUrls.length} media attachment(s)`);
+      }
       
       // Find driver by phone number
       const driver = await this.findDriverByPhone(fromPhone);
@@ -49,23 +58,56 @@ export class SMSCommunicationService {
       // Detect if message is about a specific load
       const loadContext = await this.detectLoadContext(message, driver);
       
-      // Create message record in database
-      await this.createMessageRecord({
-        threadId: thread.id,
-        loadId: loadContext?.loadId || null, // Optional load reference
-        senderId: driver.id,
-        senderRole: 'driver',
-        senderName: driver.name,
-        messageType: this.isStatusUpdate(message) ? 'status_update' : 'text',
-        textContent: message,
-        smsMessageId: smsId,
-        metadata: {
-          smsId: smsId,
-          fromPhone: fromPhone,
-          loadNumber: loadContext?.loadNumber,
-          isStatusUpdate: this.isStatusUpdate(message)
+      // Create message record in database for each media attachment
+      if (mediaUrls.length > 0) {
+        for (let i = 0; i < mediaUrls.length; i++) {
+          const mediaUrl = mediaUrls[i];
+          const mediaType = mediaTypes[i] || 'unknown';
+          
+          console.log(`💾 Saving media message: ${mediaType} - ${mediaUrl}`);
+          
+          await this.createMessageRecord({
+            threadId: thread.id,
+            loadId: loadContext?.loadId || null,
+            senderId: driver.id,
+            senderRole: 'driver',
+            senderName: driver.name,
+            messageType: 'media',
+            textContent: message || `[${mediaType.split('/')[0]} attachment]`,
+            mediaUrl: mediaUrl,
+            mediaType: mediaType,
+            smsMessageId: smsId,
+            metadata: {
+              smsId: smsId,
+              fromPhone: fromPhone,
+              loadNumber: loadContext?.loadNumber,
+              mediaIndex: i,
+              totalMedia: mediaUrls.length
+            }
+          });
         }
-      });
+      }
+      
+      // Create text message record (even if there are media attachments)
+      if (message && message.trim()) {
+        await this.createMessageRecord({
+          threadId: thread.id,
+          loadId: loadContext?.loadId || null,
+          senderId: driver.id,
+          senderRole: 'driver',
+          senderName: driver.name,
+          messageType: this.isStatusUpdate(message) ? 'status_update' : 'text',
+          textContent: message,
+          smsMessageId: smsId,
+          metadata: {
+            smsId: smsId,
+            fromPhone: fromPhone,
+            loadNumber: loadContext?.loadNumber,
+            isStatusUpdate: this.isStatusUpdate(message),
+            hasMedia: mediaUrls.length > 0
+          }
+        });
+      }
 
       // Send acknowledgment to driver
       await this.sendSMS(fromPhone, "✅ Message received. Dispatch has been notified.");
