@@ -43,35 +43,27 @@ export class SMSCommunicationService {
         return;
       }
 
-      // Check if this is a command or status update
-      if (message.toLowerCase().startsWith('/') || this.isStatusUpdate(message)) {
-        await this.handleStatusUpdate(driver, message, fromPhone, smsId);
-        return;
-      }
-
-      // Find or create active communication thread for this driver
-      const activeThread = await this.findOrCreateActiveThread(driver);
-      if (!activeThread) {
-        await this.sendSMS(fromPhone, 
-          "No active load found. Your message has been forwarded to dispatch.");
-        // Create a general message thread or forward to dispatch
-        return;
-      }
-
+      // Find or create unified communication thread for this driver (one thread per driver)
+      const thread = await this.findOrCreateUnifiedThread(driver);
+      
+      // Detect if message is about a specific load
+      const loadContext = await this.detectLoadContext(message, driver);
+      
       // Create message record in database
       await this.createMessageRecord({
-        threadId: activeThread.id,
-        loadId: activeThread.loadId,
+        threadId: thread.id,
+        loadId: loadContext?.loadId || null, // Optional load reference
         senderId: driver.id,
         senderRole: 'driver',
         senderName: driver.name,
-        messageType: 'text',
+        messageType: this.isStatusUpdate(message) ? 'status_update' : 'text',
         textContent: message,
-        telegramMessageId: smsId, // Reusing field for SMS ID
-        telegramChatId: fromPhone, // Reusing field for phone number
+        smsMessageId: smsId,
         metadata: {
           smsId: smsId,
-          fromPhone: fromPhone
+          fromPhone: fromPhone,
+          loadNumber: loadContext?.loadNumber,
+          isStatusUpdate: this.isStatusUpdate(message)
         }
       });
 
@@ -79,68 +71,65 @@ export class SMSCommunicationService {
       await this.sendSMS(fromPhone, "✅ Message received. Dispatch has been notified.");
       
       // Log communication activity
-      await this.logCommunication(activeThread.loadId, activeThread.id, 'message_sent', driver.id, 'driver', {
+      await this.logCommunication(loadContext?.loadId || null, thread.id, 'message_sent', driver.id, 'driver', {
         messageType: 'text',
         messageLength: message.length,
-        fromPhone: fromPhone
+        fromPhone: fromPhone,
+        loadContext: loadContext
       });
 
-      console.log(`✅ SMS message processed for driver ${driver.name}`);
+      console.log(`✅ SMS message processed for driver ${driver.name}${loadContext ? ` (Load: ${loadContext.loadNumber})` : ''}`);
     } catch (error) {
       console.error('Error handling incoming SMS:', error);
     }
   }
 
-  private async handleStatusUpdate(driver: Driver, message: string, fromPhone: string, smsId: string): Promise<void> {
-    const activeThread = await this.findOrCreateActiveThread(driver);
-    if (!activeThread) {
-      await this.sendSMS(fromPhone, "No active load found for status update.");
-      return;
-    }
-
-    let statusMessage = message;
-    let statusType = 'general_update';
-
-    // Parse common status updates
-    const lowerMsg = message.toLowerCase();
-    if (lowerMsg.includes('pickup') || lowerMsg.includes('picked up')) {
-      statusType = 'pickup_complete';
-      statusMessage = "Load picked up successfully";
-    } else if (lowerMsg.includes('deliver') || lowerMsg.includes('delivered')) {
-      statusType = 'delivery_complete';
-      statusMessage = "Load delivered successfully";
-    } else if (lowerMsg.includes('delayed') || lowerMsg.includes('late')) {
-      statusType = 'delay_report';
-    } else if (lowerMsg.includes('arrived') || lowerMsg.includes('on site')) {
-      statusType = 'arrival_update';
-    }
-
-    // Create status update message record
-    await this.createMessageRecord({
-      threadId: activeThread.id,
-      loadId: activeThread.loadId,
-      senderId: driver.id,
-      senderRole: 'driver',
-      senderName: driver.name,
-      messageType: 'status_update',
-      textContent: statusMessage,
-      telegramMessageId: smsId,
-      telegramChatId: fromPhone,
-      metadata: {
-        statusType: statusType,
-        originalMessage: message,
-        smsId: smsId,
-        fromPhone: fromPhone
+  // Detect load context from message content (optional load number references)
+  private async detectLoadContext(message: string, driver: Driver): Promise<{ loadId: string; loadNumber: string } | null> {
+    try {
+      // Extract potential load numbers from message
+      // Supports: LOAD-123, 603006, TN-789, etc.
+      const loadNumberPattern = /(?:LOAD[-\s]?)?(\d{6})|(?:LOAD[-\s]?)(\d+)|([A-Z]{2,4}[-\s]?\d+)/gi;
+      const matches = message.match(loadNumberPattern);
+      
+      if (!matches || matches.length === 0) {
+        // No load number detected - check driver's current active load
+        const activeLoads = await storage.getLoadsByStatus('assigned');
+        const driverLoad = activeLoads.find(load => load.driverId === driver.id);
+        
+        if (driverLoad) {
+          return {
+            loadId: driverLoad.id,
+            loadNumber: driverLoad.loadNumber
+          };
+        }
+        
+        return null;
       }
-    });
-
-    await this.sendSMS(fromPhone, `✅ Status updated: ${statusMessage}`);
-    
-    await this.logCommunication(activeThread.loadId, activeThread.id, 'status_updated', driver.id, 'driver', {
-      statusType: statusType,
-      statusMessage: statusMessage,
-      fromPhone: fromPhone
-    });
+      
+      // Try to find a matching load
+      for (const match of matches) {
+        const loads = await storage.getAllLoads();
+        const normalizedMatch = match.replace(/[-\s]/g, '').toUpperCase();
+        
+        const load = loads.find(l => {
+          const normalized = l.loadNumber.replace(/[-\s]/g, '').toUpperCase();
+          return normalized.includes(normalizedMatch) || normalizedMatch.includes(normalized);
+        });
+        
+        if (load) {
+          return {
+            loadId: load.id,
+            loadNumber: load.loadNumber
+          };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error detecting load context:', error);
+      return null;
+    }
   }
 
   private isStatusUpdate(message: string): boolean {
@@ -167,35 +156,48 @@ export class SMSCommunicationService {
   }
 
 
-  private async findOrCreateActiveThread(driver: Driver): Promise<LoadCommunicationThread | null> {
-    // Get driver's active loads
-    const activeLoads = await storage.getLoadsByStatus('assigned');
-    const driverLoad = activeLoads.find(load => load.driverId === driver.id);
-    
-    if (!driverLoad) return null;
-
-    // Check if thread exists
-    let thread = await storage.getLoadCommunicationThreadByLoad(driverLoad.id);
-    
-    if (!thread) {
-      // Create new thread
+  // Find or create a unified communication thread for the driver (one thread per driver)
+  private async findOrCreateUnifiedThread(driver: Driver): Promise<LoadCommunicationThread> {
+    try {
+      // Look for existing thread for this driver
+      const allThreads = await storage.getAllLoadCommunicationThreads();
+      let thread = allThreads.find(t => t.driverId === driver.id && t.threadType === 'unified');
+      
+      if (thread) {
+        return thread;
+      }
+      
+      // Get driver's current active load for context (optional)
+      const activeLoads = await storage.getLoadsByStatus('assigned');
+      const driverLoad = activeLoads.find(load => load.driverId === driver.id);
+      
+      // Create new unified thread for this driver
       thread = await storage.createLoadCommunicationThread({
-        loadId: driverLoad.id,
+        threadType: 'unified',
+        loadId: driverLoad?.id || null, // Optional current load context
         driverId: driver.id,
         status: 'active',
         lastMessageAt: new Date(),
         messageCount: 0,
         unreadDriverMessages: 0,
-        unreadDispatchMessages: 0
+        unreadDispatchMessages: 0,
+        driverName: driver.name,
+        driverPhone: driver.phone || driver.phoneNumber || '',
+        loadNumber: driverLoad?.loadNumber || null
       });
       
-      await this.logCommunication(driverLoad.id, thread.id, 'thread_created', driver.id, 'driver', {
-        loadNumber: driverLoad.loadNumber,
+      await this.logCommunication(driverLoad?.id || null, thread.id, 'thread_created', driver.id, 'system', {
+        threadType: 'unified',
+        loadNumber: driverLoad?.loadNumber,
         communicationType: 'sms'
       });
+      
+      console.log(`✅ Created unified thread for driver ${driver.name}`);
+      return thread;
+    } catch (error) {
+      console.error('Error finding/creating unified thread:', error);
+      throw error;
     }
-
-    return thread;
   }
 
   private async createMessageRecord(messageData: InsertLoadMessage): Promise<LoadMessage> {

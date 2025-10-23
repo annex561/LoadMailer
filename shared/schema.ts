@@ -348,12 +348,13 @@ export const loadDocuments = pgTable("load_documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Load Communication Threads - Central communication hub for loads and general driver communication
+// Driver Communication Threads - Unified messaging hub for all driver-dispatcher communication
+// One thread per driver containing all messages (load-specific and general)
 export const loadCommunicationThreads = pgTable("load_communication_threads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  // Thread type determines if this is load-specific or general communication
-  threadType: text("thread_type").notNull().default("load"), // 'load' for load-specific, 'general' for direct driver chat
-  loadId: varchar("load_id").references(() => loads.id), // Optional - only for load-specific threads
+  // Thread type - always 'unified' for the new simplified messaging system
+  threadType: text("thread_type").notNull().default("unified"), // 'unified' for all driver communication
+  loadId: varchar("load_id").references(() => loads.id), // Current/active load context (optional)
   driverId: varchar("driver_id").references(() => drivers.id).notNull(),
   status: text("status").notNull().default("active"), // active, archived, closed
   lastMessageAt: timestamp("last_message_at").defaultNow(),
