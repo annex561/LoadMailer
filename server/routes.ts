@@ -760,6 +760,8 @@ export async function registerRoutes(app: Express): Promise<void> {
         // Get driver's current (most recent active) location from database
         const currentLocation = await storage.getDriverCurrentLocation(driver.id);
         
+        console.log(`🔍 DEBUG - Driver ${driver.name} (${driver.id}): currentLocation =`, currentLocation ? `lat=${currentLocation.latitude}, lon=${currentLocation.longitude}, isActive=${currentLocation.isActive}` : 'NULL');
+        
         if (currentLocation && currentLocation.isActive) {
           console.log(`📍 Using real GPS location for driver: ${driver.name}`);
           return {
@@ -886,7 +888,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       const { driverId, lat, lon, timestamp } = validationResult.data;
-      const { trackingToken } = req.body;
+      const { trackingToken, accuracy, altitude, speed, heading, batteryLevel } = req.body;
 
       // CRITICAL SECURITY CHECK: Validate tracking token
       if (!trackingToken) {
@@ -909,20 +911,20 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       // Security audit log - log all location updates with IP for monitoring
-      console.log(`🔒 SECURITY AUDIT: GPS update - Driver: ${driverId}, IP: ${ip}, Coordinates: (${lat}, ${lon}), Time: ${new Date().toISOString()}`);
+      console.log(`🔒 SECURITY AUDIT: GPS update - Driver: ${driverId}, IP: ${ip}, Coordinates: (${lat}, ${lon}), Speed: ${speed || 'N/A'}, Battery: ${batteryLevel || 'N/A'}%, Time: ${new Date().toISOString()}`);
 
-      // Create new driver location record in database
+      // Create new driver location record in database with all available metadata
       await storage.createDriverLocation({
         driverId,
         latitude: lat,
         longitude: lon,
         timestamp: timestamp ? new Date(timestamp) : new Date(),
         isActive: true,
-        accuracy: undefined,
-        speed: undefined,
-        heading: undefined,
-        altitude: undefined,
-        batteryLevel: undefined,
+        accuracy: accuracy !== undefined ? accuracy : undefined,
+        speed: speed !== undefined ? speed : undefined,
+        heading: heading !== undefined ? heading : undefined,
+        altitude: altitude !== undefined ? altitude : undefined,
+        batteryLevel: batteryLevel !== undefined ? batteryLevel : undefined,
         signalStrength: undefined,
         address: undefined,
         loadId: undefined

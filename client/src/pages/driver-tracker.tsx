@@ -144,7 +144,7 @@ export default function DriverTracker() {
   };
 
   // Send location to server with authentication token
-  const sendLocation = async (lat: number, lon: number): Promise<boolean> => {
+  const sendLocation = async (lat: number, lon: number, positionData?: GeolocationPosition): Promise<boolean> => {
     if (!driverId) {
       setStatus('❌ No driver ID');
       return false;
@@ -156,16 +156,39 @@ export default function DriverTracker() {
     }
 
     try {
+      // Extract all available GPS metadata from position
+      const locationData: any = {
+        driverId,
+        lat,
+        lon,
+        timestamp: new Date().toISOString(),
+        trackingToken
+      };
+
+      // Add optional GPS metadata if available
+      if (positionData?.coords) {
+        if (positionData.coords.accuracy !== null) locationData.accuracy = positionData.coords.accuracy;
+        if (positionData.coords.altitude !== null) locationData.altitude = positionData.coords.altitude;
+        if (positionData.coords.speed !== null) locationData.speed = positionData.coords.speed;
+        if (positionData.coords.heading !== null) locationData.heading = positionData.coords.heading;
+      }
+
+      // Add battery level if available
+      if ('getBattery' in navigator) {
+        try {
+          const battery = await (navigator as any).getBattery();
+          if (battery?.level !== undefined) {
+            locationData.batteryLevel = Math.round(battery.level * 100);
+          }
+        } catch (e) {
+          // Battery API not available or permission denied
+        }
+      }
+
       const response = await fetch('/api/driver-location/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          driverId,
-          lat,
-          lon,
-          timestamp: new Date().toISOString(),
-          trackingToken
-        })
+        body: JSON.stringify(locationData)
       });
 
       if (!response.ok) {
@@ -209,7 +232,7 @@ export default function DriverTracker() {
           lon: longitude,
           timestamp: new Date()
         });
-        sendLocation(latitude, longitude);
+        sendLocation(latitude, longitude, position);
       },
       (error) => {
         console.error('GPS error:', error);
@@ -308,7 +331,7 @@ export default function DriverTracker() {
         });
         
         // Send location and check if successful
-        const success = await sendLocation(latitude, longitude);
+        const success = await sendLocation(latitude, longitude, position);
         
         if (success) {
           setStatus('✅ Location sent!');
