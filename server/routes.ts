@@ -920,6 +920,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         longitude: lon,
         timestamp: timestamp ? new Date(timestamp) : new Date(),
         isActive: true,
+        source: 'gps', // Mark as real GPS data from driver's device
         accuracy: accuracy !== undefined ? accuracy : undefined,
         speed: speed !== undefined ? speed : undefined,
         heading: heading !== undefined ? heading : undefined,
