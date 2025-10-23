@@ -464,6 +464,17 @@ export default function CommunicationDashboard() {
     createdAt: msg.createdAt
   }));
 
+  // Debug logging for messages with media
+  useEffect(() => {
+    const messagesWithMedia = rawMessages.filter(m => m.mediaUrl);
+    if (messagesWithMedia.length > 0) {
+      console.log(`📥 Frontend received ${messagesWithMedia.length} messages with media:`);
+      messagesWithMedia.forEach(m => {
+        console.log(`  - Message ${m.id}: mediaUrl=${m.mediaUrl}, mediaType=${m.mediaType}`);
+      });
+    }
+  }, [rawMessages]);
+
   // Fetch quick reply templates
   const { data: templates = [] } = useQuery<QuickReplyTemplate[]>({
     queryKey: ['/api/communication/quick-replies'],

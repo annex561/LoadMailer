@@ -1348,10 +1348,19 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Get messages for a specific communication thread
   app.get('/api/communication/messages/:threadId', async (req, res) => {
     try {
-      const { threadId } = req.params;
+      const { threadId} = req.params;
       console.log(`🚀 Getting messages for thread: ${threadId}`);
       const messages = await storage.getLoadMessagesByThread(threadId);
       console.log(`📋 Retrieved ${messages.length} messages for thread ${threadId}`);
+      
+      // Debug: Check if any messages have media
+      const messagesWithMedia = messages.filter((m: any) => m.mediaUrl || m.media_url);
+      if (messagesWithMedia.length > 0) {
+        console.log(`📸 Found ${messagesWithMedia.length} messages with media:`);
+        messagesWithMedia.forEach((m: any) => {
+          console.log(`  - Message ${m.id}: mediaUrl=${m.mediaUrl}, media_url=${m.media_url}, mediaType=${m.mediaType}, media_type=${m.media_type}`);
+        });
+      }
       
       // Transform snake_case DB fields to camelCase for frontend
       const transformedMessages = messages.map((msg: any) => ({
@@ -1378,6 +1387,15 @@ export async function registerRoutes(app: Express): Promise<void> {
         sender: (msg.senderRole || msg.sender_role) === 'driver' ? 'driver' : 'dispatch',
         createdAt: msg.createdAt || msg.created_at
       }));
+      
+      // Debug: Log transformed messages with media
+      const transformedWithMedia = transformedMessages.filter(m => m.mediaUrl);
+      if (transformedWithMedia.length > 0) {
+        console.log(`📤 Sending ${transformedWithMedia.length} transformed messages with media to frontend:`);
+        transformedWithMedia.forEach(m => {
+          console.log(`  - Message ${m.id}: mediaUrl=${m.mediaUrl}, mediaType=${m.mediaType}, content="${m.content}"`);
+        });
+      }
       
       res.json(transformedMessages);
     } catch (error) {
