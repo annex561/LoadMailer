@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Send, Truck, Phone, MessageCircle } from "lucide-react";
+import { Search, Send, Truck, Phone, MessageCircle, FileText, CheckCircle, XCircle, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface Driver {
@@ -45,9 +45,24 @@ interface Message {
   metadata?: {
     loadNumber?: string;
     isStatusUpdate?: boolean;
+    documentId?: string;
+    documentType?: string;
+    documentStatus?: string;
+    mediaUrl?: string;
   };
   createdAt: string;
   isRead: boolean;
+}
+
+interface LoadDocument {
+  id: string;
+  loadId: string;
+  documentType: string;
+  approvalStatus: string;
+  fileUrl: string;
+  uploadedAt: string;
+  approvedAt?: string;
+  rejectedAt?: string;
 }
 
 export default function UnifiedMessaging() {
@@ -271,6 +286,9 @@ export default function UnifiedMessaging() {
                 ) : (
                   messages.map((message) => {
                     const isDriver = message.senderRole === "driver";
+                    const hasDocument = message.metadata?.documentId || message.metadata?.mediaUrl;
+                    const documentStatus = message.metadata?.documentStatus;
+                    
                     return (
                       <div
                         key={message.id}
@@ -292,6 +310,52 @@ export default function UnifiedMessaging() {
                               </span>
                             </div>
                           )}
+                          
+                          {/* Document thumbnail and status */}
+                          {hasDocument && (
+                            <div className="mb-2 p-2 bg-white/10 rounded border border-white/20">
+                              <div className="flex items-center gap-2">
+                                <FileText className="w-5 h-5" />
+                                <div className="flex-1">
+                                  <div className="text-xs font-medium">
+                                    {message.metadata?.documentType?.replace('_', ' ').toUpperCase() || 'Document'}
+                                  </div>
+                                  {documentStatus && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      {documentStatus === 'approved' && (
+                                        <>
+                                          <CheckCircle className="w-3 h-3 text-green-500" />
+                                          <span className="text-xs text-green-600 font-medium">Approved</span>
+                                        </>
+                                      )}
+                                      {documentStatus === 'rejected' && (
+                                        <>
+                                          <XCircle className="w-3 h-3 text-red-500" />
+                                          <span className="text-xs text-red-600 font-medium">Rejected</span>
+                                        </>
+                                      )}
+                                      {documentStatus === 'pending' && (
+                                        <>
+                                          <Clock className="w-3 h-3 text-yellow-500" />
+                                          <span className="text-xs text-yellow-600 font-medium">Pending Review</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              {message.metadata?.mediaUrl && (
+                                <img 
+                                  src={message.metadata.mediaUrl} 
+                                  alt="Document" 
+                                  className="mt-2 max-w-full rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => window.open(message.metadata?.mediaUrl, '_blank')}
+                                  data-testid={`img-document-${message.id}`}
+                                />
+                              )}
+                            </div>
+                          )}
+                          
                           <p className="whitespace-pre-wrap break-words" data-testid={`text-message-content-${message.id}`}>
                             {message.textContent}
                           </p>

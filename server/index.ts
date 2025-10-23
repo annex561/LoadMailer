@@ -187,6 +187,19 @@ app.use((req, res, next) => {
         })();
       }, 750);
       
+      // 0.75 Document Reminder Service (automated SMS reminders for missing documents)
+      setTimeout(() => {
+        (async () => {
+          try {
+            const { documentReminderService } = await import('./document-reminder-service');
+            await documentReminderService.start();
+            log('✅ Document Reminder Service initialized - checking for missing documents every 30 minutes');
+          } catch (error) {
+            log(`⚠️ Document Reminder Service failed to initialize: ${error.message || error}`);
+          }
+        })();
+      }, 900);
+      
       // 1. Google Sheets Import Service (completely independent)
       setTimeout(() => {
         (async () => {

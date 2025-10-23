@@ -647,14 +647,273 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createLoadDocument(data: schema.InsertLoadDocument): Promise<schema.LoadDocument> { throw new Error('Not implemented'); }
-  async getLoadDocument(id: string): Promise<schema.LoadDocument | null> { return null; }
-  async getLoadDocumentsByLoad(loadId: string): Promise<schema.LoadDocument[]> { return []; }
-  async getLoadDocumentsByDriver(driverId: string): Promise<schema.LoadDocument[]> { return []; }
-  async getLoadDocumentsByType(loadId: string, documentType: string): Promise<schema.LoadDocument[]> { return []; }
-  async updateLoadDocument(id: string, data: Partial<schema.InsertLoadDocument>): Promise<schema.LoadDocument | null> { return null; }
-  async deleteLoadDocument(id: string): Promise<boolean> { return false; }
-  async getAllLoadDocuments(): Promise<schema.LoadDocument[]> { return []; }
+  // Load Document operations - Professional document management with approval workflow
+  async createLoadDocument(data: schema.InsertLoadDocument): Promise<schema.LoadDocument> {
+    try {
+      const id = randomUUID();
+      const document: schema.LoadDocument = {
+        ...data,
+        id,
+        approvalStatus: data.approvalStatus || 'pending',
+        uploadSource: data.uploadSource || 'web',
+        version: data.version || 1,
+        isLatestVersion: data.isLatestVersion !== undefined ? data.isLatestVersion : true,
+        isRequired: data.isRequired || false,
+        uploadedAt: new Date(),
+        createdAt: new Date(),
+        approvedBy: data.approvedBy || null,
+        approvedAt: data.approvedAt || null,
+        rejectedBy: data.rejectedBy || null,
+        rejectedAt: data.rejectedAt || null,
+        rejectionReason: data.rejectionReason || null,
+        dispatcherNotes: data.dispatcherNotes || null,
+        imageWidth: data.imageWidth || null,
+        imageHeight: data.imageHeight || null,
+        qualityScore: data.qualityScore || null,
+        qualityWarnings: data.qualityWarnings || null,
+        parentDocumentId: data.parentDocumentId || null,
+        requiredCategory: data.requiredCategory || null,
+        signerName: data.signerName || null,
+        notes: data.notes || null,
+        mimeType: data.mimeType || null,
+        fileSize: data.fileSize || null,
+      };
+      
+      await db.insert(schema.loadDocuments).values(document);
+      console.log(`📄 Created load document ${id} for load ${data.loadId}`);
+      return document;
+    } catch (error) {
+      console.error('Error creating load document:', error);
+      throw error;
+    }
+  }
+
+  async getLoadDocument(id: string): Promise<schema.LoadDocument | null> {
+    try {
+      const result = await db.select().from(schema.loadDocuments).where(eq(schema.loadDocuments.id, id));
+      return result[0] || null;
+    } catch (error) {
+      console.error('Error getting load document:', error);
+      return null;
+    }
+  }
+
+  async getDocument(id: string): Promise<schema.LoadDocument | null> {
+    return this.getLoadDocument(id);
+  }
+
+  async updateDocumentNotes(id: string, notes: string): Promise<schema.LoadDocument | undefined> {
+    try {
+      await db.update(schema.loadDocuments)
+        .set({ notes })
+        .where(eq(schema.loadDocuments.id, id));
+      
+      const result = await this.getLoadDocument(id);
+      console.log(`📝 Updated document ${id} notes`);
+      return result || undefined;
+    } catch (error) {
+      console.error('Error updating document notes:', error);
+      return undefined;
+    }
+  }
+
+  async getLoadDocumentsByLoad(loadId: string): Promise<schema.LoadDocument[]> {
+    try {
+      const result = await db.select().from(schema.loadDocuments)
+        .where(eq(schema.loadDocuments.loadId, loadId))
+        .orderBy(desc(schema.loadDocuments.createdAt));
+      return result;
+    } catch (error) {
+      console.error('Error getting load documents by load:', error);
+      return [];
+    }
+  }
+
+  async getLoadDocumentsByDriver(driverId: string): Promise<schema.LoadDocument[]> {
+    try {
+      const result = await db.select().from(schema.loadDocuments)
+        .where(eq(schema.loadDocuments.driverId, driverId))
+        .orderBy(desc(schema.loadDocuments.createdAt));
+      return result;
+    } catch (error) {
+      console.error('Error getting load documents by driver:', error);
+      return [];
+    }
+  }
+
+  async getLoadDocumentsByType(loadId: string, documentType: string): Promise<schema.LoadDocument[]> {
+    try {
+      const result = await db.select().from(schema.loadDocuments)
+        .where(
+          and(
+            eq(schema.loadDocuments.loadId, loadId),
+            eq(schema.loadDocuments.documentType, documentType)
+          )
+        )
+        .orderBy(desc(schema.loadDocuments.createdAt));
+      return result;
+    } catch (error) {
+      console.error('Error getting load documents by type:', error);
+      return [];
+    }
+  }
+
+  async updateLoadDocument(id: string, data: Partial<schema.InsertLoadDocument>): Promise<schema.LoadDocument | null> {
+    try {
+      await db.update(schema.loadDocuments).set(data).where(eq(schema.loadDocuments.id, id));
+      return this.getLoadDocument(id);
+    } catch (error) {
+      console.error('Error updating load document:', error);
+      return null;
+    }
+  }
+
+  async deleteLoadDocument(id: string): Promise<boolean> {
+    try {
+      const result = await db.delete(schema.loadDocuments).where(eq(schema.loadDocuments.id, id));
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error('Error deleting load document:', error);
+      return false;
+    }
+  }
+
+  async getAllLoadDocuments(): Promise<schema.LoadDocument[]> {
+    try {
+      const result = await db.select().from(schema.loadDocuments)
+        .orderBy(desc(schema.loadDocuments.createdAt));
+      return result;
+    } catch (error) {
+      console.error('Error getting all load documents:', error);
+      return [];
+    }
+  }
+
+  // Enhanced Load Document operations - Professional document approval workflow
+  async approveDocument(documentId: string, approverId: string, notes?: string): Promise<schema.LoadDocument | undefined> {
+    try {
+      await db.update(schema.loadDocuments).set({
+        approvalStatus: 'approved',
+        approvedBy: approverId,
+        approvedAt: new Date(),
+        dispatcherNotes: notes || null,
+        rejectedBy: null,
+        rejectedAt: null,
+        rejectionReason: null,
+      }).where(eq(schema.loadDocuments.id, documentId));
+      
+      const result = await this.getLoadDocument(documentId);
+      console.log(`✅ Document ${documentId} approved by ${approverId}`);
+      return result || undefined;
+    } catch (error) {
+      console.error('Error approving document:', error);
+      return undefined;
+    }
+  }
+
+  async rejectDocument(documentId: string, rejectedBy: string, reason: string): Promise<schema.LoadDocument | undefined> {
+    try {
+      await db.update(schema.loadDocuments).set({
+        approvalStatus: 'rejected',
+        rejectedBy: rejectedBy,
+        rejectedAt: new Date(),
+        rejectionReason: reason,
+        approvedBy: null,
+        approvedAt: null,
+      }).where(eq(schema.loadDocuments.id, documentId));
+      
+      const result = await this.getLoadDocument(documentId);
+      console.log(`❌ Document ${documentId} rejected by ${rejectedBy}: ${reason}`);
+      return result || undefined;
+    } catch (error) {
+      console.error('Error rejecting document:', error);
+      return undefined;
+    }
+  }
+
+  async getDocumentsByLoad(loadId: string, includeRejected: boolean = false): Promise<schema.LoadDocument[]> {
+    try {
+      if (includeRejected) {
+        return this.getLoadDocumentsByLoad(loadId);
+      } else {
+        const result = await db.select().from(schema.loadDocuments)
+          .where(
+            and(
+              eq(schema.loadDocuments.loadId, loadId),
+              or(
+                eq(schema.loadDocuments.approvalStatus, 'pending'),
+                eq(schema.loadDocuments.approvalStatus, 'approved')
+              )
+            )
+          )
+          .orderBy(desc(schema.loadDocuments.createdAt));
+        return result;
+      }
+    } catch (error) {
+      console.error('Error getting documents by load:', error);
+      return [];
+    }
+  }
+
+  async getRequiredDocuments(loadId: string): Promise<schema.LoadDocument[]> {
+    try {
+      const result = await db.select().from(schema.loadDocuments)
+        .where(
+          and(
+            eq(schema.loadDocuments.loadId, loadId),
+            eq(schema.loadDocuments.isRequired, true)
+          )
+        )
+        .orderBy(desc(schema.loadDocuments.createdAt));
+      console.log(`📋 Found ${result.length} required documents for load ${loadId}`);
+      return result;
+    } catch (error) {
+      console.error('Error getting required documents:', error);
+      return [];
+    }
+  }
+
+  async getDocumentAuditLog(documentId: string): Promise<schema.LoadDocument[]> {
+    try {
+      // Get the document to find its parent chain
+      const document = await this.getLoadDocument(documentId);
+      if (!document) return [];
+      
+      // Get all versions in the document chain (parent documents and child versions)
+      const result = await db.select().from(schema.loadDocuments)
+        .where(
+          or(
+            eq(schema.loadDocuments.id, documentId),
+            eq(schema.loadDocuments.parentDocumentId, documentId),
+            drizzleSql`${schema.loadDocuments.parentDocumentId} IN (
+              SELECT id FROM ${schema.loadDocuments} WHERE ${schema.loadDocuments.parentDocumentId} = ${documentId}
+            )`
+          )
+        )
+        .orderBy(desc(schema.loadDocuments.version), desc(schema.loadDocuments.createdAt));
+      
+      console.log(`📋 Audit log for document ${documentId}: ${result.length} versions`);
+      return result;
+    } catch (error) {
+      console.error('Error getting document audit log:', error);
+      return [];
+    }
+  }
+
+  async recategorizeDocument(documentId: string, newCategory: string): Promise<schema.LoadDocument | undefined> {
+    try {
+      await db.update(schema.loadDocuments).set({
+        documentType: newCategory,
+      }).where(eq(schema.loadDocuments.id, documentId));
+      
+      const result = await this.getLoadDocument(documentId);
+      console.log(`🔄 Document ${documentId} recategorized to ${newCategory}`);
+      return result || undefined;
+    } catch (error) {
+      console.error('Error recategorizing document:', error);
+      return undefined;
+    }
+  }
 
   async createGeofence(geofence: schema.InsertGeofence): Promise<schema.Geofence> { throw new Error('Not implemented'); }
   async getGeofence(id: string): Promise<schema.Geofence | undefined> { return undefined; }

@@ -85,6 +85,61 @@ export class SMSCommunicationService {
               totalMedia: mediaUrls.length
             }
           });
+          
+          // 📄 SMART MMS CATEGORIZATION: Auto-categorize documents based on load lifecycle
+          if (loadContext?.loadId && mediaType.startsWith('image/')) {
+            try {
+              // Get load details to determine status
+              const load = await storage.getLoad(loadContext.loadId);
+              
+              if (load) {
+                // Smart categorization based on load status
+                let documentType = 'other';
+                let isRequired = false;
+                
+                if (load.status === 'scheduled' || load.status === 'assigned') {
+                  // Before pickup - likely BOL
+                  documentType = 'bol';
+                  isRequired = true;
+                  console.log(`📋 Auto-categorized as BOL (load status: ${load.status})`);
+                } else if (load.status === 'in_transit' || load.status === 'at_pickup') {
+                  // During transit - likely freight photo
+                  documentType = 'freight_photo';
+                  isRequired = false;
+                  console.log(`📸 Auto-categorized as freight photo (load status: ${load.status})`);
+                } else if (load.status === 'delivered' || load.status === 'at_delivery') {
+                  // After delivery - likely POD
+                  documentType = 'pod';
+                  isRequired = true;
+                  console.log(`📦 Auto-categorized as POD (load status: ${load.status})`);
+                } else {
+                  console.log(`📄 Auto-categorized as other (load status: ${load.status})`);
+                }
+                
+                // Extract filename from URL
+                const fileName = mediaUrl.split('/').pop()?.split('?')[0] || `mms_${Date.now()}.jpg`;
+                
+                // Create load document record with smart categorization
+                const document = await storage.createLoadDocument({
+                  loadId: load.id,
+                  driverId: driver.id,
+                  documentType,
+                  fileName,
+                  fileUrl: mediaUrl,
+                  mimeType: mediaType,
+                  uploadSource: 'mms',
+                  isRequired,
+                  approvalStatus: 'pending',
+                  notes: message || `Sent via MMS at ${new Date().toLocaleString()}`
+                });
+                
+                console.log(`✅ Created load document: ${documentType} for load ${load.loadNumber} (${document.id})`);
+              }
+            } catch (docError) {
+              console.error('Error creating load document from MMS:', docError);
+              // Continue processing - message is still saved even if document creation fails
+            }
+          }
         }
       }
       

@@ -335,19 +335,113 @@ export const loadOffers = pgTable("load_offers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Load Documents Table for BOL and freight photos
+// Load Documents Table - Professional document management with approval workflow
 export const loadDocuments = pgTable("load_documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   loadId: varchar("load_id").references(() => loads.id).notNull(),
   driverId: varchar("driver_id").references(() => drivers.id).notNull(),
-  documentType: text("document_type").notNull(), // 'bol', 'freight_photo', 'signature', 'delivery_receipt'
+  
+  // Document categorization - Expanded to support all common freight document types
+  documentType: text("document_type").notNull(), // 'bol', 'pod', 'weight_ticket', 'inspection', 'receipt', 'fuel_receipt', 'scale_ticket', 'other'
+  
+  // File details
   fileName: text("file_name").notNull(),
   fileUrl: text("file_url").notNull(), // URL to object storage
   fileSize: integer("file_size"), // File size in bytes
   mimeType: text("mime_type"),
+  
+  // Legacy fields for BOL compatibility
   signerName: text("signer_name"), // Name of person who signed BOL
-  notes: text("notes"), // Additional notes about the document
+  notes: text("notes"), // Driver-provided notes about the document
+  
+  // Approval Workflow - Track document review and approval process
+  approvalStatus: text("approval_status").notNull().default("pending"), // 'pending', 'approved', 'rejected'
+  approvedBy: varchar("approved_by"), // User/dispatcher ID who approved
+  approvedAt: timestamp("approved_at"), // When document was approved
+  rejectedBy: varchar("rejected_by"), // User/dispatcher ID who rejected
+  rejectedAt: timestamp("rejected_at"), // When document was rejected
+  rejectionReason: text("rejection_reason"), // Explanation for rejection
+  dispatcherNotes: text("dispatcher_notes"), // Internal dispatcher comments
+  
+  // Quality Metrics - Automated document quality assessment
+  imageWidth: integer("image_width"), // Image resolution width in pixels
+  imageHeight: integer("image_height"), // Image resolution height in pixels
+  qualityScore: integer("quality_score"), // Auto-calculated quality rating 0-100
+  qualityWarnings: text("quality_warnings").array(), // Array of quality issues detected
+  
+  // Versioning & Audit - Track document resubmissions and changes
+  version: integer("version").notNull().default(1), // Version number for resubmissions
+  parentDocumentId: varchar("parent_document_id"), // Self-reference to previous version
+  isLatestVersion: boolean("is_latest_version").notNull().default(true), // Is this the current version?
+  uploadSource: text("upload_source").notNull().default("web"), // 'mms', 'web', 'mobile_app'
+  
+  // Required Document Tracking - Flag critical documents
+  isRequired: boolean("is_required").notNull().default(false), // Is this document required for load completion?
+  requiredCategory: text("required_category"), // Which doc type is required for this load
+  
+  // Timestamps
   uploadedAt: timestamp("uploaded_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Document Annotations - Canvas-based annotations on documents for review workflow
+export const documentAnnotations = pgTable("document_annotations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").references(() => loadDocuments.id).notNull(),
+  
+  // Annotation details
+  annotationType: text("annotation_type").notNull(), // 'rectangle', 'arrow', 'freehand', 'text'
+  color: text("color").notNull().default("#ff0000"), // Hex color code
+  
+  // Position and dimensions (normalized 0-1 coordinates relative to image)
+  x: real("x").notNull(),
+  y: real("y").notNull(),
+  width: real("width"),
+  height: real("height"),
+  
+  // Path data for freehand annotations
+  pathData: jsonb("path_data"), // Array of {x, y} points
+  
+  // Text annotation content
+  textContent: text("text_content"),
+  fontSize: integer("font_size").default(14),
+  
+  // Arrow annotation
+  endX: real("end_x"),
+  endY: real("end_y"),
+  
+  // Metadata
+  note: text("note"), // Optional note about this annotation
+  createdBy: varchar("created_by"), // User/dispatcher who created
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Document Audit Log - Track all document actions for complete history
+export const documentAuditLog = pgTable("document_audit_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").references(() => loadDocuments.id).notNull(),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  
+  // Action details
+  action: text("action").notNull(), // 'uploaded', 'approved', 'rejected', 'recategorized', 'resubmitted', 'annotated', 'deleted'
+  performedBy: varchar("performed_by"), // User/driver ID who performed action
+  performedByRole: text("performed_by_role").notNull(), // 'driver', 'dispatcher', 'system'
+  performedByName: text("performed_by_name").notNull(), // Display name
+  
+  // Action-specific data
+  previousValue: text("previous_value"), // Previous status/category/etc
+  newValue: text("new_value"), // New status/category/etc
+  reason: text("reason"), // Rejection reason or recategorization reason
+  notes: text("notes"), // Additional notes
+  
+  // Versioning
+  documentVersion: integer("document_version").default(1),
+  
+  // Metadata
+  metadata: jsonb("metadata").default({}), // Additional action-specific data
+  
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -820,6 +914,44 @@ export const insertLoadDocumentSchema = createInsertSchema(loadDocuments).omit({
   id: true,
   createdAt: true,
   uploadedAt: true,
+}).extend({
+  // Document type validation - enforce valid document categories
+  documentType: z.enum(['bol', 'pod', 'weight_ticket', 'inspection', 'receipt', 'fuel_receipt', 'scale_ticket', 'other']),
+  
+  // Approval status validation - only allow specific statuses
+  approvalStatus: z.enum(['pending', 'approved', 'rejected']).default('pending'),
+  
+  // Quality score validation - must be between 0-100 or null
+  qualityScore: z.number().int().min(0).max(100).optional(),
+  
+  // Upload source validation - enforce known sources
+  uploadSource: z.enum(['mms', 'web', 'mobile_app']).default('web'),
+  
+  // Version must be positive integer
+  version: z.number().int().min(1).default(1),
+  
+  // Boolean validations with defaults
+  isLatestVersion: z.boolean().default(true),
+  isRequired: z.boolean().default(false),
+});
+
+export const insertDocumentAnnotationSchema = createInsertSchema(documentAnnotations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  annotationType: z.enum(['rectangle', 'arrow', 'freehand', 'text']),
+  color: z.string().default('#ff0000'),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+});
+
+export const insertDocumentAuditLogSchema = createInsertSchema(documentAuditLog).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  action: z.enum(['uploaded', 'approved', 'rejected', 'recategorized', 'resubmitted', 'annotated', 'deleted']),
+  performedByRole: z.enum(['driver', 'dispatcher', 'system']),
 });
 
 export const insertVehicleSchema = createInsertSchema(vehicles).omit({
@@ -912,6 +1044,12 @@ export type InsertLoadOffer = z.infer<typeof insertLoadOfferSchema>;
 
 export type LoadDocument = typeof loadDocuments.$inferSelect;
 export type InsertLoadDocument = z.infer<typeof insertLoadDocumentSchema>;
+
+export type DocumentAnnotation = typeof documentAnnotations.$inferSelect;
+export type InsertDocumentAnnotation = z.infer<typeof insertDocumentAnnotationSchema>;
+
+export type DocumentAuditLog = typeof documentAuditLog.$inferSelect;
+export type InsertDocumentAuditLog = z.infer<typeof insertDocumentAuditLogSchema>;
 
 export type Vehicle = typeof vehicles.$inferSelect;
 export type InsertVehicle = z.infer<typeof insertVehicleSchema>;

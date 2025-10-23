@@ -256,6 +256,14 @@ export interface IStorage {
   createLoadDocument(document: InsertLoadDocument): Promise<LoadDocument>;
   updateLoadDocument(id: string, document: Partial<InsertLoadDocument>): Promise<LoadDocument | undefined>;
   deleteLoadDocument(id: string): Promise<boolean>;
+  
+  // Enhanced Load Document operations - Professional document approval workflow
+  approveDocument(documentId: string, approverId: string, notes?: string): Promise<LoadDocument | undefined>;
+  rejectDocument(documentId: string, rejectedBy: string, reason: string): Promise<LoadDocument | undefined>;
+  getDocumentsByLoad(loadId: string, includeRejected?: boolean): Promise<LoadDocument[]>;
+  getRequiredDocuments(loadId: string): Promise<LoadDocument[]>;
+  getDocumentAuditLog(documentId: string): Promise<LoadDocument[]>;
+  recategorizeDocument(documentId: string, newCategory: string): Promise<LoadDocument | undefined>;
 
   // Load Communication Thread operations
   getLoadCommunicationThread(id: string): Promise<LoadCommunicationThread | undefined>;

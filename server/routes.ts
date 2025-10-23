@@ -30,6 +30,8 @@ import { googleSheetsService } from './google-sheets-service';
 import { smsLoadService } from './sms-service';
 import { smsCommunicationService } from './sms-communication-service';
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { pdfService } from './pdf-service';
+import { documentReminderService } from './document-reminder-service';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -1295,11 +1297,63 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { id } = req.params;
       const updates = req.body;
+      const { forceComplete, overrideReason } = req.query;
       
       // Get current load before updating to check for status changes
       const currentLoad = await storage.getLoad(id);
       if (!currentLoad) {
         return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      // 🚫 LOAD COMPLETION GATE: Prevent completion without required approved documents
+      if (updates.status === 'completed' && !forceComplete) {
+        console.log(`🔒 Load Completion Gate: Checking required documents for load ${id}...`);
+        
+        // Get all documents for this load
+        const allDocuments = await storage.getLoadDocumentsByLoad(id);
+        const approvedDocuments = allDocuments.filter(doc => doc.approvalStatus === 'approved');
+        
+        // Check for required document types
+        const hasApprovedBOL = approvedDocuments.some(doc => doc.documentType === 'bol');
+        const hasApprovedPOD = approvedDocuments.some(doc => doc.documentType === 'pod');
+        
+        const missingDocs: string[] = [];
+        if (!hasApprovedBOL) missingDocs.push('BOL (Bill of Lading)');
+        if (!hasApprovedPOD) missingDocs.push('POD (Proof of Delivery)');
+        
+        if (missingDocs.length > 0) {
+          console.log(`❌ Load Completion Gate: Blocked - Missing approved documents: ${missingDocs.join(', ')}`);
+          return res.status(400).json({
+            error: 'Cannot complete load. Missing required approved documents.',
+            missingDocuments: missingDocs,
+            message: `This load cannot be marked as completed until the following documents are approved: ${missingDocs.join(', ')}. Please have the driver upload these documents and get them approved before completing the load.`,
+            canOverride: true
+          });
+        }
+        
+        console.log(`✅ Load Completion Gate: All required documents approved - allowing completion`);
+      }
+      
+      // Handle override for emergency completion
+      if (updates.status === 'completed' && forceComplete === 'true') {
+        console.log(`⚠️  Load Completion Gate: OVERRIDE used for load ${id}`);
+        console.log(`Override reason: ${overrideReason || 'No reason provided'}`);
+        
+        // Log the override in communication logs
+        await storage.createCommunicationLog({
+          loadId: id,
+          threadId: null,
+          action: 'load_completion_override',
+          actorId: 'dispatcher', // In production, get from authenticated user
+          actorRole: 'dispatcher',
+          details: {
+            reason: overrideReason || 'Emergency override - no reason provided',
+            timestamp: new Date().toISOString(),
+            originalStatus: currentLoad.status,
+            newStatus: 'completed'
+          },
+          timestamp: new Date()
+        });
       }
       
       const updatedLoad = await storage.updateLoad(id, updates);
@@ -1361,6 +1415,385 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error('Error fetching load offers:', error);
       res.status(500).json({ error: 'Failed to fetch load offers' });
+    }
+  });
+
+  // ==================== DOCUMENT APPROVAL WORKFLOW API ENDPOINTS ====================
+  
+  // 1. POST /api/documents/:documentId/approve - Approve a document
+  app.post('/api/documents/:documentId/approve', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const { approvedBy, notes } = req.body;
+      
+      if (!approvedBy) {
+        return res.status(400).json({ error: 'Approver ID is required' });
+      }
+      
+      const document = await storage.approveDocument(documentId, approvedBy, notes);
+      
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      console.log(`✅ Document ${documentId} approved by ${approvedBy}`);
+      res.json({ 
+        success: true, 
+        message: 'Document approved successfully',
+        document 
+      });
+    } catch (error) {
+      console.error('Error approving document:', error);
+      res.status(500).json({ error: 'Failed to approve document' });
+    }
+  });
+  
+  // 2. POST /api/documents/:documentId/reject - Reject a document with SMS notification
+  app.post('/api/documents/:documentId/reject', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const { rejectedBy, reason } = req.body;
+      
+      if (!rejectedBy || !reason) {
+        return res.status(400).json({ error: 'Rejected by and reason are required' });
+      }
+      
+      // Get document to find driver info before rejection
+      const existingDocument = await storage.getLoadDocument(documentId);
+      if (!existingDocument) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      const document = await storage.rejectDocument(documentId, rejectedBy, reason);
+      
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      // Send SMS notification to driver about rejection
+      try {
+        if (document.driverId) {
+          const driver = await storage.getDriver(document.driverId);
+          const load = document.loadId ? await storage.getLoad(document.loadId) : null;
+          
+          if (driver?.phone) {
+            const driverPhone = normalizePhoneToE164(driver.phone);
+            if (driverPhone) {
+              const smsMessage = `📄 Document Rejected\n\n` +
+                `Your ${document.documentType.replace('_', ' ').toUpperCase()} for load ${load?.loadNumber || document.loadId} was rejected.\n\n` +
+                `Reason: ${reason}\n\n` +
+                `Please resubmit a corrected document. Contact dispatch if you have questions.`;
+              
+              const result = await smsService.sendSMS(driverPhone, smsMessage);
+              
+              if (result.success) {
+                console.log(`📱 Rejection SMS sent to driver ${driver.name} for document ${documentId}`);
+              } else {
+                console.error(`Failed to send rejection SMS: ${result.error}`);
+              }
+            }
+          }
+        }
+      } catch (smsError) {
+        console.error('Error sending rejection SMS:', smsError);
+        // Continue even if SMS fails - rejection is still recorded
+      }
+      
+      console.log(`❌ Document ${documentId} rejected by ${rejectedBy}: ${reason}`);
+      res.json({ 
+        success: true, 
+        message: 'Document rejected and driver notified',
+        document 
+      });
+    } catch (error) {
+      console.error('Error rejecting document:', error);
+      res.status(500).json({ error: 'Failed to reject document' });
+    }
+  });
+  
+  // 3. POST /api/documents/:documentId/recategorize - Recategorize a document
+  app.post('/api/documents/:documentId/recategorize', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const { category } = req.body;
+      
+      // Validate category against known document types
+      const validCategories = ['bol', 'pod', 'weight_ticket', 'inspection', 'receipt', 'fuel_receipt', 'scale_ticket', 'freight_photo', 'other'];
+      if (!category || !validCategories.includes(category)) {
+        return res.status(400).json({ 
+          error: 'Invalid category',
+          validCategories 
+        });
+      }
+      
+      const document = await storage.recategorizeDocument(documentId, category);
+      
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      console.log(`🔄 Document ${documentId} recategorized to ${category}`);
+      res.json({ 
+        success: true, 
+        message: `Document recategorized to ${category}`,
+        document 
+      });
+    } catch (error) {
+      console.error('Error recategorizing document:', error);
+      res.status(500).json({ error: 'Failed to recategorize document' });
+    }
+  });
+  
+  // 4. GET /api/loads/:loadId/documents - Get all documents for a load
+  app.get('/api/loads/:loadId/documents', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const includeRejected = req.query.includeRejected === 'true';
+      
+      const documents = await storage.getDocumentsByLoad(loadId, includeRejected);
+      
+      res.json(documents);
+    } catch (error) {
+      console.error('Error fetching load documents:', error);
+      res.status(500).json({ error: 'Failed to fetch documents' });
+    }
+  });
+  
+  // 5. GET /api/loads/:loadId/documents/required - Get required documents status
+  app.get('/api/loads/:loadId/documents/required', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      
+      const requiredDocuments = await storage.getRequiredDocuments(loadId);
+      
+      res.json(requiredDocuments);
+    } catch (error) {
+      console.error('Error fetching required documents:', error);
+      res.status(500).json({ error: 'Failed to fetch required documents' });
+    }
+  });
+  
+  // 6. GET /api/documents/:documentId/audit-log - Get document version history
+  app.get('/api/documents/:documentId/audit-log', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      
+      const auditLog = await storage.getDocumentAuditLog(documentId);
+      
+      res.json(auditLog);
+    } catch (error) {
+      console.error('Error fetching document audit log:', error);
+      res.status(500).json({ error: 'Failed to fetch audit log' });
+    }
+  });
+
+  // 7. GET /api/documents/:documentId/annotations - Get document annotations
+  app.get('/api/documents/:documentId/annotations', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      
+      // Get document to retrieve annotations from notes field
+      const document = await storage.getDocument(documentId);
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      // Annotations are stored as JSON in the notes field
+      let annotations = [];
+      if (document.notes) {
+        try {
+          const parsed = JSON.parse(document.notes);
+          if (Array.isArray(parsed)) {
+            annotations = parsed;
+          }
+        } catch (e) {
+          // Notes field might contain regular text, not JSON
+          console.log('Notes field is not JSON, returning empty annotations');
+        }
+      }
+      
+      res.json(annotations);
+    } catch (error) {
+      console.error('Error fetching document annotations:', error);
+      res.status(500).json({ error: 'Failed to fetch annotations' });
+    }
+  });
+
+  // 8. POST /api/documents/:documentId/annotations - Save document annotations
+  app.post('/api/documents/:documentId/annotations', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const { annotations } = req.body;
+      
+      if (!Array.isArray(annotations)) {
+        return res.status(400).json({ error: 'Annotations must be an array' });
+      }
+      
+      // Store annotations as JSON in the notes field
+      await storage.updateDocumentNotes(documentId, JSON.stringify(annotations));
+      
+      res.json({ success: true, message: 'Annotations saved successfully' });
+    } catch (error) {
+      console.error('Error saving document annotations:', error);
+      res.status(500).json({ error: 'Failed to save annotations' });
+    }
+  });
+
+  // ==================== PDF GENERATION & EMAIL DELIVERY ENDPOINTS ====================
+  
+  // 9. POST /api/loads/:loadId/generate-pdf - Generate PDF package for load
+  app.post('/api/loads/:loadId/generate-pdf', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      
+      console.log(`📄 Generating PDF package for load ${loadId}...`);
+      
+      const { pdfPath, pdfUrl } = await pdfService.generateLoadDocumentPackage(loadId);
+      
+      res.json({
+        success: true,
+        message: 'PDF package generated successfully',
+        pdfUrl,
+        pdfPath
+      });
+    } catch (error) {
+      console.error('Error generating PDF package:', error);
+      res.status(500).json({
+        error: 'Failed to generate PDF package',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+  
+  // 10. GET /api/loads/:loadId/download-pdf/:filename - Download generated PDF
+  app.get('/api/loads/:loadId/download-pdf/:filename', async (req, res) => {
+    try {
+      const { loadId, filename } = req.params;
+      const pdfPath = path.join('/tmp', filename);
+      
+      // Check if file exists
+      if (!fs.existsSync(pdfPath)) {
+        return res.status(404).json({ error: 'PDF not found' });
+      }
+      
+      // Stream the PDF file
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      
+      const fileStream = fs.createReadStream(pdfPath);
+      fileStream.pipe(res);
+      
+      console.log(`📥 PDF downloaded: ${filename}`);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      res.status(500).json({ error: 'Failed to download PDF' });
+    }
+  });
+  
+  // 11. POST /api/loads/:loadId/email-documents - Email document package
+  app.post('/api/loads/:loadId/email-documents', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const { recipientEmail, recipientType } = req.body;
+      
+      if (!recipientEmail) {
+        return res.status(400).json({ error: 'Recipient email is required' });
+      }
+      
+      console.log(`📧 Emailing document package for load ${loadId} to ${recipientEmail}...`);
+      
+      // Generate PDF first
+      const { pdfPath, pdfUrl } = await pdfService.generateLoadDocumentPackage(loadId);
+      
+      // Get load details for email
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      // Get all approved documents
+      const allDocuments = await storage.getLoadDocumentsByLoad(loadId);
+      const approvedDocuments = allDocuments.filter(doc => doc.approvalStatus === 'approved');
+      
+      // Create document list for email
+      const documentList = approvedDocuments.map((doc, index) => {
+        const typeLabel = doc.documentType.replace('_', ' ').toUpperCase();
+        return `${index + 1}. ${typeLabel} - Uploaded: ${new Date(doc.uploadedAt).toLocaleDateString()}, Approved: ${doc.approvedAt ? new Date(doc.approvedAt).toLocaleDateString() : 'N/A'}`;
+      }).join('\n');
+      
+      // Create professional email
+      const emailSubject = `Load ${load.loadNumber} - Complete Documentation Package`;
+      const emailBody = `
+Dear ${recipientType === 'customer' ? 'Customer' : recipientType === 'shipper' ? 'Shipper' : recipientType === 'consignee' ? 'Consignee' : 'Partner'},
+
+Please find attached the complete documentation package for Load ${load.loadNumber}.
+
+LOAD DETAILS:
+- Load Number: ${load.loadNumber}
+- Pickup: ${load.pickupAddress}
+- Pickup Date: ${new Date(load.pickupDate).toLocaleDateString()} at ${load.pickupTime}
+- Delivery: ${load.deliveryAddress}
+- Delivery Date: ${new Date(load.deliveryDate).toLocaleDateString()} at ${load.deliveryTime}
+
+INCLUDED DOCUMENTS (${approvedDocuments.length} total):
+${documentList}
+
+All documents have been reviewed and approved by our dispatch team. If you have any questions or need additional information, please contact us.
+
+Best regards,
+LoadMaster Dispatch Team
+      `;
+      
+      // Send email with PDF attachment
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || process.env.EMAIL_FROM || "LoadMaster <noreply@loadmaster.com>",
+        to: recipientEmail,
+        subject: emailSubject,
+        text: emailBody,
+        attachments: [
+          {
+            filename: `load_${load.loadNumber}_documents.pdf`,
+            path: pdfPath
+          }
+        ]
+      });
+      
+      // Log successful email
+      await storage.createEmailLog({
+        loadId,
+        recipientEmail,
+        subject: emailSubject,
+        status: "sent",
+        sentAt: new Date(),
+      });
+      
+      console.log(`✅ Document package emailed to ${recipientEmail}`);
+      
+      res.json({
+        success: true,
+        message: `Document package sent to ${recipientEmail}`,
+        documentsIncluded: approvedDocuments.length
+      });
+    } catch (error) {
+      console.error('Error emailing document package:', error);
+      
+      // Log failed email
+      try {
+        await storage.createEmailLog({
+          loadId: req.params.loadId,
+          recipientEmail: req.body.recipientEmail,
+          subject: `Load ${req.params.loadId} - Document Package`,
+          status: "failed",
+          errorMessage: error instanceof Error ? error.message : "Unknown error",
+        });
+      } catch (logError) {
+        console.error('Failed to log email error:', logError);
+      }
+      
+      res.status(500).json({
+        error: 'Failed to email document package',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

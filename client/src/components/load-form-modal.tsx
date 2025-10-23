@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { RequiredDocumentsChecklist } from "@/components/RequiredDocumentsChecklist";
 
 interface LoadFormModalProps {
   isOpen: boolean;
@@ -370,6 +371,14 @@ export default function LoadFormModal({ isOpen, onClose, onSuccess, load, isEdit
                 />
               </div>
             </div>
+            
+            {/* Document Checklist - Only show when editing an existing load */}
+            {isEdit && load?.id && (
+              <div className="pt-6 border-t border-gray-200">
+                <h4 className="text-lg font-medium text-gray-900 mb-4">Load Documents</h4>
+                <RequiredDocumentsChecklist loadId={load.id} />
+              </div>
+            )}
             
             <div className="flex items-center justify-end space-x-4 pt-6 border-t border-gray-200">
               <Button 
