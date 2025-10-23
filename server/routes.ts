@@ -94,6 +94,71 @@ function normalizePhoneToE164(phoneNumber: string | undefined | null): string | 
   }
 }
 
+// Helper function to send GPS tracking link SMS to driver when load is assigned
+async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<void> {
+  try {
+    console.log(`📍 GPS TRACKING SMS: Starting for driver ${driverId}, load ${loadId}`);
+    
+    // Generate GPS tracking token for the driver
+    const tokenResult = await storage.generateTrackingToken(driverId);
+    if (!tokenResult?.token) {
+      console.error(`❌ GPS TRACKING SMS: Failed to generate tracking token for driver ${driverId}`);
+      return;
+    }
+    const token = tokenResult.token;
+    console.log(`🔐 GPS TRACKING SMS: Generated token for driver ${driverId}`);
+    
+    // Get driver details to get phone number
+    const driver = await storage.getDriver(driverId);
+    if (!driver) {
+      console.error(`❌ GPS TRACKING SMS: Driver ${driverId} not found`);
+      return;
+    }
+    
+    // Get driver's phone number
+    const driverPhone = driver.phoneNumber || driver.phone;
+    const normalizedPhone = normalizePhoneToE164(driverPhone);
+    
+    if (!normalizedPhone) {
+      console.log(`⚠️ GPS TRACKING SMS: Driver ${driver.name} has no valid phone number - cannot send GPS tracking SMS`);
+      return;
+    }
+    
+    // Get load details
+    const load = await storage.getLoad(loadId);
+    if (!load) {
+      console.error(`❌ GPS TRACKING SMS: Load ${loadId} not found`);
+      return;
+    }
+    
+    // Create tracking URL
+    const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
+    const trackingUrl = `https://${domain}/driver-tracker?driver=${driverId}&token=${token}`;
+    
+    // Create GPS tracking SMS message
+    const smsMessage = `📍 Load ${load.loadNumber} assigned! Start GPS tracking: ${trackingUrl}\n\nClick the link to share your location with dispatch.`;
+    
+    console.log(`📱 GPS TRACKING SMS: Sending to ${driver.name} (${normalizedPhone})`);
+    console.log(`📱 GPS TRACKING SMS: URL: ${trackingUrl}`);
+    
+    // Send SMS using existing SMS service
+    const smsResult = await smsService.sendSMS({
+      to: normalizedPhone,
+      body: smsMessage
+    });
+    
+    if (smsResult.success) {
+      console.log(`✅ GPS TRACKING SMS: Successfully sent to ${driver.name} for load ${load.loadNumber}`);
+      console.log(`✅ GPS TRACKING SMS: Tracking URL: ${trackingUrl}`);
+    } else {
+      console.error(`❌ GPS TRACKING SMS: Failed to send - ${smsResult.error}`);
+    }
+    
+  } catch (error) {
+    console.error(`❌ GPS TRACKING SMS: Error sending GPS tracking SMS for driver ${driverId}, load ${loadId}:`, error);
+  }
+}
+
 // Initialize prediction confidence service
 const predictionConfidenceService = new PredictionConfidenceService();
 
@@ -1115,9 +1180,29 @@ export async function registerRoutes(app: Express): Promise<void> {
       const { id } = req.params;
       const updates = req.body;
       
+      // Get current load before updating to check for status changes
+      const currentLoad = await storage.getLoad(id);
+      if (!currentLoad) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+      
       const updatedLoad = await storage.updateLoad(id, updates);
       if (!updatedLoad) {
         return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      // Check if status changed to "in_transit" (driver started delivery)
+      if (updates.status === 'in_transit' && currentLoad.status !== 'in_transit') {
+        console.log(`🚚 Load ${id} status changed to in_transit - sending GPS tracking SMS`);
+        
+        // Send GPS tracking link SMS to driver when they start delivery
+        if (updatedLoad.driverId) {
+          sendGPSTrackingSMS(updatedLoad.driverId, id).catch(error => {
+            console.error(`❌ Failed to send GPS tracking SMS for load ${id}:`, error);
+          });
+        } else {
+          console.log(`⚠️ Cannot send GPS tracking SMS - no driver assigned to load ${id}`);
+        }
       }
       
       res.json(updatedLoad);
@@ -1141,6 +1226,9 @@ export async function registerRoutes(app: Express): Promise<void> {
       if (!updatedLoad) {
         return res.status(404).json({ error: 'Load not found' });
       }
+      
+      // GPS tracking SMS removed - now sent when driver starts delivery (status: in_transit)
+      // Driver will receive GPS tracking link when they click "Start Delivery"
       
       res.json(updatedLoad);
     } catch (error) {
@@ -1409,6 +1497,9 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Update load assignment
       if (thread.loadId) {
         await storage.updateLoad(thread.loadId, { driverId: thread.driverId, status: 'assigned' });
+        
+        // GPS tracking SMS removed - now sent when driver starts delivery (status: in_transit)
+        // Driver will receive GPS tracking link when they click "Start Delivery"
       }
 
       // Create a system message about the acceptance
