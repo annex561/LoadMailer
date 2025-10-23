@@ -913,6 +913,10 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Security audit log - log all location updates with IP for monitoring
       console.log(`🔒 SECURITY AUDIT: GPS update - Driver: ${driverId}, IP: ${ip}, Coordinates: (${lat}, ${lon}), Speed: ${speed || 'N/A'}, Battery: ${batteryLevel || 'N/A'}%, Time: ${new Date().toISOString()}`);
 
+      // Get human-readable address from coordinates using reverse geocoding
+      const { reverseGeocode } = await import('./geocoding-service');
+      const address = await reverseGeocode(lat, lon);
+      
       // Create new driver location record in database with all available metadata
       await storage.createDriverLocation({
         driverId,
@@ -927,14 +931,17 @@ export async function registerRoutes(app: Express): Promise<void> {
         altitude: altitude !== undefined ? altitude : undefined,
         batteryLevel: batteryLevel !== undefined ? batteryLevel : undefined,
         signalStrength: undefined,
-        address: undefined,
+        address: address, // Real city, state from GPS coordinates
         loadId: undefined
       });
 
-      // Deactivate old locations to keep only the latest active
+      // Deactivate old SIMULATED locations only - preserve all real GPS data
       const oldLocations = await storage.getDriverLocations(driverId, 10);
       for (const loc of oldLocations.slice(1)) {
-        await storage.updateDriverLocation(loc.id, { isActive: false });
+        // Only deactivate simulated locations, never deactivate real GPS data
+        if (loc.source !== 'gps') {
+          await storage.updateDriverLocation(loc.id, { isActive: false });
+        }
       }
 
       console.log(`✅ GPS location updated successfully for driver ${driverId}`);

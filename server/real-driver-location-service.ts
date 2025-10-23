@@ -2,6 +2,7 @@ import { storage } from "./storage";
 import type { Driver } from "@shared/schema";
 import { randomUUID } from "crypto";
 import cron from "node-cron";
+import { reverseGeocode } from "./geocoding-service";
 
 // Real Tennessee area coordinates for authentic location simulation
 const TENNESSEE_LOCATIONS = [
@@ -200,18 +201,42 @@ export class RealDriverLocationService {
 
   private async getDriverCurrentLocation(driverId: string): Promise<{lat: number, lng: number, address?: string, source?: string} | null> {
     try {
-      // Get most recent location from database
-      const locations = await storage.getDriverLocations(driverId, 1);
-      if (locations.length > 0) {
-        const location = locations[0];
+      // Get recent locations from database (check last 50 to find any GPS data)
+      const locations = await storage.getDriverLocations(driverId, 50);
+      if (locations.length === 0) {
+        return null;
+      }
+      
+      // PRIORITY 1: Look for real GPS data first (within last 10 minutes)
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      const recentGpsLocation = locations.find(loc => {
+        if (loc.source !== 'gps') return false;
+        
+        // Parse Postgres timestamp format (YYYY-MM-DD HH:MM:SS) to JavaScript Date
+        const timestamp = typeof loc.timestamp === 'string' 
+          ? new Date(loc.timestamp.replace(' ', 'T') + 'Z') // Convert to ISO format
+          : new Date(loc.timestamp);
+        
+        return timestamp > tenMinutesAgo;
+      });
+      
+      if (recentGpsLocation) {
         return {
-          lat: location.latitude,
-          lng: location.longitude,
-          address: location.address || undefined,
-          source: location.source || 'simulated'
+          lat: recentGpsLocation.latitude,
+          lng: recentGpsLocation.longitude,
+          address: recentGpsLocation.address || undefined,
+          source: 'gps'
         };
       }
-      return null;
+      
+      // PRIORITY 2: Fall back to most recent location if no GPS data
+      const location = locations[0];
+      return {
+        lat: location.latitude,
+        lng: location.longitude,
+        address: location.address || undefined,
+        source: location.source || 'simulated'
+      };
     } catch (error) {
       console.error(`Error getting current location for driver ${driverId}:`, error);
       return null;
@@ -322,9 +347,12 @@ export class RealDriverLocationService {
   private async deactivateOldLocations(driverId: string): Promise<void> {
     try {
       const locations = await storage.getDriverLocations(driverId, 50);
-      const updatePromises = locations.slice(1).map(location => 
-        storage.updateDriverLocation(location.id, { isActive: false })
-      );
+      // Only deactivate old SIMULATED locations - preserve real GPS data
+      const updatePromises = locations.slice(1)
+        .filter(location => location.source !== 'gps') // Never deactivate real GPS data
+        .map(location => 
+          storage.updateDriverLocation(location.id, { isActive: false })
+        );
       await Promise.all(updatePromises);
     } catch (error) {
       console.error(`Error deactivating old locations for driver ${driverId}:`, error);
@@ -332,21 +360,8 @@ export class RealDriverLocationService {
   }
 
   private async getAddressFromCoords(lat: number, lng: number): Promise<string> {
-    // Find nearest Tennessee city
-    let nearestCity = "Tennessee";
-    let minDistance = Infinity;
-
-    for (const location of TENNESSEE_LOCATIONS) {
-      const distance = Math.sqrt(
-        Math.pow(lat - location.lat, 2) + Math.pow(lng - location.lng, 2)
-      );
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestCity = location.city;
-      }
-    }
-
-    return nearestCity;
+    // Use the shared geocoding service for reverse geocoding
+    return await reverseGeocode(lat, lng);
   }
 
   private async refreshDriverStates(): Promise<void> {

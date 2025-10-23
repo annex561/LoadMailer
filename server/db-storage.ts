@@ -870,6 +870,7 @@ export class DatabaseStorage implements IStorage {
         isActive: schema.driverLocations.isActive,
         batteryLevel: schema.driverLocations.batteryLevel,
         signalStrength: schema.driverLocations.signalStrength,
+        source: schema.driverLocations.source, // CRITICAL: Needed for GPS vs simulated filtering
         createdAt: schema.driverLocations.createdAt,
       })
         .from(schema.driverLocations)
