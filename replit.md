@@ -63,6 +63,20 @@ Preferred communication style: Simple, everyday language.
 - **UI/UX**: Consistent styling for forms and dropdowns, integrated document viewing, and a professional dashboard.
 - **MMS Document Integration**: Drivers upload documents via SMS/MMS, which are automatically categorized and attached to loads, viewable in the Communication Dashboard and BOL document section.
 - **Unified Messaging System**: Sleek dispatcher interface with one conversation per driver, smart load context detection, and real-time SMS integration for seamless communication.
+- **Real-Time GPS Tracking**: Mobile-optimized driver location tracking with secure token-based authentication
+  - **Driver Tracker Page** (`/driver-tracker`): Mobile-optimized PWA interface using Leaflet maps for real-time driver location tracking
+  - **60-Second Auto-Updates**: Battery-optimized GPS tracking with automatic position updates every 60 seconds
+  - **Wake Lock Support**: Prevents device sleep during active tracking to maintain continuous location updates
+  - **Token-Based Security**: Cryptographically secure tracking tokens (64-character hex) generated per driver to prevent location spoofing
+  - **Authentication Flow**: Driver clicks "Start GPS Tracking" → Token generated via `POST /api/drivers/:driverId/generate-tracking-token` → Redirect to tracker with token in URL
+  - **Location Updates**: `POST /api/driver-location/update` endpoint validates token before accepting GPS coordinates
+  - **Security Features**:
+    - Zod schema validation for all location data (lat: -90 to 90, lon: -180 to 180)
+    - Rate limiting: 120 requests/hour per IP address
+    - IP logging for all location updates and authentication failures
+    - Token-driver ID binding validation (tokens only work for their assigned driver)
+  - **Database Storage**: Driver locations stored as `lastLat` and `lastLon` in drivers table
+  - **Dispatch Visibility**: Real-time driver locations visible on dispatch dashboard map at `/loadops-dashboard`
 
 # External Dependencies
 
