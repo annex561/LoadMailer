@@ -1349,18 +1349,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.get('/api/communication/messages/:threadId', async (req, res) => {
     try {
       const { threadId} = req.params;
-      console.log(`🚀 Getting messages for thread: ${threadId}`);
       const messages = await storage.getLoadMessagesByThread(threadId);
-      console.log(`📋 Retrieved ${messages.length} messages for thread ${threadId}`);
-      
-      // Debug: Check if any messages have media
-      const messagesWithMedia = messages.filter((m: any) => m.mediaUrl || m.media_url);
-      if (messagesWithMedia.length > 0) {
-        console.log(`📸 Found ${messagesWithMedia.length} messages with media:`);
-        messagesWithMedia.forEach((m: any) => {
-          console.log(`  - Message ${m.id}: mediaUrl=${m.mediaUrl}, media_url=${m.media_url}, mediaType=${m.mediaType}, media_type=${m.media_type}`);
-        });
-      }
       
       // Transform snake_case DB fields to camelCase for frontend
       const transformedMessages = messages.map((msg: any) => ({
@@ -1388,19 +1377,77 @@ export async function registerRoutes(app: Express): Promise<void> {
         createdAt: msg.createdAt || msg.created_at
       }));
       
-      // Debug: Log transformed messages with media
-      const transformedWithMedia = transformedMessages.filter(m => m.mediaUrl);
-      if (transformedWithMedia.length > 0) {
-        console.log(`📤 Sending ${transformedWithMedia.length} transformed messages with media to frontend:`);
-        transformedWithMedia.forEach(m => {
-          console.log(`  - Message ${m.id}: mediaUrl=${m.mediaUrl}, mediaType=${m.mediaType}, content="${m.content}"`);
-        });
-      }
-      
       res.json(transformedMessages);
     } catch (error) {
       console.error('❌ Error fetching messages:', error);
       res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Proxy endpoint to serve Twilio MMS images with authentication
+  app.get('/api/communication/media-proxy', async (req, res) => {
+    try {
+      const { url } = req.query;
+      
+      if (!url || typeof url !== 'string') {
+        return res.status(400).json({ error: 'Media URL is required' });
+      }
+      
+      // Ensure Twilio credentials are configured
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+        console.error('❌ Twilio credentials not configured');
+        return res.status(500).json({ error: 'Server configuration error' });
+      }
+      
+      // Parse and validate the URL to prevent SSRF attacks
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(url);
+      } catch (error) {
+        return res.status(400).json({ error: 'Invalid URL format' });
+      }
+      
+      // Validate that this is a Twilio media URL (strict hostname check)
+      if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'api.twilio.com') {
+        return res.status(400).json({ error: 'Only Twilio media URLs are allowed' });
+      }
+      
+      // Validate that the URL path matches the expected Twilio media endpoint pattern
+      const expectedPathPattern = `/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages/`;
+      if (!parsedUrl.pathname.startsWith(expectedPathPattern)) {
+        return res.status(400).json({ error: 'Invalid Twilio media URL path' });
+      }
+      
+      console.log(`📷 Proxying Twilio media: ${url}`);
+      
+      // Fetch the image from Twilio with authentication
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(
+            `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
+          ).toString('base64')
+        }
+      });
+      
+      if (!response.ok) {
+        console.error(`❌ Failed to fetch media from Twilio: ${response.status} ${response.statusText}`);
+        return res.status(response.status).json({ error: 'Failed to fetch media from Twilio' });
+      }
+      
+      // Get the image data and content type
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      const imageBuffer = await response.arrayBuffer();
+      
+      console.log(`✅ Successfully fetched media (${contentType}, ${imageBuffer.byteLength} bytes)`);
+      
+      // Set appropriate headers and send the image
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+      res.send(Buffer.from(imageBuffer));
+      
+    } catch (error) {
+      console.error('❌ Error proxying media:', error);
+      res.status(500).json({ error: 'Failed to proxy media' });
     }
   });
 

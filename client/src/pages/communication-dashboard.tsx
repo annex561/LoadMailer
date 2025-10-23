@@ -464,17 +464,6 @@ export default function CommunicationDashboard() {
     createdAt: msg.createdAt
   }));
 
-  // Debug logging for messages with media
-  useEffect(() => {
-    const messagesWithMedia = rawMessages.filter(m => m.mediaUrl);
-    if (messagesWithMedia.length > 0) {
-      console.log(`📥 Frontend received ${messagesWithMedia.length} messages with media:`);
-      messagesWithMedia.forEach(m => {
-        console.log(`  - Message ${m.id}: mediaUrl=${m.mediaUrl}, mediaType=${m.mediaType}`);
-      });
-    }
-  }, [rawMessages]);
-
   // Fetch quick reply templates
   const { data: templates = [] } = useQuery<QuickReplyTemplate[]>({
     queryKey: ['/api/communication/quick-replies'],
@@ -1463,7 +1452,7 @@ export default function CommunicationDashboard() {
                       {message.mediaUrl && message.mediaType?.startsWith('image/') && (
                         <div className="mb-2">
                           <img 
-                            src={message.mediaUrl} 
+                            src={`/api/communication/media-proxy?url=${encodeURIComponent(message.mediaUrl)}`}
                             alt="MMS attachment"
                             className="rounded-lg max-w-full h-auto max-h-64 object-contain"
                             data-testid={`message-image-${message.id}`}
