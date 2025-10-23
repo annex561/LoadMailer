@@ -79,6 +79,17 @@ Preferred communication style: Simple, everyday language.
   - **Quality Metrics**: Image resolution, file size, quality score (0-100), quality warnings for low-quality uploads
   - **Version Control**: Document resubmission with parent-child relationships, isLatestVersion tracking
   - **Database Schema**: Enhanced loadDocuments table with 17 new fields (approvalStatus, qualityMetrics, audit fields)
+  - **Standalone Document Management Page** (`/document-management`): Centralized hub for managing all documents across loads
+    - **Manual Upload**: Drag-and-drop interface for uploading documents with load selector, document type picker, and quality validation
+    - **Document Library**: Grid/list view toggle showing all documents with thumbnails and metadata
+    - **Advanced Filters**: Filter by load, document type, approval status, and search by load number
+    - **Bulk Actions**: Select multiple documents for bulk approve/reject, download, or recategorize operations
+    - **Stats Dashboard**: Real-time metrics showing total documents, pending approvals, average quality scores, and recent uploads
+    - **EnhancedDocumentViewer Integration**: Click any document to open fullscreen viewer with annotation tools
+    - **Null-Safety**: Gracefully handles documents without associated loads (orphaned documents)
+    - **Backend API**: GET `/api/documents/all` returns all documents with joined load details, POST `/api/documents` for manual uploads
+    - **Zod Validation**: Request validation using insertLoadDocumentSchema for data integrity
+    - **Drizzle Query Optimization**: Flattened leftJoin queries to prevent object conversion errors
 - **Real-Time GPS Tracking**: Mobile-optimized driver location tracking with secure token-based authentication
   - **Driver Tracker Page** (`/driver-tracker`): Mobile-optimized PWA interface using Leaflet maps for real-time driver location tracking
   - **60-Second Auto-Updates**: Battery-optimized GPS tracking with automatic position updates every 60 seconds
