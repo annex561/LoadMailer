@@ -44,6 +44,10 @@ Preferred communication style: Simple, everyday language.
 - **SMS Delivery**: All phone numbers normalized to E.164 format (+1XXXXXXXXXX) for Twilio compatibility
 - **MMS Support**: Drivers can send images via SMS (proof of delivery, BOL photos) that automatically link to loads
 - **Sleek UI**: Modern chat interface at `/unified-messaging` optimized for dispatcher-driver communication
+- **Sound Notifications**: Web Audio API-based alerts for incoming driver messages in Communication Dashboard
+  - Browser autoplay-compliant (activates on first user interaction)
+  - 800Hz tone plays when new unread dispatch messages arrive
+  - Detects new conversations and message count increases
 - **Email System**: Nodemailer for automated email notifications based on load status changes, using dynamic templates.
 
 ## API Design
