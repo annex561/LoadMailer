@@ -127,6 +127,29 @@ export class RealDriverLocationService {
     // Check if driver has a recent location
     let currentLocation = await this.getDriverCurrentLocation(driver.id);
     
+    // If driver has real GPS data, don't overwrite it with simulated location
+    if (currentLocation && currentLocation.source === 'gps') {
+      console.log(`🔒 Driver ${driver.name} has real GPS tracking active - skipping simulation initialization`);
+      
+      // Still create state but use real GPS coordinates
+      const state: DriverLocationState = {
+        driverId: driver.id,
+        currentLat: currentLocation.lat,
+        currentLng: currentLocation.lng,
+        targetLat: currentLocation.lat,
+        targetLng: currentLocation.lng,
+        speed: 0, // Don't simulate movement
+        heading: 0,
+        routeName: 'Real GPS',
+        routeProgress: 0,
+        lastUpdate: new Date(),
+        isMoving: false, // Don't move driver with real GPS
+        batteryLevel: 80 + Math.random() * 20
+      };
+      this.driverStates.set(driver.id, state);
+      return;
+    }
+    
     // If no recent location, assign a random Tennessee location
     if (!currentLocation) {
       const randomLocation = TENNESSEE_LOCATIONS[Math.floor(Math.random() * TENNESSEE_LOCATIONS.length)];
@@ -175,7 +198,7 @@ export class RealDriverLocationService {
     }
   }
 
-  private async getDriverCurrentLocation(driverId: string): Promise<{lat: number, lng: number, address?: string} | null> {
+  private async getDriverCurrentLocation(driverId: string): Promise<{lat: number, lng: number, address?: string, source?: string} | null> {
     try {
       // Get most recent location from database
       const locations = await storage.getDriverLocations(driverId, 1);
@@ -184,7 +207,8 @@ export class RealDriverLocationService {
         return {
           lat: location.latitude,
           lng: location.longitude,
-          address: location.address || undefined
+          address: location.address || undefined,
+          source: location.source || 'simulated'
         };
       }
       return null;
