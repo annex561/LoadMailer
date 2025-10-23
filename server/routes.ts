@@ -113,7 +113,7 @@ function getBaseUrl(): string {
 }
 
 // Helper function to send GPS tracking link SMS to driver when load is assigned
-async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<void> {
+async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<{ success: boolean; error?: string }> {
   try {
     console.log(`📍 GPS TRACKING SMS: Starting for driver ${driverId}, load ${loadId}`);
     
@@ -121,7 +121,7 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<voi
     const tokenResult = await storage.generateTrackingToken(driverId);
     if (!tokenResult?.token) {
       console.error(`❌ GPS TRACKING SMS: Failed to generate tracking token for driver ${driverId}`);
-      return;
+      return { success: false, error: "Failed to generate tracking token" };
     }
     const token = tokenResult.token;
     console.log(`🔐 GPS TRACKING SMS: Generated token for driver ${driverId}`);
@@ -130,7 +130,7 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<voi
     const driver = await storage.getDriver(driverId);
     if (!driver) {
       console.error(`❌ GPS TRACKING SMS: Driver ${driverId} not found`);
-      return;
+      return { success: false, error: "Driver not found" };
     }
     
     // Get driver's phone number
@@ -139,14 +139,14 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<voi
     
     if (!normalizedPhone) {
       console.log(`⚠️ GPS TRACKING SMS: Driver ${driver.name} has no valid phone number - cannot send GPS tracking SMS`);
-      return;
+      return { success: false, error: "Driver has no valid phone number" };
     }
     
     // Get load details
     const load = await storage.getLoad(loadId);
     if (!load) {
       console.error(`❌ GPS TRACKING SMS: Load ${loadId} not found`);
-      return;
+      return { success: false, error: "Load not found" };
     }
     
     // Create tracking URL
@@ -167,12 +167,15 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<voi
     if (smsResult.success) {
       console.log(`✅ GPS TRACKING SMS: Successfully sent to ${driver.name} for load ${load.loadNumber}`);
       console.log(`✅ GPS TRACKING SMS: Tracking URL: ${trackingUrl}`);
+      return { success: true };
     } else {
       console.error(`❌ GPS TRACKING SMS: Failed to send - ${smsResult.error}`);
+      return { success: false, error: smsResult.error || "Failed to send SMS" };
     }
     
   } catch (error) {
     console.error(`❌ GPS TRACKING SMS: Error sending GPS tracking SMS for driver ${driverId}, load ${loadId}:`, error);
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
 
@@ -894,6 +897,40 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error(`❌ SECURITY: GPS update error for IP ${ip}:`, error);
       res.status(500).json({ error: "Failed to update driver location" });
+    }
+  });
+
+  // Manual GPS Tracking Link Sender
+  // Allows dispatchers to manually send GPS tracking links to drivers for specific loads
+  app.post("/api/gps/send-tracking-link", async (req, res) => {
+    try {
+      const { driverId, loadId } = req.body;
+      
+      if (!driverId || !loadId) {
+        return res.status(400).json({ 
+          error: "Both driverId and loadId are required" 
+        });
+      }
+      
+      const result = await sendGPSTrackingSMS(driverId, loadId);
+      
+      if (result.success) {
+        res.json({ 
+          success: true, 
+          message: "GPS tracking link sent successfully" 
+        });
+      } else {
+        res.status(400).json({ 
+          success: false,
+          error: result.error || "Failed to send GPS tracking link" 
+        });
+      }
+    } catch (error) {
+      console.error('Error sending GPS tracking link:', error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to send GPS tracking link" 
+      });
     }
   });
 

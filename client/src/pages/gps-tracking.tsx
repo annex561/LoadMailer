@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MapPin, Navigation, Route, Activity, Zap, Signal, Clock, AlertTriangle } from "lucide-react";
+import { MapPin, Navigation, Route, Activity, Zap, Signal, Clock, AlertTriangle, Send, Loader2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import DriverLocationMap from "@/components/driver-location-map";
@@ -71,6 +72,11 @@ export default function GPSTrackingPage() {
     heading: "",
   });
 
+  const [gpsLinkData, setGpsLinkData] = useState({
+    driverId: "",
+    loadId: ""
+  });
+
   const { data: locationsResponse } = useQuery<{
     locations: DriverLocation[];
     count: number;
@@ -95,6 +101,44 @@ export default function GPSTrackingPage() {
 
   const { data: drivers = [] } = useQuery({
     queryKey: ["/api/drivers"],
+  });
+
+  const { data: loads = [] } = useQuery({
+    queryKey: ["/api/loads"],
+  });
+
+  const activeLoads = loads.filter((load: any) => 
+    ['available', 'assigned', 'in_transit'].includes(load.status)
+  );
+
+  const sendGpsLinkMutation = useMutation({
+    mutationFn: async (data: { driverId: string; loadId: string }) => {
+      const response = await apiRequest("/api/gps/send-tracking-link", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+      
+      // Check if the response indicates failure
+      if (!response.success) {
+        throw new Error(response.error || "Failed to send GPS tracking link");
+      }
+      
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: "GPS Link Sent",
+        description: "Driver will receive GPS tracking link via SMS.",
+      });
+      setGpsLinkData({ driverId: "", loadId: "" });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send GPS tracking link.",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateLocationMutation = useMutation({
@@ -495,6 +539,97 @@ export default function GPSTrackingPage() {
         </TabsContent>
 
         <TabsContent value="manual" className="space-y-4">
+          <Card data-testid="card-send-gps-link">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Send className="w-5 h-5" />
+                Send GPS Tracking Link
+              </CardTitle>
+              <CardDescription>
+                Manually send GPS tracking link to a driver for a specific load
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (!gpsLinkData.driverId || !gpsLinkData.loadId) {
+                  toast({
+                    title: "Validation Error",
+                    description: "Please select both driver and load.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                sendGpsLinkMutation.mutate(gpsLinkData);
+              }} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="gps-driver">Driver</Label>
+                    <Select
+                      value={gpsLinkData.driverId}
+                      onValueChange={(value) => 
+                        setGpsLinkData({ ...gpsLinkData, driverId: value })
+                      }
+                    >
+                      <SelectTrigger id="gps-driver" data-testid="select-gps-driver" 
+                        className="bg-white border border-gray-300">
+                        <SelectValue placeholder="Select driver" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                        {drivers.map((driver: any) => (
+                          <SelectItem key={driver.id} value={driver.id}>
+                            {driver.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="gps-load">Load</Label>
+                    <Select
+                      value={gpsLinkData.loadId}
+                      onValueChange={(value) => 
+                        setGpsLinkData({ ...gpsLinkData, loadId: value })
+                      }
+                    >
+                      <SelectTrigger id="gps-load" data-testid="select-gps-load"
+                        className="bg-white border border-gray-300">
+                        <SelectValue placeholder="Select load" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                        {activeLoads.map((load: any) => (
+                          <SelectItem key={load.id} value={load.id}>
+                            {load.loadNumber} - {load.pickupAddress} → {load.deliveryAddress}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <Button
+                  type="submit"
+                  disabled={sendGpsLinkMutation.isPending}
+                  data-testid="button-send-gps-link"
+                  className="w-full"
+                >
+                  {sendGpsLinkMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" />
+                      Send GPS Tracking Link
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
           <Card data-testid="card-manual-update">
             <CardHeader>
               <CardTitle>Manual Location Update</CardTitle>
