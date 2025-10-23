@@ -174,6 +174,19 @@ app.use((req, res, next) => {
         })();
       }, 500);
       
+      // 0.5 GPS Health Monitor Service (monitors active drivers for stale GPS tracking)
+      setTimeout(() => {
+        (async () => {
+          try {
+            const { gpsHealthMonitorService } = await import('./gps-health-monitor');
+            await gpsHealthMonitorService.initialize();
+            log('✅ GPS Health Monitor Service initialized - checking GPS health every 3 minutes');
+          } catch (error) {
+            log(`⚠️ GPS Health Monitor Service failed to initialize: ${error.message || error}`);
+          }
+        })();
+      }, 750);
+      
       // 1. Google Sheets Import Service (completely independent)
       setTimeout(() => {
         (async () => {

@@ -94,6 +94,24 @@ function normalizePhoneToE164(phoneNumber: string | undefined | null): string | 
   }
 }
 
+// Helper function to determine the correct base URL with protocol based on environment
+function getBaseUrl(): string {
+  const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
+  
+  // If domain already has protocol, use as-is
+  if (domain.startsWith('http://') || domain.startsWith('https://')) {
+    return domain;
+  }
+  
+  // If localhost, use HTTP
+  if (domain === 'localhost' || domain.startsWith('localhost:')) {
+    return `http://${domain}`;
+  }
+  
+  // Production Replit domain - use HTTPS
+  return `https://${domain}`;
+}
+
 // Helper function to send GPS tracking link SMS to driver when load is assigned
 async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<void> {
   try {
@@ -132,8 +150,7 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string): Promise<voi
     }
     
     // Create tracking URL
-    const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
-    const trackingUrl = `https://${domain}/driver-tracker?driver=${driverId}&token=${token}`;
+    const trackingUrl = `${getBaseUrl()}/driver-tracker?driver=${driverId}&token=${token}`;
     
     // Create GPS tracking SMS message
     const smsMessage = `📍 Load ${load.loadNumber} assigned! Start GPS tracking: ${trackingUrl}\n\nClick the link to share your location with dispatch.`;
