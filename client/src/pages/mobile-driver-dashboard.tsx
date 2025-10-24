@@ -67,8 +67,29 @@ export default function MobileDriverDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [driverId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('driverId') || '';
+    const urlDriverId = params.get('driverId');
+    
+    // If driverId in URL, save it to localStorage for PWA launches
+    if (urlDriverId) {
+      localStorage.setItem('load-signal-driver-id', urlDriverId);
+      return urlDriverId;
+    }
+    
+    // Otherwise, try to get it from localStorage
+    return localStorage.getItem('load-signal-driver-id') || '';
   });
+  
+  // Handle PWA launch redirect in useEffect (cleaner than during render)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlDriverId = params.get('driverId');
+    
+    // If no driverId in URL but we have one in localStorage, redirect to include it
+    if (!urlDriverId && driverId) {
+      window.location.href = `/driver-dashboard?driverId=${driverId}`;
+    }
+  }, [driverId]);
+  
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [selectedThread, setSelectedThread] = useState<CommunicationThread | null>(null);
@@ -96,6 +117,7 @@ export default function MobileDriverDashboard() {
   // Fetch driver profile
   const { data: driver } = useQuery({
     queryKey: ['/api/drivers', driverId],
+    enabled: !!driverId,
     queryFn: async () => {
       const response = await fetch(`/api/drivers/${driverId}`);
       if (!response.ok) throw new Error('Failed to fetch driver profile');
@@ -106,6 +128,7 @@ export default function MobileDriverDashboard() {
   // Fetch current load
   const { data: currentLoad, refetch: refetchCurrentLoad } = useQuery({
     queryKey: ['/api/drivers', driverId, 'current-load'],
+    enabled: !!driverId,
     queryFn: async () => {
       const response = await fetch(`/api/loads?driverId=${driverId}&status=assigned,in_transit`);
       if (!response.ok) throw new Error('Failed to fetch current load');
@@ -118,6 +141,7 @@ export default function MobileDriverDashboard() {
   // Fetch driver earnings
   const { data: earnings } = useQuery({
     queryKey: ['/api/drivers', driverId, 'earnings'],
+    enabled: !!driverId,
     queryFn: async () => {
       const response = await fetch(`/api/drivers/${driverId}/earnings`);
       if (!response.ok) throw new Error('Failed to fetch earnings');
@@ -128,6 +152,7 @@ export default function MobileDriverDashboard() {
   // Fetch load history
   const { data: loadHistory = [] } = useQuery({
     queryKey: ['/api/drivers', driverId, 'load-history'],
+    enabled: !!driverId,
     queryFn: async () => {
       const response = await fetch(`/api/drivers/${driverId}/load-history`);
       if (!response.ok) throw new Error('Failed to fetch load history');
@@ -138,6 +163,7 @@ export default function MobileDriverDashboard() {
   // Fetch communication threads
   const { data: threads = [] } = useQuery({
     queryKey: ['/api/communication/threads'],
+    enabled: !!driverId,
     queryFn: async () => {
       const response = await fetch('/api/communication/threads');
       if (!response.ok) throw new Error('Failed to fetch threads');
@@ -871,7 +897,10 @@ export default function MobileDriverDashboard() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setSelectedThread(null)}
+              onClick={() => {
+                closeSwipe();
+                setSelectedThread(null);
+              }}
               className="text-white hover:bg-white/20 p-2 rounded-full"
               data-testid="button-back-to-threads"
             >
@@ -1200,6 +1229,31 @@ export default function MobileDriverDashboard() {
       </div>
     </>
   );
+
+  // Show error screen if no driverId is available
+  if (!driverId) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader>
+            <CardTitle className="text-center text-red-600">Access Required</CardTitle>
+            <CardDescription className="text-center">
+              This dashboard requires a valid driver link to access.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <AlertCircle className="h-16 w-16 mx-auto text-red-500" />
+            <p className="text-sm text-gray-600">
+              Please use the link provided by Load Signal dispatch to access your driver dashboard.
+            </p>
+            <p className="text-xs text-gray-500">
+              If you believe this is an error, please contact support.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
