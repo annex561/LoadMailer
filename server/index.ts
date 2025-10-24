@@ -99,9 +99,11 @@ app.use((req, res, next) => {
     const server = createHTTPServer(app);
     log('✅ HTTP server created');
 
-    // Add terminal API 404 handler before Vite setup to prevent fall-through to Vite's catch-all
-    app.use('/api', (_req, res) => res.status(404).json({ message: 'API endpoint not found' }));
-    log('✅ API 404 handler added');
+    // DISABLED: This catch-all was blocking valid API routes from registerRoutes()
+    // The dashboard link endpoints and other routes defined in routes.ts were being blocked
+    // Vite will properly handle 404s for unmatched routes
+    // app.use('/api', (_req, res) => res.status(404).json({ message: 'API endpoint not found' }));
+    // log('✅ API 404 handler added');
 
     // Enhanced error handling that ensures API routes return JSON
     app.use((err: any, req: Request, res: Response, _next: NextFunction) => {

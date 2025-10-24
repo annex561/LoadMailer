@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Plus, Edit, User, Building, BarChart3 } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Plus, Edit, User, Building, BarChart3, Smartphone, Send } from "lucide-react";
 import type { Driver, Customer } from "@shared/schema";
 import ContactFormModal from "@/components/contact-form-modal";
 import { DriverPerformanceModal } from "@/components/DriverPerformanceModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { HealthScoreSpeedometer, calculateHealthScore } from "@/components/ui/health-score-speedometer";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Contacts() {
   const [showDriverModal, setShowDriverModal] = useState(false);
@@ -15,6 +17,54 @@ export default function Contacts() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [performanceDriver, setPerformanceDriver] = useState<Driver | null>(null);
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
+  const [sendingDashboardLink, setSendingDashboardLink] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  // Mutation for sending individual dashboard link
+  const sendDashboardLinkMutation = useMutation({
+    mutationFn: async (driverId: string) => {
+      return apiRequest(`/api/drivers/${driverId}/send-dashboard-link`, {
+        method: 'POST'
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Dashboard Link Sent",
+        description: `SMS sent successfully to ${data.driverName}`,
+      });
+      setSendingDashboardLink(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Send",
+        description: error.message || "Could not send dashboard link SMS",
+        variant: "destructive",
+      });
+      setSendingDashboardLink(null);
+    }
+  });
+
+  // Mutation for bulk sending dashboard links
+  const bulkSendDashboardLinksMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/drivers/send-dashboard-links', {
+        method: 'POST'
+      });
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Bulk Send Complete",
+        description: `Sent ${data.results.sent} of ${data.results.total} dashboard links`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Bulk Send Failed",
+        description: error.message || "Could not send dashboard links",
+        variant: "destructive",
+      });
+    }
+  });
 
   const { data: drivers = [], isLoading: driversLoading } = useQuery<Driver[]>({
     queryKey: ["/api/drivers"],
@@ -123,14 +173,27 @@ export default function Contacts() {
                   <h3 className="text-lg font-semibold text-gray-900">Drivers</h3>
                   <p className="text-sm text-gray-500">Manage your driver contacts ({drivers.length} total)</p>
                 </div>
-                <Button
-                  onClick={() => setShowDriverModal(true)}
-                  className="bg-primary text-white hover:bg-blue-700"
-                  data-testid="button-add-driver"
-                >
-                  <Plus className="mr-2 w-4 h-4" />
-                  Add Driver
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => bulkSendDashboardLinksMutation.mutate()}
+                    disabled={bulkSendDashboardLinksMutation.isPending || drivers.length === 0}
+                    variant="outline"
+                    className="border-green-600 text-green-600 hover:bg-green-50"
+                    data-testid="button-bulk-send-dashboards"
+                    title="Send dashboard links to all drivers via SMS"
+                  >
+                    <Send className="mr-2 w-4 h-4" />
+                    {bulkSendDashboardLinksMutation.isPending ? 'Sending...' : 'Send All Dashboards'}
+                  </Button>
+                  <Button
+                    onClick={() => setShowDriverModal(true)}
+                    className="bg-primary text-white hover:bg-blue-700"
+                    data-testid="button-add-driver"
+                  >
+                    <Plus className="mr-2 w-4 h-4" />
+                    Add Driver
+                  </Button>
+                </div>
               </div>
             </div>
             
@@ -177,6 +240,19 @@ export default function Contacts() {
                     </div>
                     <div className="flex items-center space-x-2">
                       {getDriverStatusBadge(driver.status)}
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => {
+                          setSendingDashboardLink(driver.id);
+                          sendDashboardLinkMutation.mutate(driver.id);
+                        }}
+                        disabled={sendingDashboardLink === driver.id}
+                        data-testid={`button-send-dashboard-${driver.id}`}
+                        title="Send Dashboard Link via SMS"
+                      >
+                        <Smartphone className={`w-4 h-4 ${sendingDashboardLink === driver.id ? 'text-gray-400' : 'text-green-600'}`} />
+                      </Button>
                       <Button 
                         variant="ghost" 
                         size="sm" 

@@ -75,6 +75,23 @@ const gpsLocationRateLimiter = rateLimit({
   }
 });
 
+// Rate limiter for bulk SMS operations - max 1 request per hour per IP
+const bulkSmsRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 1, // max 1 bulk send per hour
+  message: { error: "Bulk send is limited to once per hour. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    const ip = req.ip || req.socket.remoteAddress;
+    console.log(`⚠️ SECURITY: Bulk SMS rate limit exceeded from IP: ${ip}`);
+    res.status(429).json({ 
+      error: "Bulk send is limited to once per hour. Please try again later.",
+      retryAfter: 3600
+    });
+  }
+});
+
 // Helper function to normalize and validate phone numbers for Twilio E.164 format
 function normalizePhoneToE164(phoneNumber: string | undefined | null): string | null {
   if (!phoneNumber) return null;
@@ -112,6 +129,37 @@ function getBaseUrl(): string {
   
   // Production Replit domain - use HTTPS
   return `https://${domain}`;
+}
+
+// Authorization middleware for bulk operations
+// Requires either authenticated session OR admin API key
+function requireBulkAuthorization(req: any, res: any, next: any) {
+  // Check 1: Is user authenticated via session?
+  if (req.isAuthenticated && req.isAuthenticated() && req.user) {
+    console.log(`✅ Bulk operation authorized via session: ${req.user.claims?.email || 'unknown'}`);
+    return next();
+  }
+
+  // Check 2: Is admin API key provided?
+  const adminApiKey = process.env.ADMIN_API_KEY;
+  const providedKey = req.headers['x-admin-api-key'];
+  
+  if (adminApiKey && providedKey && providedKey === adminApiKey) {
+    console.log(`✅ Bulk operation authorized via API key from IP: ${req.ip}`);
+    return next();
+  }
+
+  // Check 3: Development bypass (only if explicitly enabled)
+  if (process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_BULK === 'true') {
+    console.log(`⚠️ DEV MODE: Bulk operation allowed without auth from IP: ${req.ip}`);
+    return next();
+  }
+
+  // No valid authorization found
+  console.log(`❌ UNAUTHORIZED bulk operation attempt from IP: ${req.ip}`);
+  res.status(401).json({ 
+    error: "Unauthorized: Bulk operations require authentication or admin API key"
+  });
 }
 
 // Helper function to send GPS tracking link SMS to driver
@@ -1203,9 +1251,219 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
       
       const driver = await storage.createDriver(validatedData);
+
+      // Fire-and-forget SMS send - don't await, don't block response
+      const driverPhone = driver.phoneNumber || driver.phone;
+      const normalizedPhone = normalizePhoneToE164(driverPhone);
+
+      if (normalizedPhone) {
+        // Send SMS asynchronously without blocking
+        setImmediate(async () => {
+          try {
+            const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
+            
+            const smsMessage = `Welcome to Load Signal, ${driver.name}! 👋\n\n` +
+              `Your driver account has been created.\n\n` +
+              `Access your dashboard:\n${dashboardUrl}\n\n` +
+              `💡 Add this to your home screen for easy access!`;
+
+            const smsResult = await smsLoadService.sendSMS({
+              to: normalizedPhone,
+              body: smsMessage
+            });
+            
+            if (smsResult.success) {
+              console.log(`✅ Dashboard link sent to new driver ${driver.name} (${normalizedPhone})`);
+            } else {
+              console.error(`⚠️ Failed to send dashboard link to new driver: ${smsResult.error}`);
+            }
+          } catch (smsError) {
+            console.error('⚠️ Error sending dashboard link SMS:', smsError);
+          }
+        });
+      }
+
+      // Return immediately without waiting for SMS
       res.status(201).json(driver);
     } catch (error) {
       res.status(400).json({ error: "Invalid driver data" });
+    }
+  });
+
+  // Send dashboard link SMS to a single driver
+  app.post("/api/drivers/:id/send-dashboard-link", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get driver details
+      const driver = await storage.getDriver(id);
+      if (!driver) {
+        return res.status(404).json({
+          success: false,
+          error: 'Driver not found'
+        });
+      }
+
+      // Normalize phone number
+      const driverPhone = driver.phoneNumber || driver.phone;
+      const normalizedPhone = normalizePhoneToE164(driverPhone);
+      
+      if (!normalizedPhone) {
+        return res.status(400).json({
+          success: false,
+          error: `Driver phone number (${driverPhone}) cannot be normalized to E.164 format`,
+          driverName: driver.name
+        });
+      }
+
+      // Create dashboard URL
+      const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
+      
+      // Create SMS message
+      const smsMessage = `Hello ${driver.name}! 👋\n\n` +
+        `Access your Load Signal driver dashboard:\n${dashboardUrl}\n\n` +
+        `💡 TIP: Add this to your home screen for easy access!`;
+
+      // Send SMS using smsLoadService
+      const smsResult = await smsLoadService.sendSMS({
+        to: normalizedPhone,
+        body: smsMessage
+      });
+      
+      if (smsResult.success) {
+        console.log(`✅ Dashboard link sent to ${driver.name} (${normalizedPhone})${smsResult.messageSid ? ` - SID: ${smsResult.messageSid}` : ''}`);
+        
+        res.json({
+          success: true,
+          message: 'Dashboard link sent successfully',
+          driverName: driver.name,
+          phoneNumber: normalizedPhone,
+          messageId: smsResult.messageSid
+        });
+      } else {
+        console.error(`❌ Failed to send dashboard link SMS: ${smsResult.error}`);
+        res.status(503).json({
+          success: false,
+          error: smsResult.error || 'Failed to send SMS'
+        });
+      }
+
+    } catch (error) {
+      console.error('Error sending dashboard link SMS:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Send dashboard links to all active drivers
+  app.post("/api/drivers/send-dashboard-links", requireBulkAuthorization, bulkSmsRateLimiter, async (req, res) => {
+    try {
+      const userIdentifier = req.user?.claims?.email || (req.headers['x-admin-api-key'] ? 'API_KEY' : 'DEV_MODE');
+      console.log(`🚨 BULK SMS SEND INITIATED - User: ${userIdentifier}, IP: ${req.ip}, Time: ${new Date().toISOString()}`);
+      
+      const drivers = await storage.getAllDrivers();
+      
+      // Filter for drivers with valid phone numbers
+      const driversWithPhones = drivers.filter(d => {
+        const phone = d.phoneNumber || d.phone;
+        return normalizePhoneToE164(phone) !== null;
+      });
+
+      if (driversWithPhones.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'No drivers found with valid phone numbers'
+        });
+      }
+
+      // Limit batch size to prevent runaway costs
+      const MAX_BATCH_SIZE = 100;
+      if (driversWithPhones.length > MAX_BATCH_SIZE) {
+        console.log(`⚠️ SECURITY: Bulk send attempted for ${driversWithPhones.length} drivers - limiting to ${MAX_BATCH_SIZE}`);
+        return res.status(400).json({
+          success: false,
+          error: `Batch size too large (${driversWithPhones.length} drivers). Maximum allowed: ${MAX_BATCH_SIZE}. Please contact admin for large batches.`
+        });
+      }
+
+      console.log(`📱 Sending dashboard links to ${driversWithPhones.length} drivers...`);
+
+      const results = {
+        total: driversWithPhones.length,
+        sent: 0,
+        failed: 0,
+        errors: [] as any[]
+      };
+
+      // Send SMS to each driver
+      for (const driver of driversWithPhones) {
+        try {
+          const driverPhone = driver.phoneNumber || driver.phone;
+          const normalizedPhone = normalizePhoneToE164(driverPhone);
+          
+          if (!normalizedPhone) {
+            results.failed++;
+            results.errors.push({
+              driverId: driver.id,
+              driverName: driver.name,
+              error: 'Invalid phone number format'
+            });
+            continue;
+          }
+
+          const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
+          
+          const smsMessage = `Hello ${driver.name}! 👋\n\n` +
+            `Access your Load Signal driver dashboard:\n${dashboardUrl}\n\n` +
+            `💡 TIP: Add this to your home screen for easy access!`;
+
+          const smsResult = await smsLoadService.sendSMS({
+            to: normalizedPhone,
+            body: smsMessage
+          });
+          
+          if (smsResult.success) {
+            results.sent++;
+            console.log(`✅ Dashboard link sent to ${driver.name} (${normalizedPhone})`);
+          } else {
+            results.failed++;
+            results.errors.push({
+              driverId: driver.id,
+              driverName: driver.name,
+              error: smsResult.error || 'Unknown error'
+            });
+            console.error(`❌ Failed to send to ${driver.name}: ${smsResult.error}`);
+          }
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+        } catch (error) {
+          results.failed++;
+          results.errors.push({
+            driverId: driver.id,
+            driverName: driver.name,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      console.log(`✅ Bulk send complete: ${results.sent} sent, ${results.failed} failed`);
+
+      res.json({
+        success: true,
+        results: results,
+        message: `Sent ${results.sent} of ${results.total} dashboard links`
+      });
+
+    } catch (error) {
+      console.error('Error sending bulk dashboard links:', error);
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
