@@ -4,6 +4,7 @@ import { eq, and, or, desc, sql as drizzleSql, notInArray } from 'drizzle-orm';
 import * as schema from '@shared/schema';
 import { IStorage } from './storage';
 import { randomUUID, randomBytes } from 'crypto';
+import { nanoid } from 'nanoid';
 
 function generateSecureTrackingToken(): string {
   return randomBytes(32).toString('hex');
@@ -226,14 +227,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllLoads(): Promise<schema.LoadWithRelations[]> {
-    // Return loads from temporary storage first
-    const tempLoads = Array.from(this.temporaryLoads.values());
-    
-    if (tempLoads.length > 0) {
-      console.log(`📦 Returning ${tempLoads.length} loads from memory storage`);
-      return tempLoads;
-    }
-    
     try {
       return await db.query.loads.findMany({
         with: {
@@ -266,96 +259,84 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Create a temporary in-memory storage for loads since database relations are failing
-  private temporaryLoads = new Map<string, schema.LoadWithRelations>();
-
   async createLoad(insertLoad: schema.InsertLoad): Promise<schema.LoadWithRelations> {
-    const id = randomUUID();
-    const loadNumber = `LOAD-${Date.now().toString().slice(-6)}`;
-    
-    // Get customer for relations
-    const customer = await this.getCustomer(insertLoad.customerId);
-    
-    // Safely parse dates
-    let pickupDate: Date;
-    let deliveryDate: Date;
-    
     try {
-      if (insertLoad.pickupDate instanceof Date) {
-        pickupDate = insertLoad.pickupDate;
-      } else if (typeof insertLoad.pickupDate === 'string') {
-        pickupDate = new Date(insertLoad.pickupDate);
-      } else {
+      const id = randomUUID();
+      // Generate collision-proof load number with nanoid suffix
+      const loadNumber = `LOAD-${Date.now().toString().slice(-6)}-${nanoid(6)}`;
+      
+      // Safely parse dates
+      let pickupDate: Date;
+      let deliveryDate: Date;
+      
+      try {
+        if (insertLoad.pickupDate instanceof Date) {
+          pickupDate = insertLoad.pickupDate;
+        } else if (typeof insertLoad.pickupDate === 'string') {
+          pickupDate = new Date(insertLoad.pickupDate);
+        } else {
+          pickupDate = new Date();
+        }
+        
+        if (isNaN(pickupDate.getTime())) {
+          pickupDate = new Date();
+        }
+      } catch {
         pickupDate = new Date();
       }
       
-      if (isNaN(pickupDate.getTime())) {
-        pickupDate = new Date();
-      }
-    } catch {
-      pickupDate = new Date();
-    }
-    
-    try {
-      if (insertLoad.deliveryDate instanceof Date) {
-        deliveryDate = insertLoad.deliveryDate;
-      } else if (typeof insertLoad.deliveryDate === 'string') {
-        deliveryDate = new Date(insertLoad.deliveryDate);
-      } else {
+      try {
+        if (insertLoad.deliveryDate instanceof Date) {
+          deliveryDate = insertLoad.deliveryDate;
+        } else if (typeof insertLoad.deliveryDate === 'string') {
+          deliveryDate = new Date(insertLoad.deliveryDate);
+        } else {
+          deliveryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        }
+        
+        if (isNaN(deliveryDate.getTime())) {
+          deliveryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        }
+      } catch {
         deliveryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
       }
       
-      if (isNaN(deliveryDate.getTime())) {
-        deliveryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      }
-    } catch {
-      deliveryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    }
-    
-    const load: schema.LoadWithRelations = {
-      ...insertLoad,
-      id,
-      loadNumber,
-      pickupDate,
-      deliveryDate,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      driver: null,
-      customer: customer || null,
-    };
-    
-    // Store in temporary storage for immediate availability
-    this.temporaryLoads.set(id, load);
-    
-    try {
       const dbLoad: schema.Load = {
         ...insertLoad,
         id,
         loadNumber,
         pickupDate,
         deliveryDate,
-        description: insertLoad.description || 'General Freight', // Ensure description is never null
+        description: insertLoad.description || 'General Freight',
         status: insertLoad.status || 'scheduled',
         priority: insertLoad.priority || 'standard',
         equipmentType: insertLoad.equipmentType || 'dry_van',
         temperatureRequired: insertLoad.temperatureRequired || false,
         isExpired: insertLoad.isExpired || false,
         sourceBoard: insertLoad.sourceBoard || 'manual',
-        weight: insertLoad.weight || 25000, // Ensure weight has a default value
-        pickupTime: insertLoad.pickupTime || '08:00', // Ensure pickup time has a default
-        deliveryTime: insertLoad.deliveryTime || '17:00', // Ensure delivery time has a default
+        weight: insertLoad.weight || 25000,
+        pickupTime: insertLoad.pickupTime || '08:00',
+        deliveryTime: insertLoad.deliveryTime || '17:00',
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       
+      // Insert directly into database - NO fallback to memory
       await db.insert(schema.loads).values(dbLoad);
       console.log(`✅ Load ${loadNumber} created successfully in database - ${dbLoad.description}`);
+      
+      // Return load with relations
+      const load = await this.getLoad(id);
+      if (!load) {
+        throw new Error('Failed to retrieve created load from database');
+      }
+      
+      return load;
+      
     } catch (error) {
-      console.log(`❌ Load ${loadNumber} database insert failed: ${error?.message}`);
-      console.log(`✅ Load ${loadNumber} available in memory - ${load.description}`);
+      console.error('❌ Failed to create load:', error);
+      throw error; // Propagate error instead of silently falling back
     }
-    
-    return load;
   }
 
   async updateLoad(id: string, updateData: Partial<schema.InsertLoad>): Promise<schema.LoadWithRelations | undefined> {

@@ -1268,9 +1268,13 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Critical load CRUD routes - must be available immediately for frontend
   app.get('/api/loads', async (req, res) => {
     try {
-      const { status } = req.query;
+      const { status, driverId } = req.query;
       
-      if (status && typeof status === "string") {
+      // BUG FIX #3: Add driverId filtering support
+      if (driverId && typeof driverId === "string") {
+        const loads = await storage.getLoadsByDriver(driverId);
+        res.json(loads);
+      } else if (status && typeof status === "string") {
         const loads = await storage.getLoadsByStatus(status);
         res.json(loads);
       } else {
@@ -1444,6 +1448,30 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: 'Load not found' });
       }
       
+      // BUG FIX #1: Update driver stats when load is marked as 'completed'
+      if (updates.status === 'completed' && currentLoad.status !== 'completed' && updatedLoad.driverId) {
+        try {
+          const driver = await storage.getDriver(updatedLoad.driverId);
+          if (driver) {
+            const totalLoads = (driver.totalLoads || 0) + 1;
+            const completedLoads = (driver.completedLoads || 0) + 1;
+            const totalRevenue = (driver.totalRevenue || 0) + (updatedLoad.rate || 0);
+            
+            await storage.updateDriver(updatedLoad.driverId, {
+              totalLoads,
+              completedLoads,
+              totalRevenue
+            });
+            
+            console.log(`✅ Driver stats updated: total_loads=${totalLoads}, completed_loads=${completedLoads}, revenue=$${totalRevenue}`);
+          } else {
+            console.error(`❌ Driver ${updatedLoad.driverId} not found - cannot update stats`);
+          }
+        } catch (error) {
+          console.error(`❌ Error updating driver stats for load ${id}:`, error);
+        }
+      }
+      
       // Check if status changed to "in_transit" (driver started delivery)
       if (updates.status === 'in_transit' && currentLoad.status !== 'in_transit') {
         console.log(`🚚 Load ${id} status changed to in_transit - sending GPS tracking SMS`);
@@ -1478,6 +1506,16 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       if (!updatedLoad) {
         return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      // BUG FIX #2: Update driver status to 'on_route' when load is assigned
+      if (updatedLoad.driverId) {
+        try {
+          await storage.updateDriver(updatedLoad.driverId, { status: 'on_route' });
+          console.log(`✅ Driver status updated to 'on_route'`);
+        } catch (error) {
+          console.error(`❌ Error updating driver status:`, error);
+        }
       }
       
       // GPS tracking SMS removed - now sent when driver starts delivery (status: in_transit)
