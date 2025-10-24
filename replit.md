@@ -58,6 +58,15 @@ Preferred communication style: Simple, everyday language.
   - **Query Guards**: All driverId-dependent TanStack Query hooks use `enabled: !!driverId` to prevent malformed API calls
   - **Fallback UI**: Error screen displays when driverId is missing, directing drivers to use official dispatch link
   - **Mobile Optimizations**: Pull-to-refresh, swipe gestures, offline support, wake lock for GPS tracking, WhatsApp-style messaging interface
+- **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized driver dashboard links with multi-layer security.
+  - **Automated Onboarding SMS**: New drivers automatically receive dashboard link via SMS upon account creation (non-blocking fire-and-forget)
+  - **Individual Resend**: Green Smartphone button on each driver card allows dispatch to resend dashboard link to specific drivers
+  - **Bulk Distribution**: "Send All Dashboards" button enables mass SMS distribution to all drivers with valid phone numbers
+  - **Security Layers**: 3-tier authorization (session/API key/dev bypass), rate limiting (1/hour/IP), batch size limit (100 max), comprehensive audit logging
+  - **Dashboard URL Format**: `https://{domain}/driver-dashboard?driverId={id}` - unique per driver for secure access
+  - **SMS Message Template**: Welcome message with dashboard link and installation instructions for PWA home screen setup
+  - **Cost Protection**: Rate limiting prevents spam, batch size caps prevent runaway Twilio costs, 500ms delays respect Twilio throttling
+  - **Audit Trail**: All bulk sends logged with user identifier, IP address, and timestamp for compliance monitoring
 
 # Production Readiness Testing
 
