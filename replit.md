@@ -52,7 +52,12 @@ Preferred communication style: Simple, everyday language.
 - **UI/UX**: Consistent styling for forms and dropdowns, integrated document viewing, and a professional dashboard.
 - **Professional Document Management System**: Complete approval workflow with quality validation, automation, and cloud integrations. Includes smart categorization, an enhanced viewer with annotations, audit trails, automated reminders, and PDF generation. Prevents load completion without all required documents.
 - **Real-Time GPS Tracking**: Mobile-optimized driver location tracking with secure token-based authentication, 60-second auto-updates, wake lock support, and a GPS health monitor.
-- **Mobile Driver Dashboard**: A PWA interface with dynamic authentication, providing driver stats, load history, WhatsApp-style chat, document upload, and profile management, optimized for mobile with offline support, pull-to-refresh, and swipe gestures.
+- **Mobile Driver Dashboard**: A PWA (Progressive Web App) interface with dynamic authentication, providing driver stats, load history, WhatsApp-style chat, document upload, and profile management.
+  - **PWA Features**: Installable to home screen without App Store, offline functionality via service worker, app icons in multiple sizes (192x192, 512x512, 180x180)
+  - **Authentication Pattern**: Dynamic driver authentication via URL parameter `?driverId=xxx` with localStorage persistence for PWA launches
+  - **Query Guards**: All driverId-dependent TanStack Query hooks use `enabled: !!driverId` to prevent malformed API calls
+  - **Fallback UI**: Error screen displays when driverId is missing, directing drivers to use official dispatch link
+  - **Mobile Optimizations**: Pull-to-refresh, swipe gestures, offline support, wake lock for GPS tracking, WhatsApp-style messaging interface
 
 # External Dependencies
 
