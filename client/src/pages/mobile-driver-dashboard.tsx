@@ -811,31 +811,31 @@ export default function MobileDriverDashboard() {
                   transition: currentSwipeId.current === thread.id ? 'none' : 'transform 0.3s ease-out'
                 }}
                 onPointerDown={(e) => {
-                  e.stopPropagation();
                   handleSwipeStart(e, thread.id);
                 }}
                 onPointerMove={(e) => {
-                  e.stopPropagation();
                   handleSwipeMove(e);
                 }}
                 onPointerUp={(e) => {
-                  e.stopPropagation();
-                  handleSwipeEnd();
+                  // If swiped open, trigger the action
+                  if (swipedItemId === thread.id && swipeDistance > 60) {
+                    handleMarkAsRead(thread.id);
+                    handleSwipeEnd();
+                  } else if (swipeDistance < 10) {
+                    // Small movement = click
+                    closeSwipe();
+                    setSelectedThread(thread);
+                  } else {
+                    // Large movement but not enough for action
+                    handleSwipeEnd();
+                  }
                 }}
                 onPointerCancel={(e) => {
-                  e.stopPropagation();
                   handleSwipeEnd();
                 }}
               >
                 <Card
                   className="cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => {
-                    if (swipedItemId === thread.id && swipeDistance > 60) {
-                      handleMarkAsRead(thread.id);
-                    } else if (swipeDistance === 0) {
-                      setSelectedThread(thread);
-                    }
-                  }}
                   data-testid={`thread-${thread.id}`}
                 >
                   <CardContent className="p-4">
