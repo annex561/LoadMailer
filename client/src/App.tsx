@@ -18,6 +18,7 @@ import DriverManagement from "@/pages/driver-management";
 import DriverOnboarding from "@/pages/driver-onboarding";
 import SimpleDriverRegistration from "@/pages/simple-driver-registration";
 import DriverDashboard from "@/pages/driver-dashboard";
+import MobileDriverDashboard from "@/pages/mobile-driver-dashboard";
 import DriverProfile from "@/pages/driver-profile";
 import PaymentWorkflow from "@/pages/payment-workflow";
 import ScraperManagement from "@/pages/scraper-management";
@@ -93,7 +94,8 @@ function App() {
           <Route path="/driver-onboarding" component={DriverOnboarding} />
           <Route path="/simple-registration" component={SimpleDriverRegistration} />
           <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
-          <Route path="/driver-dashboard" component={DriverDashboard} />
+          <Route path="/driver-dashboard" component={MobileDriverDashboard} />
+          <Route path="/driver-dashboard-old" component={DriverDashboard} />
           <Route path="/driver-profile" component={DriverProfile} />
           <Route path="/sms-status" component={SMSStatus} />
           <Route path="/debug-token" component={DebugToken} />

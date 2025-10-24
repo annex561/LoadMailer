@@ -871,6 +871,89 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Get driver earnings breakdown
+  app.get('/api/drivers/:driverId/earnings', async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      
+      // Get all loads for this driver
+      const allLoads = await storage.getAllLoads();
+      const driverLoads = allLoads.filter(load => load.driverId === driverId);
+      
+      // Get driver info for total revenue
+      const driver = await storage.getDriver(driverId);
+      
+      // Calculate earnings
+      const completedLoads = driverLoads.filter(load => 
+        load.status === 'delivered' || load.status === 'completed'
+      );
+      
+      const pendingPaymentLoads = completedLoads.filter(load => 
+        load.status === 'delivered' // Delivered but not yet marked as completed/paid
+      );
+      
+      const totalEarnings = driver?.totalRevenue || 0;
+      const pendingPayment = pendingPaymentLoads.reduce((sum, load) => 
+        sum + (load.rate ? load.rate * 0.9 : 0), 0
+      );
+      
+      // Calculate this week and month earnings
+      const now = new Date();
+      const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      const paidThisWeek = completedLoads
+        .filter(load => load.status === 'completed' && load.deliveryDate && new Date(load.deliveryDate) >= weekStart)
+        .reduce((sum, load) => sum + (load.rate ? load.rate * 0.9 : 0), 0);
+      
+      const paidThisMonth = completedLoads
+        .filter(load => load.status === 'completed' && load.deliveryDate && new Date(load.deliveryDate) >= monthStart)
+        .reduce((sum, load) => sum + (load.rate ? load.rate * 0.9 : 0), 0);
+      
+      // Format load earnings data
+      const loads = completedLoads.map(load => ({
+        loadNumber: load.loadNumber,
+        amount: load.rate ? load.rate * 0.9 : 0,
+        status: load.status,
+        completedDate: load.deliveryDate,
+        paymentStatus: load.status === 'completed' ? 'paid' : 'pending'
+      }));
+      
+      res.json({
+        totalEarnings,
+        pendingPayment,
+        paidThisWeek,
+        paidThisMonth,
+        loads
+      });
+    } catch (error) {
+      console.error('Error fetching driver earnings:', error);
+      res.status(500).json({ error: 'Failed to fetch driver earnings' });
+    }
+  });
+
+  // Get driver load history
+  app.get('/api/drivers/:driverId/load-history', async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      
+      // Get all loads for this driver
+      const allLoads = await storage.getAllLoads();
+      const driverLoads = allLoads
+        .filter(load => load.driverId === driverId)
+        .sort((a, b) => {
+          const dateA = a.deliveryDate ? new Date(a.deliveryDate).getTime() : 0;
+          const dateB = b.deliveryDate ? new Date(b.deliveryDate).getTime() : 0;
+          return dateB - dateA; // Most recent first
+        });
+      
+      res.json(driverLoads);
+    } catch (error) {
+      console.error('Error fetching driver load history:', error);
+      res.status(500).json({ error: 'Failed to fetch load history' });
+    }
+  });
+
   // Update driver location from GPS tracker
   // SECURITY: Token-based authentication, rate limited, validated, and logged endpoint
   app.post('/api/driver-location/update', gpsLocationRateLimiter, async (req, res) => {
@@ -1601,6 +1684,91 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error('Error fetching load documents:', error);
       res.status(500).json({ error: 'Failed to fetch documents' });
+    }
+  });
+
+  // POST /api/loads/:loadId/upload-document - Upload a document for a load
+  app.post('/api/loads/:loadId/upload-document', async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const { documentType, fileName, fileUrl, fileSize, mimeType, driverId } = req.body;
+
+      // Validate required fields
+      if (!loadId) {
+        return res.status(400).json({ error: 'Load ID is required' });
+      }
+      if (!documentType) {
+        return res.status(400).json({ error: 'Document type is required' });
+      }
+      if (!fileName) {
+        return res.status(400).json({ error: 'File name is required' });
+      }
+      if (!fileUrl) {
+        return res.status(400).json({ error: 'File URL is required' });
+      }
+      if (!driverId) {
+        return res.status(400).json({ error: 'Driver ID is required' });
+      }
+
+      // Validate document type
+      const validDocumentTypes = ['bol', 'freight_photo', 'delivery_photo', 'signature', 'pod', 'weight_ticket', 'lumper_receipt', 'scale_ticket', 'inspection_report', 'damage_report', 'temperature_log', 'customs_documents', 'other'];
+      if (!validDocumentTypes.includes(documentType)) {
+        return res.status(400).json({ 
+          error: 'Invalid document type',
+          validTypes: validDocumentTypes
+        });
+      }
+
+      // Verify load exists
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+
+      // Verify driver exists
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(404).json({ error: 'Driver not found' });
+      }
+
+      // Normalize the file URL to get the object path
+      const objectStorageService = new ObjectStorageService();
+      const objectPath = objectStorageService.normalizeObjectEntityPath(fileUrl);
+      
+      // Set ACL policy for the uploaded document
+      await objectStorageService.trySetObjectEntityAclPolicy(fileUrl, {
+        owner: driverId,
+        visibility: "private",
+      });
+
+      // Create document record
+      const document = await storage.createLoadDocument({
+        loadId,
+        driverId,
+        documentType,
+        fileName,
+        fileUrl: objectPath,
+        fileSize,
+        mimeType,
+      });
+
+      console.log(`📄 Document uploaded: ${documentType} for load ${loadId} by driver ${driverId}`);
+
+      // Get updated documents list for the load
+      const documents = await storage.getDocumentsByLoad(loadId, false);
+
+      res.json({
+        success: true,
+        message: 'Document uploaded successfully',
+        document,
+        documents
+      });
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      res.status(500).json({ 
+        error: 'Failed to upload document',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
   
