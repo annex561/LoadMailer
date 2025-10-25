@@ -505,7 +505,7 @@ const CommunicationCard: React.FC<{
           className="bg-blue-600 hover:bg-blue-700"
           data-testid={`send-message-${thread.threadId}`}
         >
-          Send Telegram
+          Send SMS
         </Button>
       </div>
     </div>
@@ -852,21 +852,22 @@ export default function LoadOpsDashboard() {
   // Send message mutation - now load-specific
   const sendMessageMutation = useMutation({
     mutationFn: async ({ driverId, message }: { driverId: string; message: string }) => {
-      // Find the active load for this driver to get loadId
-      const driverLoad = loads?.find((load: any) => load.driverId === driverId && load.status === 'assigned');
-      if (!driverLoad) {
-        throw new Error('No active load found for this driver');
+      // Find or create communication thread for this driver
+      const thread = threads?.find((t: any) => t.driverId === driverId);
+      
+      if (!thread) {
+        throw new Error('No communication thread found for this driver');
       }
       
-      return apiRequest(`/api/communication/send-message`, {
+      return apiRequest(`/api/communication/messages`, {
         method: "POST",
-        body: { loadId: driverLoad.id, message, messageType: "text" }
+        body: { threadId: thread.threadId, content: message, sender: "dispatch" }
       });
     },
     onSuccess: () => {
       toast({
-        title: "Message sent via Telegram",
-        description: "Your message has been sent to the driver and logged to the load thread",
+        title: "Message sent via SMS",
+        description: "Your message has been sent to the driver and logged to the thread",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/communication/threads"] });
     },
