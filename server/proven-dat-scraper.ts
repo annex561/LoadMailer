@@ -1,8 +1,8 @@
 // Proven DAT Scraper based on your working code
 import puppeteer from 'puppeteer';
 
-const DAT_EMAIL = 'dispatch@lampslogistics.com';
-const DAT_PASSWORD = 'Anonymous#561';
+const DAT_EMAIL = process.env.DAT_EMAIL || '';
+const DAT_PASSWORD = process.env.DAT_PASSWORD || '';
 const DAT_MAIN_URL = 'https://www.dat.com';
 const LOGIN_URL = 'https://login.dat.com/u/login/identifier?state=hKFo2SBidC1XNWZvSHpVWi05TVo4THBKYmlwdnhaNnR4ZFVnb6Fur3VuaXZlcnNhbC1sb2dpbqN0aWTZIHFMczlTMkhZbUdVS0lUc0pkSVpqU2VjMU8tTFEwdkswo2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM';
 const LOADS_URL = 'https://app.dat.com/loadboard/search';
