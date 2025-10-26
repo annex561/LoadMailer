@@ -1173,7 +1173,7 @@ export default function CommunicationDashboard() {
   return (
     <div className="flex h-[calc(100vh-8rem)] bg-gray-50" data-testid="communication-dashboard">
       {/* Thread List Sidebar */}
-      <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col shadow-sm">
+      <div className="w-80 min-w-80 max-w-80 flex-shrink-0 border-r border-gray-200 bg-gray-50 flex flex-col shadow-sm">
         {/* Header */}
         <div className="p-4 border-b border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between mb-4">
