@@ -1173,9 +1173,9 @@ export default function CommunicationDashboard() {
   return (
     <div className="flex h-[calc(100vh-8rem)] bg-gray-50" data-testid="communication-dashboard">
       {/* Thread List Sidebar */}
-      <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col">
+      <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col shadow-sm">
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 bg-white">
+        <div className="p-4 border-b border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <h2 className="text-2xl font-bold text-gray-900">Communication Center</h2>
@@ -1194,9 +1194,10 @@ export default function CommunicationDashboard() {
                 refetchUnassignedLoads();
               }}
               disabled={threadsLoading}
+              className="hover:shadow-sm transition-all duration-200"
               data-testid="button-refresh"
             >
-              <RefreshCw className={`w-4 h-4 ${threadsLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 transition-transform ${threadsLoading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
           
@@ -1213,7 +1214,7 @@ export default function CommunicationDashboard() {
                 }}
                 onFocus={() => setShowDriverDropdown(searchTerm.length > 0)}
                 onBlur={() => setTimeout(() => setShowDriverDropdown(false), 200)}
-                className="pl-10"
+                className="pl-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 data-testid="input-search"
               />
               
@@ -1274,8 +1275,8 @@ export default function CommunicationDashboard() {
             {sortedThreads.map((thread) => (
               <button
                 key={thread.id}
-                className={`w-full mb-1.5 cursor-pointer transition-colors hover:bg-blue-50 hover:border-blue-200 rounded-lg border ${
-                  selectedThread?.id === thread.id ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-200' : 'border-gray-200 bg-white'
+                className={`w-full mb-1.5 cursor-pointer transition-all duration-200 ease-in-out hover:bg-blue-50 hover:border-blue-200 hover:shadow-md rounded-lg border ${
+                  selectedThread?.id === thread.id ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-200 shadow-sm' : 'border-gray-200 bg-white'
                 }`}
                 onClick={() => setSelectedThread(thread)}
                 data-testid={`button-thread-${thread.id}`}
@@ -1343,7 +1344,7 @@ export default function CommunicationDashboard() {
         {selectedThread ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-200 bg-white">
+            <div className="p-4 border-b border-gray-200 bg-white shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Avatar className="w-10 h-10">
@@ -1366,6 +1367,7 @@ export default function CommunicationDashboard() {
                       variant="outline"
                       size="sm"
                       onClick={() => window.open(`tel:${selectedThread.driverPhone}`, '_self')}
+                      className="hover:shadow-sm transition-all duration-200"
                       data-testid="button-call-driver"
                     >
                       <Phone className="w-4 h-4" />
@@ -1374,6 +1376,7 @@ export default function CommunicationDashboard() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="hover:shadow-sm transition-all duration-200"
                     data-testid="button-more-actions"
                   >
                     <MoreVertical className="w-4 h-4" />
@@ -1411,6 +1414,7 @@ export default function CommunicationDashboard() {
                         // Toggle AI assistant for this thread
                         toast({ title: "AI Assistant", description: selectedThread?.assistantEnabled ? "Disabled" : "Enabled" });
                       }}
+                      className="hover:shadow-sm transition-all duration-200"
                       data-testid="toggle-ai-assistant"
                     >
                       <Brain className="w-4 h-4 mr-1" />
