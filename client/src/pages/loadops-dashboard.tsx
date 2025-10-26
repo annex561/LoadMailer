@@ -148,7 +148,7 @@ const CommunicationCard: React.FC<{
   };
 
   const getAiSuggestion = async () => {
-    if (!thread.threadId) return;
+    if (!thread.id) return;
     
     setIsLoadingAI(true);
     try {
@@ -156,7 +156,7 @@ const CommunicationCard: React.FC<{
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          threadId: thread.threadId,
+          threadId: thread.id,
           context: lastMessage?.textContent || lastMessage?.message || '',
           messageType: 'response',
           tone: 'professional'
@@ -243,7 +243,7 @@ const CommunicationCard: React.FC<{
 
   const toggleAiAssistant = async (enabled: boolean) => {
     try {
-      const response = await fetch(`/api/ai/thread/${thread.threadId}/settings`, {
+      const response = await fetch(`/api/ai/thread/${thread.id}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -270,7 +270,7 @@ const CommunicationCard: React.FC<{
 
   const updateAssistantMode = async (mode: string) => {
     try {
-      const response = await fetch(`/api/ai/thread/${thread.threadId}/settings`, {
+      const response = await fetch(`/api/ai/thread/${thread.id}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -297,7 +297,7 @@ const CommunicationCard: React.FC<{
 
   const updateAutoSendConfidence = async (confidence: number) => {
     try {
-      const response = await fetch(`/api/ai/thread/${thread.threadId}/settings`, {
+      const response = await fetch(`/api/ai/thread/${thread.id}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -339,7 +339,7 @@ const CommunicationCard: React.FC<{
           size="sm"
           onClick={() => setShowAiAssistant(!showAiAssistant)}
           className="h-6 px-2 text-xs"
-          data-testid={`button-ai-assistant-${thread.threadId}`}
+          data-testid={`button-ai-assistant-${thread.id}`}
         >
           🤖 AI
         </Button>
@@ -377,7 +377,7 @@ const CommunicationCard: React.FC<{
               onClick={getAiSuggestion}
               disabled={isLoadingAI || !assistantEnabled}
               className="h-6 px-2 text-xs bg-white"
-              data-testid={`button-get-suggestion-${thread.threadId}`}
+              data-testid={`button-get-suggestion-${thread.id}`}
             >
               {isLoadingAI ? '🔄' : '💡'} Suggest
             </Button>
@@ -392,7 +392,7 @@ const CommunicationCard: React.FC<{
                 size="sm"
                 onClick={() => toggleAiAssistant(!assistantEnabled)}
                 className={`h-6 px-2 text-xs ${assistantEnabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}
-                data-testid={`button-toggle-assistant-${thread.threadId}`}
+                data-testid={`button-toggle-assistant-${thread.id}`}
               >
                 {assistantEnabled ? 'Enabled' : 'Disabled'}
               </Button>
@@ -406,7 +406,7 @@ const CommunicationCard: React.FC<{
                     value={assistantMode}
                     onChange={(e) => updateAssistantMode(e.target.value)}
                     className="h-6 px-2 text-xs border border-gray-300 rounded bg-white"
-                    data-testid={`select-assistant-mode-${thread.threadId}`}
+                    data-testid={`select-assistant-mode-${thread.id}`}
                   >
                     <option value="off">Off</option>
                     <option value="suggest">Suggest Only</option>
@@ -426,7 +426,7 @@ const CommunicationCard: React.FC<{
                         value={autoSendConfidence}
                         onChange={(e) => updateAutoSendConfidence(parseInt(e.target.value))}
                         className="w-16 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                        data-testid={`slider-autosend-confidence-${thread.threadId}`}
+                        data-testid={`slider-autosend-confidence-${thread.id}`}
                       />
                       <span className="text-xs text-blue-600 w-8">{autoSendConfidence}%</span>
                     </div>
@@ -469,7 +469,7 @@ const CommunicationCard: React.FC<{
                   size="sm"
                   onClick={useAiSuggestion}
                   className="h-6 px-2 text-xs bg-white"
-                  data-testid={`button-use-suggestion-${thread.threadId}`}
+                  data-testid={`button-use-suggestion-${thread.id}`}
                 >
                   Use This
                 </Button>
@@ -478,7 +478,7 @@ const CommunicationCard: React.FC<{
                   size="sm"
                   onClick={dismissAiSuggestion}
                   className="h-6 px-2 text-xs bg-white"
-                  data-testid={`button-dismiss-suggestion-${thread.threadId}`}
+                  data-testid={`button-dismiss-suggestion-${thread.id}`}
                 >
                   Dismiss
                 </Button>
@@ -496,14 +496,14 @@ const CommunicationCard: React.FC<{
           onChange={(e) => setMessageText(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
           className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          data-testid={`message-input-${thread.threadId}`}
+          data-testid={`message-input-${thread.id}`}
         />
         <Button 
           onClick={handleSendMessage}
           disabled={!messageText.trim()}
           size="sm"
           className="bg-blue-600 hover:bg-blue-700"
-          data-testid={`send-message-${thread.threadId}`}
+          data-testid={`send-message-${thread.id}`}
         >
           Send SMS
         </Button>
@@ -725,7 +725,7 @@ export default function LoadOpsDashboard() {
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {threads.slice(0, 6).map((thread: any) => (
                     <CommunicationCard 
-                      key={thread.threadId} 
+                      key={thread.id} 
                       thread={thread} 
                       drivers={drivers}
                       loads={loads}
