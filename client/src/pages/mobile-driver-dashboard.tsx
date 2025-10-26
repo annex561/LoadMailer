@@ -1627,27 +1627,92 @@ export default function MobileDriverDashboard() {
     </>
   );
 
-  // Show error screen if no driverId is available
+  // Show driver selector if no driverId is available
   if (!driverId) {
+    return <DriverSelector />;
+  }
+  
+  // Driver Selector Component for Development/Testing
+  function DriverSelector() {
+    const { data: allDrivers, isLoading } = useQuery({
+      queryKey: ['/api/drivers'],
+      enabled: true
+    });
+
+    const handleSelectDriver = (selectedDriverId: string) => {
+      localStorage.setItem('load-signal-driver-id', selectedDriverId);
+      window.location.href = `/driver-dashboard?driverId=${selectedDriverId}`;
+    };
+
+    if (isLoading) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto text-blue-600 mb-2" />
+            <p className="text-gray-600">Loading drivers...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardHeader>
-            <CardTitle className="text-center text-red-600">Access Required</CardTitle>
-            <CardDescription className="text-center">
-              This dashboard requires a valid driver link to access.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center space-y-4">
-            <AlertCircle className="h-16 w-16 mx-auto text-red-500" />
-            <p className="text-sm text-gray-600">
-              Please use the link provided by Load Signal dispatch to access your driver dashboard.
-            </p>
-            <p className="text-xs text-gray-500">
-              If you believe this is an error, please contact support.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="max-w-2xl mx-auto">
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle className="text-center">Select Driver</CardTitle>
+              <CardDescription className="text-center">
+                Choose a driver to access their dashboard
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
+          <div className="space-y-2">
+            {allDrivers && allDrivers.length > 0 ? (
+              allDrivers.map((driver: any) => (
+                <Card 
+                  key={driver.id}
+                  className="cursor-pointer hover:shadow-lg transition-shadow active:scale-95"
+                  onClick={() => handleSelectDriver(driver.id)}
+                  data-testid={`driver-select-${driver.id}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-blue-100 rounded-full p-3">
+                          <User className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-lg">{driver.name}</h3>
+                          <p className="text-sm text-gray-600">{driver.phone}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant={driver.status === 'available' ? 'default' : 'secondary'}>
+                              {driver.status}
+                            </Badge>
+                            <span className="text-xs text-gray-500">
+                              {driver.completedLoads || 0} loads
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <AlertCircle className="h-12 w-12 mx-auto text-gray-400 mb-3" />
+                  <p className="text-gray-600">No drivers found</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Please create a driver first from the Driver Management page
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
