@@ -859,19 +859,23 @@ export default function LoadOpsDashboard() {
         throw new Error('No communication thread found for this driver');
       }
       
-      return apiRequest(`/api/communication/messages`, {
-        method: "POST",
-        body: { threadId: thread.id, content: message, sender: "dispatch" }
+      return apiRequest("POST", "/api/communication/messages", {
+        threadId: thread.id,
+        content: message,
+        sender: "dispatch"
       });
     },
     onSuccess: () => {
+      console.log('✅ Mutation onSuccess triggered - about to show toast');
       toast({
         title: "Message sent via SMS",
         description: "Your message has been sent to the driver and logged to the thread",
       });
+      console.log('✅ Toast called successfully');
       queryClient.invalidateQueries({ queryKey: ["/api/communication/threads"] });
     },
     onError: (error) => {
+      console.log('❌ Mutation onError triggered:', error);
       toast({
         title: "Failed to send message",
         description: error.message,
