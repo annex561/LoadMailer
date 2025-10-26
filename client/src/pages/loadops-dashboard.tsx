@@ -1003,7 +1003,7 @@ export default function LoadOpsDashboard() {
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300",
+        "fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 flex flex-col",
         sidebarCollapsed ? "w-16" : "w-64"
       )}>
         {/* Header */}
