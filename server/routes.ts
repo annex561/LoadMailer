@@ -137,6 +137,56 @@ function extractCityState(address: string | null | undefined): string {
   return trimmedAddress;
 }
 
+// Helper function to sanitize numeric values from corrupted database data
+// Fixes string concatenation bugs from old import code
+function sanitizeNumericValue(value: any): number {
+  if (value === null || value === undefined || value === '') {
+    return 0;
+  }
+  
+  // If it's already a clean number, use it
+  if (typeof value === 'number' && !isNaN(value) && isFinite(value)) {
+    // Check if it's a ridiculously large number (likely corrupted)
+    // Normal freight rates are $100-$10000, miles are 0-3000
+    if (value > 1000000) {
+      console.warn(`⚠️ Sanitizing corrupted number: ${value} -> 0`);
+      return 0;
+    }
+    return value;
+  }
+  
+  // Convert to string and strip non-numeric characters
+  const stringValue = String(value)
+    .replace(/[^\d.-]/g, '') // Remove everything except digits, dots, and minus
+    .trim();
+  
+  if (stringValue === '' || stringValue === '-') {
+    return 0;
+  }
+  
+  const parsed = parseFloat(stringValue);
+  
+  // Check if parsing failed or resulted in corrupted data
+  if (isNaN(parsed) || !isFinite(parsed) || parsed > 1000000) {
+    console.warn(`⚠️ Sanitizing corrupted value: ${value} -> 0`);
+    return 0;
+  }
+  
+  return parsed;
+}
+
+// Helper function to sanitize load data before sending to frontend
+function sanitizeLoadData(load: any): any {
+  if (!load) return load;
+  
+  return {
+    ...load,
+    rate: sanitizeNumericValue(load.rate),
+    miles: sanitizeNumericValue(load.miles),
+    weight: sanitizeNumericValue(load.weight),
+  };
+}
+
 // Rate limiter for GPS location updates - max 120 requests per hour per IP
 const gpsLocationRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -1728,17 +1778,19 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { status, driverId } = req.query;
       
+      let loads;
       // BUG FIX #3: Add driverId filtering support
       if (driverId && typeof driverId === "string") {
-        const loads = await storage.getLoadsByDriver(driverId);
-        res.json(loads);
+        loads = await storage.getLoadsByDriver(driverId);
       } else if (status && typeof status === "string") {
-        const loads = await storage.getLoadsByStatus(status);
-        res.json(loads);
+        loads = await storage.getLoadsByStatus(status);
       } else {
-        const loads = await storage.getAllLoads();
-        res.json(loads);
+        loads = await storage.getAllLoads();
       }
+      
+      // Sanitize all loads before sending to frontend
+      const sanitizedLoads = loads.map(sanitizeLoadData);
+      res.json(sanitizedLoads);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch loads" });
     }
@@ -1753,7 +1805,9 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: "Load not found" });
       }
       
-      res.json(load);
+      // Sanitize load data before sending to frontend
+      const sanitizedLoad = sanitizeLoadData(load);
+      res.json(sanitizedLoad);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch load" });
     }
