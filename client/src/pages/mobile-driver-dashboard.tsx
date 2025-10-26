@@ -186,7 +186,7 @@ export default function MobileDriverDashboard() {
     enabled: !!currentLoad?.id
   });
 
-  // Fetch driver's current GPS location
+  // Fetch driver's current GPS location (always track while logged in)
   const { data: driverLocation } = useQuery({
     queryKey: ['/api/drivers', driverId, 'current-location'],
     queryFn: async () => {
@@ -202,7 +202,7 @@ export default function MobileDriverDashboard() {
         hasLocation: boolean;
       }>;
     },
-    enabled: !!driverId && !!currentLoad,
+    enabled: !!driverId,
     refetchInterval: 6000
   });
 
