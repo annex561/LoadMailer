@@ -866,16 +866,13 @@ export default function LoadOpsDashboard() {
       });
     },
     onSuccess: () => {
-      console.log('✅ Mutation onSuccess triggered - about to show toast');
       toast({
         title: "Message sent via SMS",
         description: "Your message has been sent to the driver and logged to the thread",
       });
-      console.log('✅ Toast called successfully');
       queryClient.invalidateQueries({ queryKey: ["/api/communication/threads"] });
     },
     onError: (error) => {
-      console.log('❌ Mutation onError triggered:', error);
       toast({
         title: "Failed to send message",
         description: error.message,
