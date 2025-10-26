@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -756,23 +756,38 @@ export default function MobileDriverDashboard() {
     );
   };
 
+  // Compute first name with useMemo to properly track driver dependency
+  const firstName = useMemo(() => {
+    if (!driver) {
+      return 'Driver'; // Data still loading
+    }
+    if (!driver.name || driver.name.trim().length === 0) {
+      return 'Driver'; // No name available
+    }
+    const nameParts = driver.name.trim().split(/\s+/);
+    const extractedFirstName = nameParts[0];
+    return extractedFirstName && extractedFirstName.length > 0 ? extractedFirstName : 'Driver';
+  }, [driver]);
+
   // HOME TAB
-  const HomeTab = () => (
+  const HomeTab = () => {
+    return (
     <div className="space-y-4 pb-24">
       {/* Welcome Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-b-3xl">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold">Hello, {driver?.name?.split(' ')[0] || 'Driver'} 👋</h1>
+            <h1 className="text-2xl font-bold" data-testid="text-welcome-header">Hello, {firstName} 👋</h1>
             <p className="text-blue-100 text-sm">Let's have a great day!</p>
           </div>
-          <Button 
+          <button 
             onClick={() => setShowMenu(!showMenu)}
-            className="bg-white/20 hover:bg-white/30 rounded-full h-12 w-12 p-0"
+            className="bg-white/20 hover:bg-white/30 active:bg-white/40 rounded-full h-14 w-14 p-0 flex items-center justify-center transition-all active:scale-95 touch-manipulation"
             data-testid="button-menu"
+            aria-label="Open menu"
           >
             <Menu className="h-6 w-6" />
-          </Button>
+          </button>
         </div>
 
         {/* Quick Stats */}
@@ -842,15 +857,22 @@ export default function MobileDriverDashboard() {
             {/* Earnings & Distance */}
             <div className="grid grid-cols-2 gap-3 bg-blue-50 rounded-xl p-3">
               <div>
-                <div className="text-xs text-gray-600">Your Pay</div>
+                <div className="text-xs text-gray-600 mb-1">Your Pay</div>
                 <div className="text-2xl font-bold text-blue-600" data-testid="text-current-pay">
-                  {formatCurrency(parseFloat(currentLoad.rate?.toString() || '0') * 0.9)}
+                  {(() => {
+                    const rate = Number(currentLoad.rate) || 0;
+                    const driverPay = rate * 0.9;
+                    return formatCurrency(driverPay);
+                  })()}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-gray-600">Distance</div>
+                <div className="text-xs text-gray-600 mb-1">Distance</div>
                 <div className="text-2xl font-bold text-gray-900" data-testid="text-current-distance">
-                  {parseFloat(currentLoad.miles?.toString() || '0').toFixed(0)} mi
+                  {(() => {
+                    const miles = Number(currentLoad.miles) || 0;
+                    return `${miles.toFixed(0)} mi`;
+                  })()}
                 </div>
               </div>
             </div>
@@ -954,7 +976,8 @@ export default function MobileDriverDashboard() {
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   // LOADS TAB
   const LoadsTab = () => (
@@ -1033,7 +1056,11 @@ export default function MobileDriverDashboard() {
                           {formatDate(load.deliveryDate)}
                         </div>
                         <div className="font-bold text-green-600" data-testid={`text-load-pay-${load.id}`}>
-                          {formatCurrency(parseFloat(load.rate?.toString() || '0') * 0.9)}
+                          {(() => {
+                            const rate = Number(load.rate) || 0;
+                            const driverPay = rate * 0.9;
+                            return formatCurrency(driverPay);
+                          })()}
                         </div>
                       </div>
                     </CardContent>
@@ -1483,20 +1510,19 @@ export default function MobileDriverDashboard() {
           />
           
           {/* Menu Panel */}
-          <div className="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out">
+          <div className="fixed top-0 right-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out animate-in slide-in-from-right">
             {/* Menu Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">Menu</h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <button
                   onClick={() => setShowMenu(false)}
-                  className="text-white hover:bg-white/20 rounded-full h-10 w-10 p-0"
+                  className="text-white hover:bg-white/20 active:bg-white/30 rounded-full h-12 w-12 p-0 flex items-center justify-center transition-all active:scale-95 touch-manipulation"
                   data-testid="button-close-menu"
+                  aria-label="Close menu"
                 >
                   <X className="h-6 w-6" />
-                </Button>
+                </button>
               </div>
               
               {/* Driver Profile Info */}
@@ -1516,7 +1542,7 @@ export default function MobileDriverDashboard() {
             {/* Menu Items */}
             <div className="p-4 space-y-2">
               <button
-                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-gray-100 transition-colors"
+                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation"
                 onClick={() => {
                   setShowMenu(false);
                   setActiveTab('profile');
@@ -1524,11 +1550,11 @@ export default function MobileDriverDashboard() {
                 data-testid="menu-item-profile"
               >
                 <User className="h-5 w-5 text-gray-600" />
-                <span className="font-medium">Profile Settings</span>
+                <span className="font-medium text-gray-900">Profile Settings</span>
               </button>
 
               <button
-                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-gray-100 transition-colors"
+                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation"
                 onClick={() => {
                   setShowMenu(false);
                   toast({
@@ -1539,7 +1565,7 @@ export default function MobileDriverDashboard() {
                 data-testid="menu-item-help"
               >
                 <HelpCircle className="h-5 w-5 text-gray-600" />
-                <span className="font-medium">Help & Support</span>
+                <span className="font-medium text-gray-900">Help & Support</span>
               </button>
 
               <div className="border-t border-gray-200 my-2" />
@@ -1548,7 +1574,7 @@ export default function MobileDriverDashboard() {
                 <div className="text-xs text-gray-500 font-semibold mb-2">Contact Dispatch</div>
                 <div className="flex gap-2">
                   <button
-                    className="flex-1 flex flex-col items-center gap-2 p-3 rounded-xl bg-blue-50 hover:bg-blue-100 transition-colors"
+                    className="flex-1 flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-50 hover:bg-blue-100 active:bg-blue-200 transition-colors touch-manipulation"
                     onClick={() => {
                       setShowMenu(false);
                       const dispatchPhone = process.env.DISPATCH_PHONE || '+1-800-555-0100';
@@ -1560,7 +1586,7 @@ export default function MobileDriverDashboard() {
                     <span className="text-xs font-medium text-blue-700">Call</span>
                   </button>
                   <button
-                    className="flex-1 flex flex-col items-center gap-2 p-3 rounded-xl bg-green-50 hover:bg-green-100 transition-colors"
+                    className="flex-1 flex flex-col items-center gap-2 p-4 rounded-xl bg-green-50 hover:bg-green-100 active:bg-green-200 transition-colors touch-manipulation"
                     onClick={() => {
                       setShowMenu(false);
                       const dispatchPhone = process.env.DISPATCH_PHONE || '+1-800-555-0100';
@@ -1577,7 +1603,7 @@ export default function MobileDriverDashboard() {
               <div className="border-t border-gray-200 my-2" />
 
               <button
-                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-red-50 transition-colors text-red-600"
+                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-red-50 active:bg-red-100 transition-colors text-red-600 touch-manipulation"
                 onClick={() => {
                   setShowMenu(false);
                   toast({

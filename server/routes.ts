@@ -881,6 +881,23 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.status(500).json({ error: "Failed to fetch drivers" });
     }
   });
+
+  // Get single driver by ID
+  app.get('/api/drivers/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const driver = await storage.getDriver(id);
+      
+      if (!driver) {
+        return res.status(404).json({ error: "Driver not found" });
+      }
+      
+      res.json(driver);
+    } catch (error) {
+      console.error('Error fetching driver:', error);
+      res.status(500).json({ error: "Failed to fetch driver" });
+    }
+  });
   
   // Get active driver locations for real-time map tracking
   app.get('/api/driver-locations/active', async (req, res) => {
