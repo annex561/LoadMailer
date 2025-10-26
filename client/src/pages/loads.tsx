@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Dashboard from "@/pages/dashboard";
 
 // Component to display document counts for a load
 function DocumentCount({ loadId }: { loadId: string }) {
@@ -106,8 +108,23 @@ export default function Loads() {
   return (
     <>
       <div className="p-6">
-        {/* Search and Filter Bar */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        {/* Page Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Loads</h1>
+          <p className="text-gray-500">Manage your loads and browse available freight</p>
+        </div>
+
+        {/* Tabs for switching between My Loads and Load Board */}
+        <Tabs defaultValue="my-loads" className="w-full">
+          <TabsList className="mb-6">
+            <TabsTrigger value="my-loads" data-testid="tab-my-loads">My Loads</TabsTrigger>
+            <TabsTrigger value="load-board" data-testid="tab-load-board">Load Board</TabsTrigger>
+          </TabsList>
+
+          {/* My Loads Tab Content */}
+          <TabsContent value="my-loads">
+            {/* Search and Filter Bar */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
             <div className="flex-1 max-w-lg">
               <div className="relative">
@@ -293,7 +310,13 @@ export default function Loads() {
               </div>
             </div>
           </div>
-        </div>
+          </TabsContent>
+
+          {/* Load Board Tab Content */}
+          <TabsContent value="load-board">
+            <Dashboard />
+          </TabsContent>
+        </Tabs>
       </div>
 
       <LoadFormModal

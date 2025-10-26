@@ -959,7 +959,6 @@ export default function LoadOpsDashboard() {
   const navigation = [
     // Core Operations
     { name: 'Main Dashboard', href: '/loadops-dashboard', icon: Home, section: 'core' },
-    { name: 'Dashboard', href: '/dashboard', icon: BarChart3, section: 'core' },
     { name: 'Loads', href: '/loads', icon: FileText, section: 'core' },
     { name: 'DAT Loads', href: '/dat-loads', icon: Truck, section: 'core' },
     { name: 'Manual Load Entry', href: '/manual-load-entry', icon: FileText, section: 'core' },
