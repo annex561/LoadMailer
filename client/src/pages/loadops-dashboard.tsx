@@ -973,7 +973,7 @@ export default function LoadOpsDashboard() {
     
     // Customer & Communication
     { name: 'Customers', href: '/customers', icon: Users, section: 'comm' },
-    { name: 'Communication Dashboard', href: '/communication-dashboard', icon: MessageSquare, section: 'comm' },
+    { name: 'Driver Messages', href: '/communication-dashboard', icon: MessageSquare, section: 'comm' },
     { name: 'AI Communication Insights', href: '/ai-communication-insights', icon: Brain, section: 'comm' },
     { name: 'LoadMailer Control', href: '/loadmailer-control', icon: Mail, section: 'comm' },
     { name: 'Telegram Dispatching', href: '/telegram-dispatching', icon: MessageSquare, section: 'comm' },
