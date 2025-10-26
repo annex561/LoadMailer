@@ -5,42 +5,46 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
-  // Dashboards & Operations
-  { name: "Dashboard", href: "/", icon: LayoutDashboard, section: "dashboards" },
-  { name: "LoadOps Dashboard", href: "/loadops-dashboard", icon: TrendingUp, section: "dashboards" },
-  { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Headphones, section: "dashboards" },
+  // Core Operations
+  { name: "Main Dashboard", href: "/loadops-dashboard", icon: LayoutDashboard, section: "core" },
+  { name: "Loads", href: "/loads", icon: Package, section: "core" },
+  { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "core" },
+  { name: "Manual Load Entry", href: "/manual-load-entry", icon: UserPlus, section: "core" },
   
-  // Load Management
-  { name: "Manage Loads", href: "/loads", icon: Package, section: "loads" },
-  { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "loads" },
-  { name: "Manual Load Entry", href: "/manual-load-entry", icon: UserPlus, section: "loads" },
-  { name: "Manual Dispatch", href: "/manual-dispatch", icon: Upload, section: "loads" },
-  { name: "Google Sheets Import", href: "/google-sheets-import", icon: Sheet, section: "loads" },
-  { name: "DAT Login", href: "/dat-login", icon: Bot, section: "loads" },
-  { name: "DAT Scrapers", href: "/scrapers", icon: Bot, section: "loads" },
+  // Driver Management
+  { name: "Driver Management", href: "/driver-management", icon: UserPlus, section: "drivers" },
+  { name: "Driver Onboarding", href: "/driver-onboarding", icon: UserPlus, section: "drivers" },
+  { name: "Simple Registration", href: "/simple-registration", icon: UserPlus, section: "drivers" },
+  { name: "Driver Dashboard", href: "/driver-dashboard", icon: UserPlus, section: "drivers" },
+  { name: "GPS Tracking", href: "/gps-tracking", icon: MapPin, section: "drivers" },
   
-  // Communication & Dispatch
-  { name: "SMS Dispatching", href: "/sms-dispatching", icon: MessageSquare, section: "communication" },
-  { name: "LoadMailer Bot", href: "/loadmailer-control", icon: Bot, section: "communication" },
-  { name: "Email Templates", href: "/templates", icon: Mail, section: "communication" },
+  // Communication
+  { name: "Customers", href: "/contacts", icon: Users, section: "comm" },
+  { name: "Driver Messages", href: "/communication-dashboard", icon: MessageSquare, section: "comm" },
+  { name: "AI Communication Insights", href: "/ai-communication-insights", icon: Brain, section: "comm" },
+  { name: "LoadMailer Control", href: "/loadmailer-control", icon: Mail, section: "comm" },
+  { name: "Telegram Dispatching", href: "/telegram-dispatching", icon: MessageSquare, section: "comm" },
+  { name: "SMS Status", href: "/sms-status", icon: MessageSquare, section: "comm" },
   
-  // Fleet Management
-  { name: "Driver Management", href: "/driver-management", icon: UserPlus, section: "fleet" },
-  { name: "Vehicle Management", href: "/dispatcher-vehicle-dashboard", icon: Truck, section: "fleet" },
-  { name: "Contacts", href: "/contacts", icon: Users, section: "fleet" },
-  { name: "GPS Tracking", href: "/gps-tracking", icon: MapPin, section: "fleet" },
-  
-  // Smart Operations
+  // AI & Smart Features
   { name: "Smart Load Matching", href: "/smart-load-matching", icon: Brain, section: "smart" },
-  { name: "Prediction Confidence", href: "/prediction-confidence", icon: TrendingUp, section: "smart" },
+  { name: "Analytics Dashboard", href: "/analytics", icon: BarChart3, section: "smart" },
   { name: "Predictive Maintenance", href: "/predictive-maintenance", icon: Wrench, section: "smart" },
-  { name: "Mood Tracker", href: "/mood-tracker", icon: Smile, section: "smart" },
-  { name: "Payment Workflow", href: "/payments", icon: DollarSign, section: "smart" },
+  { name: "Prediction Confidence", href: "/prediction-confidence", icon: TrendingUp, section: "smart" },
   
   // System & Reports
+  { name: "Admin Overview", href: "/admin-overview", icon: BarChart3, section: "system" },
+  { name: "Payment Workflow", href: "/payments", icon: DollarSign, section: "system" },
+  { name: "Templates", href: "/templates", icon: FileText, section: "system" },
+  { name: "Scraper Management", href: "/scrapers", icon: Bot, section: "system" },
+  { name: "Debug Token", href: "/debug-token", icon: Wrench, section: "system" },
+  { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Headphones, section: "system" },
+  { name: "Dispatcher Vehicle Dashboard", href: "/dispatcher-vehicle-dashboard", icon: Truck, section: "system" },
   { name: "Document Management", href: "/document-management", icon: FileText, section: "system" },
+  { name: "DAT Scraper", href: "/dat-scraper", icon: Bot, section: "system" },
+  { name: "DAT Login", href: "/dat-login", icon: Bot, section: "system" },
+  { name: "SMS Dispatching", href: "/sms-dispatching", icon: MessageSquare, section: "system" },
   { name: "TaskMagic Status", href: "/taskmagic-status", icon: Webhook, section: "system" },
-  { name: "Analytics", href: "/analytics", icon: BarChart3, section: "system" },
   { name: "Email Logs", href: "/email-logs", icon: FileText, section: "system" },
 ];
 
@@ -86,14 +90,14 @@ export default function Sidebar() {
       </div>
       
       <nav className="mt-6">
-        {/* Dashboards Section */}
+        {/* Core Operations Section */}
         {!isCollapsed && (
           <div className="px-6 py-2">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Dashboards</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Core Operations</p>
           </div>
         )}
         <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
-          {navigation.filter(item => item.section === "dashboards").map((item) => {
+          {navigation.filter(item => item.section === "core").map((item) => {
             const Icon = item.icon;
             const isActive = location === item.href;
             
@@ -129,14 +133,14 @@ export default function Sidebar() {
           })}
         </ul>
 
-        {/* Load Management Section */}
+        {/* Driver Management Section */}
         {!isCollapsed && (
           <div className="px-6 py-2 mt-6">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Load Management</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Driver Management</p>
           </div>
         )}
         <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
-          {navigation.filter(item => item.section === "loads").map((item) => {
+          {navigation.filter(item => item.section === "drivers").map((item) => {
             const Icon = item.icon;
             const isActive = location === item.href;
             
@@ -179,7 +183,7 @@ export default function Sidebar() {
           </div>
         )}
         <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
-          {navigation.filter(item => item.section === "communication").map((item) => {
+          {navigation.filter(item => item.section === "comm").map((item) => {
             const Icon = item.icon;
             const isActive = location === item.href;
             
@@ -215,53 +219,10 @@ export default function Sidebar() {
           })}
         </ul>
 
-        {/* Fleet Management Section */}
+        {/* AI & Smart Features Section */}
         {!isCollapsed && (
           <div className="px-6 py-2 mt-6">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Fleet Management</p>
-          </div>
-        )}
-        <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
-          {navigation.filter(item => item.section === "fleet").map((item) => {
-            const Icon = item.icon;
-            const isActive = location === item.href;
-            
-            return (
-              <li key={item.name}>
-                <Link
-                  href={item.href}
-                  data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
-                  className={cn(
-                    "flex items-center py-3 text-sm font-medium transition-colors relative group",
-                    isCollapsed 
-                      ? "px-2 justify-center" 
-                      : "px-6",
-                    isActive
-                      ? "text-primary bg-blue-50 border-r-3 border-primary"
-                      : "text-gray-700 hover:bg-gray-50 hover:text-primary"
-                  )}
-                  title={isCollapsed ? item.name : undefined}
-                >
-                  <Icon className={cn(
-                    "w-5 h-5", 
-                    !isCollapsed && "mr-3"
-                  )} />
-                  {!isCollapsed && <span>{item.name}</span>}
-                  {isCollapsed && (
-                    <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-                      {item.name}
-                    </div>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-
-        {/* Smart Operations Section */}
-        {!isCollapsed && (
-          <div className="px-6 py-2 mt-6">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Smart Operations</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">AI & Smart Features</p>
           </div>
         )}
         <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
