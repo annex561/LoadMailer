@@ -203,7 +203,7 @@ export default function MobileDriverDashboard() {
       }>;
     },
     enabled: !!driverId && !!currentLoad,
-    refetchInterval: 15000
+    refetchInterval: 6000
   });
 
   // Update load status mutation
