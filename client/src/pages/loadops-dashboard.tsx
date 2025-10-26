@@ -42,19 +42,23 @@ import Dashboard from './dashboard';
 import Loads from './loads';
 import DatLoads from './dat-loads';
 import ManualLoadEntry from './manual-load-entry';
+import ManualDispatch from './manual-dispatch';
+import GoogleSheetsImport from './google-sheets-import';
 import DriverManagement from './driver-management';
 import DriverOnboarding from './driver-onboarding';
 import SimpleDriverRegistration from './simple-driver-registration';
 import Contacts from './contacts';
+import SmsDispatching from './sms-dispatching';
 import LoadmailerControl from './loadmailer-control';
 import TelegramDispatching from './telegram-dispatching';
+import Templates from './templates';
 import SmartLoadMatching from './smart-load-matching';
 import AnalyticsDashboard from './analytics-dashboard';
 import PredictiveMaintenancePage from './predictive-maintenance';
 import GPSTracking from './gps-tracking';
 import PaymentWorkflow from './payment-workflow';
 import PredictionConfidence from './prediction-confidence';
-import Templates from './templates';
+import { MoodTracker } from './mood-tracker';
 import ScraperManagement from './scraper-management';
 import SmsStatus from './sms-status';
 import DebugToken from './debug-token';
@@ -62,10 +66,10 @@ import DriverDashboard from './driver-dashboard';
 import DispatcherDashboard from './dispatcher-dashboard';
 import DispatcherVehicleDashboard from './dispatcher-vehicle-dashboard';
 import DocumentManagement from './DocumentManagement';
+import { TaskMagicStatusPage } from './taskmagic-status';
 import DATScraper from './DATScraper';
 import DatLogin from './dat-login';
 import AdminOverview from './admin-overview';
-import ManualDispatch from './manual-dispatch';
 import CommunicationDashboard from './communication-dashboard';
 import AICommunicationInsights from './ai-communication-insights';
 import NotFound from './not-found';
@@ -532,33 +536,47 @@ export default function LoadOpsDashboard() {
         return <DatLoads />;
       case '/manual-load-entry':
         return <ManualLoadEntry />;
-      case '/drivers':
+      case '/manual-dispatch':
+        return <ManualDispatch />;
+      case '/google-sheets-import':
+        return <GoogleSheetsImport />;
+      case '/driver-management':
         return <DriverManagement />;
       case '/driver-onboarding':
         return <DriverOnboarding />;
       case '/simple-registration':
         return <SimpleDriverRegistration />;
-      case '/customers':
+      case '/contacts':
         return <Contacts />;
+      case '/sms-dispatching':
+        return <SmsDispatching />;
       case '/loadmailer-control':
         return <LoadmailerControl />;
       case '/telegram-dispatching':
         return <TelegramDispatching />;
-      case '/smart-load-matching':
-        return <SmartLoadMatching />;
-      case '/analytics-dashboard':
-        return <AnalyticsDashboard />;
-      case '/predictive-maintenance':
-        return <PredictiveMaintenancePage />;
-      case '/gps-tracking':
-        return <GPSTracking />;
-      case '/payment-workflow':
-        return <PaymentWorkflow />;
-      case '/prediction-confidence':
-        return <PredictionConfidence />;
       case '/templates':
         return <Templates />;
-      case '/scraper-management':
+      case '/dispatcher-vehicle-dashboard':
+        return <DispatcherVehicleDashboard />;
+      case '/gps-tracking':
+        return <GPSTracking />;
+      case '/smart-load-matching':
+        return <SmartLoadMatching />;
+      case '/prediction-confidence':
+        return <PredictionConfidence />;
+      case '/predictive-maintenance':
+        return <PredictiveMaintenancePage />;
+      case '/mood-tracker':
+        return <MoodTracker />;
+      case '/payments':
+        return <PaymentWorkflow />;
+      case '/document-management':
+        return <DocumentManagement />;
+      case '/taskmagic-status':
+        return <TaskMagicStatusPage />;
+      case '/analytics':
+        return <AnalyticsDashboard />;
+      case '/scrapers':
         return <ScraperManagement />;
       case '/sms-status':
         return <SmsStatus />;
@@ -566,20 +584,14 @@ export default function LoadOpsDashboard() {
         return <DebugToken />;
       case '/driver-dashboard':
         return <DriverDashboard />;
-      case '/dispatcher-dashboard':
+      case '/dispatcher':
         return <DispatcherDashboard />;
-      case '/dispatcher-vehicle-dashboard':
-        return <DispatcherVehicleDashboard />;
-      case '/document-management':
-        return <DocumentManagement />;
       case '/dat-scraper':
         return <DATScraper />;
       case '/dat-login':
         return <DatLogin />;
       case '/admin-overview':
         return <AdminOverview />;
-      case '/manual-dispatch':
-        return <ManualDispatch />;
       case '/communication-dashboard':
         return <CommunicationDashboard />;
       case '/ai-communication-insights':
@@ -957,45 +969,42 @@ export default function LoadOpsDashboard() {
 
   // Navigation items organized by sections
   const navigation = [
-    // Core Operations
-    { name: 'Main Dashboard', href: '/loadops-dashboard', icon: Home, section: 'core' },
-    { name: 'Loads', href: '/loads', icon: FileText, section: 'core' },
-    { name: 'DAT Loads', href: '/dat-loads', icon: Truck, section: 'core' },
-    { name: 'Manual Load Entry', href: '/manual-load-entry', icon: FileText, section: 'core' },
+    // Dashboards & Operations
+    { name: 'Dashboard', href: '/', icon: Home, section: 'dashboards' },
+    { name: 'LoadOps Dashboard', href: '/loadops-dashboard', icon: TrendingUp, section: 'dashboards' },
+    { name: 'Dispatcher Dashboard', href: '/dispatcher', icon: Headphones, section: 'dashboards' },
     
-    // Driver Management
-    { name: 'Driver Management', href: '/drivers', icon: Users, section: 'drivers' },
-    { name: 'Driver Onboarding', href: '/driver-onboarding', icon: UserPlus, section: 'drivers' },
-    { name: 'Simple Registration', href: '/simple-registration', icon: User, section: 'drivers' },
-    { name: 'Driver Dashboard', href: '/driver-dashboard', icon: User, section: 'drivers' },
-    { name: 'GPS Tracking', href: '/gps-tracking', icon: MapPin, section: 'drivers' },
+    // Load Management
+    { name: 'Manage Loads', href: '/loads', icon: FileText, section: 'loads' },
+    { name: 'DAT Loads', href: '/dat-loads', icon: Truck, section: 'loads' },
+    { name: 'Manual Load Entry', href: '/manual-load-entry', icon: UserPlus, section: 'loads' },
+    { name: 'Manual Dispatch', href: '/manual-dispatch', icon: Radio, section: 'loads' },
+    { name: 'Google Sheets Import', href: '/google-sheets-import', icon: FileText, section: 'loads' },
+    { name: 'DAT Login', href: '/dat-login', icon: Bot, section: 'loads' },
+    { name: 'DAT Scrapers', href: '/scrapers', icon: Bot, section: 'loads' },
     
-    // Customer & Communication
-    { name: 'Customers', href: '/customers', icon: Users, section: 'comm' },
-    { name: 'Driver Messages', href: '/communication-dashboard', icon: MessageSquare, section: 'comm' },
-    { name: 'AI Communication Insights', href: '/ai-communication-insights', icon: Brain, section: 'comm' },
-    { name: 'LoadMailer Control', href: '/loadmailer-control', icon: Mail, section: 'comm' },
-    { name: 'Telegram Dispatching', href: '/telegram-dispatching', icon: MessageSquare, section: 'comm' },
-    { name: 'SMS Status', href: '/sms-status', icon: MessageSquare, section: 'comm' },
+    // Communication & Dispatch
+    { name: 'SMS Dispatching', href: '/sms-dispatching', icon: MessageSquare, section: 'communication' },
+    { name: 'LoadMailer Bot', href: '/loadmailer-control', icon: Mail, section: 'communication' },
+    { name: 'Email Templates', href: '/templates', icon: FileText, section: 'communication' },
     
-    // AI & Smart Features
+    // Fleet Management
+    { name: 'Driver Management', href: '/driver-management', icon: UserPlus, section: 'fleet' },
+    { name: 'Vehicle Management', href: '/dispatcher-vehicle-dashboard', icon: Truck, section: 'fleet' },
+    { name: 'Contacts', href: '/contacts', icon: Users, section: 'fleet' },
+    { name: 'GPS Tracking', href: '/gps-tracking', icon: MapPin, section: 'fleet' },
+    
+    // Smart Operations
     { name: 'Smart Load Matching', href: '/smart-load-matching', icon: Brain, section: 'smart' },
-    { name: 'Analytics Dashboard', href: '/analytics-dashboard', icon: BarChart3, section: 'smart' },
+    { name: 'Prediction Confidence', href: '/prediction-confidence', icon: TrendingUp, section: 'smart' },
     { name: 'Predictive Maintenance', href: '/predictive-maintenance', icon: Wrench, section: 'smart' },
-    { name: 'Prediction Confidence', href: '/prediction-confidence', icon: Brain, section: 'smart' },
+    { name: 'Mood Tracker', href: '/mood-tracker', icon: Smile, section: 'smart' },
+    { name: 'Payment Workflow', href: '/payments', icon: DollarSign, section: 'smart' },
     
     // System & Reports
-    { name: 'Admin Overview', href: '/admin-overview', icon: Settings, section: 'system' },
-    { name: 'Payment Workflow', href: '/payment-workflow', icon: DollarSign, section: 'system' },
-    { name: 'Templates', href: '/templates', icon: FileText, section: 'system' },
-    { name: 'Scraper Management', href: '/scraper-management', icon: Bot, section: 'system' },
-    { name: 'Debug Token', href: '/debug-token', icon: Wrench, section: 'system' },
-    { name: 'Dispatcher Dashboard', href: '/dispatcher-dashboard', icon: Headphones, section: 'system' },
-    { name: 'Dispatcher Vehicle Dashboard', href: '/dispatcher-vehicle-dashboard', icon: Truck, section: 'system' },
     { name: 'Document Management', href: '/document-management', icon: FileText, section: 'system' },
-    { name: 'DAT Scraper', href: '/dat-scraper', icon: Bot, section: 'system' },
-    { name: 'DAT Login', href: '/dat-login', icon: Webhook, section: 'system' },
-    { name: 'Twilio Settings', href: '/twilio-settings', icon: Settings, section: 'system' }
+    { name: 'TaskMagic Status', href: '/taskmagic-status', icon: Webhook, section: 'system' },
+    { name: 'Analytics', href: '/analytics', icon: BarChart3, section: 'system' }
   ];
 
   return (
@@ -1022,14 +1031,14 @@ export default function LoadOpsDashboard() {
 
         {/* Navigation */}
         <nav className="flex-1 min-h-0 overflow-y-auto py-4">
-          {/* Core Operations Section */}
+          {/* Dashboards & Operations Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Core Operations</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Dashboards & Operations</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
-            {navigation.filter(item => item.section === "core").map((item) => {
+            {navigation.filter(item => item.section === "dashboards").map((item) => {
               const Icon = item.icon;
               const isActive = window.location.pathname === item.href;
               
@@ -1059,14 +1068,14 @@ export default function LoadOpsDashboard() {
             })}
           </ul>
 
-          {/* Driver Management Section */}
+          {/* Load Management Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Driver Management</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Load Management</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
-            {navigation.filter(item => item.section === "drivers").map((item) => {
+            {navigation.filter(item => item.section === "loads").map((item) => {
               const Icon = item.icon;
               const isActive = window.location.pathname === item.href;
               
@@ -1096,14 +1105,14 @@ export default function LoadOpsDashboard() {
             })}
           </ul>
 
-          {/* Customer & Communication Section */}
+          {/* Communication & Dispatch Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Communication</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Communication & Dispatch</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
-            {navigation.filter(item => item.section === "comm").map((item) => {
+            {navigation.filter(item => item.section === "communication").map((item) => {
               const Icon = item.icon;
               const isActive = window.location.pathname === item.href;
               
@@ -1133,10 +1142,47 @@ export default function LoadOpsDashboard() {
             })}
           </ul>
 
-          {/* AI & Smart Features Section */}
+          {/* Fleet Management Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">AI & Smart Features</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Fleet Management</p>
+            </div>
+          )}
+          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
+            {navigation.filter(item => item.section === "fleet").map((item) => {
+              const Icon = item.icon;
+              const isActive = window.location.pathname === item.href;
+              
+              return (
+                <li key={item.name}>
+                  <a
+                    href={item.href}
+                    className={cn(
+                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      sidebarCollapsed 
+                        ? "px-2 justify-center" 
+                        : "px-6",
+                      isActive
+                        ? "text-primary bg-blue-50 border-r-3 border-primary"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                    )}
+                    title={sidebarCollapsed ? item.name : undefined}
+                  >
+                    <Icon className={cn(
+                      "w-5 h-5", 
+                      !sidebarCollapsed && "mr-3"
+                    )} />
+                    {!sidebarCollapsed && <span>{item.name}</span>}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Smart Operations Section */}
+          {!sidebarCollapsed && (
+            <div className="px-6 py-2 mt-6">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Smart Operations</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>

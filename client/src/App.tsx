@@ -42,6 +42,7 @@ import TwilioSettings from "@/pages/twilio-settings";
 import UnifiedMessaging from "@/pages/unified-messaging";
 import DriverTracker from "@/pages/driver-tracker";
 import DocumentManagement from "@/pages/document-management";
+import ManualDispatch from "@/pages/manual-dispatch";
 
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
@@ -57,6 +58,7 @@ function Router() {
       <Route path="/loads" component={Loads} />
       <Route path="/dat-loads" component={DATLoads} />
       <Route path="/manual-load-entry" component={ManualLoadEntry} />
+      <Route path="/manual-dispatch" component={ManualDispatch} />
       <Route path="/dat-login" component={DATLogin} />
       <Route path="/telegram-dispatching" component={TelegramDispatching} />
       <Route path="/sms-dispatching" component={SMSDispatching} />

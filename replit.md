@@ -50,6 +50,13 @@ Preferred communication style: Simple, everyday language.
 - **Automated Communication**: SMS notifications for load offers and driver communications.
 - **Load Workflow**: Intelligent load retry system, post-confirmation messaging, and manual load entry.
 - **UI/UX**: Consistent styling for forms and dropdowns, integrated document viewing, and a professional dashboard.
+- **LoadOps Dashboard Navigation**: Comprehensive sidebar with 6 organized sections for efficient access to all system features
+  - **Dashboards & Operations**: Main Dashboard, LoadOps Dashboard, Dispatcher Dashboard
+  - **Load Management**: Manage Loads, DAT Loads, Manual Load Entry, Manual Dispatch, Google Sheets Import, DAT Login, DAT Scrapers
+  - **Communication & Dispatch**: SMS Dispatching, LoadMailer Bot, Email Templates
+  - **Fleet Management**: Driver Management, Vehicle Management, Contacts, GPS Tracking
+  - **Smart Operations**: Smart Load Matching, Prediction Confidence, Predictive Maintenance, Mood Tracker, Payment Workflow
+  - **System & Reports**: Document Management, TaskMagic Status, Analytics
 - **Communication Dashboard**: Modern, optimized interface for driver communications with compact thread list (320px fixed sidebar), real-time message updates (2s polling), status indicators (emerald/amber/gray dots), enhanced search/filter, AI-assisted messaging, and comprehensive empty/loading states. Features include quick message templates, MMS image preview, and WhatsApp-style chat interface.
 - **Professional Document Management System**: Complete approval workflow with quality validation, automation, and cloud integrations. Includes smart categorization, an enhanced viewer with annotations, audit trails, automated reminders, and PDF generation. Prevents load completion without all required documents.
 - **Real-Time GPS Tracking**: Mobile-optimized driver location tracking with secure token-based authentication, 60-second auto-updates, wake lock support, and a GPS health monitor. After successful location update, automatically redirects back to driver dashboard for seamless workflow.
