@@ -769,6 +769,83 @@ export default function MobileDriverDashboard() {
     return extractedFirstName && extractedFirstName.length > 0 ? extractedFirstName : 'Driver';
   }, [driver]);
 
+  // PWA Install Banner Component
+  const PWAInstallBanner = () => {
+    const [showBanner, setShowBanner] = useState(false);
+    const [isIOS, setIsIOS] = useState(false);
+    const [isAndroid, setIsAndroid] = useState(false);
+
+    useEffect(() => {
+      // Check if already installed (standalone mode)
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                          (window.navigator as any).standalone === true;
+      
+      // Check if banner was dismissed
+      const wasDismissed = localStorage.getItem('pwa-banner-dismissed') === 'true';
+      
+      // Detect platform
+      const userAgent = window.navigator.userAgent.toLowerCase();
+      const iOS = /iphone|ipad|ipod/.test(userAgent);
+      const android = /android/.test(userAgent);
+      
+      setIsIOS(iOS);
+      setIsAndroid(android);
+      
+      // Show banner if not installed and not dismissed
+      if (!isStandalone && !wasDismissed && (iOS || android)) {
+        setShowBanner(true);
+      }
+    }, []);
+
+    const handleDismiss = () => {
+      localStorage.setItem('pwa-banner-dismissed', 'true');
+      setShowBanner(false);
+    };
+
+    if (!showBanner) return null;
+
+    return (
+      <div className="mx-4 mb-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl p-4 shadow-lg relative" data-testid="pwa-install-banner">
+        <button
+          onClick={handleDismiss}
+          className="absolute top-2 right-2 text-white/80 hover:text-white"
+          data-testid="button-dismiss-pwa-banner"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        
+        <div className="pr-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Download className="h-5 w-5" />
+            <h3 className="font-bold text-lg">Install Load Signal App</h3>
+          </div>
+          
+          <p className="text-sm text-white/90 mb-3">
+            Add this app to your home screen for quick access and a better experience!
+          </p>
+          
+          {isIOS && (
+            <div className="bg-white/20 rounded-xl p-3 text-sm space-y-1">
+              <p className="font-semibold mb-1">📱 For iPhone/iPad:</p>
+              <p>1. Tap the <strong>Share</strong> button (square with arrow) at the bottom</p>
+              <p>2. Scroll down and tap <strong>"Add to Home Screen"</strong></p>
+              <p>3. Tap <strong>"Add"</strong> in the top right</p>
+            </div>
+          )}
+          
+          {isAndroid && (
+            <div className="bg-white/20 rounded-xl p-3 text-sm space-y-1">
+              <p className="font-semibold mb-1">📱 For Android:</p>
+              <p>1. Tap the <strong>menu (⋮)</strong> in your browser</p>
+              <p>2. Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></p>
+              <p>3. Tap <strong>"Add"</strong> or <strong>"Install"</strong></p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // HOME TAB
   const HomeTab = () => {
     return (
@@ -806,6 +883,9 @@ export default function MobileDriverDashboard() {
           </div>
         </div>
       </div>
+
+      {/* PWA Install Banner */}
+      <PWAInstallBanner />
 
       {/* Current Load Card */}
       {currentLoad ? (
