@@ -1008,7 +1008,7 @@ export default function LoadOpsDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Sidebar */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 flex flex-col",
@@ -1256,7 +1256,7 @@ export default function LoadOpsDashboard() {
       </aside>
 
       {/* Main Content */}
-      <div className={cn("flex-1 flex flex-col overflow-hidden", sidebarCollapsed ? "ml-16" : "ml-64")}>
+      <div className={cn("flex-1 flex flex-col", sidebarCollapsed ? "ml-16" : "ml-64")}>
         {/* Top Header */}
         <header className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
