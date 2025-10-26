@@ -61,6 +61,7 @@ Preferred communication style: Simple, everyday language.
 - **Real-Time GPS Tracking**: Mobile-optimized driver location tracking with secure token-based authentication, 60-second auto-updates, wake lock support, and a GPS health monitor. After successful location update, automatically redirects back to driver dashboard for seamless workflow.
 - **Mobile Driver Dashboard**: A PWA (Progressive Web App) interface with dynamic authentication, providing driver stats, load history, WhatsApp-style chat, document upload, and profile management.
   - **PWA Features**: Installable to home screen without App Store, offline functionality via service worker, app icons in multiple sizes (192x192, 512x512, 180x180)
+  - **PWA Install Banner**: Smart install prompt with platform-specific instructions (iOS/Android), dismissible with localStorage persistence, only shows on mobile devices when app is not installed
   - **Authentication Pattern**: Dynamic driver authentication via URL parameter `?driverId=xxx` with localStorage persistence for PWA launches
   - **Query Guards**: All driverId-dependent TanStack Query hooks use `enabled: !!driverId` to prevent malformed API calls
   - **Fallback UI**: Error screen displays when driverId is missing, directing drivers to use official dispatch link
