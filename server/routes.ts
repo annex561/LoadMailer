@@ -1092,6 +1092,99 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Get driver's current GPS location
+  app.get('/api/drivers/:driverId/current-location', async (req, res) => {
+    try {
+      const { driverId } = req.params;
+      
+      // Get driver's most recent active location
+      const currentLocation = await storage.getDriverCurrentLocation(driverId);
+      
+      if (!currentLocation || !currentLocation.isActive) {
+        return res.status(404).json({ 
+          error: 'No active location found for this driver',
+          hasLocation: false
+        });
+      }
+      
+      res.json({
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        address: currentLocation.address,
+        timestamp: currentLocation.timestamp,
+        speed: currentLocation.speed || 0,
+        heading: currentLocation.heading || 0,
+        accuracy: currentLocation.accuracy || 0,
+        hasLocation: true
+      });
+    } catch (error) {
+      console.error('Error fetching driver current location:', error);
+      res.status(500).json({ error: 'Failed to fetch current location' });
+    }
+  });
+
+  // Calculate distance between driver and target address
+  // Helper function using Haversine formula - returns distance in miles
+  function calculateDistanceInMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 3959; // Earth's radius in miles
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
+  // POST endpoint to calculate distance from lat/lon to target address
+  app.post('/api/calculate-distance', async (req, res) => {
+    try {
+      const { lat, lon, targetAddress } = req.body;
+
+      if (typeof lat !== 'number' || typeof lon !== 'number' || !targetAddress) {
+        return res.status(400).json({ 
+          error: 'Invalid request. Required: lat (number), lon (number), targetAddress (string)' 
+        });
+      }
+
+      // Geocode the target address using OpenStreetMap Nominatim
+      const geocodeResponse = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(targetAddress)}&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'LoadSignal-Fleet-Management/1.0'
+          }
+        }
+      );
+      
+      const geocodeData = await geocodeResponse.json();
+      
+      if (!geocodeData || geocodeData.length === 0) {
+        return res.status(404).json({ 
+          error: 'Unable to geocode target address',
+          address: targetAddress
+        });
+      }
+
+      const targetLat = parseFloat(geocodeData[0].lat);
+      const targetLon = parseFloat(geocodeData[0].lon);
+
+      // Calculate distance using Haversine formula
+      const distanceInMiles = calculateDistanceInMiles(lat, lon, targetLat, targetLon);
+
+      res.json({
+        distance: distanceInMiles,
+        unit: 'miles',
+        from: { lat, lon },
+        to: { lat: targetLat, lon: targetLon, address: targetAddress }
+      });
+    } catch (error) {
+      console.error('Error calculating distance:', error);
+      res.status(500).json({ error: 'Failed to calculate distance' });
+    }
+  });
+
   // Update driver location from GPS tracker
   // SECURITY: Token-based authentication, rate limited, validated, and logged endpoint
   app.post('/api/driver-location/update', gpsLocationRateLimiter, async (req, res) => {

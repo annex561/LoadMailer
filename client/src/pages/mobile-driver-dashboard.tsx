@@ -13,7 +13,7 @@ import {
   Navigation, CheckCircle, AlertCircle, Phone, Camera, Mic, Send, Plus,
   TrendingUp, Star, Truck, ChevronRight, Upload, ExternalLink, Menu,
   Settings, LogOut, Bell, Filter, Search, Calendar, Download, Share,
-  RefreshCw, Zap, Map, Image as ImageIcon, FileCheck, X
+  RefreshCw, Zap, Map, Image as ImageIcon, FileCheck, X, HelpCircle
 } from 'lucide-react';
 import type { LoadWithRelations, Driver, LoadDocument } from '@shared/schema';
 import { cn } from '@/lib/utils';
@@ -91,6 +91,7 @@ export default function MobileDriverDashboard() {
   }, [driverId]);
   
   const [showQuickActions, setShowQuickActions] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [selectedThread, setSelectedThread] = useState<CommunicationThread | null>(null);
   const [selectedDocType, setSelectedDocType] = useState<string>('bol');
@@ -183,6 +184,26 @@ export default function MobileDriverDashboard() {
       return response.json() as Promise<LoadDocument[]>;
     },
     enabled: !!currentLoad?.id
+  });
+
+  // Fetch driver's current GPS location
+  const { data: driverLocation } = useQuery({
+    queryKey: ['/api/drivers', driverId, 'current-location'],
+    queryFn: async () => {
+      const response = await fetch(`/api/drivers/${driverId}/current-location`);
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error('Failed to fetch driver location');
+      }
+      return response.json() as Promise<{ 
+        latitude: number; 
+        longitude: number; 
+        address: string;
+        hasLocation: boolean;
+      }>;
+    },
+    enabled: !!driverId && !!currentLoad,
+    refetchInterval: 15000
   });
 
   // Update load status mutation
@@ -282,6 +303,34 @@ export default function MobileDriverDashboard() {
       });
     }
   });
+
+  // Helper function: Calculate distance from driver to address using backend endpoint
+  const calculateDistanceToAddress = async (address: string): Promise<number | null> => {
+    if (!driverLocation?.hasLocation || !address) return null;
+    
+    try {
+      const response = await fetch('/api/calculate-distance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lat: driverLocation.latitude,
+          lon: driverLocation.longitude,
+          targetAddress: address
+        })
+      });
+      
+      if (!response.ok) {
+        console.error('Distance calculation failed:', response.statusText);
+        return null;
+      }
+      
+      const data = await response.json();
+      return data.distance;
+    } catch (error) {
+      console.error('Error calculating distance:', error);
+      return null;
+    }
+  };
 
   const handleStartGPSTracking = async () => {
     try {
@@ -504,6 +553,207 @@ export default function MobileDriverDashboard() {
     });
   };
 
+  // GPS-Proximity-Aware Button for Assigned Status
+  const GPSProximityButton = ({ currentLoad, driverLocation, calculateDistanceToAddress, updateLoadStatusMutation }: any) => {
+    const [distance, setDistance] = useState<number | null>(null);
+    const [isCalculating, setIsCalculating] = useState(false);
+    const [calculationFailed, setCalculationFailed] = useState(false);
+
+    useEffect(() => {
+      const calcDistance = async () => {
+        if (!driverLocation?.hasLocation || !currentLoad?.pickupAddress) {
+          setDistance(null);
+          return;
+        }
+        setIsCalculating(true);
+        setCalculationFailed(false);
+        
+        // Set a 5-second timeout for distance calculation
+        const timeoutId = setTimeout(() => {
+          setIsCalculating(false);
+          setCalculationFailed(true);
+        }, 5000);
+        
+        try {
+          const dist = await calculateDistanceToAddress(currentLoad.pickupAddress);
+          clearTimeout(timeoutId);
+          setDistance(dist);
+          setIsCalculating(false);
+          if (dist === null) {
+            setCalculationFailed(true);
+          }
+        } catch (error) {
+          clearTimeout(timeoutId);
+          setIsCalculating(false);
+          setCalculationFailed(true);
+        }
+      };
+      calcDistance();
+    }, [driverLocation, currentLoad?.pickupAddress]);
+
+    const isNearPickup = distance !== null && distance < 0.5;
+
+    // If calculation failed or timed out, show manual fallback button
+    if (calculationFailed) {
+      return (
+        <Button
+          onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'in_transit' })}
+          className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700"
+          data-testid="button-start-delivery"
+        >
+          <Navigation className="h-5 w-5 mr-2" />
+          Start Delivery
+        </Button>
+      );
+    }
+
+    if (isCalculating) {
+      return (
+        <Button className="w-full h-14 text-lg bg-gray-400" disabled data-testid="button-calculating-distance">
+          <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+          Calculating Distance...
+        </Button>
+      );
+    }
+
+    if (isNearPickup) {
+      return (
+        <Button
+          onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'in_transit' })}
+          className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+          data-testid="button-arrived-pickup"
+        >
+          <CheckCircle className="h-5 w-5 mr-2" />
+          Arrived at Pickup
+        </Button>
+      );
+    }
+
+    return (
+      <div className="space-y-2">
+        <Button
+          onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'in_transit' })}
+          className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700"
+          data-testid="button-en-route-pickup"
+        >
+          <Navigation className="h-5 w-5 mr-2" />
+          En Route to Pickup
+        </Button>
+        <div className="text-xs text-center text-gray-500">
+          {distance.toFixed(1)} miles from pickup
+        </div>
+      </div>
+    );
+  };
+
+  // GPS-Proximity-Aware Button for In-Transit Status
+  const GPSInTransitButton = ({ currentLoad, driverLocation, calculateDistanceToAddress, updateLoadStatusMutation }: any) => {
+    const [distance, setDistance] = useState<number | null>(null);
+    const [isCalculating, setIsCalculating] = useState(false);
+    const [calculationFailed, setCalculationFailed] = useState(false);
+    const [arrivedAtDelivery, setArrivedAtDelivery] = useState(false);
+
+    useEffect(() => {
+      const calcDistance = async () => {
+        if (!driverLocation?.hasLocation || !currentLoad?.deliveryAddress) {
+          setDistance(null);
+          return;
+        }
+        setIsCalculating(true);
+        setCalculationFailed(false);
+        
+        // Set a 5-second timeout for distance calculation
+        const timeoutId = setTimeout(() => {
+          setIsCalculating(false);
+          setCalculationFailed(true);
+        }, 5000);
+        
+        try {
+          const dist = await calculateDistanceToAddress(currentLoad.deliveryAddress);
+          clearTimeout(timeoutId);
+          setDistance(dist);
+          setIsCalculating(false);
+          if (dist === null) {
+            setCalculationFailed(true);
+          }
+        } catch (error) {
+          clearTimeout(timeoutId);
+          setIsCalculating(false);
+          setCalculationFailed(true);
+        }
+      };
+      calcDistance();
+    }, [driverLocation, currentLoad?.deliveryAddress]);
+
+    const isNearDelivery = distance !== null && distance < 0.5;
+
+    // If calculation failed, show manual "Mark as Delivered" button as fallback
+    if (calculationFailed) {
+      return (
+        <Button
+          onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'delivered' })}
+          className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700"
+          data-testid="button-mark-delivered"
+        >
+          <CheckCircle className="h-5 w-5 mr-2" />
+          Mark as Delivered
+        </Button>
+      );
+    }
+
+    if (isCalculating) {
+      return (
+        <div className="w-full py-3 px-4 bg-orange-100 rounded-xl text-center">
+          <div className="flex items-center justify-center gap-2 text-orange-800">
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            <span className="font-semibold">Calculating distance to delivery...</span>
+          </div>
+        </div>
+      );
+    }
+
+    // If near delivery and driver has clicked "Arrived at Delivery", show "Mark as Delivered" button
+    if (isNearDelivery && arrivedAtDelivery) {
+      return (
+        <Button
+          onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'delivered' })}
+          className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700"
+          data-testid="button-mark-delivered"
+        >
+          <CheckCircle className="h-5 w-5 mr-2" />
+          Mark as Delivered
+        </Button>
+      );
+    }
+
+    // If near delivery but hasn't clicked "Arrived", show "Arrived at Delivery" button
+    if (isNearDelivery && !arrivedAtDelivery) {
+      return (
+        <Button
+          onClick={() => setArrivedAtDelivery(true)}
+          className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+          data-testid="button-arrived-delivery"
+        >
+          <MapPin className="h-5 w-5 mr-2" />
+          Arrived at Delivery
+        </Button>
+      );
+    }
+
+    // If not near delivery, show "In Transit" indicator
+    return (
+      <div className="w-full py-3 px-4 bg-orange-100 rounded-xl text-center">
+        <div className="flex items-center justify-center gap-2 text-orange-800">
+          <Truck className="h-5 w-5" />
+          <span className="font-semibold">In Transit</span>
+        </div>
+        <div className="text-xs text-orange-600 mt-1">
+          {distance.toFixed(1)} miles from delivery
+        </div>
+      </div>
+    );
+  };
+
   // HOME TAB
   const HomeTab = () => (
     <div className="space-y-4 pb-24">
@@ -515,7 +765,7 @@ export default function MobileDriverDashboard() {
             <p className="text-blue-100 text-sm">Let's have a great day!</p>
           </div>
           <Button 
-            onClick={() => setShowQuickActions(!showQuickActions)}
+            onClick={() => setShowMenu(!showMenu)}
             className="bg-white/20 hover:bg-white/30 rounded-full h-12 w-12 p-0"
             data-testid="button-menu"
           >
@@ -591,44 +841,36 @@ export default function MobileDriverDashboard() {
             <div className="grid grid-cols-2 gap-3 bg-blue-50 rounded-xl p-3">
               <div>
                 <div className="text-xs text-gray-600">Your Pay</div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {formatCurrency(currentLoad.rate ? currentLoad.rate * 0.9 : 0)}
+                <div className="text-2xl font-bold text-blue-600" data-testid="text-current-pay">
+                  {formatCurrency(parseFloat(currentLoad.rate?.toString() || '0') * 0.9)}
                 </div>
               </div>
               <div>
                 <div className="text-xs text-gray-600">Distance</div>
-                <div className="text-2xl font-bold text-gray-900">{currentLoad.miles || 0} mi</div>
+                <div className="text-2xl font-bold text-gray-900" data-testid="text-current-distance">
+                  {parseFloat(currentLoad.miles?.toString() || '0').toFixed(0)} mi
+                </div>
               </div>
             </div>
 
-            {/* Action Buttons */}
+            {/* GPS-Proximity-Aware Action Buttons */}
             <div className="space-y-2">
               {currentLoad.status === 'assigned' && (
-                <Button
-                  onClick={() => updateLoadStatusMutation.mutate({ 
-                    loadId: currentLoad.id, 
-                    status: 'in_transit' 
-                  })}
-                  className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
-                  data-testid="button-start-delivery"
-                >
-                  <Navigation className="h-5 w-5 mr-2" />
-                  Start Delivery
-                </Button>
+                <GPSProximityButton
+                  currentLoad={currentLoad}
+                  driverLocation={driverLocation}
+                  calculateDistanceToAddress={calculateDistanceToAddress}
+                  updateLoadStatusMutation={updateLoadStatusMutation}
+                />
               )}
 
               {currentLoad.status === 'in_transit' && (
-                <Button
-                  onClick={() => updateLoadStatusMutation.mutate({ 
-                    loadId: currentLoad.id, 
-                    status: 'delivered' 
-                  })}
-                  className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700"
-                  data-testid="button-mark-delivered"
-                >
-                  <CheckCircle className="h-5 w-5 mr-2" />
-                  Mark as Delivered
-                </Button>
+                <GPSInTransitButton
+                  currentLoad={currentLoad}
+                  driverLocation={driverLocation}
+                  calculateDistanceToAddress={calculateDistanceToAddress}
+                  updateLoadStatusMutation={updateLoadStatusMutation}
+                />
               )}
 
               <div className="grid grid-cols-2 gap-2">
@@ -788,8 +1030,8 @@ export default function MobileDriverDashboard() {
                         <div className="text-sm text-gray-500">
                           {formatDate(load.deliveryDate)}
                         </div>
-                        <div className="font-bold text-green-600">
-                          {formatCurrency(load.rate ? load.rate * 0.9 : 0)}
+                        <div className="font-bold text-green-600" data-testid={`text-load-pay-${load.id}`}>
+                          {formatCurrency(parseFloat(load.rate?.toString() || '0') * 0.9)}
                         </div>
                       </div>
                     </CardContent>
@@ -1227,6 +1469,133 @@ export default function MobileDriverDashboard() {
           )}
         </Button>
       </div>
+
+      {/* Slide-out Menu */}
+      {showMenu && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={() => setShowMenu(false)}
+            data-testid="menu-backdrop"
+          />
+          
+          {/* Menu Panel */}
+          <div className="fixed top-0 right-0 h-full w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out">
+            {/* Menu Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Menu</h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMenu(false)}
+                  className="text-white hover:bg-white/20 rounded-full h-10 w-10 p-0"
+                  data-testid="button-close-menu"
+                >
+                  <X className="h-6 w-6" />
+                </Button>
+              </div>
+              
+              {/* Driver Profile Info */}
+              <div className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center">
+                  <User className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="font-semibold">{driver?.name || 'Driver'}</div>
+                  <div className="text-xs text-blue-100">
+                    {driver?.status === 'on_route' ? '🚚 On Route' : '✅ Available'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Menu Items */}
+            <div className="p-4 space-y-2">
+              <button
+                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-gray-100 transition-colors"
+                onClick={() => {
+                  setShowMenu(false);
+                  setActiveTab('profile');
+                }}
+                data-testid="menu-item-profile"
+              >
+                <User className="h-5 w-5 text-gray-600" />
+                <span className="font-medium">Profile Settings</span>
+              </button>
+
+              <button
+                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-gray-100 transition-colors"
+                onClick={() => {
+                  setShowMenu(false);
+                  toast({
+                    title: 'Help & Support',
+                    description: 'For assistance, please contact dispatch using the options below.'
+                  });
+                }}
+                data-testid="menu-item-help"
+              >
+                <HelpCircle className="h-5 w-5 text-gray-600" />
+                <span className="font-medium">Help & Support</span>
+              </button>
+
+              <div className="border-t border-gray-200 my-2" />
+
+              <div className="px-2 py-1">
+                <div className="text-xs text-gray-500 font-semibold mb-2">Contact Dispatch</div>
+                <div className="flex gap-2">
+                  <button
+                    className="flex-1 flex flex-col items-center gap-2 p-3 rounded-xl bg-blue-50 hover:bg-blue-100 transition-colors"
+                    onClick={() => {
+                      setShowMenu(false);
+                      const dispatchPhone = process.env.DISPATCH_PHONE || '+1-800-555-0100';
+                      window.location.href = `tel:${dispatchPhone}`;
+                    }}
+                    data-testid="menu-item-call-dispatch"
+                  >
+                    <Phone className="h-5 w-5 text-blue-600" />
+                    <span className="text-xs font-medium text-blue-700">Call</span>
+                  </button>
+                  <button
+                    className="flex-1 flex flex-col items-center gap-2 p-3 rounded-xl bg-green-50 hover:bg-green-100 transition-colors"
+                    onClick={() => {
+                      setShowMenu(false);
+                      const dispatchPhone = process.env.DISPATCH_PHONE || '+1-800-555-0100';
+                      window.location.href = `sms:${dispatchPhone}`;
+                    }}
+                    data-testid="menu-item-sms-dispatch"
+                  >
+                    <MessageSquare className="h-5 w-5 text-green-600" />
+                    <span className="text-xs font-medium text-green-700">SMS</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 my-2" />
+
+              <button
+                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-red-50 transition-colors text-red-600"
+                onClick={() => {
+                  setShowMenu(false);
+                  toast({
+                    title: 'Logged Out',
+                    description: 'You have been logged out successfully',
+                  });
+                  setTimeout(() => {
+                    localStorage.removeItem('load-signal-driver-id');
+                    window.location.href = '/';
+                  }, 1000);
+                }}
+                data-testid="menu-item-logout"
+              >
+                <LogOut className="h-5 w-5" />
+                <span className="font-medium">Logout</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 
