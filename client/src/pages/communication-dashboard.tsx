@@ -1163,11 +1163,18 @@ export default function CommunicationDashboard() {
   return (
     <div className="flex h-[calc(100vh-8rem)] bg-gray-50" data-testid="communication-dashboard">
       {/* Thread List Sidebar */}
-      <div className="w-1/3 border-r border-gray-200 bg-white flex flex-col">
+      <div className="w-80 border-r border-gray-200 bg-white flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Communication Center</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-semibold text-gray-900">Communication Center</h2>
+              {threads.reduce((sum, thread) => sum + thread.unreadDispatchMessages, 0) > 0 && (
+                <Badge className="bg-red-500 text-white" data-testid="badge-unread-count">
+                  {threads.reduce((sum, thread) => sum + thread.unreadDispatchMessages, 0)}
+                </Badge>
+              )}
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -1181,14 +1188,6 @@ export default function CommunicationDashboard() {
             >
               <RefreshCw className={`w-4 h-4 ${threadsLoading ? 'animate-spin' : ''}`} />
             </Button>
-          </div>
-
-          {/* Unified Messaging - One conversation per driver */}
-          <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800 flex items-center gap-2">
-              <MessageSquare className="w-4 h-4" />
-              Unified Driver Conversations
-            </p>
           </div>
           
           {/* Search and Filter */}
