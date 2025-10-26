@@ -842,12 +842,12 @@ export default function CommunicationDashboard() {
 
   const getThreadStatusBadge = (thread: LoadCommunicationThread) => {
     if (thread.unreadDispatchMessages > 0) {
-      return <Badge className="bg-red-100 text-red-800 border-red-200">{thread.unreadDispatchMessages} unread</Badge>;
+      return <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px] px-1.5 py-0.5">{thread.unreadDispatchMessages} unread</Badge>;
     }
     if (thread.status === 'active') {
-      return <Badge className="bg-green-100 text-green-800 border-green-200">Active</Badge>;
+      return <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px] px-1.5 py-0.5">Active</Badge>;
     }
-    return <Badge className="bg-gray-100 text-gray-800 border-gray-200">Archived</Badge>;
+    return <Badge className="bg-gray-100 text-gray-800 border-gray-200 text-[10px] px-1.5 py-0.5">Archived</Badge>;
   };
 
   const handleFileUpload = async () => {
@@ -913,6 +913,16 @@ export default function CommunicationDashboard() {
       case 'lumper_receipt': return 'Lumper Receipt';
       default: return 'Other Document';
     }
+  };
+
+  const getStatusDotColor = (thread: LoadCommunicationThread) => {
+    if (thread.loadOfferStatus === 'pending') {
+      return 'bg-orange-500';
+    }
+    if (thread.status === 'active') {
+      return 'bg-green-500';
+    }
+    return 'bg-gray-400';
   };
 
   const getStatusColor = (status: MessageAttachment['documentStatus']) => {
@@ -1264,37 +1274,38 @@ export default function CommunicationDashboard() {
             {sortedThreads.map((thread) => (
               <button
                 key={thread.id}
-                className={`w-full mb-2 cursor-pointer transition-colors hover:bg-gray-50 rounded-lg border ${
+                className={`w-full mb-1.5 cursor-pointer transition-colors hover:bg-gray-50 rounded-lg border ${
                   selectedThread?.id === thread.id ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-200' : 'border-gray-200 bg-white'
                 }`}
                 onClick={() => setSelectedThread(thread)}
                 data-testid={`button-thread-${thread.id}`}
               >
-                <div className="p-3">
-                  <div className="flex items-start justify-between mb-2">
+                <div className="p-2.5">
+                  <div className="flex items-start justify-between mb-1.5">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className={`w-2 h-2 rounded-full ${getStatusDotColor(thread)}`}></div>
                         <h4 className="font-medium text-sm text-gray-900">{thread.driverName}</h4>
                         {getThreadStatusBadge(thread)}
                         {thread.loadNumber && (
-                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px] px-1.5 py-0.5">
                             {thread.loadNumber}
                           </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-gray-600">{thread.driverPhone || 'No phone'}</p>
+                      <p className="text-[10px] text-gray-500">{thread.driverPhone || 'No phone'}</p>
                       {thread.loadOrigin && thread.loadDestination && (
                         <p className="text-xs text-gray-500">
                           {thread.loadOrigin} → {thread.loadDestination}
                         </p>
                       )}
                       {thread.loadOfferStatus === 'pending' && (
-                        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs mt-1">
+                        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-[10px] px-1.5 py-0.5 mt-1">
                           Load Offer Pending
                         </Badge>
                       )}
                     </div>
-                    <Avatar className="w-8 h-8">
+                    <Avatar className="w-7 h-7">
                       <AvatarFallback className="text-xs bg-gray-200">
                         {thread.driverName.charAt(0)}
                       </AvatarFallback>
@@ -1302,12 +1313,12 @@ export default function CommunicationDashboard() {
                   </div>
                   
                   {thread.lastMessageText && (
-                    <div className="mt-2">
-                      <p className="text-xs text-gray-600 truncate">
+                    <div className="mt-1.5">
+                      <p className="text-xs text-gray-500 truncate">
                         {thread.lastMessageSender === 'dispatch' ? 'You: ' : ''}
                         {thread.lastMessageText}
                       </p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-[10px] text-gray-400 mt-1">
                         {formatMessageTime(thread.lastMessageAt)}
                       </p>
                     </div>
