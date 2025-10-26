@@ -861,7 +861,7 @@ export default function LoadOpsDashboard() {
       
       return apiRequest(`/api/communication/messages`, {
         method: "POST",
-        body: { threadId: thread.threadId, content: message, sender: "dispatch" }
+        body: { threadId: thread.id, content: message, sender: "dispatch" }
       });
     },
     onSuccess: () => {
