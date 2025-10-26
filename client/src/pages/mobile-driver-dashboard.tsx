@@ -747,9 +747,11 @@ export default function MobileDriverDashboard() {
           <Truck className="h-5 w-5" />
           <span className="font-semibold">In Transit</span>
         </div>
-        <div className="text-xs text-orange-600 mt-1">
-          {distance.toFixed(1)} miles from delivery
-        </div>
+        {distance !== null && (
+          <div className="text-xs text-orange-600 mt-1">
+            {distance.toFixed(1)} miles from delivery
+          </div>
+        )}
       </div>
     );
   };

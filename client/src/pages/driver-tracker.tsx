@@ -334,13 +334,12 @@ export default function DriverTracker() {
         const success = await sendLocation(latitude, longitude, position);
         
         if (success) {
-          setStatus('✅ Location sent!');
-          // Reset status after 3 seconds
+          setStatus('✅ Location sent! Returning to dashboard...');
+          
+          // Redirect back to driver dashboard after successful update
           setTimeout(() => {
-            if (!isTracking) {
-              setStatus('Tap button to share your location');
-            }
-          }, 3000);
+            window.location.href = `/driver-dashboard?driverId=${driverId}`;
+          }, 1500);
         } else {
           // sendLocation already set appropriate error status
           // Just keep the error message visible
