@@ -428,12 +428,14 @@ export default function CommunicationDashboard() {
 
   // Debug logging
   useEffect(() => {
-    console.log('Communication Dashboard - Threads data:', threads);
-    console.log('Communication Dashboard - Threads count:', threads.length);
+    console.log('🔍 Communication Dashboard - Threads data:', threads);
+    console.log('🔍 Communication Dashboard - Threads count:', threads.length);
+    console.log('🔍 Communication Dashboard - Search term:', searchTerm);
+    console.log('🔍 Communication Dashboard - Filter status:', filterStatus);
     if (threads.length > 0) {
-      console.log('Communication Dashboard - First thread:', threads[0]);
+      console.log('🔍 Communication Dashboard - First thread:', threads[0]);
     }
-  }, [threads]);
+  }, [threads, searchTerm, filterStatus]);
 
   // Fetch messages for selected thread
   const { data: rawMessages = [], isLoading: messagesLoading, refetch: refetchMessages } = useQuery<any[]>({
@@ -801,6 +803,15 @@ export default function CommunicationDashboard() {
   const sortedThreads = [...filteredThreads].sort((a, b) => 
     new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
   );
+  
+  // Debug logging for filtering
+  useEffect(() => {
+    console.log('🔍 Filtered threads count:', filteredThreads.length);
+    console.log('🔍 Sorted threads count:', sortedThreads.length);
+    if (filteredThreads.length > 0) {
+      console.log('🔍 First filtered thread:', filteredThreads[0]);
+    }
+  }, [filteredThreads.length, sortedThreads.length]);
 
   const handleSendMessage = () => {
     if (!selectedThread || !newMessage.trim()) return;
