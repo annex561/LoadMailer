@@ -845,7 +845,7 @@ export default function CommunicationDashboard() {
       return <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px] px-1.5 py-0.5">{thread.unreadDispatchMessages} unread</Badge>;
     }
     if (thread.status === 'active') {
-      return <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px] px-1.5 py-0.5">Active</Badge>;
+      return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 text-[10px] px-1.5 py-0.5">Active</Badge>;
     }
     return <Badge className="bg-gray-100 text-gray-800 border-gray-200 text-[10px] px-1.5 py-0.5">Archived</Badge>;
   };
@@ -917,10 +917,10 @@ export default function CommunicationDashboard() {
 
   const getStatusDotColor = (thread: LoadCommunicationThread) => {
     if (thread.loadOfferStatus === 'pending') {
-      return 'bg-orange-500';
+      return 'bg-amber-500';
     }
     if (thread.status === 'active') {
-      return 'bg-green-500';
+      return 'bg-emerald-500';
     }
     return 'bg-gray-400';
   };
@@ -929,7 +929,7 @@ export default function CommunicationDashboard() {
     switch (status) {
       case 'approved': return 'bg-green-100 text-green-800 border-green-200';
       case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
-      default: return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      default: return 'bg-amber-100 text-amber-700 border-amber-300';
     }
   };
 
@@ -983,7 +983,7 @@ export default function CommunicationDashboard() {
             </p>
             <div className="flex flex-wrap gap-2">
               {missingDocuments.map(type => (
-                <Badge key={type} className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                <Badge key={type} className="bg-amber-100 text-amber-700 border-amber-300">
                   {getCategoryLabel(type)}
                 </Badge>
               ))}
@@ -1173,12 +1173,12 @@ export default function CommunicationDashboard() {
   return (
     <div className="flex h-[calc(100vh-8rem)] bg-gray-50" data-testid="communication-dashboard">
       {/* Thread List Sidebar */}
-      <div className="w-80 border-r border-gray-200 bg-white flex flex-col">
+      <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b border-gray-200 bg-white">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold text-gray-900">Communication Center</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Communication Center</h2>
               {threads.reduce((sum, thread) => sum + thread.unreadDispatchMessages, 0) > 0 && (
                 <Badge className="bg-red-500 text-white" data-testid="badge-unread-count">
                   {threads.reduce((sum, thread) => sum + thread.unreadDispatchMessages, 0)}
@@ -1241,9 +1241,9 @@ export default function CommunicationDashboard() {
                       <Badge 
                         className={
                           driver.status === 'available' 
-                            ? "bg-green-100 text-green-800 border-green-200" 
+                            ? "bg-emerald-100 text-emerald-700 border-emerald-300" 
                             : driver.status === 'on_route'
-                            ? "bg-blue-100 text-blue-800 border-blue-200"
+                            ? "bg-blue-100 text-blue-700 border-blue-300"
                             : "bg-gray-100 text-gray-800 border-gray-200"
                         }
                       >
@@ -1274,7 +1274,7 @@ export default function CommunicationDashboard() {
             {sortedThreads.map((thread) => (
               <button
                 key={thread.id}
-                className={`w-full mb-1.5 cursor-pointer transition-colors hover:bg-gray-50 rounded-lg border ${
+                className={`w-full mb-1.5 cursor-pointer transition-colors hover:bg-blue-50 hover:border-blue-200 rounded-lg border ${
                   selectedThread?.id === thread.id ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-200' : 'border-gray-200 bg-white'
                 }`}
                 onClick={() => setSelectedThread(thread)}
@@ -1285,10 +1285,10 @@ export default function CommunicationDashboard() {
                     <div className="flex-1">
                       <div className="flex items-center gap-1.5 mb-1">
                         <div className={`w-2 h-2 rounded-full ${getStatusDotColor(thread)}`}></div>
-                        <h4 className="font-medium text-sm text-gray-900">{thread.driverName}</h4>
+                        <h4 className="font-semibold text-sm text-gray-900">{thread.driverName}</h4>
                         {getThreadStatusBadge(thread)}
                         {thread.loadNumber && (
-                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[10px] px-1.5 py-0.5">
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-[10px] px-1.5 py-0.5">
                             {thread.loadNumber}
                           </Badge>
                         )}
@@ -1300,7 +1300,7 @@ export default function CommunicationDashboard() {
                         </p>
                       )}
                       {thread.loadOfferStatus === 'pending' && (
-                        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 text-[10px] px-1.5 py-0.5 mt-1">
+                        <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-[10px] px-1.5 py-0.5 mt-1">
                           Load Offer Pending
                         </Badge>
                       )}
@@ -1854,7 +1854,7 @@ export default function CommunicationDashboard() {
                         >
                           <FileText className="w-4 h-4" />
                           {attachments.filter(a => a.documentStatus === 'pending_review').length > 0 && (
-                            <Badge className="ml-1 bg-yellow-100 text-yellow-800 border-yellow-200">
+                            <Badge className="ml-1 bg-amber-100 text-amber-700 border-amber-300">
                               {attachments.filter(a => a.documentStatus === 'pending_review').length}
                             </Badge>
                           )}
