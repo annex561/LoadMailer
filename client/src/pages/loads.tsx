@@ -310,6 +310,7 @@ export default function Loads() {
               </div>
             </div>
           </div>
+        </div>
           </TabsContent>
 
           {/* Load Board Tab Content */}
