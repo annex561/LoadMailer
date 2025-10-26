@@ -958,7 +958,7 @@ export default function LoadOpsDashboard() {
   // Navigation items organized by sections
   const navigation = [
     // Core Operations
-    { name: 'LoadOps Dashboard', href: '/loadops-dashboard', icon: Home, section: 'core' },
+    { name: 'Main Dashboard', href: '/loadops-dashboard', icon: Home, section: 'core' },
     { name: 'Dashboard', href: '/dashboard', icon: BarChart3, section: 'core' },
     { name: 'Loads', href: '/loads', icon: FileText, section: 'core' },
     { name: 'DAT Loads', href: '/dat-loads', icon: Truck, section: 'core' },
