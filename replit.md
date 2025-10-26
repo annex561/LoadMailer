@@ -59,6 +59,16 @@ Preferred communication style: Simple, everyday language.
   - **Query Guards**: All driverId-dependent TanStack Query hooks use `enabled: !!driverId` to prevent malformed API calls
   - **Fallback UI**: Error screen displays when driverId is missing, directing drivers to use official dispatch link
   - **Mobile Optimizations**: Pull-to-refresh, swipe gestures, offline support, wake lock for GPS tracking, WhatsApp-style messaging interface
+  - **GPS-Based Intelligent Status Buttons**: Context-aware load progression buttons based on driver proximity to pickup/delivery locations
+    - **0.5-Mile Proximity Threshold**: Buttons change based on distance from destination (Haversine formula calculation)
+    - **Assigned Status Flow**: Shows "En Route to Pickup" (>0.5mi) or "Arrived at Pickup" (<0.5mi)
+    - **In-Transit Status Flow**: Shows "In Transit" → "Arrived at Delivery" (<0.5mi) → "Mark as Delivered"
+    - **Backend Distance Calculation**: POST `/api/calculate-distance` endpoint uses OpenStreetMap Nominatim geocoding + Haversine formula
+    - **5-Second Timeout**: Distance calculations timeout after 5 seconds to prevent infinite loading states
+    - **Manual Fallback**: If GPS fails or times out, shows manual buttons: "Start Delivery" or "Mark as Delivered"
+    - **No Client-Side User-Agent**: All geocoding done server-side to avoid browser header restrictions
+  - **Enhanced Hamburger Menu**: Slide-in menu with Profile Settings, Help & Support, Contact Dispatch (Call/SMS buttons using tel:/sms: protocols), and Logout
+  - **Number Formatting Fix**: All currency and distance values wrapped in parseFloat() to prevent string concatenation bugs (e.g., "$378,499,950.00mi000")
 - **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized driver dashboard links with multi-layer security.
   - **Automated Onboarding SMS**: New drivers automatically receive dashboard link via SMS upon account creation (non-blocking fire-and-forget)
   - **Individual Resend**: Green Smartphone button on each driver card allows dispatch to resend dashboard link to specific drivers
