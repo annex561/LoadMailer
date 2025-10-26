@@ -1272,7 +1272,26 @@ export default function CommunicationDashboard() {
         {/* Thread List - Unified Conversations */}
         <ScrollArea className="flex-1">
           <div className="p-2">
-            {sortedThreads.map((thread) => (
+            {/* Loading Skeleton */}
+            {threadsLoading && (
+              <div className="p-2 space-y-1.5">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="bg-white border border-gray-200 rounded-lg p-2.5 animate-pulse">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                        <div className="h-3 bg-gray-100 rounded w-1/3"></div>
+                      </div>
+                      <div className="w-7 h-7 bg-gray-200 rounded-full"></div>
+                    </div>
+                    <div className="h-3 bg-gray-100 rounded w-3/4"></div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* Actual Threads */}
+            {!threadsLoading && sortedThreads.map((thread) => (
               <button
                 key={thread.id}
                 className={`w-full mb-1.5 cursor-pointer transition-all duration-200 ease-in-out hover:bg-blue-50 hover:border-blue-200 hover:shadow-md rounded-lg border ${
@@ -1328,11 +1347,14 @@ export default function CommunicationDashboard() {
               </button>
             ))}
             
-            {filteredThreads.length === 0 && !threadsLoading && (
-              <div className="text-center py-8 text-gray-500">
-                <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>No conversations found</p>
-                <p className="text-xs mt-1">Start communicating with drivers about their loads</p>
+            {/* Empty State */}
+            {!threadsLoading && filteredThreads.length === 0 && (
+              <div className="bg-gray-50 rounded-lg p-8 m-4">
+                <div className="text-center">
+                  <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-400" data-testid="icon-empty-conversations" />
+                  <p className="text-gray-600 font-medium mb-2" data-testid="text-empty-primary">No conversations yet</p>
+                  <p className="text-sm text-gray-500" data-testid="text-empty-secondary">Search for a driver above to start a conversation</p>
+                </div>
               </div>
             )}
           </div>
@@ -1892,10 +1914,19 @@ export default function CommunicationDashboard() {
         ) : (
           /* No Thread Selected */
           <div className="flex-1 flex items-center justify-center bg-gray-50">
-            <div className="text-center text-gray-500">
-              <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <h3 className="text-lg font-medium mb-2">Select a conversation</h3>
-              <p className="text-sm">Choose a load communication thread to start messaging</p>
+            <div className="text-center">
+              <MessageSquare className="w-20 h-20 mx-auto mb-4 text-gray-400" data-testid="icon-no-selection" />
+              <h3 className="text-lg font-medium text-gray-600 mb-2" data-testid="text-no-selection-primary">Select a conversation</h3>
+              <p className="text-sm text-gray-500 max-w-md mx-auto" data-testid="text-no-selection-secondary">
+                Choose a conversation from the list to view messages and communicate with drivers
+              </p>
+              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-400">
+                <span>💬 Real-time messaging</span>
+                <span>•</span>
+                <span>📱 SMS & Zello</span>
+                <span>•</span>
+                <span>🤖 AI assistance</span>
+              </div>
             </div>
           </div>
         )}
