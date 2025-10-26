@@ -836,20 +836,23 @@ export default function MobileDriverDashboard() {
           </p>
           
           {isIOS && (
-            <div className="bg-white/20 rounded-xl p-3 text-sm space-y-1">
-              <p className="font-semibold mb-1">📱 For iPhone/iPad:</p>
-              <p>1. Tap the <strong>Share</strong> button (square with arrow) at the bottom</p>
-              <p>2. Scroll down and tap <strong>"Add to Home Screen"</strong></p>
-              <p>3. Tap <strong>"Add"</strong> in the top right</p>
+            <div className="bg-white/20 rounded-xl p-3 text-sm space-y-1.5">
+              <p className="font-semibold mb-1">📱 For iPhone/iPad (Safari only):</p>
+              <p>1. Open this page in <strong>Safari browser</strong></p>
+              <p>2. Tap the <strong>Share</strong> button <span className="inline-block">□↑</span> at the bottom</p>
+              <p>3. Scroll down and tap <strong>"Add to Home Screen"</strong></p>
+              <p>4. Tap <strong>"Add"</strong> in the top right corner</p>
             </div>
           )}
           
           {isAndroid && (
-            <div className="bg-white/20 rounded-xl p-3 text-sm space-y-1">
-              <p className="font-semibold mb-1">📱 For Android:</p>
-              <p>1. Tap the <strong>menu (⋮)</strong> in your browser</p>
-              <p>2. Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></p>
-              <p>3. Tap <strong>"Add"</strong> or <strong>"Install"</strong></p>
+            <div className="bg-white/20 rounded-xl p-3 text-sm space-y-1.5">
+              <p className="font-semibold mb-1">📱 For Android (Chrome recommended):</p>
+              <p>1. Look for <strong>"Install app"</strong> popup at the bottom</p>
+              <p className="text-xs text-white/80 ml-4">OR if no popup:</p>
+              <p>2. Tap the <strong>menu (⋮)</strong> at the top right</p>
+              <p>3. Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></p>
+              <p>4. Tap <strong>"Install"</strong> to confirm</p>
             </div>
           )}
         </div>
