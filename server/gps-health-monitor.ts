@@ -150,7 +150,19 @@ export class GPSHealthMonitorService {
       
       const trackingUrl = `${this.getBaseUrl()}/driver-tracker?driver=${load.driverId}&token=${trackingToken.token}`;
       
-      const smsMessage = `🚨 GPS tracking stopped for Load ${load.loadNumber}
+      // Build load context with route info if available
+      let loadContext = '';
+      if (load.pickupAddress || load.deliveryAddress) {
+        const pickupLocation = this.extractCityState(load.pickupAddress);
+        const deliveryLocation = this.extractCityState(load.deliveryAddress);
+        
+        // Only show route info if we have valid locations
+        if (pickupLocation !== 'Location TBD' || deliveryLocation !== 'Location TBD') {
+          loadContext = ` (${pickupLocation} → ${deliveryLocation})`;
+        }
+      }
+      
+      const smsMessage = `🚨 GPS tracking stopped for Load ${load.loadNumber}${loadContext}
 
 Please reopen this link to continue tracking:
 ${trackingUrl}
@@ -176,6 +188,73 @@ This helps dispatch monitor your delivery.`;
       console.error(`Error sending GPS reminder for load ${load.loadNumber}:`, error);
       return false;
     }
+  }
+
+  private extractCityState(address: string | null | undefined): string {
+    // Handle null/undefined/empty cases - return meaningful fallback
+    if (!address || address.trim() === '') {
+      return 'Location TBD';
+    }
+    
+    const trimmedAddress = address.trim();
+    
+    // Pattern 1: "Street, City, State Zip" or "City, State Zip" (with comma)
+    const cityStatePatternWithComma = /,\s*([^,]+),\s*([A-Z]{2})(?:\s+\d{5})?$/i;
+    const matchComma = trimmedAddress.match(cityStatePatternWithComma);
+    
+    if (matchComma && matchComma[1] && matchComma[2]) {
+      return `${matchComma[1].trim()}, ${matchComma[2].toUpperCase()}`;
+    }
+    
+    // Pattern 2: "City, ST" (simple comma pattern)
+    const simpleCommaPattern = /([^,]+),\s*([A-Z]{2})\b/i;
+    const simpleMatch = trimmedAddress.match(simpleCommaPattern);
+    
+    if (simpleMatch && simpleMatch[1] && simpleMatch[2]) {
+      return `${simpleMatch[1].trim()}, ${simpleMatch[2].toUpperCase()}`;
+    }
+    
+    // Pattern 3: "City ST Zip" (no comma - space-separated)
+    const noCommaPattern = /\b([A-Z][a-zA-Z\s]+)\s+([A-Z]{2})(?:\s+\d{5})?\s*$/i;
+    const noCommaMatch = trimmedAddress.match(noCommaPattern);
+    
+    if (noCommaMatch && noCommaMatch[1] && noCommaMatch[2]) {
+      return `${noCommaMatch[1].trim()}, ${noCommaMatch[2].toUpperCase()}`;
+    }
+    
+    // Pattern 4: Try to extract last two parts separated by comma
+    const parts = trimmedAddress.split(',').map(p => p.trim()).filter(p => p);
+    if (parts.length >= 2) {
+      const lastPart = parts[parts.length - 1];
+      const stateZipMatch = lastPart.match(/^([A-Z]{2})(?:\s+\d{5})?$/i);
+      if (stateZipMatch) {
+        return `${parts[parts.length - 2]}, ${stateZipMatch[1].toUpperCase()}`;
+      }
+      return parts.slice(-2).join(', ');
+    }
+    
+    // Pattern 5: Try to extract from space-separated parts (find state code)
+    const spaceParts = trimmedAddress.split(/\s+/);
+    if (spaceParts.length >= 2) {
+      for (let i = 0; i < spaceParts.length; i++) {
+        if (/^[A-Z]{2}$/i.test(spaceParts[i])) {
+          if (i > 0) {
+            return `${spaceParts[i - 1]}, ${spaceParts[i].toUpperCase()}`;
+          }
+        }
+      }
+    }
+    
+    // Final fallback: Return a shortened version if address is too long
+    if (trimmedAddress.length > 30) {
+      const firstPart = trimmedAddress.split(',')[0].trim();
+      if (firstPart.length > 0 && firstPart.length <= 30) {
+        return firstPart;
+      }
+      return trimmedAddress.substring(0, 27) + '...';
+    }
+    
+    return trimmedAddress;
   }
 
   private normalizePhoneToE164(phoneNumber: string | undefined | null): string | null {

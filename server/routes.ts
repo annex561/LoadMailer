@@ -58,6 +58,85 @@ const gpsLocationUpdateSchema = z.object({
   timestamp: z.string().optional()
 });
 
+// Helper function to extract city and state from full address
+// Handles multiple formats: "City, State Zip", "Nashville TN 37203", "Street, City, ST", etc.
+function extractCityState(address: string | null | undefined): string {
+  // Handle null/undefined/empty cases - return meaningful fallback
+  if (!address || address.trim() === '') {
+    return 'Location TBD';
+  }
+  
+  const trimmedAddress = address.trim();
+  
+  // Pattern 1: "Street, City, State Zip" or "City, State Zip" (with comma)
+  // Example: "123 Main St, Nashville, TN 37203" or "Nashville, TN 37203"
+  const cityStatePatternWithComma = /,\s*([^,]+),\s*([A-Z]{2})(?:\s+\d{5})?$/i;
+  const matchComma = trimmedAddress.match(cityStatePatternWithComma);
+  
+  if (matchComma && matchComma[1] && matchComma[2]) {
+    return `${matchComma[1].trim()}, ${matchComma[2].toUpperCase()}`;
+  }
+  
+  // Pattern 2: "City, ST" (simple comma pattern)
+  // Example: "Nashville, TN"
+  const simpleCommaPattern = /([^,]+),\s*([A-Z]{2})\b/i;
+  const simpleMatch = trimmedAddress.match(simpleCommaPattern);
+  
+  if (simpleMatch && simpleMatch[1] && simpleMatch[2]) {
+    return `${simpleMatch[1].trim()}, ${simpleMatch[2].toUpperCase()}`;
+  }
+  
+  // Pattern 3: "City ST Zip" (no comma - space-separated)
+  // Example: "Nashville TN 37203" or "New York NY 10001"
+  const noCommaPattern = /\b([A-Z][a-zA-Z\s]+)\s+([A-Z]{2})(?:\s+\d{5})?\s*$/i;
+  const noCommaMatch = trimmedAddress.match(noCommaPattern);
+  
+  if (noCommaMatch && noCommaMatch[1] && noCommaMatch[2]) {
+    return `${noCommaMatch[1].trim()}, ${noCommaMatch[2].toUpperCase()}`;
+  }
+  
+  // Pattern 4: Try to extract last two parts separated by comma
+  const parts = trimmedAddress.split(',').map(p => p.trim()).filter(p => p);
+  if (parts.length >= 2) {
+    // Check if last part looks like "State Zip"
+    const lastPart = parts[parts.length - 1];
+    const stateZipMatch = lastPart.match(/^([A-Z]{2})(?:\s+\d{5})?$/i);
+    if (stateZipMatch) {
+      return `${parts[parts.length - 2]}, ${stateZipMatch[1].toUpperCase()}`;
+    }
+    // Otherwise return last two parts as-is
+    return parts.slice(-2).join(', ');
+  }
+  
+  // Pattern 5: Try to extract from space-separated parts (find state code)
+  const spaceParts = trimmedAddress.split(/\s+/);
+  if (spaceParts.length >= 2) {
+    // Look for a 2-letter state code
+    for (let i = 0; i < spaceParts.length; i++) {
+      if (/^[A-Z]{2}$/i.test(spaceParts[i])) {
+        // Found state code, grab the word before it as city
+        if (i > 0) {
+          return `${spaceParts[i - 1]}, ${spaceParts[i].toUpperCase()}`;
+        }
+      }
+    }
+  }
+  
+  // Final fallback: Return a shortened version if address is too long
+  if (trimmedAddress.length > 30) {
+    // Try to get just the first meaningful part
+    const firstPart = trimmedAddress.split(',')[0].trim();
+    if (firstPart.length > 0 && firstPart.length <= 30) {
+      return firstPart;
+    }
+    // If still too long, truncate with ellipsis
+    return trimmedAddress.substring(0, 27) + '...';
+  }
+  
+  // Return the whole address if it's short enough
+  return trimmedAddress;
+}
+
 // Rate limiter for GPS location updates - max 120 requests per hour per IP
 const gpsLocationRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -207,7 +286,18 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null): Prom
         console.error(`❌ GPS TRACKING SMS: Load ${loadId} not found`);
         return { success: false, error: "Load not found" };
       }
-      smsMessage = `📍 Load ${load.loadNumber} assigned! Start GPS tracking: ${trackingUrl}\n\nClick the link to share your location with dispatch.`;
+      
+      // Extract locations with improved error handling
+      const pickupLocation = extractCityState(load.pickupAddress);
+      const deliveryLocation = extractCityState(load.deliveryAddress);
+      
+      // Build route info - only show arrow if we have valid locations
+      let routeInfo = '';
+      if (pickupLocation !== 'Location TBD' || deliveryLocation !== 'Location TBD') {
+        routeInfo = `\n📦 ${pickupLocation} → ${deliveryLocation}`;
+      }
+      
+      smsMessage = `📍 Load ${load.loadNumber} assigned!${routeInfo}\n\nStart GPS tracking: ${trackingUrl}\n\nClick the link to share your location with dispatch.`;
       logContext = `load ${load.loadNumber}`;
     } else {
       // General fleet tracking message
@@ -1903,8 +1993,23 @@ export async function registerRoutes(app: Express): Promise<void> {
           if (driver?.phone) {
             const driverPhone = normalizePhoneToE164(driver.phone);
             if (driverPhone) {
+              // Build load context with route info if available
+              let loadContext = '';
+              if (load) {
+                const pickupLocation = extractCityState(load.pickupAddress);
+                const deliveryLocation = extractCityState(load.deliveryAddress);
+                
+                // Only show route info if we have valid locations
+                if (pickupLocation !== 'Location TBD' || deliveryLocation !== 'Location TBD') {
+                  loadContext = ` (${pickupLocation} → ${deliveryLocation})`;
+                }
+                loadContext = `load ${load.loadNumber}${loadContext}`;
+              } else {
+                loadContext = `load ${document.loadId}`;
+              }
+              
               const smsMessage = `📄 Document Rejected\n\n` +
-                `Your ${document.documentType.replace('_', ' ').toUpperCase()} for load ${load?.loadNumber || document.loadId} was rejected.\n\n` +
+                `Your ${document.documentType.replace('_', ' ').toUpperCase()} for ${loadContext} was rejected.\n\n` +
                 `Reason: ${reason}\n\n` +
                 `Please resubmit a corrected document. Contact dispatch if you have questions.`;
               
@@ -2759,9 +2864,23 @@ LoadMaster Dispatch Team
           // General chat: Simple message format
           smsMessage = `Message from Dispatch: ${content}`;
         } else {
-          // Load communication: Include load context
+          // Load communication: Include load context with route information
           const load = thread.loadId ? await storage.getLoad(thread.loadId) : null;
-          smsMessage = `Load ${load?.loadNumber || 'Unknown'}: ${content}`;
+          if (load) {
+            // Extract locations with improved error handling
+            const pickupLocation = extractCityState(load.pickupAddress);
+            const deliveryLocation = extractCityState(load.deliveryAddress);
+            
+            // Build route info - only show arrow if we have valid locations
+            let routeInfo = '';
+            if (pickupLocation !== 'Location TBD' || deliveryLocation !== 'Location TBD') {
+              routeInfo = ` (${pickupLocation} → ${deliveryLocation})`;
+            }
+            
+            smsMessage = `Load ${load.loadNumber}${routeInfo}: ${content}`;
+          } else {
+            smsMessage = `Load Message: ${content}`;
+          }
         }
         
         // Send via SMS using the SMS service (handles Messaging Service SID and delivery status)
