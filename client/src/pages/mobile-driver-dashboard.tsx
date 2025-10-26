@@ -797,8 +797,16 @@ export default function MobileDriverDashboard() {
       }
     }, []);
 
-    const handleDismiss = () => {
-      localStorage.setItem('pwa-banner-dismissed', 'true');
+    const handleDismiss = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🚫 PWA banner dismissed');
+      try {
+        localStorage.setItem('pwa-banner-dismissed', 'true');
+        console.log('✅ localStorage set:', localStorage.getItem('pwa-banner-dismissed'));
+      } catch (error) {
+        console.error('❌ Failed to set localStorage:', error);
+      }
       setShowBanner(false);
     };
 
@@ -807,11 +815,14 @@ export default function MobileDriverDashboard() {
     return (
       <div className="mx-4 mb-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl p-4 shadow-lg relative" data-testid="pwa-install-banner">
         <button
+          type="button"
           onClick={handleDismiss}
-          className="absolute top-2 right-2 text-white/80 hover:text-white"
+          className="absolute top-2 right-2 text-white/80 hover:text-white p-2 rounded-full hover:bg-white/20 transition-colors z-10 cursor-pointer"
           data-testid="button-dismiss-pwa-banner"
+          aria-label="Dismiss install banner"
+          style={{ pointerEvents: 'auto' }}
         >
-          <X className="h-5 w-5" />
+          <X className="h-5 w-5" style={{ pointerEvents: 'none' }} />
         </button>
         
         <div className="pr-6">
