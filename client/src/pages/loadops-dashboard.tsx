@@ -1008,7 +1008,7 @@ export default function LoadOpsDashboard() {
   ];
 
   return (
-    <div className="h-screen bg-gray-50 flex overflow-hidden">
+    <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar */}
       <aside className={cn(
         "fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 flex flex-col",
@@ -1256,8 +1256,35 @@ export default function LoadOpsDashboard() {
       </aside>
 
       {/* Main Content */}
-      <div className={cn("flex-1 overflow-auto", sidebarCollapsed ? "ml-16" : "ml-64")}>
-        {renderContent()}
+      <div className={cn("flex-1 flex flex-col", sidebarCollapsed ? "ml-16" : "ml-64")}>
+        {/* Top Header */}
+        <header className="bg-white border-b border-gray-200 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900">Finance Performance for Company</h1>
+              <p className="text-sm text-gray-500">Aug 19, 2025 - Aug 19, 2025</p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Button variant="outline" size="sm" data-testid="button-quick-reminder">
+                Quick Reminder
+              </Button>
+              <Button variant="outline" size="sm" data-testid="button-last-revenue">
+                Last Revenue
+              </Button>
+              <Button size="sm" data-testid="button-actual">
+                Actual
+              </Button>
+              <Button variant="outline" size="sm" data-testid="button-projected">
+                Projected
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-auto p-6">
+          {renderContent()}
+        </main>
       </div>
     </div>
   );
