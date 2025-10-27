@@ -828,7 +828,7 @@ export default function MobileDriverDashboard() {
         <div className="pr-6">
           <div className="flex items-center gap-2 mb-2">
             <Download className="h-5 w-5" />
-            <h3 className="font-bold text-lg">Install Load Signal App</h3>
+            <h3 className="font-bold text-lg">Install TRAQ IQ App</h3>
           </div>
           
           <p className="text-sm text-white/90 mb-3">

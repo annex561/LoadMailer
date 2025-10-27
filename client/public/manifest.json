@@ -1,11 +1,11 @@
 {
-  "name": "Load Signal Driver",
-  "short_name": "Load Signal",
-  "description": "Driver dashboard for Load Signal logistics platform",
+  "name": "TRAQ IQ Driver",
+  "short_name": "TRAQ IQ",
+  "description": "Driver dashboard for TRAQ IQ logistics platform",
   "start_url": "/driver-dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "theme_color": "#1e293b",
   "orientation": "portrait-primary",
   "icons": [
     {
