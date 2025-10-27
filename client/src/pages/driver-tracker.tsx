@@ -395,7 +395,7 @@ export default function DriverTracker() {
             <div className="flex items-center gap-3">
               <Truck className="w-8 h-8 text-teal-400" />
               <div>
-                <h1 className="text-xl font-bold text-white">Load Signal GPS Tracker</h1>
+                <h1 className="text-xl font-bold text-white">TRAQ IQ GPS Tracker</h1>
                 <p className="text-sm text-slate-400">Real-time driver location</p>
               </div>
             </div>

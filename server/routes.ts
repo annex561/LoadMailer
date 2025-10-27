@@ -1512,7 +1512,7 @@ export async function registerRoutes(app: Express): Promise<void> {
           try {
             const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
             
-            const smsMessage = `Welcome to Load Signal, ${driver.name}! 👋\n\n` +
+            const smsMessage = `Welcome to TRAQ IQ, ${driver.name}! 👋\n\n` +
               `Your driver account has been created.\n\n` +
               `Access your dashboard:\n${dashboardUrl}\n\n` +
               `💡 Add this to your home screen for easy access!`;
@@ -1571,7 +1571,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       // Create SMS message
       const smsMessage = `Hello ${driver.name}! 👋\n\n` +
-        `Access your Load Signal driver dashboard:\n${dashboardUrl}\n\n` +
+        `Access your TRAQ IQ driver dashboard:\n${dashboardUrl}\n\n` +
         `💡 TIP: Add this to your home screen for easy access!`;
 
       // Send SMS using smsLoadService
@@ -1666,7 +1666,7 @@ export async function registerRoutes(app: Express): Promise<void> {
           const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
           
           const smsMessage = `Hello ${driver.name}! 👋\n\n` +
-            `Access your Load Signal driver dashboard:\n${dashboardUrl}\n\n` +
+            `Access your TRAQ IQ driver dashboard:\n${dashboardUrl}\n\n` +
             `💡 TIP: Add this to your home screen for easy access!`;
 
           const smsResult = await smsLoadService.sendSMS({

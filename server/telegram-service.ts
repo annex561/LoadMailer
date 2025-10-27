@@ -1418,7 +1418,7 @@ If your phone number for tracking has been changed, please text us back the corr
     try {
       const onboardingUrl = `${process.env.REPLIT_APP_URL || 'https://loadmaster.replit.app'}/driver-onboarding?token=${onboardingToken}`;
       
-      const message = `🚛 **Welcome to Load Signal!**
+      const message = `🚛 **Welcome to TRAQ IQ!**
       
 You've been invited to join our fleet management system with GPS tracking capabilities.
 
@@ -1435,7 +1435,7 @@ ${onboardingUrl}
 ✅ Geofencing for pickup/delivery zones
 ✅ Performance analytics and reporting
 
-👆 Click the link above to start your onboarding process and familiarize yourself with the Load Signal system!`;
+👆 Click the link above to start your onboarding process and familiarize yourself with the TRAQ IQ system!`;
 
       await this.bot.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
       console.log(`Onboarding invitation sent to Telegram ID: ${telegramId}`);

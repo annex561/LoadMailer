@@ -1273,7 +1273,7 @@ export default function MobileDriverDashboard() {
             </Button>
             <div className="flex-1">
               <div className="font-semibold">Dispatch</div>
-              <div className="text-xs text-blue-100">Load Signal Team</div>
+              <div className="text-xs text-blue-100">TRAQ IQ Team</div>
             </div>
             <Phone className="h-5 w-5" />
           </div>
