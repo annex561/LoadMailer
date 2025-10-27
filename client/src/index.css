@@ -1,49 +1,59 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
+  /* TRAQ IQ Color Palette */
+  --navy: #0A101A;
+  --slate: #1E2733;
+  --teal: #00B5B8;
+  --whitesmoke: #F3F5F7;
+  --white: #FFFFFF;
+  
+  /* Theme Colors - Light Mode */
   --background: hsl(0 0% 100%);
   --foreground: hsl(210 25% 7.8431%);
   --card: hsl(0 0% 100%);
   --card-foreground: hsl(210 25% 7.8431%);
   --popover: hsl(0 0% 100%);
   --popover-foreground: hsl(210 25% 7.8431%);
-  --primary: hsl(207 90% 54%);
+  --primary: hsl(181 100% 36%); /* Teal #00B5B8 */
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(231 48% 48%);
+  --secondary: hsl(211 26% 16%); /* Slate #1E2733 */
   --secondary-foreground: hsl(0 0% 100%);
-  --muted: hsl(210 40% 98%);
+  --muted: hsl(210 17% 96%); /* Whitesmoke #F3F5F7 */
   --muted-foreground: hsl(215 13.8% 34.1%);
-  --accent: hsl(210 40% 98%);
-  --accent-foreground: hsl(222.2 84% 4.9%);
-  --destructive: hsl(0 84% 60%);
+  --accent: hsl(181 100% 36%); /* Teal #00B5B8 */
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(355 78% 56%); /* Error #E63946 */
   --destructive-foreground: hsl(0 0% 100%);
-  --success: hsl(122 39% 49%);
+  --success: hsl(145 74% 57%); /* Success #3AE374 */
   --success-foreground: hsl(0 0% 100%);
   --warning: hsl(36 100% 50%);
   --warning-foreground: hsl(0 0% 100%);
   --border: hsl(214 32% 91%);
   --input: hsl(214 32% 91%);
-  --ring: hsl(207 90% 54%);
-  --chart-1: hsl(207 90% 54%);
-  --chart-2: hsl(159.7826 100% 36.0784%);
+  --ring: hsl(181 100% 36%); /* Teal #00B5B8 */
+  --chart-1: hsl(181 100% 36%); /* Teal */
+  --chart-2: hsl(145 74% 57%); /* Success Green */
   --chart-3: hsl(42.0290 92.8251% 56.2745%);
   --chart-4: hsl(147.1429 78.5047% 41.9608%);
   --chart-5: hsl(341.4894 75.2000% 50.9804%);
   --sidebar: hsl(0 0% 100%);
   --sidebar-foreground: hsl(210 25% 7.8431%);
-  --sidebar-primary: hsl(207 90% 54%);
+  --sidebar-primary: hsl(181 100% 36%); /* Teal */
   --sidebar-primary-foreground: hsl(0 0% 100%);
   --sidebar-accent: hsl(210 40% 98%);
   --sidebar-accent-foreground: hsl(222.2 84% 4.9%);
   --sidebar-border: hsl(214 32% 91%);
-  --sidebar-ring: hsl(207 90% 54%);
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --sidebar-ring: hsl(181 100% 36%); /* Teal */
+  
+  /* TRAQ IQ Font Stack */
+  --font-sans: 'Poppins', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
-  --radius: 0.75rem;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --radius: 0.5rem;
   --shadow-2xs: 0px 2px 0px 0px hsl(207 90% 54% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(207 90% 54% / 0.00);
   --shadow-sm: 0px 2px 0px 0px hsl(207 90% 54% / 0.00), 0px 1px 2px -1px hsl(207 90% 54% / 0.00);
@@ -57,37 +67,38 @@
 }
 
 .dark {
-  --background: hsl(222 84% 5%);
-  --foreground: hsl(210 40% 98%);
-  --card: hsl(222 84% 5%);
-  --card-foreground: hsl(210 40% 98%);
-  --popover: hsl(222 84% 5%);
-  --popover-foreground: hsl(210 40% 98%);
-  --primary: hsl(207 90% 54%);
+  /* TRAQ IQ Dark Mode - Navy Background */
+  --background: hsl(212 42% 7%); /* Navy #0A101A */
+  --foreground: hsl(210 17% 96%); /* Whitesmoke #F3F5F7 */
+  --card: hsl(211 26% 16%); /* Slate #1E2733 */
+  --card-foreground: hsl(210 17% 96%);
+  --popover: hsl(211 26% 16%); /* Slate */
+  --popover-foreground: hsl(210 17% 96%);
+  --primary: hsl(181 100% 36%); /* Teal #00B5B8 */
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(231 48% 48%);
+  --secondary: hsl(211 26% 16%); /* Slate */
   --secondary-foreground: hsl(0 0% 100%);
-  --muted: hsl(217 32% 17%);
+  --muted: hsl(211 26% 16%); /* Slate */
   --muted-foreground: hsl(215 20% 65%);
-  --accent: hsl(217 32% 17%);
-  --accent-foreground: hsl(210 40% 98%);
-  --destructive: hsl(0 84% 60%);
+  --accent: hsl(181 100% 36%); /* Teal */
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(355 78% 56%); /* Error #E63946 */
   --destructive-foreground: hsl(0 0% 100%);
-  --success: hsl(122 39% 49%);
+  --success: hsl(145 74% 57%); /* Success #3AE374 */
   --success-foreground: hsl(0 0% 100%);
   --warning: hsl(36 100% 50%);
   --warning-foreground: hsl(0 0% 100%);
-  --border: hsl(217 32% 17%);
-  --input: hsl(217 32% 17%);
-  --ring: hsl(207 90% 54%);
-  --sidebar: hsl(222 84% 5%);
-  --sidebar-foreground: hsl(210 40% 98%);
-  --sidebar-primary: hsl(207 90% 54%);
+  --border: hsl(211 26% 20%);
+  --input: hsl(211 26% 20%);
+  --ring: hsl(181 100% 36%); /* Teal */
+  --sidebar: hsl(211 26% 16%); /* Slate */
+  --sidebar-foreground: hsl(210 17% 96%);
+  --sidebar-primary: hsl(181 100% 36%); /* Teal */
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(217 32% 17%);
-  --sidebar-accent-foreground: hsl(210 40% 98%);
-  --sidebar-border: hsl(217 32% 17%);
-  --sidebar-ring: hsl(207 90% 54%);
+  --sidebar-accent: hsl(211 26% 20%);
+  --sidebar-accent-foreground: hsl(210 17% 96%);
+  --sidebar-border: hsl(211 26% 20%);
+  --sidebar-ring: hsl(181 100% 36%); /* Teal */
 }
 
 @layer base {
@@ -207,20 +218,29 @@
   }
 }
 
-/* Form button improvements for better visibility */
+/* TRAQ IQ Button Styling */
+button {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+/* Form button improvements for TRAQ IQ design */
 .form-button-improved {
-  background: #2563eb !important;
+  background: #00B5B8 !important; /* Teal */
   color: white !important;
   border: none !important;
-  padding: 8px 16px !important;
-  border-radius: 6px !important;
-  font-weight: 500 !important;
+  padding: 10px 20px !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
   cursor: pointer !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   min-height: 40px !important;
   min-width: 80px !important;
+  transition: all 0.2s ease !important;
 }
 
 /* Ensure all Select components have solid white backgrounds */
@@ -250,7 +270,8 @@
 }
 
 .form-button-improved:hover {
-  background: #1d4ed8 !important;
+  background: #00C2D1 !important; /* Lighter teal on hover */
+  transform: translateY(-1px);
 }
 
 .form-button-improved:disabled {

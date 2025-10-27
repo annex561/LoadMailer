@@ -6,11 +6,34 @@ TRAQ IQ is a comprehensive fleet management system for truck load tracking and l
 
 Preferred communication style: Simple, everyday language.
 
-## UI/UX Preferences
+## TRAQ IQ Design System
+
+### Brand Colors
+- **Navy**: #0A101A - Primary dark background for dark mode
+- **Slate**: #1E2733 - Secondary dark background, cards in dark mode
+- **Teal**: #00B5B8 - Primary accent color for buttons, links, and highlights
+- **Whitesmoke**: #F3F5F7 - Light text and backgrounds
+- **Success**: #3AE374 - Success states and positive actions
+- **Error**: #E63946 - Error states and destructive actions
+
+### Typography
+- **Primary Font**: Poppins - Modern, clean sans-serif for UI elements
+- **Secondary Font**: Inter - Supporting sans-serif for body text
+- **Monospace Font**: JetBrains Mono - Code and technical displays
+
+### Design Principles
+- **Border Radius**: 8px for buttons and cards (rounded, modern feel)
+- **Transitions**: 0.2s ease for smooth interactions
+- **Button Hover**: Lighter teal (#00C2D1) with subtle lift effect
+- **Font Weight**: 600 for buttons and headings (semi-bold)
+
+### UI/UX Preferences
 - **Select Dropdowns**: Always use solid white backgrounds with proper borders and shadows, never transparent backgrounds
 - **Form Elements**: Consistent styling with `bg-white border border-gray-300` for select triggers
 - **Dropdown Menus**: Use `bg-white border border-gray-300 shadow-lg` for select content areas
 - **Visibility**: Ensure all form elements are clearly visible and have proper contrast
+- **Primary Actions**: Teal background (#00B5B8) with white text
+- **Dark Mode**: Navy background with teal accents, whitesmoke text
 
 # System Architecture
 

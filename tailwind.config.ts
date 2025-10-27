@@ -11,6 +11,12 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       colors: {
+        // TRAQ IQ Brand Colors
+        navy: '#0A101A',
+        slate: '#1E2733',
+        teal: '#00B5B8',
+        whitesmoke: '#F3F5F7',
+        
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {
@@ -75,10 +81,11 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["var(--font-sans)"],
+        sans: ['Poppins', 'Inter', 'var(--font-sans)', 'system-ui', 'sans-serif'],
         serif: ["var(--font-serif)"],
-        mono: ["var(--font-mono)"],
+        mono: ['JetBrains Mono', 'var(--font-mono)', 'monospace'],
         inter: ['Inter', 'sans-serif'],
+        poppins: ['Poppins', 'sans-serif'],
       },
       keyframes: {
         "accordion-down": {
