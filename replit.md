@@ -27,13 +27,16 @@ Preferred communication style: Simple, everyday language.
 - **Button Hover**: Lighter teal (#00C2D1) with subtle lift effect
 - **Font Weight**: 600 for buttons and headings (semi-bold)
 
-### UI/UX Preferences
-- **Select Dropdowns**: Always use solid white backgrounds with proper borders and shadows, never transparent backgrounds
-- **Form Elements**: Consistent styling with `bg-white border border-gray-300` for select triggers
-- **Dropdown Menus**: Use `bg-white border border-gray-300 shadow-lg` for select content areas
-- **Visibility**: Ensure all form elements are clearly visible and have proper contrast
-- **Primary Actions**: Teal background (#00B5B8) with white text
-- **Dark Mode**: Navy background with teal accents, whitesmoke text
+### UI/UX Preferences & Implementation (Updated October 2025)
+- **Theme System**: All components use CSS variables and theme tokens for automatic light/dark mode adaptation
+- **Color Tokens**: `bg-primary`, `bg-background`, `bg-card`, `text-foreground`, `border-border` used exclusively
+- **Form Elements**: Modern styling with `bg-background`, `border-input`, `focus:border-primary` and smooth transitions
+- **Select Components**: Use `hsl(var(--background))`, `hsl(var(--border))` for proper dark mode support
+- **Component Library**: All Shadcn/ui components (Button, Card, Input, Badge, Select, Toast) modernized with teal brand color via `--primary` token
+- **Focus States**: Teal ring effects using `focus:ring-primary/10` and `focus:border-primary`
+- **Hover Effects**: Smooth transitions with `-translate-y-0.5` lift effect on buttons and cards
+- **Dark Mode**: Fully functional with Navy (#0A101A) background, Slate (#1E2733) cards, teal (#00B5B8) accents, whitesmoke (#F3F5F7) text
+- **NO Hard-Coded Colors**: Zero `bg-white`, `text-gray-X`, `border-gray-X`, `bg-teal`, or hex values in UI components
 
 # System Architecture
 
