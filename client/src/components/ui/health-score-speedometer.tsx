@@ -59,14 +59,11 @@ export function HealthScoreSpeedometer({
   const strokeDasharray = `${circumference} ${circumference}`;
   const strokeDashoffset = circumference - (normalizedScore / 100) * circumference;
   
-  // Get color based on score
+  // Get color based on score using theme tokens
   const getScoreColor = (score: number) => {
-    if (score >= 90) return { color: '#10B981', bg: 'bg-green-100', text: 'text-green-800' }; // Green
-    if (score >= 80) return { color: '#059669', bg: 'bg-green-50', text: 'text-green-700' }; // Light Green
-    if (score >= 70) return { color: '#FBBF24', bg: 'bg-yellow-100', text: 'text-yellow-800' }; // Yellow
-    if (score >= 60) return { color: '#F59E0B', bg: 'bg-orange-100', text: 'text-orange-800' }; // Orange
-    if (score >= 50) return { color: '#EF4444', bg: 'bg-red-100', text: 'text-red-800' }; // Red
-    return { color: '#DC2626', bg: 'bg-red-200', text: 'text-red-900' }; // Dark Red
+    if (score >= 80) return { color: 'hsl(var(--success))', bg: 'bg-success/10', text: 'text-success' }; // Success
+    if (score >= 60) return { color: 'hsl(var(--warning))', bg: 'bg-warning/10', text: 'text-warning' }; // Warning
+    return { color: 'hsl(var(--destructive))', bg: 'bg-destructive/10', text: 'text-destructive' }; // Destructive
   };
   
   const scoreColor = getScoreColor(normalizedScore);
@@ -101,7 +98,7 @@ export function HealthScoreSpeedometer({
           <path
             d={`M ${centerX - radius} ${centerY} A ${radius} ${radius} 0 0 1 ${centerX + radius} ${centerY}`}
             fill="none"
-            stroke="#E5E7EB"
+            stroke="hsl(var(--muted))"
             strokeWidth={strokeWidth}
             strokeLinecap="round"
           />
@@ -127,7 +124,7 @@ export function HealthScoreSpeedometer({
             y1={centerY}
             x2={centerX + needleLength * Math.cos((angle * Math.PI) / 180)}
             y2={centerY + needleLength * Math.sin((angle * Math.PI) / 180)}
-            stroke="#374151"
+            stroke="hsl(var(--foreground))"
             strokeWidth="3"
             strokeLinecap="round"
             style={{
@@ -140,14 +137,14 @@ export function HealthScoreSpeedometer({
             cx={centerX}
             cy={centerY}
             r="4"
-            fill="#374151"
+            fill="hsl(var(--foreground))"
           />
           
           {/* Score labels */}
           <text
             x={centerX - radius * 0.8}
             y={centerY + 15}
-            className="text-xs fill-gray-500"
+            className="text-xs fill-muted-foreground"
             textAnchor="middle"
           >
             0
@@ -155,7 +152,7 @@ export function HealthScoreSpeedometer({
           <text
             x={centerX}
             y={centerY - radius * 0.8}
-            className="text-xs fill-gray-500"
+            className="text-xs fill-muted-foreground"
             textAnchor="middle"
           >
             50
@@ -163,7 +160,7 @@ export function HealthScoreSpeedometer({
           <text
             x={centerX + radius * 0.8}
             y={centerY + 15}
-            className="text-xs fill-gray-500"
+            className="text-xs fill-muted-foreground"
             textAnchor="middle"
           >
             100
@@ -188,7 +185,7 @@ export function HealthScoreSpeedometer({
       </div>
       
       {driverName && showLabel && (
-        <p className={`${textSize} font-medium text-center mt-2 text-gray-700 dark:text-gray-300`}>
+        <p className={`${textSize} font-medium text-center mt-2 text-muted-foreground`}>
           {driverName}
         </p>
       )}

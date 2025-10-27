@@ -107,7 +107,14 @@
   }
 
   body {
-    @apply font-sans antialiased bg-gray-50 text-foreground;
+    @apply font-sans antialiased bg-background text-foreground;
+    letter-spacing: -0.01em;
+  }
+
+  /* Modern Typography */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-poppins;
+    letter-spacing: -0.02em;
   }
 
   .bg-primary {
@@ -134,65 +141,48 @@
     color: hsl(var(--success));
   }
 
+  /* Modern Card Enhancements */
+  .card-modern {
+    @apply bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all duration-300;
+  }
+
+  .card-stat {
+    @apply bg-card rounded-xl border border-border shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-300;
+  }
+
   /* Improved form styling for better visibility */
   .form-input-improved {
-    @apply bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400;
+    @apply bg-background border-2 border-input text-foreground placeholder:text-muted-foreground;
     @apply focus:border-primary focus:ring-2 focus:ring-primary/20;
     @apply transition-colors duration-200;
-    background-color: white !important;
-    color: #111827 !important;
-  }
-  
-  .dark .form-input-improved {
-    background-color: #374151 !important;
-    color: #f9fafb !important;
   }
 
   .form-label-improved {
-    @apply text-gray-900 dark:text-gray-100 font-medium;
+    @apply text-foreground font-medium;
   }
 
   .form-select-improved {
-    @apply bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100;
+    @apply bg-background border-2 border-input text-foreground;
     @apply focus:border-primary focus:ring-2 focus:ring-primary/20;
     @apply transition-colors duration-200;
-    background-color: white !important;
-    color: #111827 !important;
-  }
-  
-  .dark .form-select-improved {
-    background-color: #374151 !important;
-    color: #f9fafb !important;
   }
 
   .form-textarea-improved {
-    @apply bg-white dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400;
+    @apply bg-background border-2 border-input text-foreground placeholder:text-muted-foreground;
     @apply focus:border-primary focus:ring-2 focus:ring-primary/20;
     @apply transition-colors duration-200;
-    background-color: white !important;
-    color: #111827 !important;
-  }
-  
-  .dark .form-textarea-improved {
-    background-color: #374151 !important;
-    color: #f9fafb !important;
   }
 
   .dialog-improved {
-    @apply bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700;
-    background-color: white !important;
-  }
-  
-  .dark .dialog-improved {
-    background-color: #1f2937 !important;
+    @apply bg-card border border-border;
   }
 
   .dialog-header-improved {
-    @apply border-b border-gray-200 dark:border-gray-700 pb-4 mb-6;
+    @apply border-b border-border pb-4 mb-6;
   }
 
   .dialog-title-improved {
-    @apply text-xl font-semibold text-gray-900 dark:text-gray-100;
+    @apply text-xl font-semibold text-card-foreground;
   }
 
   .bg-warning {
@@ -218,18 +208,36 @@
   }
 }
 
-/* TRAQ IQ Button Styling */
+/* TRAQ IQ Modern Button Styling */
 button {
   font-family: var(--font-sans);
   font-weight: 600;
   border-radius: 8px;
   transition: all 0.2s ease;
+  letter-spacing: -0.01em;
+}
+
+/* Primary Button - Uses Theme Tokens */
+.btn-primary {
+  @apply bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5;
+}
+
+.btn-secondary {
+  @apply bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold px-6 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200;
+}
+
+.btn-success {
+  @apply bg-success hover:bg-success/90 text-white font-semibold px-6 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200;
+}
+
+.btn-outline {
+  @apply border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold px-6 py-2.5 rounded-lg transition-all duration-200;
 }
 
 /* Form button improvements for TRAQ IQ design */
 .form-button-improved {
-  background: #00B5B8 !important; /* Teal */
-  color: white !important;
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
   border: none !important;
   padding: 10px 20px !important;
   border-radius: 8px !important;
@@ -241,40 +249,132 @@ button {
   min-height: 40px !important;
   min-width: 80px !important;
   transition: all 0.2s ease !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
 }
 
-/* Ensure all Select components have solid white backgrounds */
+.form-button-improved:hover:not(:disabled) {
+  background: hsl(var(--primary) / 0.9) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 181, 184, 0.2), 0 2px 4px -1px rgba(0, 181, 184, 0.1) !important;
+}
+
+/* Ensure all Select components use theme tokens */
 [data-radix-select-content] {
-  background-color: white !important;
-  border: 1px solid #d1d5db !important;
+  background-color: hsl(var(--background)) !important;
+  border: 1px solid hsl(var(--border)) !important;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
   z-index: 50 !important;
+  color: hsl(var(--foreground)) !important;
 }
 
 [data-radix-select-trigger] {
-  background-color: white !important;
-  border: 1px solid #d1d5db !important;
-  color: #111827 !important;
-}
-
-.dark [data-radix-select-content] {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #f9fafb !important;
-}
-
-.dark [data-radix-select-trigger] {
-  background-color: #374151 !important;
-  border-color: #4b5563 !important;
-  color: #f9fafb !important;
+  background-color: hsl(var(--background)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
 }
 
 .form-button-improved:hover {
-  background: #00C2D1 !important; /* Lighter teal on hover */
+  background: hsl(var(--primary) / 0.9) !important;
   transform: translateY(-1px);
 }
 
 .form-button-improved:disabled {
-  background: #9ca3af !important;
+  background: hsl(var(--muted)) !important;
   cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* Modern Input Styling */
+.input-modern {
+  @apply bg-background border-2 border-input rounded-lg px-4 py-2.5 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200 outline-none text-foreground;
+}
+
+.input-modern:hover {
+  @apply border-primary/30;
+}
+
+/* Modern Select Styling */
+.select-modern {
+  @apply bg-background border-2 border-input rounded-lg px-4 py-2.5 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200 outline-none cursor-pointer text-foreground;
+}
+
+.select-modern:hover {
+  @apply border-primary/30;
+}
+
+/* Badge Enhancements */
+.badge-primary {
+  @apply bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-semibold border border-primary/20;
+}
+
+.badge-success {
+  @apply bg-success/10 text-success px-3 py-1 rounded-full text-xs font-semibold border border-success/20;
+}
+
+.badge-warning {
+  @apply bg-warning/10 text-warning px-3 py-1 rounded-full text-xs font-semibold border border-warning/20;
+}
+
+.badge-error {
+  @apply bg-destructive/10 text-destructive px-3 py-1 rounded-full text-xs font-semibold border border-destructive/20;
+}
+
+/* Loading Skeleton */
+.skeleton {
+  @apply animate-pulse bg-muted/50 rounded;
+}
+
+/* Smooth Scrollbar */
+.scrollbar-modern::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-modern::-webkit-scrollbar-track {
+  @apply bg-muted/30 rounded-full;
+}
+
+.scrollbar-modern::-webkit-scrollbar-thumb {
+  @apply bg-muted rounded-full hover:bg-muted-foreground/50 transition-colors;
+}
+
+/* Professional Stat Card */
+.stat-card {
+  @apply bg-card rounded-xl border border-border p-6 hover:shadow-lg hover:border-primary/20 transition-all duration-300 hover:-translate-y-1;
+}
+
+/* Icon Glow Effect */
+.icon-glow {
+  @apply drop-shadow-[0_0_8px_rgba(0,181,184,0.4)];
+}
+
+/* Glass Effect */
+.glass {
+  @apply bg-card/80 backdrop-blur-sm border border-border/20 shadow-lg;
+}
+
+/* Metric Number Styling */
+.metric-value {
+  @apply font-poppins font-bold text-3xl text-foreground;
+}
+
+/* Subtle Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Hover Lift Effect */
+.hover-lift {
+  @apply transition-transform duration-200 hover:-translate-y-1;
 }
