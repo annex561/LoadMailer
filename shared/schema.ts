@@ -98,6 +98,8 @@ export const loads = pgTable("loads", {
   company: text("company"), // Shipping company
   contactPhone: text("contact_phone"), // Contact phone number
   sourceBoard: text("source_board").default("manual"), // manual, dat, loadboard
+  // GPS tracking SMS throttle - prevents spam by tracking last send time
+  gpsTrackingSmsLastSentAt: timestamp("gps_tracking_sms_last_sent_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

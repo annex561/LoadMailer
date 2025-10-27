@@ -293,9 +293,30 @@ function requireBulkAuthorization(req: any, res: any, next: any) {
 
 // Helper function to send GPS tracking link SMS to driver
 // loadId is optional - if null, sends general fleet tracking link instead of load-specific
-async function sendGPSTrackingSMS(driverId: string, loadId: string | null): Promise<{ success: boolean; error?: string }> {
+async function sendGPSTrackingSMS(driverId: string, loadId: string | null, options: { override?: boolean } = {}): Promise<{ success: boolean; error?: string }> {
   try {
     console.log(`📍 GPS TRACKING SMS: Starting for driver ${driverId}${loadId ? `, load ${loadId}` : ' (general tracking)'}`);
+    
+    // THROTTLE CHECK: Prevent SMS spam by checking last send time
+    const THROTTLE_MINUTES = 30; // Don't resend within 30 minutes
+    
+    if (loadId && !options.override) {
+      const load = await storage.getLoad(loadId);
+      if (load?.gpsTrackingSmsLastSentAt) {
+        const lastSentAt = new Date(load.gpsTrackingSmsLastSentAt);
+        const now = new Date();
+        const minutesSinceLastSend = (now.getTime() - lastSentAt.getTime()) / (1000 * 60);
+        
+        if (minutesSinceLastSend < THROTTLE_MINUTES) {
+          const remainingMinutes = Math.ceil(THROTTLE_MINUTES - minutesSinceLastSend);
+          console.log(`⏸️ GPS TRACKING SMS: Throttled - last sent ${Math.floor(minutesSinceLastSend)} minutes ago for load ${loadId}. Will allow resend in ${remainingMinutes} minutes.`);
+          return { 
+            success: false, 
+            error: `GPS tracking SMS was already sent ${Math.floor(minutesSinceLastSend)} minutes ago. Please wait ${remainingMinutes} more minutes before resending.` 
+          };
+        }
+      }
+    }
     
     // Generate GPS tracking token for the driver
     const tokenResult = await storage.generateTrackingToken(driverId);
@@ -367,6 +388,20 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null): Prom
     if (smsResult.success) {
       console.log(`✅ GPS TRACKING SMS: Successfully sent to ${driver.name} for ${logContext}`);
       console.log(`✅ GPS TRACKING SMS: Tracking URL: ${trackingUrl}`);
+      
+      // Update load timestamp to prevent re-sending within throttle window
+      if (loadId) {
+        try {
+          await storage.updateLoad(loadId, { 
+            gpsTrackingSmsLastSentAt: new Date() 
+          });
+          console.log(`✅ GPS TRACKING SMS: Updated throttle timestamp for load ${loadId}`);
+        } catch (updateError) {
+          console.error(`⚠️ GPS TRACKING SMS: Failed to update throttle timestamp (non-critical):`, updateError);
+          // Don't fail the overall SMS send if timestamp update fails
+        }
+      }
+      
       return { success: true };
     } else {
       console.error(`❌ GPS TRACKING SMS: Failed to send - ${smsResult.error}`);
