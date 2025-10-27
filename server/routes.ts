@@ -309,10 +309,11 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
         
         if (minutesSinceLastSend < THROTTLE_MINUTES) {
           const remainingMinutes = Math.ceil(THROTTLE_MINUTES - minutesSinceLastSend);
-          console.log(`⏸️ GPS TRACKING SMS: Throttled - last sent ${Math.floor(minutesSinceLastSend)} minutes ago for load ${loadId}. Will allow resend in ${remainingMinutes} minutes.`);
+          console.log(`⏸️ GPS TRACKING SMS: Throttled - last sent ${Math.floor(minutesSinceLastSend)} minutes ago for load ${loadId}. Skipping resend (${remainingMinutes} min remaining).`);
           return { 
-            success: false, 
-            error: `GPS tracking SMS was already sent ${Math.floor(minutesSinceLastSend)} minutes ago. Please wait ${remainingMinutes} more minutes before resending.` 
+            success: true, 
+            throttled: true, 
+            message: `GPS tracking SMS already sent ${Math.floor(minutesSinceLastSend)} minutes ago (throttled)` 
           };
         }
       }
