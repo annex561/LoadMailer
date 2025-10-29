@@ -49,8 +49,6 @@ interface OnboardingData {
   accountNumber: string;
   
   // Preferences
-  enableTelegramNotifications: boolean;
-  telegramUsername: string;
   preferredLanes: string[];
   avoidAreas: string[];
   
@@ -96,8 +94,6 @@ export default function DriverOnboarding() {
     bankName: '',
     routingNumber: '',
     accountNumber: '',
-    enableTelegramNotifications: true,
-    telegramUsername: '',
     preferredLanes: [],
     avoidAreas: [],
     confirmPassword: 'password123'
@@ -595,31 +591,6 @@ export default function DriverOnboarding() {
       case 4: // Preferences
         return (
           <div className="space-y-4">
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="telegramNotifications"
-                  checked={formData.enableTelegramNotifications}
-                  onCheckedChange={(checked) => updateFormData('enableTelegramNotifications', checked)}
-                  data-testid="checkbox-telegram-notifications"
-                />
-                <Label htmlFor="telegramNotifications">Enable Telegram notifications for load offers</Label>
-              </div>
-
-              {formData.enableTelegramNotifications && (
-                <div className="space-y-2">
-                  <Label htmlFor="telegramUsername">Telegram Username (optional)</Label>
-                  <Input
-                    id="telegramUsername"
-                    value={formData.telegramUsername}
-                    onChange={(e) => updateFormData('telegramUsername', e.target.value)}
-                    placeholder="@johndoe"
-                    data-testid="input-telegram-username"
-                  />
-                </div>
-              )}
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="preferredLanes">Preferred Lanes (optional)</Label>
               <Textarea

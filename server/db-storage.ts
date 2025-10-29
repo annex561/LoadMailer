@@ -489,9 +489,46 @@ export class DatabaseStorage implements IStorage {
       return memoryToken;
     }
   }
-  async getOnboardingToken(token: string): Promise<schema.OnboardingToken | undefined> { return undefined; }
-  async getAllOnboardingTokens(): Promise<schema.OnboardingToken[]> { return []; }
-  async markTokenAsUsed(token: string): Promise<boolean> { return false; }
+  async getOnboardingToken(tokenString: string): Promise<schema.OnboardingToken | undefined> {
+    try {
+      const result = await db
+        .select()
+        .from(schema.onboardingTokens)
+        .where(eq(schema.onboardingTokens.token, tokenString))
+        .limit(1);
+      return result[0];
+    } catch (error) {
+      console.error('Database error retrieving onboarding token:', error);
+      return undefined;
+    }
+  }
+  
+  async getAllOnboardingTokens(): Promise<schema.OnboardingToken[]> {
+    try {
+      const results = await db
+        .select()
+        .from(schema.onboardingTokens)
+        .orderBy(desc(schema.onboardingTokens.createdAt));
+      return results;
+    } catch (error) {
+      console.error('Database error retrieving all onboarding tokens:', error);
+      return [];
+    }
+  }
+  
+  async markTokenAsUsed(tokenString: string): Promise<boolean> {
+    try {
+      const result = await db
+        .update(schema.onboardingTokens)
+        .set({ isUsed: true })
+        .where(eq(schema.onboardingTokens.token, tokenString))
+        .returning();
+      return result.length > 0;
+    } catch (error) {
+      console.error('Database error marking token as used:', error);
+      return false;
+    }
+  }
 
   // Add stub implementations for all remaining methods required by IStorage interface
   async getDriverLocationsByDriver(driverId: string): Promise<schema.DriverLocation[]> { return []; }

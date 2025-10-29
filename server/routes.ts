@@ -1580,6 +1580,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       };
 
       // Check for duplicates
+      console.log(`🔍 Checking for duplicates: name="${driverRecord.name}", email="${driverRecord.email}", phone="${driverRecord.phone}"`);
       const duplicates = await storage.findDuplicateDrivers(
         driverRecord.name,
         driverRecord.email,
@@ -1587,12 +1588,14 @@ export async function registerRoutes(app: Express): Promise<void> {
       );
       
       if (duplicates.length > 0) {
+        console.log(`❌ Found ${duplicates.length} duplicate(s):`, duplicates.map(d => `${d.name} (${d.email} / ${d.phone})`));
         return res.status(409).json({
           error: "Duplicate driver found",
           duplicates,
           message: "A driver with this name, email, or phone already exists."
         });
       }
+      console.log('✅ No duplicates found, proceeding with driver creation');
 
       // Create driver
       const driver = await storage.createDriver(driverRecord);
