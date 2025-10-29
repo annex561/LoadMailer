@@ -1491,6 +1491,192 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.status(400).json({ error: "Registration failed" });
     }
   });
+
+  // Validate onboarding token
+  app.post("/api/validate-onboarding-token", async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ 
+          valid: false, 
+          error: "Token is required" 
+        });
+      }
+
+      const tokenData = await storage.getOnboardingToken(token);
+      
+      if (!tokenData) {
+        return res.status(404).json({ 
+          valid: false, 
+          error: "Invalid token" 
+        });
+      }
+
+      // Check if token is expired
+      if (new Date() > new Date(tokenData.expiresAt)) {
+        return res.status(400).json({ 
+          valid: false, 
+          error: "Token has expired" 
+        });
+      }
+
+      // Check if token was already used
+      if (tokenData.isUsed) {
+        return res.status(400).json({ 
+          valid: false, 
+          error: "Token has already been used" 
+        });
+      }
+
+      res.json({ 
+        valid: true, 
+        email: tokenData.email 
+      });
+    } catch (error) {
+      console.error('Error validating token:', error);
+      res.status(500).json({ 
+        valid: false, 
+        error: "Failed to validate token" 
+      });
+    }
+  });
+
+  // Full driver onboarding
+  app.post("/api/driver-onboarding", async (req, res) => {
+    try {
+      const { token, ...driverData } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ error: "Token is required" });
+      }
+
+      // Validate token
+      const tokenData = await storage.getOnboardingToken(token);
+      
+      if (!tokenData || tokenData.isUsed || new Date() > new Date(tokenData.expiresAt)) {
+        return res.status(400).json({ error: "Invalid or expired token" });
+      }
+
+      // Prepare driver data
+      const driverRecord = {
+        name: driverData.name,
+        email: driverData.email || tokenData.email,
+        phone: driverData.phone,
+        city: driverData.city,
+        emergencyContact: driverData.emergencyContact || null,
+        emergencyPhone: driverData.emergencyPhone || null,
+        licenseNumber: driverData.licenseNumber,
+        licenseState: driverData.licenseState,
+        equipmentType: driverData.equipmentType,
+        weightCapacity: driverData.maxWeight || driverData.weightCapacity || 26000,
+        maxLength: driverData.maxLength || 53,
+        maxWeight: driverData.maxWeight || 48000,
+        loadType: driverData.loadType || 'full_partial',
+        status: 'available' as const,
+        enableSmsNotifications: true,
+        enableTelegramNotifications: false,
+        isOnboarded: true
+      };
+
+      // Check for duplicates
+      const duplicates = await storage.findDuplicateDrivers(
+        driverRecord.name,
+        driverRecord.email,
+        driverRecord.phone
+      );
+      
+      if (duplicates.length > 0) {
+        return res.status(409).json({
+          error: "Duplicate driver found",
+          duplicates,
+          message: "A driver with this name, email, or phone already exists."
+        });
+      }
+
+      // Create driver
+      const driver = await storage.createDriver(driverRecord);
+      
+      // Mark token as used
+      await storage.markTokenAsUsed(token);
+      
+      console.log(`✅ Driver onboarded: ${driver.name} (${driver.id})`);
+
+      // Send welcome SMS
+      const normalizedPhone = normalizePhoneToE164(driver.phone);
+      if (normalizedPhone && twilioPhoneNumber) {
+        try {
+          const welcomeMessage = `Welcome to LAMP Logistics, ${driver.name}!\n\n` +
+            `Your driver account has been created successfully.\n` +
+            `You'll receive load notifications via SMS.\n\n` +
+            `Questions? Contact dispatch.`;
+          
+          await twilioClient.messages.create({
+            to: normalizedPhone,
+            from: twilioPhoneNumber,
+            body: welcomeMessage
+          });
+          console.log(`📱 Sent welcome SMS to driver (${normalizedPhone})`);
+        } catch (smsError) {
+          console.error('⚠️ Failed to send welcome SMS:', smsError);
+        }
+      }
+
+      res.status(201).json({
+        ...driver,
+        message: 'Driver onboarded successfully!'
+      });
+      
+    } catch (error) {
+      console.error('❌ Onboarding error:', error);
+      res.status(400).json({ error: "Onboarding failed" });
+    }
+  });
+
+  // Create onboarding token and send invitation
+  app.post("/api/create-onboarding-token", async (req, res) => {
+    try {
+      const { email, sendVia } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const { randomUUID } = await import('crypto');
+      const tokenValue = randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+
+      const tokenData = await storage.createOnboardingToken({
+        token: tokenValue,
+        email,
+        expiresAt,
+        isUsed: false
+      });
+
+      const onboardingUrl = `${getBaseUrl()}/driver-onboarding?token=${tokenValue}`;
+      
+      // Send invitation based on preference
+      if (sendVia === 'email') {
+        // TODO: Implement email sending
+        console.log(`📧 Would send email to ${email} with link: ${onboardingUrl}`);
+      } else if (sendVia === 'sms') {
+        // TODO: Implement SMS sending
+        console.log(`📱 Would send SMS with link: ${onboardingUrl}`);
+      }
+
+      res.json({
+        success: true,
+        token: tokenValue,
+        onboardingUrl,
+        expiresAt: tokenData.expiresAt
+      });
+      
+    } catch (error) {
+      console.error('Error creating onboarding token:', error);
+      res.status(500).json({ error: "Failed to create onboarding token" });
+    }
+  });
   
   // Check for duplicate contacts before creation
   app.post("/api/check-duplicates", async (req, res) => {
