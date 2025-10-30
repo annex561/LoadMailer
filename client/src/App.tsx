@@ -92,22 +92,13 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Switch>
-          {/* Standalone driver pages without sidebar/header */}
+          {/* Standalone driver pages without sidebar/header - for driver self-service only */}
           <Route path="/driver-onboarding" component={DriverOnboarding} />
           <Route path="/simple-registration" component={SimpleDriverRegistration} />
           <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
           <Route path="/driver-dashboard" component={MobileDriverDashboard} />
-          <Route path="/driver-dashboard-old" component={DriverDashboard} />
-          <Route path="/driver-profile" component={DriverProfile} />
-          <Route path="/sms-status" component={SMSStatus} />
-          <Route path="/debug-token" component={DebugToken} />
-          <Route path="/twilio-settings" component={TwilioSettings} />
-          <Route path="/unified-messaging" component={UnifiedMessaging} />
-          <Route path="/driver-chat" component={UnifiedMessaging} />
-          <Route path="/driver-tracker" component={DriverTracker} />
-          <Route path="/document-management" component={DocumentManagement} />
           
-          {/* All routes use LoadOps dashboard layout */}
+          {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
           <Route>
             <LoadOpsDashboard />
           </Route>

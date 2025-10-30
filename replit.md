@@ -6,38 +6,6 @@ TRAQ IQ is a comprehensive fleet management system for truck load tracking and l
 
 Preferred communication style: Simple, everyday language.
 
-## TRAQ IQ Design System
-
-### Brand Colors
-- **Navy**: #0A101A - Primary dark background for dark mode
-- **Slate**: #1E2733 - Secondary dark background, cards in dark mode
-- **Teal**: #00B5B8 - Primary accent color for buttons, links, and highlights
-- **Whitesmoke**: #F3F5F7 - Light text and backgrounds
-- **Success**: #3AE374 - Success states and positive actions
-- **Error**: #E63946 - Error states and destructive actions
-
-### Typography
-- **Primary Font**: Poppins - Modern, clean sans-serif for UI elements
-- **Secondary Font**: Inter - Supporting sans-serif for body text
-- **Monospace Font**: JetBrains Mono - Code and technical displays
-
-### Design Principles
-- **Border Radius**: 8px for buttons and cards (rounded, modern feel)
-- **Transitions**: 0.2s ease for smooth interactions
-- **Button Hover**: Lighter teal (#00C2D1) with subtle lift effect
-- **Font Weight**: 600 for buttons and headings (semi-bold)
-
-### UI/UX Preferences & Implementation (Updated October 2025)
-- **Theme System**: All components use CSS variables and theme tokens for automatic light/dark mode adaptation
-- **Color Tokens**: `bg-primary`, `bg-background`, `bg-card`, `text-foreground`, `border-border` used exclusively
-- **Form Elements**: Modern styling with `bg-background`, `border-input`, `focus:border-primary` and smooth transitions
-- **Select Components**: Use `hsl(var(--background))`, `hsl(var(--border))` for proper dark mode support
-- **Component Library**: All Shadcn/ui components (Button, Card, Input, Badge, Select, Toast) modernized with teal brand color via `--primary` token
-- **Focus States**: Teal ring effects using `focus:ring-primary/10` and `focus:border-primary`
-- **Hover Effects**: Smooth transitions with `-translate-y-0.5` lift effect on buttons and cards
-- **Dark Mode**: Fully functional with Navy (#0A101A) background, Slate (#1E2733) cards, teal (#00B5B8) accents, whitesmoke (#F3F5F7) text
-- **NO Hard-Coded Colors**: Zero `bg-white`, `text-gray-X`, `border-gray-X`, `bg-teal`, or hex values in UI components
-
 # System Architecture
 
 ## Frontend Architecture
@@ -58,11 +26,11 @@ Preferred communication style: Simple, everyday language.
 ## Database Design
 - **ORM**: Drizzle ORM with PostgreSQL dialect.
 - **Schema Structure**: Includes Drivers, Customers, Loads, Email Templates, and Email Logs with defined relationships.
+- **Collision-Proof IDs**: Implemented nanoid-based load number generation (LOAD-XXXXXX-nanoid) to prevent duplicate key conflicts.
 
 ## Communication System
 - **Unified Messaging Architecture**: One conversation stream per driver for all communications.
-- **SMS Communication**: Twilio SMS for all driver communications and notifications, with bidirectional capabilities and smart load context detection.
-- **MMS Support**: Allows drivers to send images (e.g., proof of delivery) via SMS, linked to loads.
+- **SMS Communication**: Twilio SMS for all driver communications and notifications, with bidirectional capabilities and smart load context detection, including MMS support for image uploads.
 - **Email System**: Nodemailer for automated email notifications based on load status changes, using dynamic templates.
 
 ## API Design
@@ -70,87 +38,33 @@ Preferred communication style: Simple, everyday language.
 - **Error Handling**: Centralized middleware.
 - **Data Validation**: Zod schemas shared between frontend and backend.
 
+## UI/UX Design System
+- **Brand Colors**: Navy (#0A101A), Slate (#1E2733), Teal (#00B5B8 - primary accent), Whitesmoke (#F3F5F7), Success (#3AE374), Error (#E63946).
+- **Typography**: Poppins (primary), Inter (secondary), JetBrains Mono (monospace).
+- **Design Principles**: 8px border-radius, 0.2s ease transitions, button hover effects, 600 font weight for headings.
+- **Theming**: CSS variables and theme tokens for automatic light/dark mode adaptation, using `hsl(var(--color))` for components.
+- **Component Styling**: Shadcn/ui components are modernized with Teal brand color via `--primary` token, consistent focus states and hover effects.
+- **Dark Mode**: Fully functional with Navy background, Slate cards, Teal accents, and Whitesmoke text.
+- **Strict Color Usage**: No hard-coded hex values or utility classes like `bg-white`, `text-gray-X`, `border-gray-X`, `bg-teal` in UI components.
+
 ## Feature Specifications
 - **Driver Management**: Onboarding, status tracking, payment workflows.
 - **Load Matching**: Location-based, equipment type, weight capacity, and driver availability filtering.
 - **Automated Communication**: SMS notifications for load offers and driver communications.
 - **Load Workflow**: Intelligent load retry system, post-confirmation messaging, and manual load entry.
-- **UI/UX**: Consistent styling for forms and dropdowns, integrated document viewing, and a professional dashboard.
-- **LoadOps Dashboard Navigation**: Consolidated sidebar with 5 organized sections for efficient access to all system features (Dashboard and LoadOps Dashboard merged into "Main Dashboard")
-  - **Core Operations**: Main Dashboard (unified view), Manage Loads, DAT Loads, Manual Load Entry
-  - **Driver Management**: Driver Management, Driver Onboarding, Simple Registration, Driver Dashboard, GPS Tracking
-  - **Communication**: Customers/Contacts, Driver Messages, AI Communication Insights, LoadMailer Control, Telegram Dispatching, SMS Status
-  - **AI & Smart Features**: Smart Load Matching, Analytics Dashboard, Predictive Maintenance, Prediction Confidence
-  - **System & Reports**: Admin Overview, Payment Workflow, Templates, Scraper Management, Debug Token, Dispatcher Dashboard, Dispatcher Vehicle Dashboard, Document Management, DAT Scraper, DAT Login, SMS Dispatching, TaskMagic Status
-- **Communication Dashboard**: Modern, optimized interface for driver communications with compact thread list (320px fixed sidebar), real-time message updates (2s polling), status indicators (emerald/amber/gray dots), enhanced search/filter, AI-assisted messaging, and comprehensive empty/loading states. Features include quick message templates, MMS image preview, and WhatsApp-style chat interface.
-- **Professional Document Management System**: Complete approval workflow with quality validation, automation, and cloud integrations. Includes smart categorization, an enhanced viewer with annotations, audit trails, automated reminders, and PDF generation. Prevents load completion without all required documents.
-- **Real-Time GPS Tracking**: Mobile-optimized driver location tracking with secure token-based authentication, 60-second auto-updates, wake lock support, and a GPS health monitor. After successful location update, automatically redirects back to driver dashboard for seamless workflow.
-- **Mobile Driver Dashboard**: A PWA (Progressive Web App) interface with dynamic authentication, providing driver stats, load history, WhatsApp-style chat, document upload, and profile management.
-  - **PWA Features**: Installable to home screen without App Store, offline functionality via service worker, app icons in multiple sizes (192x192, 512x512, 180x180)
-  - **PWA Install Banner**: Smart install prompt with platform-specific instructions (iOS/Android), dismissible with localStorage persistence, only shows on mobile devices when app is not installed
-  - **Authentication Pattern**: Dynamic driver authentication via URL parameter `?driverId=xxx` with localStorage persistence for PWA launches
-  - **Query Guards**: All driverId-dependent TanStack Query hooks use `enabled: !!driverId` to prevent malformed API calls
-  - **Fallback UI**: Error screen displays when driverId is missing, directing drivers to use official dispatch link
-  - **Mobile Optimizations**: Pull-to-refresh, swipe gestures, offline support, wake lock for GPS tracking, WhatsApp-style messaging interface
-  - **GPS-Based Intelligent Status Buttons**: Context-aware load progression buttons based on driver proximity to pickup/delivery locations
-    - **0.5-Mile Proximity Threshold**: Buttons change based on distance from destination (Haversine formula calculation)
-    - **Assigned Status Flow**: Shows "En Route to Pickup" (>0.5mi) or "Arrived at Pickup" (<0.5mi)
-    - **In-Transit Status Flow**: Shows "In Transit" → "Arrived at Delivery" (<0.5mi) → "Mark as Delivered"
-    - **Backend Distance Calculation**: POST `/api/calculate-distance` endpoint uses OpenStreetMap Nominatim geocoding + Haversine formula
-    - **5-Second Timeout**: Distance calculations timeout after 5 seconds to prevent infinite loading states
-    - **Manual Fallback**: If GPS fails or times out, shows manual buttons: "Start Delivery" or "Mark as Delivered"
-    - **No Client-Side User-Agent**: All geocoding done server-side to avoid browser header restrictions
-  - **Enhanced Hamburger Menu**: Slide-in menu with Profile Settings, Help & Support, Contact Dispatch (Call/SMS buttons using tel:/sms: protocols), and Logout
-  - **Number Formatting Fix**: All currency and distance values wrapped in parseFloat() to prevent string concatenation bugs (e.g., "$378,499,950.00mi000")
-- **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized driver dashboard links with multi-layer security.
-  - **Automated Onboarding SMS**: New drivers automatically receive dashboard link via SMS upon account creation (non-blocking fire-and-forget)
-  - **Individual Resend**: Green Smartphone button on each driver card allows dispatch to resend dashboard link to specific drivers
-  - **Bulk Distribution**: "Send All Dashboards" button enables mass SMS distribution to all drivers with valid phone numbers
-  - **Security Layers**: 3-tier authorization (session/API key/dev bypass), rate limiting (1/hour/IP), batch size limit (100 max), comprehensive audit logging
-  - **Dashboard URL Format**: `https://{domain}/driver-dashboard?driverId={id}` - unique per driver for secure access
-  - **SMS Message Template**: Welcome message with dashboard link and installation instructions for PWA home screen setup
-  - **Cost Protection**: Rate limiting prevents spam, batch size caps prevent runaway Twilio costs, 500ms delays respect Twilio throttling
-  - **Audit Trail**: All bulk sends logged with user identifier, IP address, and timestamp for compliance monitoring
-
-# Production Readiness Testing
-
-## Comprehensive End-to-End Load Lifecycle Testing (October 2025)
-Successfully completed comprehensive mock trial of the entire load lifecycle from dispatch to driver payment, simulating both roles to verify system integrity.
-
-### Testing Scope
-- **Load Creation & Assignment**: Dispatch creates load and assigns to driver
-- **Driver Communication**: SMS notifications and bidirectional messaging
-- **Load Status Progression**: scheduled → assigned → picked_up → in_transit → delivered → completed
-- **GPS Tracking**: Real-time location updates during transit
-- **Document Management**: BOL and POD upload with approval workflow
-- **Payment Processing**: Driver earnings calculation and stats update
-- **Dashboard Verification**: Driver mobile dashboard data accuracy
-
-### Critical Bugs Fixed
-1. **Driver Stats Auto-Update**: Fixed total_loads, completed_loads, and total_revenue not updating when loads complete - now updates correctly in real-time
-2. **Driver Status Management**: Fixed driver status not changing to 'on_route' when load assigned - now updates automatically
-3. **API Load Filtering**: Fixed GET /api/loads?driverId query returning all loads instead of driver-specific loads - now filters correctly
-4. **Status Serialization**: Fixed API responses returning null status values - now returns complete load objects with all fields
-5. **Storage Layer Architecture**: Eliminated dual storage (PostgreSQL + in-memory Map) - PostgreSQL is now sole source of truth with collision-proof load number generation using nanoid
-
-### Architecture Improvements
-- **Single Source of Truth**: Removed in-memory Map fallback, all loads now stored exclusively in PostgreSQL
-- **Collision-Proof IDs**: Implemented nanoid-based load number generation (LOAD-XXXXXX-nanoid) to prevent duplicate key conflicts
-- **Database Integrity**: All driver-load relationships, documents, and stats properly persisted and queryable
-- **Document Gate Working**: System correctly enforces approved BOL + POD requirements before load completion
-
-### Test Results
-- ✅ Complete load lifecycle verified working end-to-end
-- ✅ Driver stats update correctly ($2500 revenue, +1 load, +1 completed)
-- ✅ Driver status transitions properly ('available' → 'on_route')
-- ✅ API filtering returns correct subset of loads (not all 827+)
-- ✅ All API responses include complete data with proper serialization
-- ✅ GPS tracking SMS sent with secure token-based authentication
-- ✅ Document approval workflow prevents premature completion
-- ✅ Database integrity maintained with no orphaned records
-
-### Status
-**PRODUCTION READY** - All critical bugs fixed and verified through comprehensive end-to-end testing. System is stable, consistent, and ready for deployment.
+- **LoadOps Dashboard Navigation**: Consolidated sidebar with 5 organized sections: Core Operations, Driver Management, Communication, AI & Smart Features, and System & Reports.
+- **Communication Dashboard**: Modern, optimized interface for driver communications with compact thread list, real-time message updates, status indicators, AI-assisted messaging, quick message templates, and MMS image preview.
+- **Professional Document Management System**: Complete approval workflow with quality validation, automation, cloud integrations, smart categorization, enhanced viewer with annotations, audit trails, automated reminders, and PDF generation. Prevents load completion without required documents.
+- **Real-Time GPS Tracking**: Mobile-optimized driver location tracking with secure token-based authentication, 60-second auto-updates, wake lock support, and a GPS health monitor.
+- **Mobile Driver Dashboard (PWA)**: Installable Progressive Web App with dynamic authentication, driver stats, load history, WhatsApp-style chat, document upload, and profile management.
+    - **PWA Features**: Offline functionality, app icons, smart install prompt.
+    - **Authentication**: Dynamic driver authentication via `?driverId=xxx` with localStorage persistence.
+    - **Query Guards**: `enabled: !!driverId` for TanStack Query hooks.
+    - **Mobile Optimizations**: Pull-to-refresh, swipe gestures, wake lock.
+    - **GPS-Based Intelligent Status Buttons**: Context-aware load progression based on 0.5-mile proximity to pickup/delivery locations using Haversine formula and server-side geocoding. Includes manual fallback.
+    - **Enhanced Hamburger Menu**: Profile Settings, Help & Support, Contact Dispatch, Logout.
+- **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized driver dashboard links with multi-layer security (authorization, rate limiting, batch size limits, audit logging).
+    - **Security Layers**: 3-tier authorization, rate limiting (1/hour/IP), batch size limit (100 max), audit logging.
 
 # External Dependencies
 
