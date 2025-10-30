@@ -80,3 +80,37 @@ Preferred communication style: Simple, everyday language.
 - **Radix UI**: Accessible UI primitives.
 - **Lucide React**: Icon library.
 - **Tailwind CSS**: Utility-first CSS framework.
+
+# Recent Updates
+
+## Driver Onboarding Enhancement (October 30, 2025)
+**Changed**: Driver onboarding page now works with or without invitation tokens for maximum flexibility.
+
+### Key Changes
+1. **Token-Optional Flow**: `/driver-onboarding` accepts both invited and direct registration
+   - **With Token** (`/driver-onboarding?token=xxx`): Pre-fills email from invitation, validates token
+   - **Without Token** (`/driver-onboarding`): Allows manual entry of all driver information
+   - Both flows use the same professional multi-step wizard (5 steps)
+
+2. **Frontend Updates** (`client/src/pages/driver-onboarding.tsx`):
+   - Removed "Invalid Invitation" error when no token provided
+   - Token validation only happens if token exists in URL
+   - Form proceeds normally without requiring invitation link
+
+3. **Backend Updates** (`server/routes.ts`):
+   - POST `/api/driver-onboarding` no longer requires token parameter
+   - Token validation and marking as used only happens when token is provided
+   - Duplicate detection still enforced for data integrity
+
+### Driver Registration Methods
+The system now supports three driver registration approaches:
+1. **Driver Onboarding** (`/driver-onboarding`) - Multi-step wizard, works with or without token
+2. **Simple Registration** (`/simple-registration`) - Quick single-page form for basic driver info
+3. **Admin Creation** - Create drivers directly from Contacts page modal
+
+### Routing Architecture
+- **Standalone Pages** (no sidebar): Driver self-service pages
+  - `/driver-onboarding` - Multi-step registration wizard
+  - `/simple-registration` - Quick registration form
+  - `/driver-dashboard` - Mobile PWA driver dashboard
+- **Admin Pages** (with sidebar): All management interfaces routed through LoadOpsDashboard

@@ -103,38 +103,18 @@ export default function DriverOnboarding() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Get token from URL parameters using API endpoint
+  // Get token from URL parameters (optional)
   useEffect(() => {
-    console.log('Driver onboarding page loaded');
-    console.log('Current URL:', window.location.href);
-    console.log('Search params:', window.location.search);
-    
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     
-    console.log('Token from URLSearchParams:', urlToken);
-    
     if (urlToken) {
-      // Token found in URL parameters directly
-      console.log('Setting token from URL params:', urlToken);
       setOnboardingToken(urlToken);
       setTokenError(null);
     } else {
-      // Fallback: Try to extract from full URL string
-      const urlString = window.location.href;
-      const tokenMatch = urlString.match(/[?&]token=([^&]+)/);
-      
-      console.log('Token regex match:', tokenMatch);
-      
-      if (tokenMatch && tokenMatch[1]) {
-        const token = decodeURIComponent(tokenMatch[1]);
-        console.log('Setting token from regex match:', token);
-        setOnboardingToken(token);
-        setTokenError(null);
-      } else {
-        console.log('No token found in URL');
-        setTokenError('No onboarding token found. Please use the invitation link.');
-      }
+      // No token is fine - continue with manual registration
+      setOnboardingToken(null);
+      setTokenError(null);
     }
   }, []);
 
@@ -183,15 +163,11 @@ export default function DriverOnboarding() {
 
   const onboardDriverMutation = useMutation({
     mutationFn: async (data: OnboardingData) => {
-      if (!onboardingToken) {
-        throw new Error('No onboarding token available');
-      }
-      
       const response = await fetch('/api/driver-onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          token: onboardingToken,
+          token: onboardingToken || undefined, // Token is optional
           ...data
         })
       });
@@ -642,8 +618,8 @@ export default function DriverOnboarding() {
     }
   };
 
-  // Show loading state while validating token
-  if (isValidatingToken) {
+  // Show loading state while validating token (only if token exists)
+  if (isValidatingToken && onboardingToken) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -651,12 +627,6 @@ export default function DriverOnboarding() {
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
               <p>Validating onboarding invitation...</p>
-              {/* Debug info */}
-              <div className="mt-4 text-xs text-gray-500 space-y-1">
-                <p>URL: {window.location.href}</p>
-                <p>Token: {onboardingToken || 'Not found'}</p>
-                <p>Validating: {isValidatingToken ? 'Yes' : 'No'}</p>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -664,8 +634,8 @@ export default function DriverOnboarding() {
     );
   }
 
-  // Show error if token is invalid
-  if (tokenError) {
+  // Show error if token validation failed (only for invalid tokens, not missing tokens)
+  if (tokenError && onboardingToken) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">

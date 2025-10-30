@@ -1547,21 +1547,21 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { token, ...driverData } = req.body;
       
-      if (!token) {
-        return res.status(400).json({ error: "Token is required" });
-      }
-
-      // Validate token
-      const tokenData = await storage.getOnboardingToken(token);
+      let tokenData = null;
       
-      if (!tokenData || tokenData.isUsed || new Date() > new Date(tokenData.expiresAt)) {
-        return res.status(400).json({ error: "Invalid or expired token" });
+      // Validate token if provided (token is optional)
+      if (token) {
+        tokenData = await storage.getOnboardingToken(token);
+        
+        if (!tokenData || tokenData.isUsed || new Date() > new Date(tokenData.expiresAt)) {
+          return res.status(400).json({ error: "Invalid or expired token" });
+        }
       }
 
       // Prepare driver data
       const driverRecord = {
         name: driverData.name,
-        email: driverData.email || tokenData.email,
+        email: driverData.email || (tokenData?.email),
         phone: driverData.phone,
         city: driverData.city,
         emergencyContact: driverData.emergencyContact || null,
@@ -1600,8 +1600,10 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Create driver
       const driver = await storage.createDriver(driverRecord);
       
-      // Mark token as used
-      await storage.markTokenAsUsed(token);
+      // Mark token as used (only if token was provided)
+      if (token) {
+        await storage.markTokenAsUsed(token);
+      }
       
       console.log(`✅ Driver onboarded: ${driver.name} (${driver.id})`);
 
