@@ -447,6 +447,30 @@ export const documentAuditLog = pgTable("document_audit_log", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// AI Document Extractions - Store AI-extracted data from documents (BOL, Recon, Driver Sheets)
+export const documentExtractions = pgTable("document_extractions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").references(() => loadDocuments.id).notNull(),
+  documentType: text("document_type").notNull(), // 'bol', 'recon', 'driver_sheet'
+  extractedData: jsonb("extracted_data").notNull(), // Full extracted data object from AI
+  confidence: real("confidence").notNull(), // AI confidence score 0-1
+  isVerified: boolean("is_verified").notNull().default(false),
+  verifiedBy: text("verified_by"),
+  verifiedAt: timestamp("verified_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Extraction Verifications - Track field-level corrections to AI extractions
+export const extractionVerifications = pgTable("extraction_verifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  extractionId: varchar("extraction_id").references(() => documentExtractions.id).notNull(),
+  field: text("field").notNull(), // Which field was verified/edited
+  originalValue: text("original_value"),
+  correctedValue: text("corrected_value"),
+  verifiedBy: text("verified_by").notNull(),
+  verifiedAt: timestamp("verified_at").defaultNow(),
+});
+
 // Driver Communication Threads - Unified messaging hub for all driver-dispatcher communication
 // One thread per driver containing all messages (load-specific and general)
 export const loadCommunicationThreads = pgTable("load_communication_threads", {
@@ -956,6 +980,20 @@ export const insertDocumentAuditLogSchema = createInsertSchema(documentAuditLog)
   performedByRole: z.enum(['driver', 'dispatcher', 'system']),
 });
 
+export const insertDocumentExtractionSchema = createInsertSchema(documentExtractions).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  documentType: z.enum(['bol', 'recon', 'driver_sheet']),
+  confidence: z.number().min(0).max(1),
+  isVerified: z.boolean().default(false),
+});
+
+export const insertExtractionVerificationSchema = createInsertSchema(extractionVerifications).omit({
+  id: true,
+  verifiedAt: true,
+});
+
 export const insertVehicleSchema = createInsertSchema(vehicles).omit({
   id: true,
   createdAt: true,
@@ -1052,6 +1090,12 @@ export type InsertDocumentAnnotation = z.infer<typeof insertDocumentAnnotationSc
 
 export type DocumentAuditLog = typeof documentAuditLog.$inferSelect;
 export type InsertDocumentAuditLog = z.infer<typeof insertDocumentAuditLogSchema>;
+
+export type DocumentExtraction = typeof documentExtractions.$inferSelect;
+export type InsertDocumentExtraction = z.infer<typeof insertDocumentExtractionSchema>;
+
+export type ExtractionVerification = typeof extractionVerifications.$inferSelect;
+export type InsertExtractionVerification = z.infer<typeof insertExtractionVerificationSchema>;
 
 export type Vehicle = typeof vehicles.$inferSelect;
 export type InsertVehicle = z.infer<typeof insertVehicleSchema>;

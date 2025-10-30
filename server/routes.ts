@@ -3587,6 +3587,369 @@ LoadMaster Dispatch Team
     }
   });
 
+  // =============================================================================
+  // AI DOCUMENT PROCESSING ENDPOINTS
+  // =============================================================================
+
+  // POST /api/documents/:documentId/process - Trigger AI processing for uploaded document
+  app.post('/api/documents/:documentId/process', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+
+      console.log(`🤖 Starting AI processing for document ${documentId}`);
+
+      // Check OpenAI configuration first
+      const { checkOpenAIConfig } = await import('./ai-document-processor');
+      const configCheck = checkOpenAIConfig();
+      if (!configCheck.configured) {
+        console.error(`❌ OpenAI not configured: ${configCheck.error}`);
+        return res.status(500).json({
+          error: 'AI processing unavailable',
+          message: configCheck.error,
+          configured: false
+        });
+      }
+
+      // Get document from storage
+      const document = await storage.getLoadDocument(documentId);
+      if (!document) {
+        return res.status(404).json({ 
+          error: 'Document not found',
+          documentId 
+        });
+      }
+
+      // Check if already processed
+      const existingExtraction = await storage.getExtractionByDocumentId(documentId);
+      if (existingExtraction) {
+        console.log(`ℹ️ Document ${documentId} already has extraction ${existingExtraction.id}`);
+        return res.json({
+          message: 'Document already processed',
+          extraction: existingExtraction,
+          alreadyProcessed: true
+        });
+      }
+
+      // Update document status to processing
+      await storage.updateLoadDocument(documentId, {
+        approvalStatus: 'pending'
+      });
+
+      // Process document with AI
+      const { processDocument } = await import('./ai-document-processor');
+      const result = await processDocument(document.fileUrl);
+
+      console.log(`✅ AI processing complete for document ${documentId}:`, {
+        documentType: result.documentType,
+        hasData: !!result.data
+      });
+
+      // Store extraction in database
+      const extraction = await storage.createDocumentExtraction({
+        documentId,
+        documentType: result.documentType,
+        extractedData: result.data || {},
+        confidence: result.documentType === 'unknown' ? 0 : 0.85,
+        isVerified: false
+      });
+
+      res.json({
+        success: true,
+        documentId,
+        extractionId: extraction.id,
+        documentType: result.documentType,
+        extractedData: result.data,
+        confidence: extraction.confidence,
+        message: 'Document processed successfully'
+      });
+
+    } catch (error) {
+      console.error('❌ Error processing document:', error);
+      res.status(500).json({ 
+        error: 'Failed to process document',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // POST /api/documents/:documentId/verify - Verify and edit extracted data with workflow triggers
+  app.post('/api/documents/:documentId/verify', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const { extractedData, verifiedBy, corrections } = req.body;
+
+      console.log(`✅ Verifying document ${documentId} by ${verifiedBy}`);
+
+      // Get extraction
+      const extraction = await storage.getExtractionByDocumentId(documentId);
+      if (!extraction) {
+        return res.status(404).json({ 
+          error: 'No extraction found for this document' 
+        });
+      }
+
+      // Update extraction as verified
+      await storage.updateExtractionVerification(extraction.id, {
+        isVerified: true,
+        verifiedBy,
+        verifiedAt: new Date()
+      });
+
+      // Create verification records for corrections
+      if (corrections && Array.isArray(corrections)) {
+        for (const correction of corrections) {
+          await storage.createExtractionVerification({
+            extractionId: extraction.id,
+            field: correction.field,
+            originalValue: correction.originalValue,
+            correctedValue: correction.correctedValue,
+            verifiedBy
+          });
+        }
+        console.log(`📝 Recorded ${corrections.length} corrections`);
+      }
+
+      // Trigger workflow based on document type
+      const documentType = extraction.documentType;
+      const data = extractedData || extraction.extractedData;
+
+      console.log(`🔄 Triggering ${documentType} workflow...`);
+
+      if (documentType === 'bol') {
+        // BOL Workflow: Update load totals
+        const bolData = data as any;
+        if (bolData.loadNumber) {
+          const load = await storage.getLoadByNumber(bolData.loadNumber);
+          if (load) {
+            const totalAmount = parseFloat(bolData.totalAmount || '0');
+            await storage.updateLoad(load.id, {
+              rate: totalAmount || load.rate
+            });
+            console.log(`💰 Updated load ${load.loadNumber} rate to $${totalAmount}`);
+          } else {
+            console.warn(`⚠️ Load not found for number: ${bolData.loadNumber}`);
+          }
+        }
+      } else if (documentType === 'driver_sheet') {
+        // Driver Sheet Workflow: Send SMS and start GPS tracking
+        const driverSheet = data as any;
+        if (driverSheet.driverName) {
+          const driver = await storage.getDriverByNameOrPhone(driverSheet.driverName);
+          if (driver && driver.phoneNumber) {
+            const smsMessage = `🚛 New load assignment!\n\n` +
+              `Pickup: ${driverSheet.pickupAddress || 'TBD'}\n` +
+              `Delivery: ${driverSheet.deliveryAddress || 'TBD'}\n\n` +
+              `Reply CONFIRM to start tracking.`;
+
+            try {
+              if (twilioClient && twilioPhoneNumber) {
+                await twilioClient.messages.create({
+                  to: driver.phoneNumber,
+                  from: twilioPhoneNumber,
+                  body: smsMessage
+                });
+                console.log(`📱 SMS sent to driver ${driver.name} at ${driver.phoneNumber}`);
+              } else {
+                console.warn('⚠️ Twilio not configured - SMS not sent');
+              }
+            } catch (smsError) {
+              console.error('❌ Failed to send SMS:', smsError);
+            }
+          } else {
+            console.warn(`⚠️ Driver not found: ${driverSheet.driverName}`);
+          }
+        }
+      } else if (documentType === 'recon') {
+        // Recon Workflow: Update financial records
+        const reconData = data as any;
+        if (reconData.loadNumber) {
+          const load = await storage.getLoadByNumber(reconData.loadNumber);
+          if (load) {
+            console.log(`📊 Reconciliation for load ${load.loadNumber}:`, {
+              revenue: reconData.totalRevenue,
+              netProfit: reconData.netProfit,
+              expenses: reconData.expenses?.length || 0
+            });
+          } else {
+            console.warn(`⚠️ Load not found for number: ${reconData.loadNumber}`);
+          }
+        }
+      }
+
+      // Update document approval status
+      const document = await storage.getLoadDocument(documentId);
+      if (document) {
+        await storage.updateLoadDocument(documentId, {
+          approvalStatus: 'approved',
+          approvedBy: verifiedBy,
+          approvedAt: new Date()
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Document verified and workflow triggered',
+        documentId,
+        extractionId: extraction.id,
+        documentType,
+        correctionsApplied: corrections?.length || 0
+      });
+
+    } catch (error) {
+      console.error('❌ Error verifying document:', error);
+      res.status(500).json({ 
+        error: 'Failed to verify document',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // GET /api/documents/:documentId/extraction - Get extraction data with verification status
+  app.get('/api/documents/:documentId/extraction', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+
+      const extraction = await storage.getExtractionByDocumentId(documentId);
+      if (!extraction) {
+        return res.status(404).json({ 
+          error: 'No extraction found for this document' 
+        });
+      }
+
+      // Get verification corrections
+      const verifications = await storage.getExtractionVerifications(extraction.id);
+
+      res.json({
+        extraction: {
+          id: extraction.id,
+          documentId: extraction.documentId,
+          documentType: extraction.documentType,
+          extractedData: extraction.extractedData,
+          confidence: extraction.confidence,
+          isVerified: extraction.isVerified,
+          verifiedBy: extraction.verifiedBy,
+          verifiedAt: extraction.verifiedAt,
+          createdAt: extraction.createdAt
+        },
+        corrections: verifications,
+        correctionCount: verifications.length
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching extraction:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch extraction',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // POST /api/documents/batch-process - Process multiple documents in parallel
+  app.post('/api/documents/batch-process', async (req, res) => {
+    try {
+      const { documentIds } = req.body;
+
+      if (!documentIds || !Array.isArray(documentIds) || documentIds.length === 0) {
+        return res.status(400).json({ 
+          error: 'documentIds array is required and must not be empty' 
+        });
+      }
+
+      console.log(`🤖 Batch processing ${documentIds.length} documents`);
+
+      // Check OpenAI configuration first
+      const { checkOpenAIConfig, processDocument } = await import('./ai-document-processor');
+      const configCheck = checkOpenAIConfig();
+      if (!configCheck.configured) {
+        console.error(`❌ OpenAI not configured: ${configCheck.error}`);
+        return res.status(500).json({
+          error: 'AI processing unavailable',
+          message: configCheck.error,
+          configured: false
+        });
+      }
+      
+      // Process all documents in parallel
+      const results = await Promise.allSettled(
+        documentIds.map(async (documentId) => {
+          try {
+            // Get document
+            const document = await storage.getLoadDocument(documentId);
+            if (!document) {
+              throw new Error(`Document ${documentId} not found`);
+            }
+
+            // Check if already processed
+            const existingExtraction = await storage.getExtractionByDocumentId(documentId);
+            if (existingExtraction) {
+              return {
+                documentId,
+                status: 'already_processed',
+                extraction: existingExtraction
+              };
+            }
+
+            // Process with AI
+            const result = await processDocument(document.fileUrl);
+
+            // Store extraction
+            const extraction = await storage.createDocumentExtraction({
+              documentId,
+              documentType: result.documentType,
+              extractedData: result.data || {},
+              confidence: result.documentType === 'unknown' ? 0 : 0.85,
+              isVerified: false
+            });
+
+            return {
+              documentId,
+              status: 'processed',
+              extractionId: extraction.id,
+              documentType: result.documentType,
+              confidence: extraction.confidence
+            };
+          } catch (error) {
+            return {
+              documentId,
+              status: 'failed',
+              error: error instanceof Error ? error.message : 'Unknown error'
+            };
+          }
+        })
+      );
+
+      // Aggregate results
+      const processed = results.filter(r => r.status === 'fulfilled' && r.value.status === 'processed').length;
+      const alreadyProcessed = results.filter(r => r.status === 'fulfilled' && r.value.status === 'already_processed').length;
+      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.status === 'failed')).length;
+
+      const resultsData = results.map(r => 
+        r.status === 'fulfilled' ? r.value : { status: 'failed', error: 'Promise rejected' }
+      );
+
+      console.log(`✅ Batch processing complete: ${processed} processed, ${alreadyProcessed} already processed, ${failed} failed`);
+
+      res.json({
+        success: true,
+        total: documentIds.length,
+        processed,
+        alreadyProcessed,
+        failed,
+        results: resultsData
+      });
+
+    } catch (error) {
+      console.error('❌ Error in batch processing:', error);
+      res.status(500).json({ 
+        error: 'Failed to batch process documents',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // =============================================================================
+  // END AI DOCUMENT PROCESSING ENDPOINTS
+  // =============================================================================
 
   // Create and send driver onboarding link
   app.post('/api/driver/send-onboarding-link', async (req, res) => {

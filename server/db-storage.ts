@@ -987,6 +987,101 @@ export class DatabaseStorage implements IStorage {
     return this.createLoadDocument(data as schema.InsertLoadDocument);
   }
 
+  // AI Document Extraction operations
+  async createDocumentExtraction(data: schema.InsertDocumentExtraction): Promise<schema.DocumentExtraction> {
+    try {
+      const id = randomUUID();
+      const extraction: schema.DocumentExtraction = {
+        ...data,
+        id,
+        isVerified: data.isVerified ?? false,
+        verifiedBy: data.verifiedBy || null,
+        verifiedAt: data.verifiedAt || null,
+        createdAt: new Date(),
+      };
+      
+      await db.insert(schema.documentExtractions).values(extraction);
+      console.log(`✅ Created document extraction ${id} for document ${data.documentId}`);
+      return extraction;
+    } catch (error) {
+      console.error('Error creating document extraction:', error);
+      throw error;
+    }
+  }
+
+  async getDocumentExtraction(id: string): Promise<schema.DocumentExtraction | undefined> {
+    try {
+      const result = await db.select().from(schema.documentExtractions).where(eq(schema.documentExtractions.id, id));
+      return result[0];
+    } catch (error) {
+      console.error('Error getting document extraction:', error);
+      return undefined;
+    }
+  }
+
+  async getExtractionByDocumentId(documentId: string): Promise<schema.DocumentExtraction | undefined> {
+    try {
+      const result = await db.select()
+        .from(schema.documentExtractions)
+        .where(eq(schema.documentExtractions.documentId, documentId))
+        .orderBy(desc(schema.documentExtractions.createdAt))
+        .limit(1);
+      return result[0];
+    } catch (error) {
+      console.error('Error getting extraction by document ID:', error);
+      return undefined;
+    }
+  }
+
+  async updateExtractionVerification(id: string, verifiedBy: string, verifiedAt: Date): Promise<schema.DocumentExtraction | undefined> {
+    try {
+      await db.update(schema.documentExtractions)
+        .set({ 
+          isVerified: true,
+          verifiedBy,
+          verifiedAt 
+        })
+        .where(eq(schema.documentExtractions.id, id));
+      
+      console.log(`✅ Updated extraction verification for ${id}`);
+      return this.getDocumentExtraction(id);
+    } catch (error) {
+      console.error('Error updating extraction verification:', error);
+      return undefined;
+    }
+  }
+
+  async createExtractionVerification(data: schema.InsertExtractionVerification): Promise<schema.ExtractionVerification> {
+    try {
+      const id = randomUUID();
+      const verification: schema.ExtractionVerification = {
+        ...data,
+        id,
+        verifiedAt: new Date(),
+      };
+      
+      await db.insert(schema.extractionVerifications).values(verification);
+      console.log(`✅ Created extraction verification ${id} for extraction ${data.extractionId}`);
+      return verification;
+    } catch (error) {
+      console.error('Error creating extraction verification:', error);
+      throw error;
+    }
+  }
+
+  async getExtractionVerifications(extractionId: string): Promise<schema.ExtractionVerification[]> {
+    try {
+      const result = await db.select()
+        .from(schema.extractionVerifications)
+        .where(eq(schema.extractionVerifications.extractionId, extractionId))
+        .orderBy(desc(schema.extractionVerifications.verifiedAt));
+      return result;
+    } catch (error) {
+      console.error('Error getting extraction verifications:', error);
+      return [];
+    }
+  }
+
   async createGeofence(geofence: schema.InsertGeofence): Promise<schema.Geofence> { throw new Error('Not implemented'); }
   async getGeofence(id: string): Promise<schema.Geofence | undefined> { return undefined; }
   async updateGeofence(id: string, geofence: Partial<schema.InsertGeofence>): Promise<schema.Geofence | undefined> { return undefined; }
