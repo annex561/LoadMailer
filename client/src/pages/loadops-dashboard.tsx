@@ -65,7 +65,7 @@ import DebugToken from './debug-token';
 import DriverDashboard from './driver-dashboard';
 import DispatcherDashboard from './dispatcher-dashboard';
 import DispatcherVehicleDashboard from './dispatcher-vehicle-dashboard';
-import DocumentManagement from './DocumentManagement';
+import DocumentManagement from './document-management';
 import { TaskMagicStatusPage } from './taskmagic-status';
 import DATScraper from './DATScraper';
 import DatLogin from './dat-login';
