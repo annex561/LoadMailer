@@ -10,6 +10,7 @@ packages = ["chromium", "glib", "nspr", "nss", "dbus", "at-spi2-atk", "gtk3", "l
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
 run = ["npm", "run", "start"]
+publicDir = "dist"
 
 [[ports]]
 localPort = 5000

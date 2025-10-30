@@ -45,7 +45,6 @@ const navigation = [
   { name: "DAT Login", href: "/dat-login", icon: Bot, section: "system" },
   { name: "SMS Dispatching", href: "/sms-dispatching", icon: MessageSquare, section: "system" },
   { name: "TaskMagic Status", href: "/taskmagic-status", icon: Webhook, section: "system" },
-  { name: "Email Logs", href: "/email-logs", icon: FileText, section: "system" },
 ];
 
 export default function Sidebar() {
