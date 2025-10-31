@@ -57,7 +57,7 @@ export class DATLoadPoster {
         miles: load.miles || 0,
         weight: load.weight,
         commodity: this.extractCommodity(load.description),
-        company: 'LAMP Logistics',
+        company: 'TRAQ IQ',
         contact: 'Dispatch Team',
         phone: '423-455-5007'
       };

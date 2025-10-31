@@ -133,7 +133,7 @@ export default function Contacts() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  LAMP Logistics Driver Registration
+                  TRAQ IQ Driver Registration
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300">
                   Quick registration to start receiving load offers

@@ -448,7 +448,7 @@ export class TelegramLoadService {
         } else if (responseText === 'INFO' || responseText === 'HELP') {
           // Send information about how the system works - start with a question
           await this.bot?.sendMessage(chatId,
-            `*Want to know how LAMP Logistics can help you earn more money?*\n\n` +
+            `*Want to know how TRAQ IQ can help you earn more money?*\n\n` +
             `ℹ️ Here's exactly how it works:\n\n` +
             `1️⃣ *Complete Registration*\n` +
             `• Provide your driver details\n` +
@@ -496,7 +496,7 @@ export class TelegramLoadService {
       try {
         // Send interactive welcome message that prompts for a response
         await this.bot.sendMessage(chatId, 
-          `🚛 *Welcome to LAMP Logistics!*\n\n` +
+          `🚛 *Welcome to TRAQ IQ!*\n\n` +
           `Hi ${userInfo?.first_name || 'Driver'}! I'm your personal load dispatcher bot.\n\n` +
           `I'll help you:\n` +
           `• Receive instant load offers\n` +
@@ -726,9 +726,9 @@ export class TelegramLoadService {
           }
         } else if (data === 'contact_support') {
           await this.bot.sendMessage(chatId, 
-            `📞 *LAMP Logistics Support*\n\n` +
+            `📞 *TRAQ IQ Support*\n\n` +
             `Need help? Contact our dispatch team:\n\n` +
-            `📧 Email: dispatch@lamplogistics.com\n` +
+            `📧 Email: dispatch@traqiqs.io\n` +
             `📱 Phone: (855) 599-9983\n` +
             `⏰ Available: 24/7\n\n` +
             `Or just reply to this message and we'll assist you!`,
@@ -736,7 +736,7 @@ export class TelegramLoadService {
           );
         } else if (data === 'how_it_works') {
           await this.bot.sendMessage(chatId,
-            `ℹ️ *How LAMP Logistics Works*\n\n` +
+            `ℹ️ *How TRAQ IQ Works*\n\n` +
             `1️⃣ *Complete Registration*\n` +
             `• Provide your driver details\n` +
             `• Set equipment preferences\n` +
@@ -1359,7 +1359,7 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
       const pickupTime = load.pickupTime || '12:30 PM';
       const deliveryTime = load.deliveryTime || '08:00 AM';
       
-      // Format confirmation message based on LAMP Logistics template
+      // Format confirmation message based on TRAQ IQ template
       const confirmationMessage = `🚛 **LOAD CONFIRMATION**
 
 Please check in as **LoadMaster Logistics**
@@ -2478,12 +2478,13 @@ Please contact driver if needed.`;
       console.log('Token created successfully:', createdToken.id);
       
       // Format the onboarding message with proper domain and token
-      const domain = process.env.REPLIT_DOMAINS ? 
-        `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 
-        'http://localhost:5000';
-      const onboardingUrl = `${domain}/simple-registration?token=${token}`;
+      const customDomain = process.env.CUSTOM_DOMAIN || 'traqiqs.io';
+      const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
+      const domain = replitDomain || customDomain;
+      const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`;
+      const onboardingUrl = `${baseUrl}/simple-registration?token=${token}`;
       
-      const message = `🚛 *LAMP Logistics Driver Onboarding*
+      const message = `🚛 *TRAQ IQ Driver Onboarding*
 
 Hi ${userInfo?.first_name || 'Driver'}! Ready to join our fleet and start earning?
 

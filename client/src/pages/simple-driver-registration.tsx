@@ -171,7 +171,7 @@ export default function SimpleDriverRegistration() {
               <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
               <h3 className="text-2xl font-bold text-green-600">Registration Complete!</h3>
               <p className="text-muted-foreground">
-                Welcome to LAMP Logistics! Your driver profile has been created successfully. 
+                Welcome to TRAQ IQ! Your driver profile has been created successfully. 
                 You can now receive load offers via SMS and Zello voice dispatch.
               </p>
               
@@ -272,7 +272,7 @@ export default function SimpleDriverRegistration() {
         <CardHeader>
           <CardTitle className="text-center">
             <Truck className="h-8 w-8 mx-auto mb-2 text-blue-600" />
-            LAMP Logistics Driver Registration
+            TRAQ IQ Driver Registration
           </CardTitle>
           <CardDescription className="text-center">
             Quick registration to start receiving load offers
