@@ -639,9 +639,11 @@ export default function MobileDriverDashboard() {
           <Navigation className="h-5 w-5 mr-2" />
           En Route to Pickup
         </Button>
-        <div className="text-xs text-center text-gray-500">
-          {distance.toFixed(1)} miles from pickup
-        </div>
+        {distance !== null && (
+          <div className="text-xs text-center text-gray-500">
+            {distance.toFixed(1)} miles from pickup
+          </div>
+        )}
       </div>
     );
   };
