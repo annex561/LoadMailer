@@ -1362,8 +1362,8 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
       // Format confirmation message based on TRAQ IQ template
       const confirmationMessage = `🚛 **LOAD CONFIRMATION**
 
-Please check in as **LoadMaster Logistics**
-You are working for **LoadMaster Logistics**:
+Please check in as **TRAQ IQ**
+You are working for **TRAQ IQ**:
 
 ======================
 📍 **Pick Up:** ${load.pickupDate.toLocaleDateString()} until ${pickupTime}

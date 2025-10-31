@@ -337,9 +337,9 @@ export class BiddingService {
       `Please let me know if you need any additional information to move forward.\n\n` +
       `Looking forward to earning your business and building a long-term partnership.\n\n` +
       `Best regards,\n\n` +
-      `LoadMaster Transportation\n` +
+      `TRAQ IQ Transportation\n` +
       `Phone: ${process.env.COMPANY_PHONE || '(555) 123-4567'}\n` +
-      `Email: ${process.env.COMPANY_EMAIL || 'dispatch@loadmaster.com'}\n` +
+      `Email: ${process.env.COMPANY_EMAIL || 'dispatch@traqiqs.io'}\n` +
       `MC#: ${process.env.MC_NUMBER || 'MC-123456'}\n` +
       `DOT#: ${process.env.DOT_NUMBER || '12345678'}`;
 
@@ -352,7 +352,7 @@ export class BiddingService {
   private async sendCampaignEmail(campaign: EmailCampaign, subject: string, body: string, followUpType: string): Promise<void> {
     try {
       await this.emailTransporter.sendMail({
-        from: process.env.COMPANY_EMAIL || 'dispatch@loadmaster.com',
+        from: process.env.COMPANY_EMAIL || 'dispatch@traqiqs.io',
         to: campaign.brokerEmail,
         subject,
         text: body,
@@ -446,7 +446,7 @@ export class BiddingService {
           `I wanted to follow up on my rate submission for load ${campaign.bidId}.\n\n` +
           `Our competitive rate of $${campaign.bidAmount} is still available, and we're ready for immediate pickup.\n\n` +
           `Time-sensitive opportunities require quick decisions - please let me know if you need any additional information to move forward.\n\n` +
-          `Best regards,\nLoadMaster Transportation`
+          `Best regards,\nTRAQ IQ Transportation`
       };
     } else if (followUpNumber === 2) {
       return {
@@ -456,7 +456,7 @@ export class BiddingService {
           `While our initial rate was $${campaign.bidAmount}, I'm authorized to work with you on pricing if needed to secure this load.\n\n` +
           `We value long-term partnerships over single transactions. What rate would work for you?\n\n` +
           `Ready to confirm within minutes of your response.\n\n` +
-          `Best regards,\nLoadMaster Transportation`
+          `Best regards,\nTRAQ IQ Transportation`
       };
     } else {
       return {
@@ -466,7 +466,7 @@ export class BiddingService {
           `If there's any way we can work together on this load, please let me know. I'm open to discussing rate adjustments.\n\n` +
           `Otherwise, I hope we can connect on future shipments.\n\n` +
           `Thank you for your time.\n\n` +
-          `Best regards,\nLoadMaster Transportation`
+          `Best regards,\nTRAQ IQ Transportation`
       };
     }
   }

@@ -131,7 +131,7 @@ export function setupDirectDATLoads(app: Express) {
   app.get('/api/dat/scraper-status', async (req, res) => {
     res.json({
       authenticated: false,
-      account: 'dispatch@lampslogistics.com',
+      account: 'dispatch@traqiqs.io',
       status: 'ready',
       message: 'Click "Start DAT Login" to authenticate and load real DAT loads'
     });

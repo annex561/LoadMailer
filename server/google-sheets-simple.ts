@@ -36,7 +36,7 @@ class GoogleSheetsSimple {
           customer = await storage.createCustomer({
             name: 'Google Sheets Customer',
             contactPerson: 'VA Dispatcher',
-            email: 'dispatch@lampslogistics.com',
+            email: 'dispatch@traqiqs.io',
             phone: '(555) 000-0000',
             address: 'Various Locations'
           });
@@ -46,7 +46,7 @@ class GoogleSheetsSimple {
         customer = {
           id: 'default-customer',
           name: 'Google Sheets Customer',
-          email: 'dispatch@lampslogistics.com',
+          email: 'dispatch@traqiqs.io',
           phone: '(555) 000-0000',
           address: 'Various Locations',
           createdAt: new Date()

@@ -176,7 +176,7 @@ export class DATScraperService {
       if (emailInput) {
         // Clear and enter email
         await emailInput.click({ clickCount: 3 }); // Select all
-        await emailInput.type('dispatch@lampslogistics.com', { delay: 100 });
+        await emailInput.type('dispatch@traqiqs.io', { delay: 100 });
         console.log('📧 Email entered');
 
         // Look for password field

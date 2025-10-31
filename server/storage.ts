@@ -467,7 +467,7 @@ export class MemStorage implements IStorage {
       trigger: "load_created",
       recipients: "driver",
       subject: "New Load Assignment - {{loadNumber}}",
-      body: "Hello {{driverName}},\n\nYou have been assigned a new load:\n\nLoad Number: {{loadNumber}}\nCustomer: {{customerName}}\nPickup: {{pickupAddress}} on {{pickupDate}} at {{pickupTime}}\nDelivery: {{deliveryAddress}} on {{deliveryDate}} at {{deliveryTime}}\n\nSpecial Instructions: {{specialInstructions}}\n\nPlease confirm receipt of this assignment.\n\nBest regards,\nLoadMaster Team",
+      body: "Hello {{driverName}},\n\nYou have been assigned a new load:\n\nLoad Number: {{loadNumber}}\nCustomer: {{customerName}}\nPickup: {{pickupAddress}} on {{pickupDate}} at {{pickupTime}}\nDelivery: {{deliveryAddress}} on {{deliveryDate}} at {{deliveryTime}}\n\nSpecial Instructions: {{specialInstructions}}\n\nPlease confirm receipt of this assignment.\n\nBest regards,\nTRAQ IQ Team",
       isActive: true,
       createdAt: new Date(),
     };
@@ -479,7 +479,7 @@ export class MemStorage implements IStorage {
       trigger: "pickup_confirmed",
       recipients: "customer",
       subject: "Pickup Confirmed - {{loadNumber}}",
-      body: "Dear {{customerContactPerson}},\n\nWe're pleased to confirm that your shipment has been picked up:\n\nLoad Number: {{loadNumber}}\nPickup Time: {{currentTime}}\nDriver: {{driverName}} - {{driverPhone}}\nExpected Delivery: {{deliveryDate}} at {{deliveryTime}}\n\nYou can track your shipment status through our system.\n\nThank you for choosing our services.\n\nBest regards,\nLoadMaster Team",
+      body: "Dear {{customerContactPerson}},\n\nWe're pleased to confirm that your shipment has been picked up:\n\nLoad Number: {{loadNumber}}\nPickup Time: {{currentTime}}\nDriver: {{driverName}} - {{driverPhone}}\nExpected Delivery: {{deliveryDate}} at {{deliveryTime}}\n\nYou can track your shipment status through our system.\n\nThank you for choosing our services.\n\nBest regards,\nTRAQ IQ Team",
       isActive: true,
       createdAt: new Date(),
     };
@@ -491,7 +491,7 @@ export class MemStorage implements IStorage {
       trigger: "delivered",
       recipients: "both",
       subject: "Delivery Complete - {{loadNumber}}",
-      body: "Hello,\n\nWe're happy to confirm that the delivery has been completed successfully:\n\nLoad Number: {{loadNumber}}\nDelivery Time: {{currentTime}}\nDelivery Address: {{deliveryAddress}}\n\nThank you for your business.\n\nBest regards,\nLoadMaster Team",
+      body: "Hello,\n\nWe're happy to confirm that the delivery has been completed successfully:\n\nLoad Number: {{loadNumber}}\nDelivery Time: {{currentTime}}\nDelivery Address: {{deliveryAddress}}\n\nThank you for your business.\n\nBest regards,\nTRAQ IQ Team",
       isActive: true,
       createdAt: new Date(),
     };

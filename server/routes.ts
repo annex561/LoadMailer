@@ -523,7 +523,7 @@ DRIVER INFORMATION:
 Please reply to this email or call ${driver.phone} to confirm the booking.
 
 Best regards,
-LoadMaster Dispatch Team
+TRAQ IQ Dispatch Team
     `;
 
     // Log the email booking attempt
@@ -578,7 +578,7 @@ LoadMaster Dispatch Team
 async function sendEmail(to: string, subject: string, body: string, loadId?: string, templateId?: string) {
   try {
     await transporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.EMAIL_FROM || "LoadMaster <noreply@loadmaster.com>",
+      from: process.env.SMTP_FROM || process.env.EMAIL_FROM || "TRAQ IQ <noreply@traqiqs.io>",
       to,
       subject,
       text: body,
@@ -812,7 +812,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Send test SMS
       const testMessage = `TEST MESSAGE\n\n` +
         `Hello ${driver.name}!\n\n` +
-        `This is a test message from the LoadMaster dispatch system.\n` +
+        `This is a test message from the TRAQ IQ dispatch system.\n` +
         `Your SMS notifications are working correctly.\n\n` +
         `Driver ID: ${driver.id}\n` +
         `Phone: ${normalizedPhone}\n` +
@@ -2753,12 +2753,12 @@ ${documentList}
 All documents have been reviewed and approved by our dispatch team. If you have any questions or need additional information, please contact us.
 
 Best regards,
-LoadMaster Dispatch Team
+TRAQ IQ Dispatch Team
       `;
       
       // Send email with PDF attachment
       await transporter.sendMail({
-        from: process.env.SMTP_FROM || process.env.EMAIL_FROM || "LoadMaster <noreply@loadmaster.com>",
+        from: process.env.SMTP_FROM || process.env.EMAIL_FROM || "TRAQ IQ <noreply@traqiqs.io>",
         to: recipientEmail,
         subject: emailSubject,
         text: emailBody,

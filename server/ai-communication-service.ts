@@ -199,7 +199,7 @@ export class AiCommunicationService {
         loadId: thread.loadId,
         senderId: null, // AI assistant
         senderRole: 'assistant' as const,
-        senderName: 'LoadMaster AI',
+        senderName: 'TRAQ IQ AI',
         textContent: suggestion.suggestedText,
         isSuggested: true,
         isSent: false,
@@ -286,7 +286,7 @@ export class AiCommunicationService {
       contextBlock = `\\n\\nAdditional context: ${additionalContext}`;
     }
 
-    return `You are LoadMaster AI, helping with trucking communication between dispatch and drivers.
+    return `You are TRAQ IQ AI, helping with trucking communication between dispatch and drivers.
 
 ${loadInfo}
 ${driverInfo}
@@ -304,7 +304,7 @@ Please suggest an appropriate message for this context. Consider:
    * Get default system prompt based on message type and tone
    */
   private getDefaultSystemPrompt(messageType?: string, tone?: string): string {
-    const basePrompt = `You are LoadMaster AI, an assistant for trucking logistics communication. You help dispatch teams communicate effectively with drivers about load assignments, updates, and logistics coordination.
+    const basePrompt = `You are TRAQ IQ AI, an assistant for trucking logistics communication. You help dispatch teams communicate effectively with drivers about load assignments, updates, and logistics coordination.
 
 Communication Guidelines:
 - Be clear, concise, and professional
