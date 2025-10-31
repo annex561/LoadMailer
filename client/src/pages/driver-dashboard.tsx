@@ -33,13 +33,28 @@ interface DriverStats {
 }
 
 export default function DriverDashboard() {
-  const [driverId] = useState('e8213f28-19bc-45fd-8293-8c5c8b439ea7'); // Mock driver ID for demo
+  // Get driverId from URL parameter or localStorage
+  const [driverId, setDriverId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlDriverId = params.get('driverId');
+    
+    if (urlDriverId) {
+      // Store in localStorage for persistence
+      localStorage.setItem('driverId', urlDriverId);
+      return urlDriverId;
+    }
+    
+    // Try to get from localStorage
+    return localStorage.getItem('driverId');
+  });
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Fetch driver profile
   const { data: driver } = useQuery({
     queryKey: ['/api/drivers', driverId],
+    enabled: !!driverId,
     queryFn: async () => {
       const response = await fetch(`/api/drivers/${driverId}`);
       if (!response.ok) throw new Error('Failed to fetch driver profile');
@@ -50,6 +65,7 @@ export default function DriverDashboard() {
   // Fetch pending load offers
   const { data: loadOffers = [], refetch: refetchOffers } = useQuery({
     queryKey: ['/api/drivers', driverId, 'offers'],
+    enabled: !!driverId,
     queryFn: async () => {
       const response = await fetch(`/api/drivers/${driverId}/offers`);
       if (!response.ok) throw new Error('Failed to fetch load offers');
@@ -77,6 +93,7 @@ export default function DriverDashboard() {
   // Fetch current assigned load
   const { data: currentLoad } = useQuery({
     queryKey: ['/api/drivers', driverId, 'current-load'],
+    enabled: !!driverId,
     queryFn: async () => {
       const response = await fetch(`/api/loads?driverId=${driverId}&status=assigned,in_transit`);
       if (!response.ok) throw new Error('Failed to fetch current load');
@@ -89,6 +106,7 @@ export default function DriverDashboard() {
   // Fetch driver statistics
   const { data: stats } = useQuery({
     queryKey: ['/api/drivers', driverId, 'stats'],
+    enabled: !!driverId,
     queryFn: async (): Promise<DriverStats> => {
       // Mock stats for demo - in real app this would come from API
       return {
@@ -100,6 +118,30 @@ export default function DriverDashboard() {
       };
     }
   });
+
+  // Show error if no driverId
+  if (!driverId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              Access Denied
+            </CardTitle>
+            <CardDescription>
+              No driver ID provided. Please use the link sent to your phone or contact dispatch.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              If you received a link via SMS, please make sure to click on it directly from your phone.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   // Respond to load offer
   const respondToOfferMutation = useMutation({
