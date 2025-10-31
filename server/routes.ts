@@ -1472,7 +1472,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const normalizedPhone = normalizePhoneToE164(driver.phone);
       if (normalizedPhone && twilioPhoneNumber) {
         try {
-          const welcomeMessage = `Welcome to LAMP Logistics, ${driver.name}!\n\n` +
+          const welcomeMessage = `Welcome to TRAQ IQ, ${driver.name}!\n\n` +
             `Your driver account has been created successfully.\n` +
             `You'll receive load notifications via SMS.\n\n` +
             `Questions? Contact dispatch.`;
@@ -1618,7 +1618,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const normalizedPhone = normalizePhoneToE164(driver.phone);
       if (normalizedPhone && twilioPhoneNumber) {
         try {
-          const welcomeMessage = `Welcome to LAMP Logistics, ${driver.name}!\n\n` +
+          const welcomeMessage = `Welcome to TRAQ IQ, ${driver.name}!\n\n` +
             `Your driver account has been created successfully.\n` +
             `You'll receive load notifications via SMS.\n\n` +
             `Questions? Contact dispatch.`;
@@ -3992,17 +3992,14 @@ LoadMaster Dispatch Team
       });
       
       // Generate registration link
-      const domain = process.env.REPLIT_DOMAINS ? 
-        `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` : 
-        'http://localhost:5000';
-      const registrationLink = `${domain}/simple-registration?token=${token}`;
+      const registrationLink = `${getBaseUrl()}/simple-registration?token=${token}`;
       
       // Create SMS message
-      const smsMessage = `🚛 LAMP Logistics Driver Registration\n\n` +
+      const smsMessage = `🚛 TRAQ IQ Driver Registration\n\n` +
         `Hi ${name || 'Driver'}! You're invited to join our fleet.\n\n` +
         `Complete your registration here:\n${registrationLink}\n\n` +
         `This link expires in 7 days.\n\n` +
-        `Questions? Call dispatch at (615) 555-0123`;
+        `Questions? Contact dispatch at (615) 555-0123`;
       
       // Check if SMS service is available (Twilio)
       const smsService = (global as any).smsService;
