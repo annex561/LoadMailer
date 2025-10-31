@@ -267,12 +267,27 @@ export class RealDriverLocationService {
 
   private async updateDriverPosition(driverId: string, state: DriverLocationState): Promise<void> {
     try {
-      // Check if driver has switched to real GPS tracking - if so, skip simulation
+      // Check if driver has FRESH real GPS data (< 5 minutes old) - if so, skip simulation
       const currentLocation = await this.getDriverCurrentLocation(driverId);
       if (currentLocation && currentLocation.source === 'gps') {
-        console.log(`🔒 Driver ${driverId} is now using real GPS - stopping simulation`);
-        state.isMoving = false; // Stop simulated movement
-        return;
+        // Get the actual location record to check timestamp
+        const locations = await storage.getDriverLocations(driverId, 1);
+        if (locations.length > 0) {
+          const latestLocation = locations[0];
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+          const locationTimestamp = typeof latestLocation.timestamp === 'string'
+            ? new Date(latestLocation.timestamp.replace(' ', 'T') + 'Z')
+            : new Date(latestLocation.timestamp);
+          
+          // Only skip simulation if GPS data is fresh (< 5 minutes old)
+          if (locationTimestamp > fiveMinutesAgo) {
+            console.log(`🔒 Driver ${driverId} is now using real GPS - stopping simulation`);
+            state.isMoving = false; // Stop simulated movement
+            return;
+          } else {
+            console.log(`📡 Driver ${driverId} has stale GPS data (${Math.round((Date.now() - locationTimestamp.getTime()) / 60000)}m old) - continuing simulation`);
+          }
+        }
       }
 
       if (state.isMoving) {
