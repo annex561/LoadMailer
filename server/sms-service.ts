@@ -75,11 +75,13 @@ export class SMSLoadService {
       };
 
       // Get the base URL for status callbacks
-      const baseUrl = process.env.REPL_SLUG 
-        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-        : process.env.REPLIT_DEV_DOMAIN 
-          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-          : 'http://localhost:5000';
+      const customDomain = process.env.CUSTOM_DOMAIN || 'traqiqs.io';
+      const replitDomain = process.env.REPL_SLUG 
+        ? `${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+        : process.env.REPLIT_DEV_DOMAIN;
+      
+      const domain = replitDomain || customDomain;
+      const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`;
       
       // Prefer Messaging Service SID (required for A2P 10DLC compliance)
       if (this.twilioMessagingServiceSid) {

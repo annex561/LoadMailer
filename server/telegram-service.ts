@@ -1416,7 +1416,12 @@ If your phone number for tracking has been changed, please text us back the corr
     }
 
     try {
-      const onboardingUrl = `${process.env.REPLIT_APP_URL || 'https://loadmaster.replit.app'}/driver-onboarding?token=${onboardingToken}`;
+      // Use custom domain (TRAQ IQ) or fall back to Replit domains
+      const customDomain = process.env.CUSTOM_DOMAIN || 'traqiqs.io';
+      const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
+      const domain = replitDomain || customDomain;
+      const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`;
+      const onboardingUrl = `${baseUrl}/driver-onboarding?token=${onboardingToken}`;
       
       const message = `🚛 **Welcome to TRAQ IQ!**
       

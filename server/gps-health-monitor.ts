@@ -273,7 +273,14 @@ This helps dispatch monitor your delivery.`;
   }
 
   private getBaseUrl(): string {
-    const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
+    // Priority 1: Custom domain (TRAQ IQ production domain)
+    const customDomain = process.env.CUSTOM_DOMAIN || 'traqiqs.io';
+    
+    // Priority 2: Development/Replit domains
+    const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
+    
+    // Use Replit domain for development, custom domain for production
+    const domain = replitDomain || customDomain;
     
     // If domain already has protocol, use as-is
     if (domain.startsWith('http://') || domain.startsWith('https://')) {
@@ -285,7 +292,7 @@ This helps dispatch monitor your delivery.`;
       return `http://${domain}`;
     }
     
-    // Production Replit domain - use HTTPS
+    // Production domain - use HTTPS
     return `https://${domain}`;
   }
 
