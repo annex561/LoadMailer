@@ -1803,10 +1803,11 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Create dashboard URL
       const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
       
-      // Create SMS message
-      const smsMessage = `Hello ${driver.name}! 👋\n\n` +
-        `Access your TRAQ IQ driver dashboard:\n${dashboardUrl}\n\n` +
-        `💡 TIP: Add this to your home screen for easy access!`;
+      // Create SMS message - simple and clean
+      const smsMessage = `Hi ${driver.name}! 👋\n\n` +
+        `📱 Tap here to open your TRAQ IQ Driver Dashboard:\n\n` +
+        `${dashboardUrl}\n\n` +
+        `✅ View loads, track GPS, and manage your trips!`;
 
       // Send SMS using smsLoadService
       const smsResult = await smsLoadService.sendSMS({
@@ -1899,9 +1900,10 @@ export async function registerRoutes(app: Express): Promise<void> {
 
           const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
           
-          const smsMessage = `Hello ${driver.name}! 👋\n\n` +
-            `Access your TRAQ IQ driver dashboard:\n${dashboardUrl}\n\n` +
-            `💡 TIP: Add this to your home screen for easy access!`;
+          const smsMessage = `Hi ${driver.name}! 👋\n\n` +
+            `📱 Tap here to open your TRAQ IQ Driver Dashboard:\n\n` +
+            `${dashboardUrl}\n\n` +
+            `✅ View loads, track GPS, and manage your trips!`;
 
           const smsResult = await smsLoadService.sendSMS({
             to: normalizedPhone,
