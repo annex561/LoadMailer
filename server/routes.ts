@@ -32,6 +32,7 @@ import { smsCommunicationService } from './sms-communication-service';
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
+import { urlShortener } from './url-shortener-service';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -354,6 +355,10 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
     // Create tracking URL
     const trackingUrl = `${getBaseUrl()}/driver-tracker?driver=${driverId}&token=${token}`;
     
+    // Shorten URL for professional appearance
+    const shortUrlResult = await urlShortener.shortenUrl(trackingUrl);
+    const link = shortUrlResult.shortUrl || trackingUrl;
+    
     // Create GPS tracking SMS message
     let smsMessage: string;
     let logContext: string;
@@ -376,11 +381,11 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
         routeInfo = `\n📦 ${pickupLocation} → ${deliveryLocation}`;
       }
       
-      smsMessage = `📍 Load ${load.loadNumber} assigned!${routeInfo}\n\nStart GPS tracking: ${trackingUrl}\n\nClick the link to share your location with dispatch.`;
+      smsMessage = `🚛 TRAQ IQ\n\n📍 Load ${load.loadNumber} assigned!${routeInfo}\n\nStart GPS tracking:\n${link}\n\nTap to share location with dispatch.`;
       logContext = `load ${load.loadNumber}`;
     } else {
       // General fleet tracking message
-      smsMessage = `📍 GPS Tracking Request: Please share your location with dispatch: ${trackingUrl}\n\nClick the link to enable location tracking.`;
+      smsMessage = `🚛 TRAQ IQ\n\n📍 GPS Tracking Request\n\nShare your location:\n${link}\n\nTap to enable tracking.`;
       logContext = 'general tracking';
     }
     
@@ -1746,10 +1751,16 @@ export async function registerRoutes(app: Express): Promise<void> {
           try {
             const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
             
-            const smsMessage = `Welcome to TRAQ IQ, ${driver.name}! 👋\n\n` +
-              `Your driver account has been created.\n\n` +
-              `Access your dashboard:\n${dashboardUrl}\n\n` +
-              `💡 Add this to your home screen for easy access!`;
+            // Shorten URL for professional appearance
+            const shortUrlResult = await urlShortener.shortenUrl(dashboardUrl);
+            const link = shortUrlResult.shortUrl || dashboardUrl;
+            
+            const smsMessage = `🚛 TRAQ IQ\n\n` +
+              `Welcome, ${driver.name}!\n\n` +
+              `Your driver portal is ready. Tap to access:\n` +
+              `${link}\n\n` +
+              `💡 Add to home screen for quick access\n\n` +
+              `Questions? Reply to this message.`;
 
             const smsResult = await smsLoadService.sendSMS({
               to: normalizedPhone,
@@ -1803,11 +1814,19 @@ export async function registerRoutes(app: Express): Promise<void> {
       // Create dashboard URL
       const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
       
-      // Create SMS message - simple and clean
-      const smsMessage = `Hi ${driver.name}! 👋\n\n` +
-        `📱 Tap here to open your TRAQ IQ Driver Dashboard:\n\n` +
-        `${dashboardUrl}\n\n` +
-        `✅ View loads, track GPS, and manage your trips!`;
+      // Shorten URL for professional appearance
+      const shortUrlResult = await urlShortener.shortenUrl(dashboardUrl);
+      const link = shortUrlResult.shortUrl || dashboardUrl;
+      
+      // Create SMS message with TRAQ IQ branding
+      const smsMessage = `🚛 TRAQ IQ\n\n` +
+        `Hi ${driver.name}!\n\n` +
+        `Access your driver portal:\n` +
+        `${link}\n\n` +
+        `✅ View loads\n` +
+        `📍 Track GPS\n` +
+        `💬 Message dispatch\n\n` +
+        `Questions? Reply here.`;
 
       // Send SMS using smsLoadService
       const smsResult = await smsLoadService.sendSMS({
@@ -1900,10 +1919,18 @@ export async function registerRoutes(app: Express): Promise<void> {
 
           const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
           
-          const smsMessage = `Hi ${driver.name}! 👋\n\n` +
-            `📱 Tap here to open your TRAQ IQ Driver Dashboard:\n\n` +
-            `${dashboardUrl}\n\n` +
-            `✅ View loads, track GPS, and manage your trips!`;
+          // Shorten URL for professional appearance
+          const shortUrlResult = await urlShortener.shortenUrl(dashboardUrl);
+          const link = shortUrlResult.shortUrl || dashboardUrl;
+          
+          const smsMessage = `🚛 TRAQ IQ\n\n` +
+            `Hi ${driver.name}!\n\n` +
+            `Access your driver portal:\n` +
+            `${link}\n\n` +
+            `✅ View loads\n` +
+            `📍 Track GPS\n` +
+            `💬 Message dispatch\n\n` +
+            `Questions? Reply here.`;
 
           const smsResult = await smsLoadService.sendSMS({
             to: normalizedPhone,
@@ -3996,12 +4023,17 @@ TRAQ IQ Dispatch Team
       // Generate registration link
       const registrationLink = `${getBaseUrl()}/simple-registration?token=${token}`;
       
-      // Create SMS message
-      const smsMessage = `🚛 TRAQ IQ Driver Registration\n\n` +
-        `Hi ${name || 'Driver'}! You're invited to join our fleet.\n\n` +
-        `Complete your registration here:\n${registrationLink}\n\n` +
-        `This link expires in 7 days.\n\n` +
-        `Questions? Contact dispatch at (615) 555-0123`;
+      // Shorten URL for professional appearance
+      const shortUrlResult = await urlShortener.shortenUrl(registrationLink);
+      const link = shortUrlResult.shortUrl || registrationLink;
+      
+      // Create SMS message with TRAQ IQ branding
+      const smsMessage = `🚛 TRAQ IQ\n\n` +
+        `Hi ${name || 'Driver'}!\n\n` +
+        `You're invited to join our fleet.\n\n` +
+        `Complete registration:\n${link}\n\n` +
+        `⏰ Link expires in 7 days\n\n` +
+        `Questions? Reply to this message.`;
       
       // Check if SMS service is available (Twilio)
       const smsService = (global as any).smsService;
