@@ -332,13 +332,32 @@ export default function MobileDriverDashboard() {
     }
   };
 
+  const [isGPSActive, setIsGPSActive] = useState(false);
+  const [trackingToken, setTrackingToken] = useState<string | null>(null);
+  const gpsWatchId = useRef<number | null>(null);
+  
   const handleStartGPSTracking = async () => {
+    if (isGPSActive) {
+      // Stop GPS tracking
+      if (gpsWatchId.current !== null) {
+        navigator.geolocation.clearWatch(gpsWatchId.current);
+        gpsWatchId.current = null;
+      }
+      setIsGPSActive(false);
+      toast({
+        title: 'GPS Tracking Stopped',
+        description: 'Location updates have been paused.'
+      });
+      return;
+    }
+
     try {
       toast({
-        title: 'Initializing GPS Tracking',
-        description: 'Generating secure authentication token...'
+        title: 'Starting GPS Tracking',
+        description: 'Requesting location permissions...'
       });
 
+      // Generate tracking token
       const response = await fetch(`/api/drivers/${driverId}/generate-tracking-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
@@ -346,8 +365,58 @@ export default function MobileDriverDashboard() {
 
       if (!response.ok) throw new Error('Failed to generate tracking token');
       const { token } = await response.json();
+      setTrackingToken(token);
+
+      // Request location permission and start tracking
+      const watchId = navigator.geolocation.watchPosition(
+        async (position) => {
+          // Send location to backend
+          try {
+            await fetch('/api/driver-location/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                driverId,
+                lat: position.coords.latitude,
+                lon: position.coords.longitude,
+                accuracy: position.coords.accuracy,
+                altitude: position.coords.altitude,
+                speed: position.coords.speed,
+                heading: position.coords.heading,
+                timestamp: new Date().toISOString(),
+                trackingToken: token
+              })
+            });
+            
+            // Refresh location data
+            queryClient.invalidateQueries({ queryKey: [`/api/drivers/${driverId}/current-location`] });
+          } catch (error) {
+            console.error('Failed to update GPS location:', error);
+          }
+        },
+        (error) => {
+          console.error('GPS error:', error);
+          toast({
+            title: 'Location Error',
+            description: error.message || 'Failed to access your location.',
+            variant: 'destructive'
+          });
+          setIsGPSActive(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+
+      gpsWatchId.current = watchId;
+      setIsGPSActive(true);
       
-      window.location.href = `/driver-tracker?driver=${driverId}&token=${token}`;
+      toast({
+        title: 'GPS Tracking Active',
+        description: 'Your location is now being tracked automatically.'
+      });
     } catch (error) {
       toast({
         title: 'Error',
@@ -607,11 +676,16 @@ export default function MobileDriverDashboard() {
       );
     }
 
+    // Silently calculate distance in the background - show default button immediately
     if (isCalculating) {
       return (
-        <Button className="w-full h-14 text-lg bg-gray-400" disabled data-testid="button-calculating-distance">
-          <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-          Calculating Distance...
+        <Button
+          onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'in_transit' })}
+          className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700"
+          data-testid="button-start-delivery"
+        >
+          <Navigation className="h-5 w-5 mr-2" />
+          Start Delivery
         </Button>
       );
     }
@@ -703,14 +777,17 @@ export default function MobileDriverDashboard() {
       );
     }
 
+    // Silently calculate distance in the background without showing intrusive UI
     if (isCalculating) {
       return (
-        <div className="w-full py-3 px-4 bg-orange-100 rounded-xl text-center">
-          <div className="flex items-center justify-center gap-2 text-orange-800">
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            <span className="font-semibold">Calculating distance to delivery...</span>
-          </div>
-        </div>
+        <Button
+          onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'delivered' })}
+          className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700"
+          data-testid="button-mark-delivered"
+        >
+          <CheckCircle className="h-5 w-5 mr-2" />
+          Mark as Delivered
+        </Button>
       );
     }
 
@@ -1021,13 +1098,25 @@ export default function MobileDriverDashboard() {
               </div>
 
               <Button
-                variant="outline"
+                variant={isGPSActive ? "default" : "outline"}
                 onClick={handleStartGPSTracking}
-                className="w-full h-12"
+                className={cn(
+                  "w-full h-12",
+                  isGPSActive && "bg-green-600 hover:bg-green-700 text-white"
+                )}
                 data-testid="button-gps-tracking"
               >
-                <MapPin className="h-4 w-4 mr-2" />
-                Enable GPS Tracking
+                {isGPSActive ? (
+                  <>
+                    <Zap className="h-4 w-4 mr-2 animate-pulse" />
+                    GPS Active - Tap to Stop
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="h-4 w-4 mr-2" />
+                    Enable GPS Tracking
+                  </>
+                )}
               </Button>
             </div>
           </CardContent>
