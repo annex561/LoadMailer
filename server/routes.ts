@@ -2435,10 +2435,11 @@ export async function registerRoutes(app: Express): Promise<void> {
                 loadContext = `load ${document.loadId}`;
               }
               
-              const smsMessage = `📄 Document Rejected\n\n` +
+              const smsMessage = `🚛 TRAQ IQ\n\n` +
+                `📄 Document Rejected\n\n` +
                 `Your ${document.documentType.replace('_', ' ').toUpperCase()} for ${loadContext} was rejected.\n\n` +
                 `Reason: ${reason}\n\n` +
-                `Please resubmit a corrected document. Contact dispatch if you have questions.`;
+                `Please resubmit. Questions? Reply here.`;
               
               const result = await smsService.sendSMS(driverPhone, smsMessage);
               

@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { storage } from "./storage";
 import { smsService } from "./sms-service";
+import { urlShortener } from "./url-shortener-service";
 import type { LoadWithRelations, Driver, DriverLocation } from "@shared/schema";
 
 export class GPSHealthMonitorService {
@@ -150,6 +151,10 @@ export class GPSHealthMonitorService {
       
       const trackingUrl = `${this.getBaseUrl()}/driver-tracker?driver=${load.driverId}&token=${trackingToken.token}`;
       
+      // Shorten URL for professional appearance
+      const shortUrlResult = await urlShortener.shortenUrl(trackingUrl);
+      const link = shortUrlResult.shortUrl || trackingUrl;
+      
       // Build load context with route info if available
       let loadContext = '';
       if (load.pickupAddress || load.deliveryAddress) {
@@ -162,12 +167,7 @@ export class GPSHealthMonitorService {
         }
       }
       
-      const smsMessage = `🚨 GPS tracking stopped for Load ${load.loadNumber}${loadContext}
-
-Please reopen this link to continue tracking:
-${trackingUrl}
-
-This helps dispatch monitor your delivery.`;
+      const smsMessage = `🚛 TRAQ IQ\n\n🚨 GPS Tracking Stopped\n\nLoad ${load.loadNumber}${loadContext}\n\nReopen tracking link:\n${link}\n\nHelps dispatch monitor delivery.`;
       
       console.log(`📱 Sending GPS reminder to ${load.driver.name} (${normalizedPhone}) for load ${load.loadNumber}`);
       
