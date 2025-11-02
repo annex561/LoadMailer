@@ -13,7 +13,6 @@ const navigation = [
   { name: "Driver Onboarding", href: "/driver-onboarding", icon: UserPlus, section: "drivers" },
   { name: "Simple Registration", href: "/simple-registration", icon: UserPlus, section: "drivers" },
   { name: "Driver Dashboard", href: "/driver-dashboard", icon: UserPlus, section: "drivers" },
-  { name: "GPS Tracking", href: "/gps-tracking", icon: MapPin, section: "drivers" },
   
   // Communication
   { name: "Customers", href: "/contacts", icon: Users, section: "comm" },
@@ -32,7 +31,6 @@ const navigation = [
   { name: "Admin Overview", href: "/admin-overview", icon: BarChart3, section: "system" },
   { name: "Payment Workflow", href: "/payments", icon: DollarSign, section: "system" },
   { name: "Templates", href: "/templates", icon: FileText, section: "system" },
-  { name: "Document Management", href: "/document-management", icon: FileText, section: "system" },
   { name: "Scraper Management", href: "/scrapers", icon: Bot, section: "system" },
   { name: "Debug Token", href: "/debug-token", icon: Wrench, section: "system" },
 ];

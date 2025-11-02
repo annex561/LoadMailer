@@ -169,6 +169,17 @@ export default function DispatcherDashboard() {
     refetchInterval: 60000
   });
 
+  // Fetch documents with auto-refresh
+  const { data: documents = [], isLoading: documentsLoading } = useQuery<Document[]>({
+    queryKey: ['/api/documents/all'],
+    queryFn: async () => {
+      const response = await fetch('/api/documents/all');
+      if (!response.ok) throw new Error('Failed to fetch documents');
+      return response.json();
+    },
+    refetchInterval: 30000
+  });
+
   // Assign driver mutation
   const assignDriverMutation = useMutation({
     mutationFn: async ({ loadId, driverId }: { loadId: string; driverId: string }) => {
@@ -225,6 +236,53 @@ export default function DispatcherDashboard() {
     },
     onError: () => {
       toast({ title: 'Failed to book load', variant: 'destructive' });
+    }
+  });
+
+  // Document approval mutation
+  const approveDocumentMutation = useMutation({
+    mutationFn: async ({ documentId, notes }: { documentId: string; notes?: string }) => {
+      const response = await apiRequest('POST', `/api/documents/${documentId}/approve`, {
+        approvedBy: 'dispatcher',
+        notes: notes || ''
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/documents/all'] });
+      toast({ title: 'Document approved successfully' });
+    }
+  });
+
+  // Document rejection mutation
+  const rejectDocumentMutation = useMutation({
+    mutationFn: async ({ documentId, reason }: { documentId: string; reason: string }) => {
+      const response = await apiRequest('POST', `/api/documents/${documentId}/reject`, {
+        rejectedBy: 'dispatcher',
+        reason
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/documents/all'] });
+      toast({ title: 'Document rejected - driver notified', description: 'Driver will be notified to resubmit' });
+    }
+  });
+
+  // SMS sending mutation
+  const sendSMSMutation = useMutation({
+    mutationFn: async ({ driverId, message }: { driverId: string; message: string }) => {
+      const response = await apiRequest('POST', '/api/communication/send-sms', {
+        driverId,
+        message
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      setSmsMessage('');
+      setSelectedSMSDriver(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/communication/threads'] });
+      toast({ title: 'SMS sent successfully' });
     }
   });
 
@@ -317,6 +375,12 @@ export default function DispatcherDashboard() {
     delivered: filteredLoads.filter(l => l.status === 'delivered')
   };
 
+  // Filter documents based on docFilter state
+  const filteredDocuments = documents.filter(doc => {
+    if (docFilter === 'all') return true;
+    return doc.approvalStatus === docFilter;
+  });
+
   const handleAssignDriver = () => {
     if (assigningLoadId && selectedDriverId) {
       assignDriverMutation.mutate({ loadId: assigningLoadId, driverId: selectedDriverId });
@@ -335,8 +399,24 @@ export default function DispatcherDashboard() {
         </div>
       </div>
 
-      {/* Quick Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Tabbed Interface */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid grid-cols-4 w-full">
+          <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+          <TabsTrigger value="gps" data-testid="tab-gps">GPS Tracking</TabsTrigger>
+          <TabsTrigger value="documents" data-testid="tab-documents">
+            Documents
+            {documents.filter(d => d.approvalStatus === 'pending').length > 0 && (
+              <Badge className="ml-2 bg-red-500">{documents.filter(d => d.approvalStatus === 'pending').length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="sms" data-testid="tab-sms">SMS Dispatch</TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-6 mt-6">
+          {/* Quick Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-l-4 border-l-purple-500">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -767,50 +847,364 @@ export default function DispatcherDashboard() {
         </div>
       </div>
 
-      {/* Integrated Map View (Toggle) */}
-      {showMap && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <MapIcon className="h-5 w-5" />
-                Live Map View
-              </span>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => setShowMap(false)}
-                data-testid="button-close-map"
-              >
-                <XCircle className="h-4 w-4" />
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {driverLocations?.locations && driverLocations.locations.length > 0 ? (
-              <div className="h-[500px]">
-                <DriverLocationMap />
+          {/* Integrated Map View (Toggle) */}
+          {showMap && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <MapIcon className="h-5 w-5" />
+                    Live Map View
+                  </span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setShowMap(false)}
+                    data-testid="button-close-map"
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {driverLocations?.locations && driverLocations.locations.length > 0 ? (
+                  <div className="h-[500px]">
+                    <DriverLocationMap />
+                  </div>
+                ) : (
+                  <div className="h-[500px] bg-gray-100 rounded-lg flex items-center justify-center border">
+                    <div className="text-center p-6">
+                      <MapIcon className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                      <p className="text-muted-foreground mb-2">No active driver locations available</p>
+                      <p className="text-sm text-muted-foreground">
+                        Driver locations will appear here when GPS tracking is active
+                      </p>
+                      <Link href="/gps-tracking">
+                        <Button className="mt-4 bg-[#00B5B8] hover:bg-[#009A9D]" data-testid="button-open-full-map">
+                          <Eye className="h-4 w-4 mr-2" />
+                          Open GPS Tracking
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* GPS Tracking Tab */}
+        <TabsContent value="gps" className="space-y-4 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="w-5 h-5" />
+                Live GPS Tracking
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Map showing all driver locations */}
+              <div className="h-[500px] mb-4">
+                {driverLocations?.locations && driverLocations.locations.length > 0 ? (
+                  <DriverLocationMap />
+                ) : (
+                  <div className="h-full bg-gray-100 rounded-lg flex items-center justify-center border">
+                    <div className="text-center p-6">
+                      <MapPin className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                      <p className="text-muted-foreground mb-2">No active GPS data available</p>
+                      <p className="text-sm text-muted-foreground">
+                        Driver locations will appear here when GPS tracking is active
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="h-[500px] bg-gray-100 rounded-lg flex items-center justify-center border">
-                <div className="text-center p-6">
-                  <MapIcon className="h-16 w-16 mx-auto text-gray-400 mb-4" />
-                  <p className="text-muted-foreground mb-2">No active driver locations available</p>
-                  <p className="text-sm text-muted-foreground">
-                    Driver locations will appear here when GPS tracking is active
-                  </p>
-                  <Link href="/gps-tracking">
-                    <Button className="mt-4 bg-[#00B5B8] hover:bg-[#009A9D]" data-testid="button-open-full-map">
-                      <Eye className="h-4 w-4 mr-2" />
-                      Open GPS Tracking
-                    </Button>
-                  </Link>
+              
+              {/* Driver location cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {driverLocations?.locations?.map((loc: DriverLocation) => (
+                  <Card key={loc.driverId} data-testid={`gps-location-card-${loc.driverId}`}>
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold" data-testid={`gps-driver-name-${loc.driverId}`}>
+                              {loc.driverName}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {loc.address || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`}
+                            </p>
+                          </div>
+                          <Badge className={loc.isMoving ? 'bg-green-500' : 'bg-gray-500'}>
+                            {loc.isMoving ? 'Moving' : 'Stationary'}
+                          </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {loc.speed !== undefined && (
+                            <div className="flex items-center gap-1">
+                              <Navigation className="h-3 w-3 text-muted-foreground" />
+                              <span>{Math.round(loc.speed)} mph</span>
+                            </div>
+                          )}
+                          {loc.batteryLevel !== undefined && (
+                            <div className="flex items-center gap-1">
+                              <Activity className="h-3 w-3 text-muted-foreground" />
+                              <span>{loc.batteryLevel}% battery</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="text-xs text-muted-foreground">
+                          Last update: {formatDistanceToNow(new Date(loc.lastUpdate))} ago
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )) || (
+                  <div className="col-span-2 text-center py-8 text-muted-foreground">
+                    No driver location data available
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Documents Tab */}
+        <TabsContent value="documents" className="space-y-4 mt-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">Document Management</h3>
+            <Select value={docFilter} onValueChange={setDocFilter}>
+              <SelectTrigger className="w-40" data-testid="select-document-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Documents</SelectItem>
+                <SelectItem value="pending">Pending Review</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {documentsLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map(i => (
+                <Skeleton key={i} className="h-48 w-full" />
+              ))}
+            </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="text-center py-16">
+              <FileText className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+              <p className="text-muted-foreground">No documents found</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {docFilter === 'all' ? 'Documents will appear here once uploaded' : `No ${docFilter} documents`}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredDocuments.map(doc => (
+                <Card key={doc.id} data-testid={`document-card-${doc.id}`}>
+                  <CardContent className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-semibold text-sm" data-testid={`document-type-${doc.id}`}>
+                            {doc.documentType}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Load: {doc.load?.loadNumber || 'N/A'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Driver: {doc.load?.driver?.name || 'Unknown'}
+                          </p>
+                        </div>
+                        <Badge 
+                          className={
+                            doc.approvalStatus === 'approved' ? 'bg-green-500' :
+                            doc.approvalStatus === 'rejected' ? 'bg-red-500' :
+                            'bg-yellow-500'
+                          }
+                        >
+                          {doc.approvalStatus}
+                        </Badge>
+                      </div>
+                      
+                      <div className="text-xs text-muted-foreground">
+                        Uploaded: {new Date(doc.uploadedAt).toLocaleDateString()}
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-xs"
+                          onClick={() => window.open(doc.fileUrl, '_blank')}
+                          data-testid={`button-view-document-${doc.id}`}
+                        >
+                          <Eye className="h-3 w-3 mr-1" />
+                          View
+                        </Button>
+                        {doc.approvalStatus === 'pending' && (
+                          <>
+                            <Button
+                              size="sm"
+                              className="flex-1 bg-green-500 hover:bg-green-600 text-xs"
+                              onClick={() => approveDocumentMutation.mutate({ documentId: doc.id })}
+                              disabled={approveDocumentMutation.isPending}
+                              data-testid={`button-approve-document-${doc.id}`}
+                            >
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Approve
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="flex-1 text-xs"
+                              onClick={() => rejectDocumentMutation.mutate({ 
+                                documentId: doc.id, 
+                                reason: 'Quality issue' 
+                              })}
+                              disabled={rejectDocumentMutation.isPending}
+                              data-testid={`button-reject-document-${doc.id}`}
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* SMS Dispatch Tab */}
+        <TabsContent value="sms" className="space-y-4 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="w-5 h-5" />
+                Send SMS to Driver
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Driver selection */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Select Driver</label>
+                <Select value={selectedSMSDriver || ''} onValueChange={setSelectedSMSDriver}>
+                  <SelectTrigger data-testid="select-sms-driver">
+                    <SelectValue placeholder="Select driver" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {drivers.map(driver => (
+                      <SelectItem key={driver.id} value={driver.id}>
+                        {driver.name} - {driver.phone || 'No phone'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Quick templates */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Quick Templates</label>
+                <div className="flex gap-2 flex-wrap">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setSmsMessage('Are you available for a load?')}
+                    data-testid="button-template-availability"
+                  >
+                    Check Availability
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setSmsMessage('Please provide load status update')}
+                    data-testid="button-template-status"
+                  >
+                    Status Update
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setSmsMessage('Load assigned - check your dashboard')}
+                    data-testid="button-template-assigned"
+                  >
+                    Load Assigned
+                  </Button>
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              
+              {/* Message input */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Message</label>
+                <Textarea 
+                  value={smsMessage}
+                  onChange={(e) => setSmsMessage(e.target.value)}
+                  placeholder="Type your message..."
+                  rows={4}
+                  data-testid="input-sms-message"
+                />
+              </div>
+              
+              {/* Send button */}
+              <Button 
+                onClick={() => {
+                  if (!selectedSMSDriver) {
+                    toast({ title: 'Please select a driver', variant: 'destructive' });
+                    return;
+                  }
+                  if (!smsMessage.trim()) {
+                    toast({ title: 'Please enter a message', variant: 'destructive' });
+                    return;
+                  }
+                  sendSMSMutation.mutate({ driverId: selectedSMSDriver, message: smsMessage });
+                }}
+                disabled={sendSMSMutation.isPending}
+                className="w-full bg-[#00B5B8] hover:bg-[#009A9D]"
+                data-testid="button-send-sms"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {sendSMSMutation.isPending ? 'Sending...' : 'Send SMS'}
+              </Button>
+              
+              {/* Recent messages */}
+              <div className="mt-6">
+                <h4 className="font-semibold mb-2">Recent Messages</h4>
+                <ScrollArea className="h-48">
+                  {threads.slice(0, 10).length > 0 ? (
+                    threads.slice(0, 10).map(thread => (
+                      <div key={thread.id} className="p-2 border-b" data-testid={`thread-${thread.id}`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{thread.driverName || 'Unknown Driver'}</p>
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                              {thread.lastMessage}
+                            </p>
+                          </div>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
+                            {formatDistanceToNow(new Date(thread.lastMessageTimestamp))} ago
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                      No recent messages
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* Assignment Dialog */}
       <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
