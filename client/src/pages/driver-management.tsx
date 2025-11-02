@@ -115,6 +115,9 @@ export default function DriverManagement() {
 
   const { data: drivers = [], isLoading: driversLoading } = useQuery<Driver[]>({
     queryKey: ["/api/drivers"],
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
   });
 
   const { data: onboardingTokens = [], isLoading: tokensLoading } = useQuery<OnboardingToken[]>({
