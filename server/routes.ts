@@ -2472,7 +2472,30 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.post('/api/documents/:documentId/recategorize', async (req, res) => {
     try {
       const { documentId } = req.params;
-      const { category } = req.body;
+      const { category, driverId } = req.body;
+      
+      // Authentication: Require driverId
+      if (!driverId) {
+        return res.status(401).json({ error: 'Driver ID is required for authentication' });
+      }
+      
+      // Verify driver exists
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(401).json({ error: 'Invalid driver' });
+      }
+      
+      // Get document to verify ownership
+      const existingDoc = await storage.getLoadDocument(documentId);
+      if (!existingDoc) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      // Authorization: Verify document ownership
+      if (existingDoc.driverId !== driverId) {
+        console.warn(`⚠️ Unauthorized recategorize attempt: Driver ${driverId} tried to modify document ${documentId} owned by ${existingDoc.driverId}`);
+        return res.status(403).json({ error: 'Not authorized to modify this document' });
+      }
       
       // Validate category against known document types
       const validCategories = ['bol', 'pod', 'weight_ticket', 'inspection', 'receipt', 'fuel_receipt', 'scale_ticket', 'freight_photo', 'other'];
@@ -2489,7 +2512,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: 'Document not found' });
       }
       
-      console.log(`🔄 Document ${documentId} recategorized to ${category}`);
+      console.log(`🔄 Document ${documentId} recategorized to ${category} by driver ${driverId}`);
       res.json({ 
         success: true, 
         message: `Document recategorized to ${category}`,
@@ -2498,6 +2521,52 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error('Error recategorizing document:', error);
       res.status(500).json({ error: 'Failed to recategorize document' });
+    }
+  });
+
+  // DELETE /api/documents/:documentId - Delete a document
+  app.delete('/api/documents/:documentId', async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const { driverId } = req.body;
+      
+      // Authentication: Require driverId
+      if (!driverId) {
+        return res.status(401).json({ error: 'Driver ID is required for authentication' });
+      }
+      
+      // Verify driver exists
+      const driver = await storage.getDriver(driverId);
+      if (!driver) {
+        return res.status(401).json({ error: 'Invalid driver' });
+      }
+      
+      // Get document before deletion for logging and ownership verification
+      const document = await storage.getLoadDocument(documentId);
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      
+      // Authorization: Verify document ownership
+      if (document.driverId !== driverId) {
+        console.warn(`⚠️ Unauthorized delete attempt: Driver ${driverId} tried to delete document ${documentId} owned by ${document.driverId}`);
+        return res.status(403).json({ error: 'Not authorized to delete this document' });
+      }
+      
+      const success = await storage.deleteLoadDocument(documentId);
+      
+      if (!success) {
+        return res.status(500).json({ error: 'Failed to delete document' });
+      }
+      
+      console.log(`🗑️ Document ${documentId} (${document.documentType}) deleted by driver ${driverId}`);
+      res.json({ 
+        success: true, 
+        message: 'Document deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      res.status(500).json({ error: 'Failed to delete document' });
     }
   });
   

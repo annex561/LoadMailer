@@ -13,8 +13,33 @@ import {
   Navigation, CheckCircle, AlertCircle, Phone, Camera, Mic, Send, Plus,
   TrendingUp, Star, Truck, ChevronRight, Upload, ExternalLink, Menu,
   Settings, LogOut, Bell, Filter, Search, Calendar, Download, Share,
-  RefreshCw, Zap, Map, Image as ImageIcon, FileCheck, X, HelpCircle
+  RefreshCw, Zap, Map, Image as ImageIcon, FileCheck, X, HelpCircle,
+  Edit2, Trash2, MoreVertical, RotateCcw, Check
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { LoadWithRelations, Driver, LoadDocument } from '@shared/schema';
 import { cn } from '@/lib/utils';
 
@@ -96,6 +121,15 @@ export default function MobileDriverDashboard() {
   const [selectedThread, setSelectedThread] = useState<CommunicationThread | null>(null);
   const [selectedDocType, setSelectedDocType] = useState<string>('bol');
   const [isRecording, setIsRecording] = useState(false);
+  
+  // Smart document workflow state
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [showTypeModal, setShowTypeModal] = useState(false);
+  const [pendingFilePreview, setPendingFilePreview] = useState<string | null>(null);
+  const [editingDocument, setEditingDocument] = useState<LoadDocument | null>(null);
+  const [showEditMenu, setShowEditMenu] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<LoadDocument | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   
   // Pull-to-refresh state
   const [isPulling, setIsPulling] = useState(false);
@@ -304,6 +338,73 @@ export default function MobileDriverDashboard() {
     }
   });
 
+  // Recategorize document mutation (change document type)
+  const recategorizeDocumentMutation = useMutation({
+    mutationFn: async ({ documentId, category }: { documentId: string; category: string }) => {
+      if (!driverId) throw new Error('Driver ID not available');
+      
+      const res = await fetch(`/api/documents/${documentId}/recategorize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category, driverId })
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to recategorize document');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/loads', currentLoad?.id, 'documents'] });
+      setEditingDocument(null);
+      toast({
+        title: 'Document Updated',
+        description: 'Document type has been changed successfully.'
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Update Failed',
+        description: error instanceof Error ? error.message : 'Failed to update document',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  // Delete document mutation
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      if (!driverId) throw new Error('Driver ID not available');
+      
+      const res = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId })
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to delete document');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/loads', currentLoad?.id, 'documents'] });
+      setDocumentToDelete(null);
+      setShowDeleteConfirm(false);
+      toast({
+        title: 'Document Deleted',
+        description: 'Document has been removed successfully.'
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'Delete Failed',
+        description: error instanceof Error ? error.message : 'Failed to delete document',
+        variant: 'destructive'
+      });
+    }
+  });
+
   // Helper function: Calculate distance from driver to address using backend endpoint
   const calculateDistanceToAddress = async (address: string): Promise<number | null> => {
     if (!driverLocation?.hasLocation || !address) return null;
@@ -426,15 +527,47 @@ export default function MobileDriverDashboard() {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Capture file first, then ask for document type
+  const handleFileCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentLoad || !driverId) return;
 
+    // Store file and create preview
+    setPendingFile(file);
+    
+    // Create preview URL for image files
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPendingFilePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    // Show type selection modal
+    setShowTypeModal(true);
+    
+    // Reset file input for re-capture
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
+  // Upload after document type is selected
+  const handleDocumentTypeSelected = (documentType: string) => {
+    if (!pendingFile || !currentLoad) return;
+    
+    setShowTypeModal(false);
+    
     uploadDocumentMutation.mutate({
-      file,
-      documentType: selectedDocType,
+      file: pendingFile,
+      documentType,
       loadId: currentLoad.id
     });
+    
+    // Clear pending state
+    setPendingFile(null);
+    setPendingFilePreview(null);
   };
 
   const handleSendMessage = () => {
@@ -1442,50 +1575,40 @@ export default function MobileDriverDashboard() {
     </div>
   );
 
-  // DOCUMENTS TAB
+  // DOCUMENTS TAB - Smart Document Management
   const DocumentsTab = () => (
     <div className="space-y-4 pb-24">
       <div className="p-4">
         <h2 className="text-xl font-bold mb-4">Documents</h2>
 
-        {/* Camera Upload */}
+        {/* Smart Camera Upload - Capture First Workflow */}
         {currentLoad && (
-          <Card className="mb-4 border-2 border-dashed border-blue-300 bg-blue-50">
+          <Card className="mb-4 border-2 border-dashed border-teal-300 bg-teal-50">
             <CardContent className="p-6 text-center">
-              <Camera className="h-12 w-12 mx-auto mb-3 text-blue-600" />
+              <Camera className="h-12 w-12 mx-auto mb-3 text-teal-600" />
               <h3 className="font-semibold mb-2">Upload Document</h3>
               <p className="text-sm text-gray-600 mb-4">
                 Take a photo or select from gallery
               </p>
 
-              {/* Document Type Selector */}
-              <div className="flex gap-2 mb-4 justify-center">
-                {['bol', 'pod', 'weight_ticket'].map((type) => (
-                  <Button
-                    key={type}
-                    variant={selectedDocType === type ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedDocType(type)}
-                    data-testid={`button-select-${type}`}
-                  >
-                    {type.toUpperCase().replace('_', ' ')}
-                  </Button>
-                ))}
-              </div>
-
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 capture="environment"
-                onChange={handleFileUpload}
+                onChange={handleFileCapture}
                 className="hidden"
               />
 
               <div className="grid grid-cols-2 gap-2">
                 <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="h-12"
+                  onClick={() => {
+                    if (fileInputRef.current) {
+                      fileInputRef.current.setAttribute('capture', 'environment');
+                      fileInputRef.current.click();
+                    }
+                  }}
+                  className="h-12 bg-teal-600 hover:bg-teal-700"
                   data-testid="button-take-photo"
                 >
                   <Camera className="h-4 w-4 mr-2" />
@@ -1499,7 +1622,7 @@ export default function MobileDriverDashboard() {
                     }
                   }}
                   variant="outline"
-                  className="h-12"
+                  className="h-12 border-teal-300 text-teal-700 hover:bg-teal-50"
                   data-testid="button-choose-file"
                 >
                   <Upload className="h-4 w-4 mr-2" />
@@ -1510,16 +1633,61 @@ export default function MobileDriverDashboard() {
           </Card>
         )}
 
-        {/* Document Gallery */}
+        {/* Smart Document Gallery with Edit/Delete */}
         <div>
           <h3 className="font-semibold mb-3">Uploaded Documents</h3>
           <div className="grid grid-cols-2 gap-3">
             {documents.length > 0 ? (
               documents.map((doc) => (
-                <Card key={doc.id} className="overflow-hidden">
-                  <div className="aspect-video bg-gray-100 flex items-center justify-center">
-                    <ImageIcon className="h-8 w-8 text-gray-400" />
+                <Card key={doc.id} className="overflow-hidden relative group">
+                  <div className="aspect-video bg-gray-100 flex items-center justify-center relative">
+                    {doc.fileUrl && doc.mimeType?.startsWith('image/') ? (
+                      <img 
+                        src={doc.fileUrl} 
+                        alt={doc.documentType}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <FileText className="h-8 w-8 text-gray-400" />
+                    )}
+                    
+                    {/* Edit Menu Button */}
+                    <div className="absolute top-2 right-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 w-8 p-0 rounded-full bg-white/90 hover:bg-white shadow"
+                            data-testid={`button-edit-${doc.id}`}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => setEditingDocument(doc)}
+                            data-testid={`menu-change-type-${doc.id}`}
+                          >
+                            <Edit2 className="h-4 w-4 mr-2" />
+                            Change Type
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setDocumentToDelete(doc);
+                              setShowDeleteConfirm(true);
+                            }}
+                            className="text-red-600"
+                            data-testid={`menu-delete-${doc.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
+                  
                   <CardContent className="p-3">
                     <div className="text-xs font-medium uppercase text-gray-600 mb-1">
                       {doc.documentType.replace('_', ' ')}
@@ -1531,6 +1699,7 @@ export default function MobileDriverDashboard() {
                         doc.approvalStatus === 'pending' && "bg-yellow-100 text-yellow-700",
                         doc.approvalStatus === 'rejected' && "bg-red-100 text-red-700"
                       )}
+                      data-testid={`badge-status-${doc.id}`}
                     >
                       {doc.approvalStatus}
                     </Badge>
@@ -1541,11 +1710,154 @@ export default function MobileDriverDashboard() {
               <div className="col-span-2 text-center py-12">
                 <FileText className="h-16 w-16 mx-auto mb-4 text-gray-300" />
                 <p className="text-gray-500">No documents uploaded yet</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Take a photo to get started
+                </p>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Document Type Selection Modal - Appears after photo capture */}
+      <Dialog open={showTypeModal} onOpenChange={setShowTypeModal}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-select-type">
+          <DialogHeader>
+            <DialogTitle>What type of document is this?</DialogTitle>
+            <DialogDescription>
+              Select the document type to categorize your upload
+            </DialogDescription>
+          </DialogHeader>
+          
+          {pendingFilePreview && (
+            <div className="mt-4 mb-4">
+              <img 
+                src={pendingFilePreview} 
+                alt="Preview" 
+                className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
+              />
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 gap-2">
+            <Button
+              onClick={() => handleDocumentTypeSelected('bol')}
+              className="h-14 text-base justify-start"
+              variant="outline"
+              data-testid="button-type-bol"
+            >
+              <FileCheck className="h-5 w-5 mr-3" />
+              BOL (Bill of Lading)
+            </Button>
+            <Button
+              onClick={() => handleDocumentTypeSelected('pod')}
+              className="h-14 text-base justify-start"
+              variant="outline"
+              data-testid="button-type-pod"
+            >
+              <Check className="h-5 w-5 mr-3" />
+              POD (Proof of Delivery)
+            </Button>
+            <Button
+              onClick={() => handleDocumentTypeSelected('weight_ticket')}
+              className="h-14 text-base justify-start"
+              variant="outline"
+              data-testid="button-type-weight"
+            >
+              <FileText className="h-5 w-5 mr-3" />
+              Weight Ticket
+            </Button>
+          </div>
+          
+          <DialogFooter className="sm:justify-start">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowTypeModal(false);
+                setPendingFile(null);
+                setPendingFilePreview(null);
+              }}
+              data-testid="button-cancel-upload"
+            >
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Document Type Modal */}
+      <Dialog open={!!editingDocument} onOpenChange={(open) => !open && setEditingDocument(null)}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-edit-document">
+          <DialogHeader>
+            <DialogTitle>Change Document Type</DialogTitle>
+            <DialogDescription>
+              Select the correct document type for this file
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-1 gap-2 mt-4">
+            <Button
+              onClick={() => recategorizeDocumentMutation.mutate({ 
+                documentId: editingDocument!.id, 
+                category: 'bol' 
+              })}
+              variant="outline"
+              className="h-12 justify-start"
+              data-testid="button-edit-type-bol"
+            >
+              <FileCheck className="h-5 w-5 mr-3" />
+              BOL (Bill of Lading)
+            </Button>
+            <Button
+              onClick={() => recategorizeDocumentMutation.mutate({ 
+                documentId: editingDocument!.id, 
+                category: 'pod' 
+              })}
+              variant="outline"
+              className="h-12 justify-start"
+              data-testid="button-edit-type-pod"
+            >
+              <Check className="h-5 w-5 mr-3" />
+              POD (Proof of Delivery)
+            </Button>
+            <Button
+              onClick={() => recategorizeDocumentMutation.mutate({ 
+                documentId: editingDocument!.id, 
+                category: 'weight_ticket' 
+              })}
+              variant="outline"
+              className="h-12 justify-start"
+              data-testid="button-edit-type-weight"
+            >
+              <FileText className="h-5 w-5 mr-3" />
+              Weight Ticket
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent data-testid="dialog-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this {documentToDelete?.documentType.replace('_', ' ')} document? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => documentToDelete && deleteDocumentMutation.mutate(documentToDelete.id)}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="button-confirm-delete"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 
