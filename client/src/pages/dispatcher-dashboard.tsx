@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,6 +23,7 @@ import { apiRequest } from '@/lib/queryClient';
 import type { LoadWithRelations, Driver } from '@shared/schema';
 import { RateSettingModal } from '@/components/rate-setting-modal';
 import DriverLocationMap from '@/components/driver-location-map';
+import { formatDistanceToNow } from 'date-fns';
 
 interface LoadOffer {
   id: string;
@@ -64,6 +66,35 @@ interface ActivityFeedItem {
   color: string;
 }
 
+interface Document {
+  id: string;
+  loadId: string;
+  driverId: string;
+  documentType: string;
+  fileName: string;
+  fileUrl: string;
+  uploadedAt: string;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  load?: {
+    loadNumber: string;
+    driver?: {
+      name: string;
+    };
+  };
+}
+
+interface DriverLocation {
+  driverId: string;
+  driverName: string;
+  latitude: number;
+  longitude: number;
+  address?: string;
+  speed?: number;
+  batteryLevel?: number;
+  lastUpdate: string;
+  isMoving: boolean;
+}
+
 export default function DispatcherDashboard() {
   const [selectedLoad, setSelectedLoad] = useState<DispatcherLoad | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
@@ -74,6 +105,14 @@ export default function DispatcherDashboard() {
   const [assigningLoadId, setAssigningLoadId] = useState<string | null>(null);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<{ load: DispatcherLoad; driverId: string; driverName: string } | null>(null);
+  
+  // New state for GPS, Documents, SMS features
+  const [docFilter, setDocFilter] = useState<string>('all');
+  const [selectedSMSDriver, setSelectedSMSDriver] = useState<string | null>(null);
+  const [smsMessage, setSMSMessage] = useState('');
+  const [smsTemplate, setSmsTemplate] = useState('');
+  const [activeTab, setActiveTab] = useState('overview');
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
