@@ -5,14 +5,11 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
-  // Core Operations
-  { name: "Main Dashboard", href: "/loadops-dashboard", icon: LayoutDashboard, section: "core" },
-  { name: "Loads", href: "/loads", icon: Package, section: "core" },
-  { name: "DAT Loads", href: "/dat-loads", icon: Truck, section: "core" },
-  { name: "Manual Load Entry", href: "/manual-load-entry", icon: UserPlus, section: "core" },
+  // Core Operations - Unified Dispatcher Workspace
+  { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Headphones, section: "core" },
+  { name: "Finance Dashboard", href: "/loadops-dashboard", icon: DollarSign, section: "core" },
   
   // Driver Management
-  { name: "Driver Management", href: "/driver-management", icon: UserPlus, section: "drivers" },
   { name: "Driver Onboarding", href: "/driver-onboarding", icon: UserPlus, section: "drivers" },
   { name: "Simple Registration", href: "/simple-registration", icon: UserPlus, section: "drivers" },
   { name: "Driver Dashboard", href: "/driver-dashboard", icon: UserPlus, section: "drivers" },
@@ -20,7 +17,6 @@ const navigation = [
   
   // Communication
   { name: "Customers", href: "/contacts", icon: Users, section: "comm" },
-  { name: "Driver Messages", href: "/communication-dashboard", icon: MessageSquare, section: "comm" },
   { name: "AI Communication Insights", href: "/ai-communication-insights", icon: Brain, section: "comm" },
   { name: "LoadMailer Control", href: "/loadmailer-control", icon: Mail, section: "comm" },
   { name: "Telegram Dispatching", href: "/telegram-dispatching", icon: MessageSquare, section: "comm" },
@@ -36,15 +32,9 @@ const navigation = [
   { name: "Admin Overview", href: "/admin-overview", icon: BarChart3, section: "system" },
   { name: "Payment Workflow", href: "/payments", icon: DollarSign, section: "system" },
   { name: "Templates", href: "/templates", icon: FileText, section: "system" },
+  { name: "Document Management", href: "/document-management", icon: FileText, section: "system" },
   { name: "Scraper Management", href: "/scrapers", icon: Bot, section: "system" },
   { name: "Debug Token", href: "/debug-token", icon: Wrench, section: "system" },
-  { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Headphones, section: "system" },
-  { name: "Dispatcher Vehicle Dashboard", href: "/dispatcher-vehicle-dashboard", icon: Truck, section: "system" },
-  { name: "Document Management", href: "/document-management", icon: FileText, section: "system" },
-  { name: "DAT Scraper", href: "/dat-scraper", icon: Bot, section: "system" },
-  { name: "DAT Login", href: "/dat-login", icon: Bot, section: "system" },
-  { name: "SMS Dispatching", href: "/sms-dispatching", icon: MessageSquare, section: "system" },
-  { name: "TaskMagic Status", href: "/taskmagic-status", icon: Webhook, section: "system" },
 ];
 
 export default function Sidebar() {
