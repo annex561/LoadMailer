@@ -3225,6 +3225,103 @@ TRAQ IQ Dispatch Team
     }
   });
 
+  // Send SMS to a driver from dispatcher dashboard
+  app.post('/api/communication/send-sms', async (req, res) => {
+    try {
+      const { driverId, message } = req.body;
+      
+      if (!driverId || !message) {
+        return res.status(400).json({ error: 'Driver ID and message are required' });
+      }
+      
+      console.log(`📱 Dispatcher SMS: Sending to driver ${driverId}`);
+      
+      // Get driver details
+      const driver = await storage.getDriverById(driverId);
+      if (!driver) {
+        return res.status(404).json({ error: 'Driver not found' });
+      }
+      
+      // Get or validate phone number
+      const phoneNumber = driver.phoneNumber || driver.phone;
+      if (!phoneNumber) {
+        return res.status(400).json({ error: 'Driver has no phone number' });
+      }
+      
+      // Normalize phone number
+      const normalizedPhone = phoneNumber.replace(/\D/g, '');
+      
+      // Send SMS using the SMS service
+      const smsService = (global as any).smsService;
+      if (!smsService || !smsService.isServiceConfigured || !smsService.isServiceConfigured()) {
+        return res.status(503).json({ error: 'SMS service not configured' });
+      }
+      
+      const result = await smsService.sendSMS({
+        to: normalizedPhone,
+        body: message
+      });
+      
+      if (!result.success) {
+        console.error(`❌ Failed to send SMS to driver ${driverId}:`, result.error);
+        return res.status(500).json({ error: result.error || 'Failed to send SMS' });
+      }
+      
+      console.log(`✅ Dispatcher SMS sent successfully to ${driver.name} (${normalizedPhone})`);
+      
+      // Find or create general communication thread for this driver
+      let thread = null;
+      try {
+        const threads = await storage.getAllLoadCommunicationThreads();
+        thread = threads.find((t: any) => 
+          t.driverId === driverId && 
+          t.threadType === 'general'
+        );
+        
+        // If no general thread exists, create one
+        if (!thread) {
+          thread = await storage.createLoadCommunicationThread({
+            driverId,
+            loadId: null,
+            threadType: 'general',
+            driverName: driver.name,
+            loadNumber: null,
+            loadOrigin: null,
+            loadDestination: null,
+            loadOfferStatus: null
+          });
+          console.log(`✅ Created new general thread for driver ${driver.name}`);
+        }
+        
+        // Create message record in the thread
+        await storage.createLoadMessage({
+          threadId: thread.id,
+          content: message,
+          sender: 'dispatch',
+          isRead: true,
+          deliveryStatus: 'delivered',
+          deliveryMethod: 'sms',
+          smsMessageId: result.sid || null
+        });
+        
+        console.log(`✅ Message saved to thread ${thread.id}`);
+      } catch (threadError) {
+        console.error('⚠️ Failed to save message to thread (non-critical):', threadError);
+        // Don't fail the response if thread creation fails
+      }
+      
+      res.json({ 
+        success: true, 
+        message: 'SMS sent successfully',
+        sid: result.sid,
+        threadId: thread?.id
+      });
+    } catch (error) {
+      console.error('❌ Error sending dispatcher SMS:', error);
+      res.status(500).json({ error: 'Failed to send SMS' });
+    }
+  });
+
   // Get messages for a specific communication thread
   app.get('/api/communication/messages/:threadId', async (req, res) => {
     try {

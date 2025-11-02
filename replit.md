@@ -52,15 +52,33 @@ Preferred communication style: Simple, everyday language.
 - **Load Matching**: Location, equipment, weight, driver availability filtering.
 - **Automated Communication**: SMS for load offers and driver communications.
 - **Load Workflow**: Intelligent load retry, post-confirmation messaging, manual entry.
-- **Unified Dispatcher Dashboard**: Mission control center consolidating all dispatcher tools into one workspace. Features include:
-    - **Quick Stats Cards**: Real-time metrics for Active Loads, Available Drivers, Pending Assignments, and Today's Pickups.
-    - **Three-Panel Layout**: Active Loads (left), Available Drivers (center), Activity Feed (right) with color-coded status badges and quick actions.
-    - **Quick Actions Bar**: Create Load, Assign Driver, Send Message, View GPS - all accessible from top bar.
-    - **Smart Search**: Live filtering across loads (by number, customer, status) and drivers (by name, equipment).
-    - **Integrated Map View**: Toggle-able map showing driver locations and active loads with DriverLocationMap component.
-    - **Auto-Refresh**: Optimized polling intervals (loads: 30s, drivers: 60s, activity: 15s) for real-time updates.
-    - **Professional Styling**: Teal/Navy brand colors, responsive design, loading states, empty states.
-- **Streamlined Navigation**: Consolidated sidebar with Dispatcher Dashboard at top of Core Operations. Removed redundant items (Loads, DAT Loads, Manual Load Entry, Driver Management, Driver Messages) now accessible via unified dashboard.
+- **Unified Dispatcher Dashboard**: Mission control center consolidating all dispatcher tools into one workspace with tabbed interface. Features include:
+    - **Four-Tab Layout**: Overview, GPS Tracking, Documents, SMS Dispatch tabs for complete dispatcher workflow.
+    - **Overview Tab**: 
+        - Quick Stats Cards: Real-time metrics for Active Loads, Available Drivers, Pending Assignments, and Today's Pickups.
+        - Three-Panel Layout: Active Loads (left), Available Drivers (center), Activity Feed (right) with color-coded status badges and quick actions.
+        - Quick Actions Bar: Create Load, Assign Driver, Send Message, View GPS - all accessible from top bar.
+        - Smart Search: Live filtering across loads (by number, customer, status) and drivers (by name, equipment).
+    - **GPS Tracking Tab**: 
+        - Live map integration using DriverLocationMap component showing all active driver locations.
+        - Driver telemetry cards displaying: current address, speed, battery level, last update timestamp, moving/stationary status.
+        - Empty state handling for no active GPS data.
+        - Auto-refresh: 60-second intervals for driver locations.
+    - **Documents Tab**: 
+        - Document approval workflow with filter dropdown (all/pending/approved/rejected).
+        - Document cards showing: type, load number, driver name, upload time, status badge.
+        - Quick approve/reject buttons with driver SMS notifications.
+        - Pending document count badge on tab (red).
+        - Auto-refresh: 30-second intervals for documents.
+    - **SMS Dispatch Tab**: 
+        - Driver selection dropdown and message textarea.
+        - Quick message templates: Check Availability, Status Update, Load Assigned.
+        - Form validation (driver and message required).
+        - Recent messages section showing last 10 threads.
+        - Auto-refresh: 15-second intervals for communication threads.
+    - **Auto-Refresh Strategy**: Optimized polling intervals (loads: 30s, drivers/locations: 60s, activity/threads: 15s, documents: 30s) for real-time updates.
+    - **Professional Styling**: Teal/Navy brand colors, responsive design, loading states, empty states, toast notifications.
+- **Streamlined Navigation**: Consolidated sidebar with Dispatcher Dashboard at top of Core Operations. Removed redundant items (Loads, DAT Loads, Manual Load Entry, Driver Management, Driver Messages, GPS Tracking, Document Management) now accessible via unified dashboard.
 - **Communication Dashboard**: Modern interface for driver communications with compact thread list, real-time updates, status indicators, AI-assisted messaging, quick message templates, and MMS preview.
 - **Professional Document Management**: Approval workflow, quality validation, cloud integrations, smart categorization, enhanced viewer, audit trails, automated reminders, PDF generation. Prevents load completion without required documents.
 - **Real-Time GPS Tracking**: Mobile-optimized, secure token-based authentication, 60-second auto-updates, wake lock, GPS health monitor.

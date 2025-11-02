@@ -109,7 +109,7 @@ export default function DispatcherDashboard() {
   // New state for GPS, Documents, SMS features
   const [docFilter, setDocFilter] = useState<string>('all');
   const [selectedSMSDriver, setSelectedSMSDriver] = useState<string | null>(null);
-  const [smsMessage, setSMSMessage] = useState('');
+  const [smsMessage, setSmsMessage] = useState('');
   const [smsTemplate, setSmsTemplate] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
   
@@ -283,6 +283,14 @@ export default function DispatcherDashboard() {
       setSelectedSMSDriver(null);
       queryClient.invalidateQueries({ queryKey: ['/api/communication/threads'] });
       toast({ title: 'SMS sent successfully' });
+    },
+    onError: (error: any) => {
+      console.error('SMS send error:', error);
+      toast({ 
+        title: 'Failed to send SMS', 
+        description: error.message || 'Please try again',
+        variant: 'destructive'
+      });
     }
   });
 
@@ -1189,7 +1197,9 @@ export default function DispatcherDashboard() {
                             </p>
                           </div>
                           <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                            {formatDistanceToNow(new Date(thread.lastMessageTimestamp))} ago
+                            {thread.lastMessageTimestamp 
+                              ? `${formatDistanceToNow(new Date(thread.lastMessageTimestamp))} ago`
+                              : 'No messages'}
                           </span>
                         </div>
                       </div>
