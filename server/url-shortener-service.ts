@@ -1,8 +1,8 @@
 /**
  * URL Shortening Service
  * 
- * Uses TinyURL API for converting long URLs to short, professional links
- * No API key required, reliable and works in all environments
+ * Uses is.gd API for converting long URLs to short, professional links
+ * No API key required, direct redirects, no interstitial pages
  */
 
 interface ShortenResult {
@@ -14,10 +14,10 @@ interface ShortenResult {
 
 class URLShortenerService {
   private cache: Map<string, string> = new Map();
-  private readonly API_URL = 'https://tinyurl.com/api-create.php';
+  private readonly API_URL = 'https://is.gd/create.php';
   
   /**
-   * Shorten a URL using TinyURL API
+   * Shorten a URL using is.gd API (direct redirects, no preview pages)
    */
   async shortenUrl(longUrl: string): Promise<ShortenResult> {
     // Check cache first
@@ -30,8 +30,10 @@ class URLShortenerService {
     }
 
     try {
-      // Call TinyURL API (simple and reliable!)
-      const response = await fetch(`${this.API_URL}?url=${encodeURIComponent(longUrl)}`);
+      // Call is.gd API with format=simple for direct URL response
+      const response = await fetch(
+        `${this.API_URL}?format=simple&url=${encodeURIComponent(longUrl)}`
+      );
       
       if (!response.ok) {
         throw new Error(`Shortening failed: ${response.statusText}`);
