@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'wouter';
+import { useLocation, Link } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1047,12 +1047,12 @@ export default function LoadOpsDashboard() {
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
             {navigation.filter(item => item.section === "core").map((item) => {
               const Icon = item.icon;
-              const isActive = window.location.pathname === item.href;
+              const isActive = location === item.href;
               
               return (
                 <li key={item.name}>
-                  <a
-                    href={item.href}
+                  <Link
+                    to={item.href}
                     className={cn(
                       "flex items-center py-3 text-sm font-medium transition-colors relative group",
                       sidebarCollapsed 
@@ -1069,7 +1069,7 @@ export default function LoadOpsDashboard() {
                       !sidebarCollapsed && "mr-3"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
-                  </a>
+                  </Link>
                 </li>
               );
             })}
@@ -1084,12 +1084,12 @@ export default function LoadOpsDashboard() {
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
             {navigation.filter(item => item.section === "drivers").map((item) => {
               const Icon = item.icon;
-              const isActive = window.location.pathname === item.href;
+              const isActive = location === item.href;
               
               return (
                 <li key={item.name}>
-                  <a
-                    href={item.href}
+                  <Link
+                    to={item.href}
                     className={cn(
                       "flex items-center py-3 text-sm font-medium transition-colors relative group",
                       sidebarCollapsed 
@@ -1106,7 +1106,7 @@ export default function LoadOpsDashboard() {
                       !sidebarCollapsed && "mr-3"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
-                  </a>
+                  </Link>
                 </li>
               );
             })}
@@ -1121,12 +1121,12 @@ export default function LoadOpsDashboard() {
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
             {navigation.filter(item => item.section === "comm").map((item) => {
               const Icon = item.icon;
-              const isActive = window.location.pathname === item.href;
+              const isActive = location === item.href;
               
               return (
                 <li key={item.name}>
-                  <a
-                    href={item.href}
+                  <Link
+                    to={item.href}
                     className={cn(
                       "flex items-center py-3 text-sm font-medium transition-colors relative group",
                       sidebarCollapsed 
@@ -1143,7 +1143,7 @@ export default function LoadOpsDashboard() {
                       !sidebarCollapsed && "mr-3"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
-                  </a>
+                  </Link>
                 </li>
               );
             })}
@@ -1158,12 +1158,12 @@ export default function LoadOpsDashboard() {
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
             {navigation.filter(item => item.section === "smart").map((item) => {
               const Icon = item.icon;
-              const isActive = window.location.pathname === item.href;
+              const isActive = location === item.href;
               
               return (
                 <li key={item.name}>
-                  <a
-                    href={item.href}
+                  <Link
+                    to={item.href}
                     className={cn(
                       "flex items-center py-3 text-sm font-medium transition-colors relative group",
                       sidebarCollapsed 
@@ -1180,7 +1180,7 @@ export default function LoadOpsDashboard() {
                       !sidebarCollapsed && "mr-3"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
-                  </a>
+                  </Link>
                 </li>
               );
             })}
@@ -1195,12 +1195,12 @@ export default function LoadOpsDashboard() {
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
             {navigation.filter(item => item.section === "system").map((item) => {
               const Icon = item.icon;
-              const isActive = window.location.pathname === item.href;
+              const isActive = location === item.href;
               
               return (
                 <li key={item.name}>
-                  <a
-                    href={item.href}
+                  <Link
+                    to={item.href}
                     className={cn(
                       "flex items-center py-3 text-sm font-medium transition-colors relative group",
                       sidebarCollapsed 
@@ -1217,7 +1217,7 @@ export default function LoadOpsDashboard() {
                       !sidebarCollapsed && "mr-3"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
-                  </a>
+                  </Link>
                 </li>
               );
             })}
@@ -1227,32 +1227,34 @@ export default function LoadOpsDashboard() {
 
       {/* Main Content */}
       <div className={cn("flex-1 flex flex-col", sidebarCollapsed ? "ml-16" : "ml-64")}>
-        {/* Top Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Finance Performance for Company</h1>
-              <p className="text-sm text-gray-500">Aug 19, 2025 - Aug 19, 2025</p>
+        {/* Top Header - Only show on dashboard */}
+        {(location === '/' || location === '/loadops-dashboard') && (
+          <header className="bg-white border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900">Finance Performance for Company</h1>
+                <p className="text-sm text-gray-500">Aug 19, 2025 - Aug 19, 2025</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Button variant="outline" size="sm" data-testid="button-quick-reminder">
+                  Quick Reminder
+                </Button>
+                <Button variant="outline" size="sm" data-testid="button-last-revenue">
+                  Last Revenue
+                </Button>
+                <Button size="sm" data-testid="button-actual">
+                  Actual
+                </Button>
+                <Button variant="outline" size="sm" data-testid="button-projected">
+                  Projected
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <Button variant="outline" size="sm" data-testid="button-quick-reminder">
-                Quick Reminder
-              </Button>
-              <Button variant="outline" size="sm" data-testid="button-last-revenue">
-                Last Revenue
-              </Button>
-              <Button size="sm" data-testid="button-actual">
-                Actual
-              </Button>
-              <Button variant="outline" size="sm" data-testid="button-projected">
-                Projected
-              </Button>
-            </div>
-          </div>
-        </header>
+          </header>
+        )}
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className={cn("flex-1 overflow-auto", (location === '/' || location === '/loadops-dashboard') ? "p-6" : "")}>
           {renderContent()}
         </main>
       </div>
