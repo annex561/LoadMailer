@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle, Trash2, AlertTriangle, UserPlus, BarChart3 } from "lucide-react";
+import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle, Trash2, AlertTriangle, UserPlus, BarChart3, Search, Filter } from "lucide-react";
 import type { Driver, OnboardingToken } from "@shared/schema";
 import { EQUIPMENT_TYPES } from "@shared/equipment-types";
 import { apiRequest } from "@/lib/queryClient";
@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -60,6 +62,8 @@ export default function DriverManagement() {
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
   const [performanceDriver, setPerformanceDriver] = useState<Driver | null>(null);
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "available" | "on_route" | "unavailable">("all");
   const { toast } = useToast();
 
   const telegramForm = useForm<SMSDriverForm>({
@@ -314,6 +318,28 @@ export default function DriverManagement() {
 
   const onboardedDrivers = drivers.filter(driver => driver.isOnboarded);
   const activeDrivers = onboardedDrivers.filter(driver => driver.status === "available" || driver.status === "on_route");
+  
+  // Filter and search logic
+  const filteredDrivers = onboardedDrivers.filter(driver => {
+    // Status filter
+    if (statusFilter !== "all" && driver.status !== statusFilter) {
+      return false;
+    }
+    
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        driver.name.toLowerCase().includes(query) ||
+        driver.email?.toLowerCase().includes(query) ||
+        driver.phone?.toLowerCase().includes(query) ||
+        driver.city?.toLowerCase().includes(query) ||
+        driver.equipmentType?.toLowerCase().includes(query)
+      );
+    }
+    
+    return true;
+  });
 
   if (driversLoading || tokensLoading) {
     return (
@@ -332,516 +358,38 @@ export default function DriverManagement() {
   }
 
   return (
-    <div className="p-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Total Drivers</p>
-                <p className="text-3xl font-bold text-gray-900">{onboardedDrivers.length}</p>
-              </div>
-              <div className="w-12 h-12 bg-primary bg-opacity-10 rounded-lg flex items-center justify-center">
-                <Users className="text-primary w-6 h-6" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Active Drivers</p>
-                <p className="text-3xl font-bold text-gray-900">{activeDrivers.length}</p>
-              </div>
-              <div className="w-12 h-12 bg-success bg-opacity-10 rounded-lg flex items-center justify-center">
-                <MapPin className="text-success w-6 h-6" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Pending Invites</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {onboardingTokens.filter(token => !token.isUsed && new Date(token.expiresAt) > new Date()).length}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-warning bg-opacity-10 rounded-lg flex items-center justify-center">
-                <Clock className="text-warning w-6 h-6" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Current Drivers */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-primary" />
-                  Current Drivers
-                </CardTitle>
-                <p className="text-sm text-gray-500">Manage your active driver fleet</p>
-              </div>
-              <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
-                <DialogTrigger asChild>
-                  <Button className="bg-primary text-white hover:bg-blue-700" data-testid="button-invite-driver">
-                    <Plus className="mr-2 w-4 h-4" />
-                    Invite Driver
-                  </Button>
-                </DialogTrigger>
-                <DialogContent data-testid="invite-driver-modal" className="bg-white border border-gray-300 shadow-lg">
-                  <DialogHeader>
-                    <DialogTitle>Invite New Driver</DialogTitle>
-                    <p className="text-sm text-gray-500">Send an onboarding link via email</p>
-                  </DialogHeader>
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit((data) => createInviteMutation.mutate(data))} className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Driver Email</FormLabel>
-                            <FormControl>
-                              <Input 
-                                {...field} 
-                                type="email"
-                                placeholder="driver@example.com"
-                                className="bg-white border border-gray-300"
-                                data-testid="input-invite-email"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="flex justify-end space-x-4">
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          className="bg-white border border-gray-300"
-                          onClick={() => setShowInviteModal(false)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          type="submit" 
-                          disabled={createInviteMutation.isPending}
-                          className="bg-primary text-white hover:bg-blue-700"
-                          data-testid="button-send-invite"
-                        >
-                          {createInviteMutation.isPending ? "Creating..." : "Create Invite"}
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {onboardedDrivers.map((driver) => (
-                <div 
-                  key={driver.id} 
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
-                  data-testid={`driver-item-${driver.id}`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-primary bg-opacity-10 rounded-full flex items-center justify-center">
-                      <Users className="text-primary w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-gray-900">{driver.name}</h4>
-                          <p className="text-sm text-gray-500">{driver.email}</p>
-                          <p className="text-sm text-gray-500">{driver.phone}</p>
-                        </div>
-                        {/* Health Score Speedometer */}
-                        <div className="ml-4">
-                          <HealthScoreSpeedometer 
-                            score={calculateHealthScore({
-                              averageRating: driver.averageRating || 0,
-                              onTimeDeliveries: driver.onTimeDeliveries || 0,
-                              lateDeliveries: driver.lateDeliveries || 0,
-                              completedLoads: driver.completedLoads || 0,
-                              cancelledLoads: driver.cancelledLoads || 0,
-                              currentStreak: driver.currentStreak || 0,
-                              safetyScore: driver.safetyScore || 100,
-                              maintenanceScore: 100, // Default maintenance score
-                              totalLoads: driver.totalLoads || 0
-                            })}
-                            size="sm"
-                            showLabel={true}
-                            driverName={driver.name}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {getDriverStatusBadge(driver)}
-                    <Button variant="ghost" size="sm" title="View Location">
-                      <MapPin className="w-4 h-4 text-blue-600" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      title="View Performance"
-                      onClick={() => {
-                        setPerformanceDriver(driver);
-                        setShowPerformanceModal(true);
-                      }}
-                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                      data-testid={`button-performance-${driver.id}`}
-                    >
-                      <BarChart3 className="w-4 h-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          title="Remove Driver"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          data-testid={`button-delete-driver-${driver.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-white border border-gray-300 shadow-lg">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="w-5 h-5 text-red-600" />
-                            Remove Driver
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to remove <strong>{driver.name}</strong> from your fleet? 
-                            This action cannot be undone and will:
-                            <ul className="list-disc list-inside mt-2 space-y-1">
-                              <li>Remove the driver from all future load offers</li>
-                              <li>Delete their profile and contact information</li>
-                              <li>Remove access to the driver portal</li>
-                            </ul>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="bg-white border border-gray-300">
-                            Cancel
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteDriverMutation.mutate(driver.id)}
-                            disabled={deleteDriverMutation.isPending}
-                            className="bg-red-600 text-white hover:bg-red-700"
-                            data-testid={`button-confirm-delete-${driver.id}`}
-                          >
-                            {deleteDriverMutation.isPending ? "Removing..." : "Remove Driver"}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              ))}
-              
-              {onboardedDrivers.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  No drivers onboarded yet. Send your first invitation to get started.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Add New Drivers */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-green-600" />
-                  Add New Drivers
-                </CardTitle>
-                <p className="text-sm text-gray-500">Invite drivers via email or SMS</p>
-              </div>
-              <Dialog open={showSMSModal} onOpenChange={setShowSMSModal}>
-                <DialogTrigger asChild>
-                  <Button className="bg-green-600 text-white hover:bg-green-700" data-testid="button-create-driver-sms">
-                    <MessageCircle className="mr-2 w-4 h-4" />
-                    Send SMS Link
-                  </Button>
-                </DialogTrigger>
-                <DialogContent data-testid="create-driver-sms-modal" className="bg-white border border-gray-300 shadow-lg">
-                  <DialogHeader>
-                    <DialogTitle>Create Driver via SMS</DialogTitle>
-                    <p className="text-sm text-gray-500">Send an onboarding link via text message</p>
-                  </DialogHeader>
-                  <Form {...smsForm}>
-                    <form onSubmit={smsForm.handleSubmit((data) => createSMSInviteMutation.mutate(data))} className="space-y-4">
-                      <FormField
-                        control={smsForm.control}
-                        name="phone"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Driver Phone Number</FormLabel>
-                            <FormControl>
-                              <Input 
-                                {...field} 
-                                type="tel"
-                                placeholder="+1 (555) 123-4567"
-                                className="bg-white border border-gray-300"
-                                data-testid="input-driver-phone"
-                              />
-                            </FormControl>
-                            <p className="text-xs text-amber-600 mt-1">
-                              📱 For trial accounts, this number must be verified in your Twilio console first
-                            </p>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={smsForm.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Driver Email</FormLabel>
-                            <FormControl>
-                              <Input 
-                                {...field} 
-                                type="email"
-                                placeholder="driver@example.com"
-                                className="bg-white border border-gray-300"
-                                data-testid="input-driver-email-sms"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="bg-blue-50 p-4 rounded-lg">
-                        <div className="flex items-start space-x-3">
-                          <MessageCircle className="text-blue-600 w-5 h-5 mt-0.5" />
-                          <div>
-                            <h4 className="font-medium text-blue-800">SMS Invitation</h4>
-                            <p className="text-sm text-blue-700 mt-1">
-                              The driver will receive a text message with a secure onboarding link. Once they complete registration, they'll be automatically added to your fleet.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
-                        <div className="flex items-start space-x-3">
-                          <AlertTriangle className="text-red-600 w-5 h-5 mt-0.5" />
-                          <div>
-                            <h4 className="font-medium text-red-800">🚨 ERROR 30034: CARRIER REJECTION</h4>
-                            <p className="text-sm text-red-700 mt-1">
-                              <strong>Your Twilio trial account can only send SMS to verified numbers.</strong><br/>
-                              1. Go to <a href="https://console.twilio.com/us1/develop/phone-numbers/manage/verified" target="_blank" className="underline font-medium">Twilio Console → Verified Numbers</a><br/>
-                              2. Click "Add a new number" and verify YOUR actual phone number<br/>
-                              3. Then test SMS with your verified number
-                            </p>
-                            <div className="mt-2 p-2 bg-red-100 rounded text-xs text-red-800">
-                              <strong>Why SMS shows "Success" but doesn't arrive:</strong> Twilio accepts the message but silently drops it for unverified numbers on trial accounts.
-                            </div>
-                            <div className="mt-2">
-                              <a href="/sms-status" target="_blank" className="text-blue-600 underline text-sm">
-                                📱 Check SMS Delivery Status
-                              </a>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex justify-end space-x-4">
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          className="bg-white border border-gray-300"
-                          onClick={() => setShowSMSModal(false)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          type="submit" 
-                          disabled={createSMSInviteMutation.isPending}
-                          className="bg-green-600 text-white hover:bg-green-700"
-                          data-testid="button-send-sms-invite"
-                        >
-                          {createSMSInviteMutation.isPending ? "Sending..." : "Send SMS Invite"}
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Email Invitation Option */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Send className="text-blue-600 w-5 h-5" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">Email Invitation</h4>
-                    <p className="text-sm text-gray-500 mb-3">
-                      Send a secure onboarding link via email
-                    </p>
-                    <Button 
-                      onClick={() => setShowInviteModal(true)}
-                      className="bg-primary text-white hover:bg-blue-700"
-                      size="sm"
-                      data-testid="button-email-invite"
-                    >
-                      <Send className="mr-2 w-4 h-4" />
-                      Send Email Invite
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* SMS Invitation Option */}
-              <div className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <MessageCircle className="text-green-600 w-5 h-5" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-900">SMS Invitation</h4>
-                    <p className="text-sm text-gray-500 mb-3">
-                      Send instant text message with onboarding link
-                    </p>
-                    <Button 
-                      onClick={() => setShowSMSModal(true)}
-                      className="bg-green-600 text-white hover:bg-green-700"
-                      size="sm"
-                      data-testid="button-sms-invite"
-                    >
-                      <MessageCircle className="mr-2 w-4 h-4" />
-                      Send SMS Invite
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <AlertTriangle className="text-amber-600 w-5 h-5 mt-0.5" />
-                  <div>
-                    <h4 className="font-medium text-amber-800">Important</h4>
-                    <p className="text-sm text-amber-700 mt-1">
-                      Both methods create secure onboarding links that expire in 7 days. Drivers complete their profile and start receiving load offers automatically.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Pending Invitations */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-warning" />
-              Pending Invitations
-            </CardTitle>
-            <p className="text-sm text-gray-500">Track sent onboarding invites</p>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {onboardingTokens.map((token) => (
-                <div 
-                  key={token.id} 
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
-                  data-testid={`token-item-${token.id}`}
-                >
-                  <div>
-                    <h4 className="font-medium text-gray-900">{token.email}</h4>
-                    <p className="text-sm text-gray-500">
-                      Expires: {new Date(token.expiresAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {getTokenStatusBadge(token)}
-                    {!token.isUsed && new Date(token.expiresAt) > new Date() && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => copyInviteLink(token.token)}
-                        title="Copy Invite Link"
-                        data-testid={`button-copy-${token.id}`}
-                      >
-                        <Copy className={`w-4 h-4 ${copiedToken === token.token ? 'text-success' : 'text-gray-600'}`} />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-              
-              {onboardingTokens.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  No pending invitations. Click "Invite Driver" to send your first invite.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Manual Driver Onboarding */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <UserPlus className="w-5 h-5 text-blue-600" />
-                  Manual Onboarding
-                </CardTitle>
-                <p className="text-sm text-gray-500">Add drivers directly without sending invitations</p>
-              </div>
-              <Dialog open={showManualOnboardingModal} onOpenChange={setShowManualOnboardingModal}>
-                <DialogTrigger asChild>
-                  <Button className="bg-blue-600 text-white hover:bg-blue-700" data-testid="button-manual-onboard">
-                    <UserPlus className="mr-2 w-4 h-4" />
-                    Add Driver
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-white border border-gray-300 shadow-lg max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="manual-onboard-modal">
-                  <DialogHeader>
-                    <DialogTitle>Manual Driver Onboarding</DialogTitle>
-                    <DialogDescription>
-                      Create a driver profile directly without sending an invitation. The driver will be immediately available for load assignments.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <Form {...manualForm}>
-                    <form onSubmit={manualForm.handleSubmit(
-                      (data) => {
-                        console.log('Form submission data:', data);
-                        createManualDriverMutation.mutate(data);
-                      },
-                      (errors) => {
-                        console.log('Form validation errors:', errors);
-                        toast({
-                          title: "Form Validation Error",
-                          description: "Please check all required fields are filled correctly",
-                          variant: "destructive",
-                        });
-                      }
-                    )} className="space-y-6">
-                      {/* Personal Information */}
+    <div className="p-8 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900" data-testid="heading-driver-management">
+              Driver Management
+            </h1>
+            <p className="text-gray-500 mt-1" data-testid="text-driver-count">
+              {filteredDrivers.length} of {onboardedDrivers.length} drivers
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Dialog open={showManualOnboardingModal} onOpenChange={setShowManualOnboardingModal}>
+              <DialogTrigger asChild>
+                <Button className="bg-teal-600 text-white hover:bg-teal-700" data-testid="button-add-driver">
+                  <UserPlus className="mr-2 w-4 h-4" />
+                  Add Driver
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-white border border-gray-300 shadow-lg max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="manual-onboarding-modal">
+                <DialogHeader>
+                  <DialogTitle>Add Driver Manually</DialogTitle>
+                  <DialogDescription>
+                    Manually create a driver profile when you have all necessary information ready
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...manualForm}>
+                  <form onSubmit={manualForm.handleSubmit((data) => createManualDriverMutation.mutate(data))} className="space-y-6">
+                    {/* Basic Information */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={manualForm.control}
@@ -863,17 +411,17 @@ export default function DriverManagement() {
                         />
                         <FormField
                           control={manualForm.control}
-                          name="email"
+                          name="phone"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Email Address *</FormLabel>
+                              <FormLabel>Phone Number *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
-                                  type="email"
-                                  placeholder="john@example.com"
+                                  type="tel"
+                                  placeholder="+1 (555) 123-4567"
                                   className="bg-white border border-gray-300"
-                                  data-testid="input-manual-email"
+                                  data-testid="input-manual-phone"
                                 />
                               </FormControl>
                               <FormMessage />
@@ -881,27 +429,30 @@ export default function DriverManagement() {
                           )}
                         />
                       </div>
-
                       <FormField
                         control={manualForm.control}
-                        name="phone"
+                        name="email"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Phone Number *</FormLabel>
+                            <FormLabel>Email Address *</FormLabel>
                             <FormControl>
                               <Input 
                                 {...field} 
-                                placeholder="(555) 123-4567"
+                                type="email"
+                                placeholder="driver@example.com"
                                 className="bg-white border border-gray-300"
-                                data-testid="input-manual-phone"
+                                data-testid="input-manual-email"
                               />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
+                    </div>
 
-                      {/* License Information */}
+                    {/* License Information */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-gray-900">License Information</h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={manualForm.control}
@@ -912,7 +463,7 @@ export default function DriverManagement() {
                               <FormControl>
                                 <Input 
                                   {...field} 
-                                  placeholder="ABC123456"
+                                  placeholder="DL123456"
                                   className="bg-white border border-gray-300"
                                   data-testid="input-manual-license"
                                 />
@@ -930,9 +481,9 @@ export default function DriverManagement() {
                               <FormControl>
                                 <Input 
                                   {...field} 
-                                  placeholder="CA"
+                                  placeholder="GA"
                                   className="bg-white border border-gray-300"
-                                  data-testid="input-manual-state"
+                                  data-testid="input-manual-license-state"
                                 />
                               </FormControl>
                               <FormMessage />
@@ -958,8 +509,11 @@ export default function DriverManagement() {
                           )}
                         />
                       </div>
+                    </div>
 
-                      {/* Equipment & Capacity */}
+                    {/* Equipment & Capacity */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Equipment & Capacity</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={manualForm.control}
@@ -1008,7 +562,6 @@ export default function DriverManagement() {
                           )}
                         />
                       </div>
-
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={manualForm.control}
@@ -1059,8 +612,11 @@ export default function DriverManagement() {
                           )}
                         />
                       </div>
+                    </div>
 
-                      {/* Location */}
+                    {/* Location */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Location</h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={manualForm.control}
@@ -1117,8 +673,11 @@ export default function DriverManagement() {
                           )}
                         />
                       </div>
+                    </div>
 
-                      {/* Vehicle Information */}
+                    {/* Vehicle Information */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Vehicle Information</h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={manualForm.control}
@@ -1175,46 +734,429 @@ export default function DriverManagement() {
                           )}
                         />
                       </div>
+                    </div>
 
-                      <div className="flex justify-end space-x-4 pt-4">
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          className="bg-white border border-gray-300"
-                          onClick={() => setShowManualOnboardingModal(false)}
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          type="submit" 
-                          disabled={createManualDriverMutation.isPending}
-                          className="bg-blue-600 text-white hover:bg-blue-700"
-                          data-testid="button-create-manual-driver"
-                        >
-                          {createManualDriverMutation.isPending ? "Creating Driver..." : "Create Driver"}
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-8 text-gray-600">
-              <UserPlus className="w-12 h-12 mx-auto text-blue-600 mb-4" />
-              <h3 className="text-lg font-medium mb-2">Quick Driver Addition</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Manually create driver profiles when you have all the necessary information ready. 
-                This skips the invitation process and immediately adds the driver to your fleet.
-              </p>
-              <p className="text-xs text-gray-400">
-                Best for drivers you've already verified and want to add quickly to the system.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+                    <div className="flex justify-end space-x-4 pt-4">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="bg-white border border-gray-300"
+                        onClick={() => setShowManualOnboardingModal(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={createManualDriverMutation.isPending}
+                        className="bg-teal-600 text-white hover:bg-teal-700"
+                        data-testid="button-create-manual-driver"
+                      >
+                        {createManualDriverMutation.isPending ? "Creating Driver..." : "Create Driver"}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
       </div>
+
+      {/* Search and Filter Section */}
+      <Card className="mb-6">
+        <CardContent className="p-6">
+          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+            {/* Search Bar */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Input
+                type="text"
+                placeholder="Search drivers by name, email, phone, city, or equipment..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-white border-gray-300"
+                data-testid="input-search-drivers"
+              />
+            </div>
+            
+            {/* Status Filter Tabs */}
+            <Tabs value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)} className="w-full lg:w-auto">
+              <TabsList className="grid w-full lg:w-auto grid-cols-4 bg-gray-100" data-testid="tabs-status-filter">
+                <TabsTrigger value="all" className="data-[state=active]:bg-white" data-testid="tab-all">
+                  All
+                </TabsTrigger>
+                <TabsTrigger value="available" className="data-[state=active]:bg-white" data-testid="tab-available">
+                  Available
+                </TabsTrigger>
+                <TabsTrigger value="on_route" className="data-[state=active]:bg-white" data-testid="tab-on-route">
+                  On Route
+                </TabsTrigger>
+                <TabsTrigger value="unavailable" className="data-[state=active]:bg-white" data-testid="tab-unavailable">
+                  Unavailable
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Drivers Table */}
+      <Card>
+        <CardContent className="p-0">
+          {filteredDrivers.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No drivers found</h3>
+              <p className="text-sm">
+                {searchQuery || statusFilter !== "all" 
+                  ? "Try adjusting your search or filter criteria"
+                  : "Add your first driver to get started"}
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50 hover:bg-gray-50">
+                  <TableHead className="font-semibold text-gray-700">Driver</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Contact</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Equipment & Location</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Status</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Health</TableHead>
+                  <TableHead className="font-semibold text-gray-700 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDrivers.map((driver) => (
+                  <TableRow key={driver.id} className="hover:bg-gray-50" data-testid={`driver-row-${driver.id}`}>
+                    {/* Driver Column */}
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
+                          <Users className="text-teal-600 w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900" data-testid={`text-driver-name-${driver.id}`}>
+                            {driver.name}
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+
+                    {/* Contact Column */}
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="text-sm text-gray-600" data-testid={`text-driver-email-${driver.id}`}>
+                          {driver.email}
+                        </div>
+                        <div className="text-sm text-gray-500" data-testid={`text-driver-phone-${driver.id}`}>
+                          {driver.phone}
+                        </div>
+                      </div>
+                    </TableCell>
+
+                    {/* Equipment & Location Column */}
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium text-gray-900" data-testid={`text-driver-equipment-${driver.id}`}>
+                          {driver.equipmentType || "Not specified"}
+                        </div>
+                        <div className="text-sm text-gray-500 flex items-center gap-1" data-testid={`text-driver-location-${driver.id}`}>
+                          <MapPin className="w-3 h-3" />
+                          {driver.city}, {driver.state}
+                        </div>
+                      </div>
+                    </TableCell>
+
+                    {/* Status Column */}
+                    <TableCell data-testid={`status-driver-${driver.id}`}>
+                      {getDriverStatusBadge(driver)}
+                    </TableCell>
+
+                    {/* Health Column */}
+                    <TableCell>
+                      <HealthScoreSpeedometer 
+                        score={calculateHealthScore({
+                          averageRating: driver.averageRating || 0,
+                          onTimeDeliveries: driver.onTimeDeliveries || 0,
+                          lateDeliveries: driver.lateDeliveries || 0,
+                          completedLoads: driver.completedLoads || 0,
+                          cancelledLoads: driver.cancelledLoads || 0,
+                          currentStreak: driver.currentStreak || 0,
+                          safetyScore: driver.safetyScore || 100,
+                          maintenanceScore: 100,
+                          totalLoads: driver.totalLoads || 0
+                        })}
+                        size="sm"
+                        showLabel={true}
+                        driverName={driver.name}
+                      />
+                    </TableCell>
+
+                    {/* Actions Column */}
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          title="View Performance"
+                          onClick={() => {
+                            setPerformanceDriver(driver);
+                            setShowPerformanceModal(true);
+                          }}
+                          className="text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                          data-testid={`button-performance-${driver.id}`}
+                        >
+                          <BarChart3 className="w-4 h-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Remove Driver"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              data-testid={`button-delete-driver-${driver.id}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="bg-white border border-gray-300 shadow-lg">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5 text-red-600" />
+                                Remove Driver
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to remove <strong>{driver.name}</strong> from your fleet? 
+                                This action cannot be undone and will:
+                                <ul className="list-disc list-inside mt-2 space-y-1">
+                                  <li>Remove the driver from all future load offers</li>
+                                  <li>Delete their profile and contact information</li>
+                                  <li>Remove access to the driver portal</li>
+                                </ul>
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="bg-white border border-gray-300">
+                                Cancel
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteDriverMutation.mutate(driver.id)}
+                                disabled={deleteDriverMutation.isPending}
+                                className="bg-red-600 text-white hover:bg-red-700"
+                                data-testid={`button-confirm-delete-${driver.id}`}
+                              >
+                                {deleteDriverMutation.isPending ? "Removing..." : "Remove Driver"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Invite Driver Modal */}
+      <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
+        <DialogContent data-testid="invite-driver-modal" className="bg-white border border-gray-300 shadow-lg">
+          <DialogHeader>
+            <DialogTitle>Invite New Driver</DialogTitle>
+            <DialogDescription>
+              Send an onboarding link via email
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit((data) => createInviteMutation.mutate(data))} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Driver Email</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type="email"
+                        placeholder="driver@example.com"
+                        className="bg-white border border-gray-300"
+                        data-testid="input-invite-email"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end space-x-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="bg-white border border-gray-300"
+                  onClick={() => setShowInviteModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createInviteMutation.isPending}
+                  className="bg-primary text-white hover:bg-blue-700"
+                  data-testid="button-send-invite"
+                >
+                  {createInviteMutation.isPending ? "Creating..." : "Create Invite"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* SMS Driver Modal */}
+      <Dialog open={showSMSModal} onOpenChange={setShowSMSModal}>
+        <DialogContent data-testid="create-driver-sms-modal" className="bg-white border border-gray-300 shadow-lg">
+          <DialogHeader>
+            <DialogTitle>Create Driver via SMS</DialogTitle>
+            <DialogDescription>
+              Send an onboarding link via text message
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...smsForm}>
+            <form onSubmit={smsForm.handleSubmit((data) => createSMSInviteMutation.mutate(data))} className="space-y-4">
+              <FormField
+                control={smsForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Driver Phone Number</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type="tel"
+                        placeholder="+1 (555) 123-4567"
+                        className="bg-white border border-gray-300"
+                        data-testid="input-driver-phone"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={smsForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Driver Email</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type="email"
+                        placeholder="driver@example.com"
+                        className="bg-white border border-gray-300"
+                        data-testid="input-driver-email-sms"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end space-x-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="bg-white border border-gray-300"
+                  onClick={() => setShowSMSModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createSMSInviteMutation.isPending}
+                  className="bg-green-600 text-white hover:bg-green-700"
+                  data-testid="button-send-sms-invite"
+                >
+                  {createSMSInviteMutation.isPending ? "Sending..." : "Send SMS Invite"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Telegram Driver Modal */}
+      <Dialog open={showTelegramModal} onOpenChange={setShowTelegramModal}>
+        <DialogContent data-testid="create-driver-telegram-modal" className="bg-white border border-gray-300 shadow-lg">
+          <DialogHeader>
+            <DialogTitle>Create Driver via Telegram</DialogTitle>
+            <DialogDescription>
+              Send an onboarding link via Telegram
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...telegramForm}>
+            <form onSubmit={telegramForm.handleSubmit((data) => createTelegramInviteMutation.mutate(data))} className="space-y-4">
+              <FormField
+                control={telegramForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Driver Phone Number</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type="tel"
+                        placeholder="+1 (555) 123-4567"
+                        className="bg-white border border-gray-300"
+                        data-testid="input-driver-phone-telegram"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={telegramForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Driver Email</FormLabel>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type="email"
+                        placeholder="driver@example.com"
+                        className="bg-white border border-gray-300"
+                        data-testid="input-driver-email-telegram"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end space-x-4">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="bg-white border border-gray-300"
+                  onClick={() => setShowTelegramModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createTelegramInviteMutation.isPending}
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                  data-testid="button-send-telegram-invite"
+                >
+                  {createTelegramInviteMutation.isPending ? "Sending..." : "Send Telegram Invite"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Performance Modal */}
       <DriverPerformanceModal
