@@ -625,11 +625,8 @@ export default function MobileDriverDashboard() {
 
   // Pull-to-refresh handlers
   const handlePullStart = (e: React.TouchEvent | React.PointerEvent) => {
-    const container = pullContainerRef.current;
-    if (!container) return;
-    
-    // Only start pull if we're at the top of the scroll container
-    if (container.scrollTop === 0) {
+    // Only start pull if we're at the top of the page
+    if (window.scrollY === 0) {
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
       pullStartY.current = clientY;
       setIsPulling(true);
@@ -638,6 +635,11 @@ export default function MobileDriverDashboard() {
 
   const handlePullMove = (e: React.TouchEvent | React.PointerEvent) => {
     if (!isPulling || isRefreshing) return;
+    
+    // Prevent default scrolling while pulling
+    if (window.scrollY === 0) {
+      e.preventDefault();
+    }
     
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     const distance = Math.max(0, clientY - pullStartY.current);
@@ -1399,9 +1401,9 @@ export default function MobileDriverDashboard() {
 
   // MESSAGES TAB
   const MessagesTab = () => (
-    <div className="flex flex-col h-[calc(100vh-80px)]">
+    <div className="flex flex-col min-h-screen">
       {!selectedThread ? (
-        <div className="space-y-2 p-4 overflow-y-auto pb-24">
+        <div className="space-y-2 p-4">
           <h2 className="text-xl font-bold mb-4">Messages</h2>
           {threads.map((thread) => (
             <div 
@@ -1480,9 +1482,9 @@ export default function MobileDriverDashboard() {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col min-h-screen">
           {/* Chat Header */}
-          <div className="bg-blue-600 text-white p-4 flex items-center gap-3 shadow-lg">
+          <div className="bg-blue-600 text-white p-4 flex items-center gap-3 shadow-lg sticky top-0 z-10">
             <Button
               variant="ghost"
               size="sm"
@@ -1503,7 +1505,7 @@ export default function MobileDriverDashboard() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          <div className="flex-1 p-4 space-y-3 bg-gray-50 min-h-[400px]">
             {selectedThread.messages?.map((message) => (
               <div
                 key={message.id}
@@ -2219,13 +2221,10 @@ export default function MobileDriverDashboard() {
       {/* Content with Pull-to-Refresh */}
       <div 
         ref={pullContainerRef}
-        className="max-w-2xl mx-auto overflow-y-auto h-screen"
+        className="max-w-2xl mx-auto pb-24"
         onTouchStart={handlePullStart}
         onTouchMove={handlePullMove}
         onTouchEnd={handlePullEnd}
-        onPointerDown={handlePullStart}
-        onPointerMove={handlePullMove}
-        onPointerUp={handlePullEnd}
         style={{
           transform: isPulling || isRefreshing ? `translateY(${pullDistance}px)` : 'translateY(0)',
           transition: isPulling ? 'none' : 'transform 0.3s ease-out'
