@@ -3242,8 +3242,8 @@ TRAQ IQ Dispatch Team
         return res.status(404).json({ error: 'Driver not found' });
       }
       
-      // Get or validate phone number
-      const phoneNumber = driver.phoneNumber || driver.phone;
+      // Get or validate phone number (handle both snake_case and camelCase)
+      const phoneNumber = driver.phoneNumber || driver.phone_number || driver.phone;
       if (!phoneNumber) {
         return res.status(400).json({ error: 'Driver has no phone number' });
       }
