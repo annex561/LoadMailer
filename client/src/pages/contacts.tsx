@@ -23,9 +23,8 @@ export default function Contacts() {
   // Mutation for sending individual dashboard link
   const sendDashboardLinkMutation = useMutation({
     mutationFn: async (driverId: string) => {
-      return apiRequest(`/api/drivers/${driverId}/send-dashboard-link`, {
-        method: 'POST'
-      });
+      const response = await apiRequest('POST', `/api/drivers/${driverId}/send-dashboard-link`);
+      return response.json();
     },
     onSuccess: (data: any) => {
       toast({
@@ -47,9 +46,8 @@ export default function Contacts() {
   // Mutation for bulk sending dashboard links
   const bulkSendDashboardLinksMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('/api/drivers/send-dashboard-links', {
-        method: 'POST'
-      });
+      const response = await apiRequest('POST', '/api/drivers/send-dashboard-links');
+      return response.json();
     },
     onSuccess: (data: any) => {
       toast({
