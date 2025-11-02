@@ -83,6 +83,49 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Updates
 
+## Smart Mobile Document Capture (November 2, 2025)
+**Added**: Intelligent document management system for mobile drivers with capture-first workflow, post-capture categorization, and robust editing capabilities.
+
+### Key Features
+1. **Capture-First Workflow**: Drivers take photos first, then select document type
+   - No pre-selection confusion - just tap "Take Photo" or "Choose File"
+   - Image preview shown in type selection modal
+   - Supports camera capture and gallery selection
+   
+2. **Smart Categorization Modal**: Post-capture document type selection
+   - Large, touch-friendly buttons for BOL, POD, Weight Ticket
+   - Image preview to verify photo quality before categorization
+   - Clear cancel option to retake photos
+   
+3. **Robust Edit Functionality**: Full document management capabilities
+   - Edit menu (⋮) on each document card
+   - Change document type if miscategorized
+   - Delete documents with confirmation dialog
+   - Real-time UI updates with toast notifications
+   
+4. **Security Implementation**: Comprehensive authentication and authorization
+   - Backend endpoints require `driverId` authentication
+   - Document ownership validation before mutations
+   - Unauthorized attempts logged with warnings
+   - Proper HTTP status codes (401 auth, 403 authz, 404 not found)
+
+### Technical Implementation
+- **Backend Endpoints** (`server/routes.ts`):
+  - `POST /api/documents/:documentId/recategorize` - Change document type with ownership validation
+  - `DELETE /api/documents/:documentId` - Delete document with ownership validation
+  
+- **Frontend** (`client/src/pages/mobile-driver-dashboard.tsx`):
+  - State: `pendingFile`, `showTypeModal`, `editingDocument`, `showDeleteConfirm`
+  - Modals: Type selection, edit type, delete confirmation
+  - Enhanced document cards with image previews and edit menus
+  - Teal branding for document section
+
+### Security Model
+- Authentication via `driverId` in request body
+- Backend validates driver existence and document ownership
+- Frontend guards against missing driverId
+- All mutations invalidate relevant queries for UI consistency
+
 ## Driver Onboarding Enhancement (October 30, 2025)
 **Changed**: Driver onboarding page now works with or without invitation tokens for maximum flexibility.
 
