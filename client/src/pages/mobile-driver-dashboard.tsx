@@ -121,6 +121,8 @@ export default function MobileDriverDashboard() {
   const [selectedThread, setSelectedThread] = useState<CommunicationThread | null>(null);
   const [selectedDocType, setSelectedDocType] = useState<string>('bol');
   const [isRecording, setIsRecording] = useState(false);
+  const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   
   // Smart document workflow state
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -208,6 +210,19 @@ export default function MobileDriverDashboard() {
     refetchInterval: 5000
   });
 
+  // Fetch messages for selected thread
+  const { data: messages = [] } = useQuery({
+    queryKey: ['/api/communication/messages', selectedThread?.id],
+    queryFn: async () => {
+      if (!selectedThread?.id) return [];
+      const response = await fetch(`/api/communication/messages/${selectedThread.id}`);
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      return response.json();
+    },
+    enabled: !!selectedThread?.id,
+    refetchInterval: 3000
+  });
+
   // Fetch documents for current load
   const { data: documents = [] } = useQuery({
     queryKey: ['/api/loads', currentLoad?.id, 'documents'],
@@ -273,13 +288,33 @@ export default function MobileDriverDashboard() {
       if (!res.ok) throw new Error('Failed to send message');
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       setMessageInput('');
+      setShowAISuggestions(false);
+      setAiSuggestions([]);
       queryClient.invalidateQueries({ queryKey: ['/api/communication/threads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/communication/messages', variables.threadId] });
       toast({
         title: 'Message Sent',
         description: 'Your message has been sent to dispatch.'
       });
+    }
+  });
+
+  // AI message assistance mutation
+  const getAISuggestionsMutation = useMutation({
+    mutationFn: async ({ input, context }: { input: string; context?: string }) => {
+      const res = await fetch('/api/ai/message-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input, context, driverId, loadId: currentLoad?.id })
+      });
+      if (!res.ok) throw new Error('Failed to get AI suggestions');
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setAiSuggestions(data.suggestions || []);
+      setShowAISuggestions(true);
     }
   });
 
@@ -1505,44 +1540,129 @@ export default function MobileDriverDashboard() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 p-4 space-y-3 bg-gray-50 min-h-[400px]">
-            {selectedThread.messages?.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex",
-                  message.sender === 'driver' ? "justify-end" : "justify-start"
-                )}
-              >
+          <div className="flex-1 p-4 space-y-3 bg-gray-50 min-h-[400px] overflow-y-auto">
+            {messages.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p>No messages yet. Start the conversation!</p>
+              </div>
+            ) : (
+              messages.map((message: any) => (
                 <div
+                  key={message.id}
                   className={cn(
-                    "max-w-[80%] rounded-2xl px-4 py-2",
-                    message.sender === 'driver'
-                      ? "bg-blue-600 text-white rounded-br-sm"
-                      : "bg-white text-gray-900 rounded-bl-sm shadow"
+                    "flex",
+                    message.senderRole === 'driver' ? "justify-end" : "justify-start"
                   )}
+                  data-testid={`message-${message.id}`}
                 >
-                  <div className="text-sm">{message.content}</div>
                   <div
                     className={cn(
-                      "text-xs mt-1",
-                      message.sender === 'driver' ? "text-blue-100" : "text-gray-500"
+                      "max-w-[80%] rounded-2xl px-4 py-2",
+                      message.senderRole === 'driver'
+                        ? "bg-blue-600 text-white rounded-br-sm"
+                        : "bg-white text-gray-900 rounded-bl-sm shadow"
                     )}
                   >
-                    {formatDate(message.timestamp)}
+                    <div className="text-sm">{message.textContent || message.content}</div>
+                    <div
+                      className={cn(
+                        "text-xs mt-1",
+                        message.senderRole === 'driver' ? "text-blue-100" : "text-gray-500"
+                      )}
+                    >
+                      {formatDate(message.createdAt)}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
-          {/* Message Input with Microphone */}
+          {/* AI Quick Suggestions Panel */}
+          {showAISuggestions && aiSuggestions.length > 0 && (
+            <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-t border-purple-200">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm font-semibold text-purple-900">AI Quick Messages</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAISuggestions(false)}
+                  className="h-6 w-6 p-0"
+                  data-testid="button-close-ai-suggestions"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {aiSuggestions.map((suggestion, index) => (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    className="w-full text-left justify-start h-auto py-3 px-4 bg-white hover:bg-purple-50 border-purple-200 text-sm"
+                    onClick={() => {
+                      setMessageInput(suggestion);
+                      setShowAISuggestions(false);
+                    }}
+                    data-testid={`button-ai-suggestion-${index}`}
+                  >
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Message Input with AI and Microphone */}
           <div className="p-4 bg-white border-t border-gray-200 pb-20">
+            {/* Quick Actions Row */}
+            <div className="flex gap-2 mb-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const context = currentLoad ? `Current load: ${currentLoad.loadNumber} from ${currentLoad.pickupCity} to ${currentLoad.deliveryCity}` : '';
+                  getAISuggestionsMutation.mutate({ 
+                    input: messageInput.trim() || "I need quick message suggestions for a driver", 
+                    context 
+                  });
+                }}
+                disabled={getAISuggestionsMutation.isPending}
+                className="flex-1 h-9 text-xs bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200 text-purple-700 hover:from-purple-100 hover:to-blue-100"
+                data-testid="button-ai-help"
+              >
+                <Zap className="h-3 w-3 mr-1" />
+                {getAISuggestionsMutation.isPending ? 'Thinking...' : 'AI Help'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMessageInput("Arrived at pickup location")}
+                className="flex-1 h-9 text-xs"
+                data-testid="button-quick-arrived"
+              >
+                At Pickup
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMessageInput("Running 15 minutes late")}
+                className="flex-1 h-9 text-xs"
+                data-testid="button-quick-late"
+              >
+                Running Late
+              </Button>
+            </div>
+
+            {/* Message Input Row */}
             <div className="flex items-center gap-2">
               <div className="flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2">
                 <Input
                   type="text"
-                  placeholder="Type a message..."
+                  placeholder="Type a message or use AI help..."
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -1564,7 +1684,7 @@ export default function MobileDriverDashboard() {
               </div>
               <Button
                 onClick={handleSendMessage}
-                disabled={!messageInput.trim()}
+                disabled={!messageInput.trim() || sendMessageMutation.isPending}
                 className="rounded-full h-12 w-12 p-0 bg-blue-600 hover:bg-blue-700"
                 data-testid="button-send-message"
               >

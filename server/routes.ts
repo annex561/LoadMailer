@@ -33,6 +33,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';
+import { generateMessageSuggestions, improveMessage } from './openai-helper';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -3446,6 +3447,50 @@ TRAQ IQ Dispatch Team
     } catch (error) {
       console.error('❌ Error sending message:', error);
       res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  // AI Message Suggestions endpoint
+  app.post('/api/ai/message-suggestions', async (req, res) => {
+    try {
+      const { input, context, driverId, loadId } = req.body;
+      
+      console.log(`🤖 Generating AI message suggestions for driver: ${driverId}`);
+      
+      // Build enhanced context
+      let enhancedContext = context || '';
+      
+      // Add load details if available
+      if (loadId) {
+        try {
+          const load = await storage.getLoad(loadId);
+          if (load) {
+            enhancedContext += `\nLoad: ${load.loadNumber} from ${load.pickupCity}, ${load.pickupState} to ${load.deliveryCity}, ${load.deliveryState}`;
+            if (load.status) {
+              enhancedContext += `\nCurrent Status: ${load.status}`;
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching load details:', err);
+        }
+      }
+      
+      const suggestions = await generateMessageSuggestions(input, enhancedContext);
+      
+      res.json({ 
+        success: true,
+        suggestions
+      });
+    } catch (error) {
+      console.error('❌ Error generating AI suggestions:', error);
+      res.status(500).json({ 
+        error: "Failed to generate AI suggestions",
+        suggestions: [
+          "Arrived at pickup location and ready to load.",
+          "Running about 15 minutes behind schedule due to traffic.",
+          "Load secured and heading to delivery location now."
+        ]
+      });
     }
   });
 
