@@ -63,6 +63,12 @@ Preferred communication style: Simple, everyday language.
     - **Mobile Optimizations**: Pull-to-refresh, swipe gestures, wake lock.
     - **GPS-Based Intelligent Status Buttons**: Context-aware load progression based on 0.5-mile proximity to pickup/delivery locations using Haversine formula and server-side geocoding. Includes manual fallback.
     - **Enhanced Hamburger Menu**: Profile Settings, Help & Support, Contact Dispatch, Logout.
+    - **AI-Powered Messaging**: ChatGPT-assisted message composition for drivers on the road.
+        - **Smart Suggestions**: Generates 3 context-aware message variations using driver/load information
+        - **Quick Messages**: Pre-built buttons for common updates ("At Pickup", "Running Late")
+        - **OpenAI Integration**: Uses GPT-5 via Replit AI Integrations (no API key required)
+        - **Message Enhancement**: Professional tone improvement while maintaining driver's intent
+        - **Context-Aware**: Includes load details and conversation history for relevance
 - **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized driver dashboard links with multi-layer security (authorization, rate limiting, batch size limits, audit logging).
     - **Security Layers**: 3-tier authorization, rate limiting (1/hour/IP), batch size limit (100 max), audit logging.
 
@@ -82,6 +88,49 @@ Preferred communication style: Simple, everyday language.
 - **Tailwind CSS**: Utility-first CSS framework.
 
 # Recent Updates
+
+## AI-Powered Driver Messaging (November 2, 2025)
+**Added**: Intelligent ChatGPT-powered message assistance to help drivers compose quick, professional messages while on the road.
+
+### Key Features
+1. **Smart Message Suggestions**: Drivers can get 3 AI-generated message variations with one tap
+   - Context-aware suggestions using driver name, load details, and conversation history
+   - Professional tone suitable for dispatch communication
+   - Optimized for trucking/logistics scenarios
+
+2. **Quick Action Buttons**: Pre-built message templates for common updates
+   - "At Pickup" - Instantly sends arrival confirmation
+   - "Running Late" - Quick delay notification
+   - "AI Help" - Triggers intelligent message generation
+
+3. **Blank Messages Bug Fix**: Resolved issue where messages appeared blank in mobile dashboard
+   - Added dedicated query to fetch messages from `/api/communication/messages/:threadId`
+   - Messages now load properly when thread is selected
+   - Cache invalidation ensures real-time updates after sending
+
+### Technical Implementation
+- **Backend** (`server/openai-helper.ts`):
+  - `generateMessageSuggestions()` - Generates 3 contextual message variations
+  - `improveMessage()` - Enhances user-typed messages for professionalism
+  - Uses OpenAI GPT-5 via Replit AI Integrations (no API key management required)
+  - Includes fallback suggestions for offline/error scenarios
+
+- **API Endpoint** (`server/routes.ts`):
+  - `POST /api/ai/message-suggestions` - Generates context-aware suggestions
+  - Parameters: `{ input, context, driverId, loadId }`
+  - Returns: `{ success: true, suggestions: string[] }`
+
+- **Frontend** (`client/src/pages/mobile-driver-dashboard.tsx`):
+  - AI Help button in Messages tab (visible when thread selected)
+  - Suggestions panel displays 3 clickable options
+  - Clicking suggestion populates message input
+  - Loading states and error handling with fallbacks
+
+### Impact
+- Drivers can compose professional messages quickly while on the road
+- Reduces typing on mobile devices during driving stops
+- Maintains consistent, professional communication with dispatch
+- AI adapts suggestions to current load and driver context
 
 ## Mobile Scrolling Performance Fix (November 2, 2025)
 **Fixed**: Resolved scrolling glitches in mobile driver dashboard that made it difficult to scroll up and down.
