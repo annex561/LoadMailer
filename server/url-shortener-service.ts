@@ -1,8 +1,8 @@
 /**
  * URL Shortening Service
  * 
- * Uses Shrtco.de free API for converting long URLs to short, professional links
- * No API key required, unlimited usage
+ * Uses TinyURL API for converting long URLs to short, professional links
+ * No API key required, reliable and works in all environments
  */
 
 interface ShortenResult {
@@ -14,10 +14,10 @@ interface ShortenResult {
 
 class URLShortenerService {
   private cache: Map<string, string> = new Map();
-  private readonly API_URL = 'https://api.shrtco.de/v2/shorten';
+  private readonly API_URL = 'https://tinyurl.com/api-create.php';
   
   /**
-   * Shorten a URL using Shrtco.de API
+   * Shorten a URL using TinyURL API
    */
   async shortenUrl(longUrl: string): Promise<ShortenResult> {
     // Check cache first
@@ -30,29 +30,28 @@ class URLShortenerService {
     }
 
     try {
-      // Call Shrtco.de API (no auth required!)
+      // Call TinyURL API (simple and reliable!)
       const response = await fetch(`${this.API_URL}?url=${encodeURIComponent(longUrl)}`);
       
       if (!response.ok) {
         throw new Error(`Shortening failed: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const shortUrl = await response.text();
       
-      if (!data.ok) {
-        throw new Error(data.error || 'URL shortening failed');
+      // Validate the shortened URL
+      if (!shortUrl || !shortUrl.startsWith('http')) {
+        throw new Error('Invalid shortened URL response');
       }
-
-      const shortUrl = data.result.full_short_link;
       
       // Cache the result
-      this.cache.set(longUrl, shortUrl);
+      this.cache.set(longUrl, shortUrl.trim());
       
-      console.log(`✅ URL shortened: ${longUrl.substring(0, 50)}... → ${shortUrl}`);
+      console.log(`✅ URL shortened: ${longUrl.substring(0, 50)}... → ${shortUrl.trim()}`);
       
       return {
         success: true,
-        shortUrl,
+        shortUrl: shortUrl.trim(),
         originalUrl: longUrl
       };
     } catch (error) {
