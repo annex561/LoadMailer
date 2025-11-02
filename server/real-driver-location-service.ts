@@ -374,9 +374,31 @@ export class RealDriverLocationService {
     }
   }
 
+  private findNearestCity(lat: number, lng: number): string {
+    // Find the nearest Tennessee city from our predefined locations
+    // This avoids calling the external geocoding API for simulated locations
+    let nearestCity = "Tennessee";
+    let minDistance = Infinity;
+
+    for (const location of TENNESSEE_LOCATIONS) {
+      // Calculate distance using Haversine formula (simplified)
+      const latDiff = lat - location.lat;
+      const lngDiff = lng - location.lng;
+      const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestCity = location.city;
+      }
+    }
+
+    return nearestCity;
+  }
+
   private async getAddressFromCoords(lat: number, lng: number): Promise<string> {
-    // Use the shared geocoding service for reverse geocoding
-    return await reverseGeocode(lat, lng);
+    // For simulated locations, use nearest city to avoid geocoding API timeouts
+    // This provides instant city/state information without external API calls
+    return this.findNearestCity(lat, lng);
   }
 
   private async refreshDriverStates(): Promise<void> {
