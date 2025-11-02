@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle, Trash2, AlertTriangle, UserPlus, BarChart3, Search, Filter } from "lucide-react";
+import { Plus, Send, Copy, MapPin, Users, Clock, CheckCircle, MessageCircle, Trash2, AlertTriangle, UserPlus, BarChart3, Search, Filter, ChevronUp, ChevronDown } from "lucide-react";
 import type { Driver, OnboardingToken } from "@shared/schema";
 import { EQUIPMENT_TYPES } from "@shared/equipment-types";
 import { apiRequest } from "@/lib/queryClient";
@@ -19,7 +19,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { DriverPerformanceModal } from "@/components/DriverPerformanceModal";
-import { HealthScoreSpeedometer, calculateHealthScore } from "@/components/ui/health-score-speedometer";
 
 const inviteDriverSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -64,6 +63,8 @@ export default function DriverManagement() {
   const [showPerformanceModal, setShowPerformanceModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "available" | "on_route" | "unavailable">("all");
+  const [sortKey, setSortKey] = useState<'name' | 'status' | 'equipment' | 'location' | 'createdAt'>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const { toast } = useToast();
 
   const telegramForm = useForm<SMSDriverForm>({
@@ -316,11 +317,60 @@ export default function DriverManagement() {
     });
   };
 
+  // Sort function
+  const getSortedDrivers = (drivers: Driver[]) => {
+    return [...drivers].sort((a, b) => {
+      let comparison = 0;
+      switch (sortKey) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'status':
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case 'equipment':
+          comparison = (a.equipmentType || '').localeCompare(b.equipmentType || '');
+          break;
+        case 'location':
+          comparison = (a.city || '').localeCompare(b.city || '');
+          break;
+        case 'createdAt':
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  };
+
+  // Health badge helper
+  const getHealthBadge = (driver: Driver) => {
+    const safetyScore = driver.safetyScore ?? 100;
+    const maintenanceScore = driver.maintenanceScore ?? 100;
+    const score = Math.round((safetyScore + maintenanceScore) / 2);
+    if (score >= 90) return { label: 'Excellent', color: 'bg-green-100 text-green-800' };
+    if (score >= 75) return { label: 'Good', color: 'bg-blue-100 text-blue-800' };
+    if (score >= 60) return { label: 'Fair', color: 'bg-yellow-100 text-yellow-800' };
+    return { label: 'Needs Attention', color: 'bg-red-100 text-red-800' };
+  };
+
+  // Handle column header click for sorting
+  const handleSort = (key: 'name' | 'status' | 'equipment' | 'location' | 'createdAt') => {
+    if (sortKey === key) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+  };
+
   const onboardedDrivers = drivers.filter(driver => driver.isOnboarded);
   const activeDrivers = onboardedDrivers.filter(driver => driver.status === "available" || driver.status === "on_route");
   
-  // Filter and search logic
-  const filteredDrivers = onboardedDrivers.filter(driver => {
+  // Sort drivers first, then filter and search
+  const sortedDrivers = getSortedDrivers(drivers);
+  
+  // Filter and search logic - using all drivers, not just onboarded
+  const filteredDrivers = sortedDrivers.filter(driver => {
     // Status filter
     if (statusFilter !== "all" && driver.status !== statusFilter) {
       return false;
@@ -367,7 +417,7 @@ export default function DriverManagement() {
               Driver Management
             </h1>
             <p className="text-gray-500 mt-1" data-testid="text-driver-count">
-              {filteredDrivers.length} of {onboardedDrivers.length} drivers
+              {filteredDrivers.length} of {drivers.length} drivers
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -817,11 +867,56 @@ export default function DriverManagement() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50 hover:bg-gray-50">
-                  <TableHead className="font-semibold text-gray-700">Driver</TableHead>
+                  <TableHead 
+                    className="font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" 
+                    onClick={() => handleSort('name')}
+                    data-testid="header-sort-name"
+                  >
+                    <div className="flex items-center gap-2">
+                      Driver
+                      {sortKey === 'name' && (
+                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                      )}
+                    </div>
+                  </TableHead>
                   <TableHead className="font-semibold text-gray-700">Contact</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Equipment & Location</TableHead>
-                  <TableHead className="font-semibold text-gray-700">Status</TableHead>
+                  <TableHead 
+                    className="font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" 
+                    onClick={() => handleSort('equipment')}
+                    data-testid="header-sort-equipment"
+                  >
+                    <div className="flex items-center gap-2">
+                      Equipment & Location
+                      {sortKey === 'equipment' && (
+                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" 
+                    onClick={() => handleSort('status')}
+                    data-testid="header-sort-status"
+                  >
+                    <div className="flex items-center gap-2">
+                      Status
+                      {sortKey === 'status' && (
+                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                      )}
+                    </div>
+                  </TableHead>
                   <TableHead className="font-semibold text-gray-700">Health</TableHead>
+                  <TableHead 
+                    className="font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" 
+                    onClick={() => handleSort('createdAt')}
+                    data-testid="header-sort-date-added"
+                  >
+                    <div className="flex items-center gap-2">
+                      Date Added
+                      {sortKey === 'createdAt' && (
+                        sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
+                      )}
+                    </div>
+                  </TableHead>
                   <TableHead className="font-semibold text-gray-700 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -873,23 +968,26 @@ export default function DriverManagement() {
                     </TableCell>
 
                     {/* Health Column */}
-                    <TableCell>
-                      <HealthScoreSpeedometer 
-                        score={calculateHealthScore({
-                          averageRating: driver.averageRating || 0,
-                          onTimeDeliveries: driver.onTimeDeliveries || 0,
-                          lateDeliveries: driver.lateDeliveries || 0,
-                          completedLoads: driver.completedLoads || 0,
-                          cancelledLoads: driver.cancelledLoads || 0,
-                          currentStreak: driver.currentStreak || 0,
-                          safetyScore: driver.safetyScore || 100,
-                          maintenanceScore: 100,
-                          totalLoads: driver.totalLoads || 0
+                    <TableCell data-testid={`health-driver-${driver.id}`}>
+                      {(() => {
+                        const healthBadge = getHealthBadge(driver);
+                        return (
+                          <Badge className={`${healthBadge.color} border-0`}>
+                            {healthBadge.label}
+                          </Badge>
+                        );
+                      })()}
+                    </TableCell>
+
+                    {/* Date Added Column */}
+                    <TableCell data-testid={`date-added-driver-${driver.id}`}>
+                      <div className="text-sm text-gray-600">
+                        {new Date(driver.createdAt).toLocaleDateString('en-US', { 
+                          year: 'numeric', 
+                          month: 'short', 
+                          day: 'numeric' 
                         })}
-                        size="sm"
-                        showLabel={true}
-                        driverName={driver.name}
-                      />
+                      </div>
                     </TableCell>
 
                     {/* Actions Column */}
