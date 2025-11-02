@@ -83,6 +83,38 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Updates
 
+## Mobile Scrolling Performance Fix (November 2, 2025)
+**Fixed**: Resolved scrolling glitches in mobile driver dashboard that made it difficult to scroll up and down.
+
+### Problem
+The driver dashboard had severe scrolling issues caused by:
+- Fixed viewport-height containers (`h-screen overflow-y-auto`) creating nested scroll contexts
+- Pull-to-refresh touch handlers interfering with normal scroll gestures
+- Messages tab enforcing its own viewport-sized container
+- Insufficient bottom padding causing content to hide behind fixed navigation
+
+### Solution
+1. **Natural Document Scrolling**: Removed fixed-height containers in favor of natural page flow
+   - Main container: Changed from `h-screen overflow-y-auto` to `pb-24` with natural height
+   - Messages tab: Changed from `h-[calc(100vh-80px)]` to `min-h-screen`
+   - Pull-to-refresh: Now uses `window.scrollY` instead of container scroll position
+
+2. **Optimized Touch Handlers**: 
+   - Pull-to-refresh only activates when `window.scrollY === 0`
+   - Added `preventDefault()` to prevent scroll conflicts during pull gesture
+   - No interference with normal scrolling behavior
+
+3. **Layout Improvements**:
+   - Bottom padding (96px) ensures content clears fixed bottom navigation (80px)
+   - Chat header in Messages tab is now sticky for better UX
+   - All tabs use consistent scrolling behavior
+
+### Impact
+- Smooth, native scrolling across all tabs (Home, Loads, Messages, Documents, Profile)
+- No scroll glitches or stuck scroll positions
+- Pull-to-refresh works reliably without blocking scroll
+- Better mobile UX with natural touch behavior
+
 ## Smart Mobile Document Capture (November 2, 2025)
 **Added**: Intelligent document management system for mobile drivers with capture-first workflow, post-capture categorization, and robust editing capabilities.
 
