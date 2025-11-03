@@ -72,6 +72,7 @@ import DatLogin from './dat-login';
 import AdminOverview from './admin-overview';
 import CommunicationDashboard from './communication-dashboard';
 import AICommunicationInsights from './ai-communication-insights';
+import FleetCalculator from './fleet-calculator';
 import NotFound from './not-found';
 import DriverLocationMap from '@/components/driver-location-map';
 
@@ -576,6 +577,8 @@ export default function LoadOpsDashboard() {
         return <TaskMagicStatusPage />;
       case '/analytics':
         return <AnalyticsDashboard />;
+      case '/fleet-calculator':
+        return <FleetCalculator />;
       case '/scrapers':
         return <ScraperManagement />;
       case '/sms-status':
@@ -993,6 +996,7 @@ export default function LoadOpsDashboard() {
     // AI & Smart Features
     { name: 'Smart Load Matching', href: '/smart-load-matching', icon: Brain, section: 'smart' },
     { name: 'Analytics Dashboard', href: '/analytics', icon: BarChart3, section: 'smart' },
+    { name: 'Fleet Profit Calculator', href: '/fleet-calculator', icon: DollarSign, section: 'smart' },
     { name: 'Predictive Maintenance', href: '/predictive-maintenance', icon: Wrench, section: 'smart' },
     { name: 'Prediction Confidence', href: '/prediction-confidence', icon: Brain, section: 'smart' },
     
@@ -1012,25 +1016,25 @@ export default function LoadOpsDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transition-all duration-300 flex flex-col",
+        "fixed inset-y-0 left-0 z-50 bg-sidebar border-r border-sidebar-border transition-all duration-300 flex flex-col shadow-xl",
         sidebarCollapsed ? "w-16" : "w-64"
       )}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-sidebar-border">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3">
               <img src="/traq-logo.png" alt="TRAQ IQ" className="w-8 h-8 object-contain" />
-              <h2 className="text-xl font-semibold text-gray-900">TRAQ IQ</h2>
+              <h2 className="text-xl font-bold text-sidebar-foreground">TRAQ IQ</h2>
             </div>
           )}
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-2"
+            className="p-2 text-sidebar-foreground hover:text-primary hover:bg-sidebar-accent"
           >
             {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </Button>
@@ -1041,7 +1045,7 @@ export default function LoadOpsDashboard() {
           {/* Core Operations Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Core Operations</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Core Operations</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
@@ -1054,19 +1058,20 @@ export default function LoadOpsDashboard() {
                   <Link
                     to={item.href}
                     className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
                       sidebarCollapsed 
-                        ? "px-2 justify-center" 
-                        : "px-6",
+                        ? "px-2 justify-center mx-2" 
+                        : "px-4 mx-2",
                       isActive
-                        ? "text-primary bg-blue-50 border-r-3 border-primary"
-                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
                     )}
                     title={sidebarCollapsed ? item.name : undefined}
                   >
                     <Icon className={cn(
                       "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3"
+                      !sidebarCollapsed && "mr-3",
+                      isActive && "text-primary"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
                   </Link>
@@ -1078,7 +1083,7 @@ export default function LoadOpsDashboard() {
           {/* Driver Management Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Driver Management</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Driver Management</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
@@ -1091,19 +1096,20 @@ export default function LoadOpsDashboard() {
                   <Link
                     to={item.href}
                     className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
                       sidebarCollapsed 
-                        ? "px-2 justify-center" 
-                        : "px-6",
+                        ? "px-2 justify-center mx-2" 
+                        : "px-4 mx-2",
                       isActive
-                        ? "text-primary bg-blue-50 border-r-3 border-primary"
-                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
                     )}
                     title={sidebarCollapsed ? item.name : undefined}
                   >
                     <Icon className={cn(
                       "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3"
+                      !sidebarCollapsed && "mr-3",
+                      isActive && "text-primary"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
                   </Link>
@@ -1115,7 +1121,7 @@ export default function LoadOpsDashboard() {
           {/* Customer & Communication Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Communication</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Communication</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
@@ -1128,19 +1134,20 @@ export default function LoadOpsDashboard() {
                   <Link
                     to={item.href}
                     className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
                       sidebarCollapsed 
-                        ? "px-2 justify-center" 
-                        : "px-6",
+                        ? "px-2 justify-center mx-2" 
+                        : "px-4 mx-2",
                       isActive
-                        ? "text-primary bg-blue-50 border-r-3 border-primary"
-                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
                     )}
                     title={sidebarCollapsed ? item.name : undefined}
                   >
                     <Icon className={cn(
                       "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3"
+                      !sidebarCollapsed && "mr-3",
+                      isActive && "text-primary"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
                   </Link>
@@ -1152,7 +1159,7 @@ export default function LoadOpsDashboard() {
           {/* AI & Smart Features Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">AI & Smart Features</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">AI & Smart Features</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
@@ -1165,19 +1172,20 @@ export default function LoadOpsDashboard() {
                   <Link
                     to={item.href}
                     className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
                       sidebarCollapsed 
-                        ? "px-2 justify-center" 
-                        : "px-6",
+                        ? "px-2 justify-center mx-2" 
+                        : "px-4 mx-2",
                       isActive
-                        ? "text-primary bg-blue-50 border-r-3 border-primary"
-                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
                     )}
                     title={sidebarCollapsed ? item.name : undefined}
                   >
                     <Icon className={cn(
                       "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3"
+                      !sidebarCollapsed && "mr-3",
+                      isActive && "text-primary"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
                   </Link>
@@ -1189,7 +1197,7 @@ export default function LoadOpsDashboard() {
           {/* System & Reports Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">System & Reports</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">System & Reports</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
@@ -1202,19 +1210,20 @@ export default function LoadOpsDashboard() {
                   <Link
                     to={item.href}
                     className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-colors relative group",
+                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
                       sidebarCollapsed 
-                        ? "px-2 justify-center" 
-                        : "px-6",
+                        ? "px-2 justify-center mx-2" 
+                        : "px-4 mx-2",
                       isActive
-                        ? "text-primary bg-blue-50 border-r-3 border-primary"
-                        : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
                     )}
                     title={sidebarCollapsed ? item.name : undefined}
                   >
                     <Icon className={cn(
                       "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3"
+                      !sidebarCollapsed && "mr-3",
+                      isActive && "text-primary"
                     )} />
                     {!sidebarCollapsed && <span>{item.name}</span>}
                   </Link>

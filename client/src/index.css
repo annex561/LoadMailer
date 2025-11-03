@@ -67,38 +67,38 @@
 }
 
 .dark {
-  /* TRAQ IQ Dark Mode - Navy Background */
-  --background: hsl(212 42% 7%); /* Navy #0A101A */
+  /* TRAQ IQ Ultra-Dark Mode - Modern Trading Journal Aesthetic */
+  --background: hsl(222 47% 4%); /* Ultra-dark navy background #0B1120 */
   --foreground: hsl(210 17% 96%); /* Whitesmoke #F3F5F7 */
-  --card: hsl(211 26% 16%); /* Slate #1E2733 */
+  --card: hsl(218 24% 10%); /* Darker slate cards #151922 */
   --card-foreground: hsl(210 17% 96%);
-  --popover: hsl(211 26% 16%); /* Slate */
+  --popover: hsl(218 24% 10%);
   --popover-foreground: hsl(210 17% 96%);
-  --primary: hsl(181 100% 36%); /* Teal #00B5B8 */
+  --primary: hsl(181 100% 42%); /* Brighter teal for pop #14B8A6 */
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(211 26% 16%); /* Slate */
+  --secondary: hsl(218 24% 14%); /* Slightly lighter than cards */
   --secondary-foreground: hsl(0 0% 100%);
-  --muted: hsl(211 26% 16%); /* Slate */
+  --muted: hsl(218 24% 12%);
   --muted-foreground: hsl(215 20% 65%);
-  --accent: hsl(181 100% 36%); /* Teal */
+  --accent: hsl(181 100% 42%); /* Brighter teal */
   --accent-foreground: hsl(0 0% 100%);
-  --destructive: hsl(355 78% 56%); /* Error #E63946 */
+  --destructive: hsl(355 85% 60%); /* Brighter red #F14B5A */
   --destructive-foreground: hsl(0 0% 100%);
-  --success: hsl(145 74% 57%); /* Success #3AE374 */
+  --success: hsl(145 85% 55%); /* Brighter green #2DD45E */
   --success-foreground: hsl(0 0% 100%);
-  --warning: hsl(36 100% 50%);
+  --warning: hsl(38 92% 58%); /* Brighter orange/yellow */
   --warning-foreground: hsl(0 0% 100%);
-  --border: hsl(211 26% 20%);
-  --input: hsl(211 26% 20%);
-  --ring: hsl(181 100% 36%); /* Teal */
-  --sidebar: hsl(211 26% 16%); /* Slate */
+  --border: hsl(218 24% 18%); /* Subtle borders */
+  --input: hsl(218 24% 14%);
+  --ring: hsl(181 100% 42%); /* Bright teal focus */
+  --sidebar: hsl(218 24% 8%); /* Darker sidebar */
   --sidebar-foreground: hsl(210 17% 96%);
-  --sidebar-primary: hsl(181 100% 36%); /* Teal */
+  --sidebar-primary: hsl(181 100% 42%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(211 26% 20%);
+  --sidebar-accent: hsl(218 24% 14%);
   --sidebar-accent-foreground: hsl(210 17% 96%);
-  --sidebar-border: hsl(211 26% 20%);
-  --sidebar-ring: hsl(181 100% 36%); /* Teal */
+  --sidebar-border: hsl(218 24% 12%);
+  --sidebar-ring: hsl(181 100% 42%);
 }
 
 @layer base {

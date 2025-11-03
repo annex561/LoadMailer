@@ -640,21 +640,21 @@ export default function MobileDriverDashboard() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'assigned': return 'bg-blue-500';
-      case 'in_transit': return 'bg-orange-500';
-      case 'delivered': return 'bg-green-500';
-      case 'completed': return 'bg-emerald-600';
-      case 'available': return 'bg-gray-500';
-      default: return 'bg-gray-500';
+      case 'assigned': return 'bg-primary/10 text-primary border border-primary/30';
+      case 'in_transit': return 'bg-primary/10 text-primary border border-primary/30';
+      case 'delivered': return 'bg-success/10 text-success border border-success/30';
+      case 'completed': return 'bg-success/10 text-success border border-success/30';
+      case 'available': return 'bg-warning/10 text-warning border border-warning/30';
+      default: return 'bg-muted text-muted-foreground border border-border';
     }
   };
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case 'paid': return 'text-green-600 bg-green-50';
-      case 'pending': return 'text-yellow-600 bg-yellow-50';
-      case 'processing': return 'text-blue-600 bg-blue-50';
-      default: return 'text-gray-600 bg-gray-50';
+      case 'paid': return 'bg-success/10 text-success border border-success/30';
+      case 'pending': return 'bg-warning/10 text-warning border border-warning/30';
+      case 'processing': return 'bg-primary/10 text-primary border border-primary/30';
+      default: return 'bg-muted text-muted-foreground border border-border';
     }
   };
 
@@ -1114,35 +1114,35 @@ export default function MobileDriverDashboard() {
     return (
     <div className="space-y-4 pb-24">
       {/* Welcome Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-b-3xl">
+      <div className="bg-card border-b border-border p-6 rounded-b-3xl shadow-lg">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-welcome-header">Hello, {firstName} 👋</h1>
-            <p className="text-blue-100 text-sm">Let's have a great day!</p>
+            <h1 className="text-2xl font-bold text-foreground" data-testid="text-welcome-header">Hello, {firstName} 👋</h1>
+            <p className="text-muted-foreground text-sm">Let's have a great day!</p>
           </div>
           <button 
             onClick={() => setShowMenu(!showMenu)}
-            className="bg-white/20 hover:bg-white/30 active:bg-white/40 rounded-full h-14 w-14 p-0 flex items-center justify-center transition-all active:scale-95 touch-manipulation"
+            className="bg-primary/10 hover:bg-primary/20 active:bg-primary/30 rounded-full h-14 w-14 p-0 flex items-center justify-center transition-all active:scale-95 touch-manipulation border border-primary/30"
             data-testid="button-menu"
             aria-label="Open menu"
           >
-            <Menu className="h-6 w-6" />
+            <Menu className="h-6 w-6 text-primary" />
           </button>
         </div>
 
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-3 mt-4">
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
-            <div className="text-3xl font-bold">{driver?.completedLoads || 0}</div>
-            <div className="text-xs text-blue-100">Loads</div>
+          <div className="bg-card border border-border rounded-2xl p-3 text-center hover:border-primary/30 transition-all">
+            <div className="text-3xl font-bold text-success">{driver?.completedLoads || 0}</div>
+            <div className="text-xs text-muted-foreground">Loads</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
-            <div className="text-3xl font-bold">{formatCurrency(earnings?.totalEarnings || 0)}</div>
-            <div className="text-xs text-blue-100">Earned</div>
+          <div className="bg-card border border-border rounded-2xl p-3 text-center hover:border-primary/30 transition-all">
+            <div className="text-3xl font-bold text-success">{formatCurrency(earnings?.totalEarnings || 0)}</div>
+            <div className="text-xs text-muted-foreground">Earned</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 text-center">
-            <div className="text-3xl font-bold">{driver?.averageRating?.toFixed(1) || '0.0'}</div>
-            <div className="text-xs text-blue-100">Rating</div>
+          <div className="bg-card border border-border rounded-2xl p-3 text-center hover:border-primary/30 transition-all">
+            <div className="text-2xl font-bold text-primary">{driver?.averageRating?.toFixed(1) || '0.0'}</div>
+            <div className="text-xs text-muted-foreground">Rating</div>
           </div>
         </div>
       </div>
@@ -1152,18 +1152,18 @@ export default function MobileDriverDashboard() {
 
       {/* Current Load Card */}
       {currentLoad ? (
-        <Card className="mx-4 border-2 border-blue-100 shadow-lg">
+        <Card className="mx-4 bg-card border-border hover:border-primary/30 transition-all shadow-lg">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Truck className="h-5 w-5 text-blue-600" />
-                <CardTitle className="text-lg">Current Load</CardTitle>
+                <Truck className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg text-foreground">Current Load</CardTitle>
               </div>
-              <Badge className={cn(getStatusColor(currentLoad.status), "text-white text-xs")}>
+              <Badge className={cn(getStatusColor(currentLoad.status), "text-xs font-semibold")}>
                 {currentLoad.status.replace('_', ' ')}
               </Badge>
             </div>
-            <CardDescription className="text-base font-semibold text-gray-900">
+            <CardDescription className="text-base font-semibold text-foreground">
               {currentLoad.loadNumber}
             </CardDescription>
           </CardHeader>
@@ -1198,10 +1198,10 @@ export default function MobileDriverDashboard() {
             </div>
 
             {/* Earnings & Distance */}
-            <div className="grid grid-cols-2 gap-3 bg-blue-50 rounded-xl p-3">
+            <div className="grid grid-cols-2 gap-3 bg-card border border-border rounded-xl p-3">
               <div>
-                <div className="text-xs text-gray-600 mb-1">Your Pay</div>
-                <div className="text-2xl font-bold text-blue-600" data-testid="text-current-pay">
+                <div className="text-xs text-muted-foreground mb-1">Your Pay</div>
+                <div className="text-3xl font-bold text-success" data-testid="text-current-pay">
                   {(() => {
                     const rate = Number(currentLoad.rate) || 0;
                     const driverPay = rate * 0.9;
@@ -1210,8 +1210,8 @@ export default function MobileDriverDashboard() {
                 </div>
               </div>
               <div>
-                <div className="text-xs text-gray-600 mb-1">Distance</div>
-                <div className="text-2xl font-bold text-gray-900" data-testid="text-current-distance">
+                <div className="text-xs text-muted-foreground mb-1">Distance</div>
+                <div className="text-3xl font-bold text-primary" data-testid="text-current-distance">
                   {(() => {
                     const miles = Number(currentLoad.miles) || 0;
                     return `${miles.toFixed(0)} mi`;
@@ -1247,7 +1247,7 @@ export default function MobileDriverDashboard() {
                     currentLoad.status === 'assigned' ? currentLoad.pickupAddress : currentLoad.deliveryAddress,
                     'google'
                   )}
-                  className="h-12"
+                  className="h-12 bg-card border-border text-foreground hover:border-primary/30 transition-all"
                   data-testid="button-navigate-google"
                 >
                   <Map className="h-4 w-4 mr-2" />
@@ -1259,7 +1259,7 @@ export default function MobileDriverDashboard() {
                     currentLoad.status === 'assigned' ? currentLoad.pickupAddress : currentLoad.deliveryAddress,
                     'waze'
                   )}
-                  className="h-12"
+                  className="h-12 bg-card border-border text-foreground hover:border-primary/30 transition-all"
                   data-testid="button-navigate-waze"
                 >
                   <Navigation className="h-4 w-4 mr-2" />
@@ -1268,11 +1268,10 @@ export default function MobileDriverDashboard() {
               </div>
 
               <Button
-                variant={isGPSActive ? "default" : "outline"}
                 onClick={handleStartGPSTracking}
                 className={cn(
-                  "w-full h-12",
-                  isGPSActive && "bg-green-600 hover:bg-green-700 text-white"
+                  "w-full h-12 transition-all",
+                  isGPSActive ? "bg-success hover:bg-success/90 text-white" : "bg-primary hover:bg-primary/90 text-primary-foreground"
                 )}
                 data-testid="button-gps-tracking"
               >
@@ -1338,16 +1337,16 @@ export default function MobileDriverDashboard() {
   const LoadsTab = () => (
     <div className="space-y-4 pb-24">
       {/* Earnings Summary */}
-      <div className="bg-gradient-to-br from-green-600 to-green-700 text-white p-6 rounded-b-3xl">
-        <h2 className="text-lg font-semibold mb-4">Earnings Overview</h2>
+      <div className="bg-card border-b border-border p-6 rounded-b-3xl shadow-lg">
+        <h2 className="text-lg font-semibold mb-4 text-foreground">Earnings Overview</h2>
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-            <div className="text-xs text-green-100">Pending Payment</div>
-            <div className="text-2xl font-bold mt-1">{formatCurrency(earnings?.pendingPayment || 0)}</div>
+          <div className="bg-card border border-border rounded-xl p-4 hover:border-primary/30 transition-all">
+            <div className="text-xs text-muted-foreground">Pending Payment</div>
+            <div className="text-3xl font-bold text-warning mt-1">{formatCurrency(earnings?.pendingPayment || 0)}</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-            <div className="text-xs text-green-100">This Month</div>
-            <div className="text-2xl font-bold mt-1">{formatCurrency(earnings?.paidThisMonth || 0)}</div>
+          <div className="bg-card border border-border rounded-xl p-4 hover:border-primary/30 transition-all">
+            <div className="text-xs text-muted-foreground">This Month</div>
+            <div className="text-3xl font-bold text-success mt-1">{formatCurrency(earnings?.paidThisMonth || 0)}</div>
           </div>
         </div>
       </div>
@@ -1395,22 +1394,22 @@ export default function MobileDriverDashboard() {
                     }
                   }}
                 >
-                  <Card className="border-l-4 border-l-blue-500">
+                  <Card className="bg-card border-border hover:border-primary/30 transition-all shadow-sm hover:shadow-md border-l-4 border-l-primary">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <div className="font-bold">{load.loadNumber}</div>
-                        <Badge className={cn(getStatusColor(load.status), "text-white text-xs")}>
+                        <div className="font-bold text-foreground">{load.loadNumber}</div>
+                        <Badge className={cn(getStatusColor(load.status), "text-xs font-semibold")}>
                           {load.status}
                         </Badge>
                       </div>
-                      <div className="text-sm text-gray-600 mb-3">
+                      <div className="text-sm text-muted-foreground mb-3">
                         {load.pickupAddress?.split(',')[0]} → {load.deliveryAddress?.split(',')[0]}
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="text-sm text-gray-500">
+                        <div className="text-sm text-muted-foreground">
                           {formatDate(load.deliveryDate)}
                         </div>
-                        <div className="font-bold text-green-600" data-testid={`text-load-pay-${load.id}`}>
+                        <div className="text-2xl font-bold text-success" data-testid={`text-load-pay-${load.id}`}>
                           {(() => {
                             const rate = Number(load.rate) || 0;
                             const driverPay = rate * 0.9;
@@ -1519,7 +1518,7 @@ export default function MobileDriverDashboard() {
       ) : (
         <div className="flex flex-col h-screen">
           {/* Chat Header */}
-          <div className="bg-blue-600 text-white p-4 flex items-center gap-3 shadow-lg flex-shrink-0">
+          <div className="bg-card border-b border-border p-4 flex items-center gap-3 shadow-lg flex-shrink-0">
             <Button
               variant="ghost"
               size="sm"
@@ -1527,23 +1526,23 @@ export default function MobileDriverDashboard() {
                 closeSwipe();
                 setSelectedThread(null);
               }}
-              className="text-white hover:bg-white/20 p-2 rounded-full"
+              className="text-foreground hover:bg-primary/10 p-2 rounded-full"
               data-testid="button-back-to-threads"
             >
               <ChevronRight className="h-5 w-5 rotate-180" />
             </Button>
             <div className="flex-1">
-              <div className="font-semibold">Dispatch</div>
+              <div className="font-semibold text-foreground">Dispatch</div>
               <div className="text-xs text-blue-100">TRAQ IQ Team</div>
             </div>
             <Phone className="h-5 w-5" />
           </div>
 
           {/* Messages */}
-          <div className="flex-1 p-4 space-y-3 bg-gray-50 overflow-y-auto">
+          <div className="flex-1 p-4 space-y-3 bg-background overflow-y-auto">
             {messages.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <div className="text-center py-12 text-muted-foreground">
+                <MessageSquare className="w-12 h-12 mx-auto mb-3 text-muted" />
                 <p>No messages yet. Start the conversation!</p>
               </div>
             ) : (
@@ -1560,15 +1559,15 @@ export default function MobileDriverDashboard() {
                     className={cn(
                       "max-w-[80%] rounded-2xl px-4 py-2",
                       message.senderRole === 'driver'
-                        ? "bg-blue-600 text-white rounded-br-sm"
-                        : "bg-white text-gray-900 rounded-bl-sm shadow"
+                        ? "bg-muted text-foreground rounded-br-sm"
+                        : "bg-primary/10 text-foreground border border-primary/30 rounded-bl-sm"
                     )}
                   >
                     <div className="text-sm">{message.textContent || message.content}</div>
                     <div
                       className={cn(
                         "text-xs mt-1",
-                        message.senderRole === 'driver' ? "text-blue-100" : "text-gray-500"
+                        message.senderRole === 'driver' ? "text-muted-foreground" : "text-muted-foreground"
                       )}
                     >
                       {formatDate(message.createdAt)}
@@ -1580,14 +1579,14 @@ export default function MobileDriverDashboard() {
           </div>
 
           {/* Message Input Area - Sticky at Bottom */}
-          <div className="flex-shrink-0 bg-white border-t border-gray-200">
+          <div className="flex-shrink-0 bg-card border-t border-border">
             {/* AI Quick Suggestions Panel */}
             {showAISuggestions && aiSuggestions.length > 0 && (
-              <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-b border-purple-200">
+              <div className="p-4 bg-card border-b border-border">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-purple-600" />
-                    <span className="text-sm font-semibold text-purple-900">AI Quick Messages</span>
+                    <Zap className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold text-foreground">AI Quick Messages</span>
                   </div>
                   <Button
                     variant="ghost"
@@ -1604,7 +1603,7 @@ export default function MobileDriverDashboard() {
                     <Button
                       key={index}
                       variant="outline"
-                      className="w-full text-left justify-start h-auto py-3 px-4 bg-white hover:bg-purple-50 border-purple-200 text-sm"
+                      className="w-full text-left justify-start h-auto py-3 px-4 bg-card border-border text-foreground hover:border-primary/30 transition-all text-sm"
                       onClick={() => {
                         setMessageInput(suggestion);
                         setShowAISuggestions(false);
@@ -1633,7 +1632,7 @@ export default function MobileDriverDashboard() {
                   });
                 }}
                 disabled={getAISuggestionsMutation.isPending}
-                className="flex-1 h-9 text-xs bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200 text-purple-700 hover:from-purple-100 hover:to-blue-100"
+                className="flex-1 h-9 text-xs bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 transition-all"
                 data-testid="button-ai-help"
               >
                 <Zap className="h-3 w-3 mr-1" />
@@ -1643,7 +1642,7 @@ export default function MobileDriverDashboard() {
                 variant="outline"
                 size="sm"
                 onClick={() => setMessageInput("Arrived at pickup location")}
-                className="flex-1 h-9 text-xs"
+                className="flex-1 h-9 text-xs bg-card border-border text-foreground hover:border-primary/30 transition-all"
                 data-testid="button-quick-arrived"
               >
                 At Pickup
@@ -1652,7 +1651,7 @@ export default function MobileDriverDashboard() {
                 variant="outline"
                 size="sm"
                 onClick={() => setMessageInput("Running 15 minutes late")}
-                className="flex-1 h-9 text-xs"
+                className="flex-1 h-9 text-xs bg-card border-border text-foreground hover:border-primary/30 transition-all"
                 data-testid="button-quick-late"
               >
                 Running Late
@@ -1661,14 +1660,14 @@ export default function MobileDriverDashboard() {
 
             {/* Message Input Row */}
             <div className="flex items-center gap-2">
-              <div className="flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2">
+              <div className="flex-1 flex items-center bg-input border border-border rounded-full px-4 py-2">
                 <Input
                   type="text"
                   placeholder="Type a message or use AI help..."
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base"
+                  className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base text-foreground placeholder:text-muted-foreground"
                   data-testid="input-message"
                 />
                 <Button
@@ -1676,18 +1675,18 @@ export default function MobileDriverDashboard() {
                   size="sm"
                   className={cn(
                     "rounded-full p-2 h-auto",
-                    isRecording && "bg-red-100"
+                    isRecording && "bg-destructive/10"
                   )}
                   onClick={() => setIsRecording(!isRecording)}
                   data-testid="button-voice-input"
                 >
-                  <Mic className={cn("h-5 w-5", isRecording && "text-red-600")} />
+                  <Mic className={cn("h-5 w-5", isRecording && "text-destructive")} />
                 </Button>
               </div>
               <Button
                 onClick={handleSendMessage}
                 disabled={!messageInput.trim() || sendMessageMutation.isPending}
-                className="rounded-full h-12 w-12 p-0 bg-blue-600 hover:bg-blue-700"
+                className="rounded-full h-12 w-12 p-0 bg-primary hover:bg-primary/90 text-primary-foreground"
                 data-testid="button-send-message"
               >
                 <Send className="h-5 w-5" />
@@ -1708,11 +1707,11 @@ export default function MobileDriverDashboard() {
 
         {/* Smart Camera Upload - Capture First Workflow */}
         {currentLoad && (
-          <Card className="mb-4 border-2 border-dashed border-teal-300 bg-teal-50">
+          <Card className="mb-4 border-2 border-dashed border-primary/30 bg-card">
             <CardContent className="p-6 text-center">
-              <Camera className="h-12 w-12 mx-auto mb-3 text-teal-600" />
-              <h3 className="font-semibold mb-2">Upload Document</h3>
-              <p className="text-sm text-gray-600 mb-4">
+              <Camera className="h-12 w-12 mx-auto mb-3 text-primary" />
+              <h3 className="font-semibold mb-2 text-foreground">Upload Document</h3>
+              <p className="text-sm text-muted-foreground mb-4">
                 Take a photo or select from gallery
               </p>
 
@@ -1733,7 +1732,7 @@ export default function MobileDriverDashboard() {
                       fileInputRef.current.click();
                     }
                   }}
-                  className="h-12 bg-teal-600 hover:bg-teal-700"
+                  className="h-12 bg-primary hover:bg-primary/90 text-primary-foreground"
                   data-testid="button-take-photo"
                 >
                   <Camera className="h-4 w-4 mr-2" />
@@ -1747,7 +1746,7 @@ export default function MobileDriverDashboard() {
                     }
                   }}
                   variant="outline"
-                  className="h-12 border-teal-300 text-teal-700 hover:bg-teal-50"
+                  className="h-12 border-border text-foreground hover:border-primary/30 transition-all"
                   data-testid="button-choose-file"
                 >
                   <Upload className="h-4 w-4 mr-2" />
@@ -1819,10 +1818,10 @@ export default function MobileDriverDashboard() {
                     </div>
                     <Badge
                       className={cn(
-                        "text-xs",
-                        doc.approvalStatus === 'approved' && "bg-green-100 text-green-700",
-                        doc.approvalStatus === 'pending' && "bg-yellow-100 text-yellow-700",
-                        doc.approvalStatus === 'rejected' && "bg-red-100 text-red-700"
+                        "text-xs font-semibold",
+                        doc.approvalStatus === 'approved' && "bg-success/10 text-success border border-success/30",
+                        doc.approvalStatus === 'pending' && "bg-warning/10 text-warning border border-warning/30",
+                        doc.approvalStatus === 'rejected' && "bg-destructive/10 text-destructive border border-destructive/30"
                       )}
                       data-testid={`badge-status-${doc.id}`}
                     >
@@ -1990,27 +1989,27 @@ export default function MobileDriverDashboard() {
   const ProfileTab = () => (
     <div className="space-y-4 pb-24">
       {/* Profile Header */}
-      <div className="bg-gradient-to-br from-gray-800 to-gray-900 text-white p-6 rounded-b-3xl">
+      <div className="bg-card border-b border-border p-6 rounded-b-3xl shadow-lg">
         <div className="flex items-center gap-4 mb-4">
-          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-            <User className="h-8 w-8" />
+          <div className="w-16 h-16 bg-primary/10 border border-primary/30 rounded-full flex items-center justify-center">
+            <User className="h-8 w-8 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-bold">{driver?.name || 'Driver'}</h2>
-            <p className="text-sm text-gray-300">{driver?.email}</p>
+            <h2 className="text-xl font-bold text-foreground">{driver?.name || 'Driver'}</h2>
+            <p className="text-sm text-muted-foreground">{driver?.email}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-            <div className="text-xs text-gray-300">Equipment</div>
-            <div className="font-semibold mt-1">
+          <div className="bg-card border border-border rounded-xl p-3 hover:border-primary/30 transition-all">
+            <div className="text-xs text-muted-foreground">Equipment</div>
+            <div className="font-semibold mt-1 text-foreground">
               {driver?.equipmentType?.replace('_', ' ') || 'Not Set'}
             </div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-            <div className="text-xs text-gray-300">Status</div>
-            <div className="font-semibold mt-1 capitalize">{driver?.status || 'Unknown'}</div>
+          <div className="bg-card border border-border rounded-xl p-3 hover:border-primary/30 transition-all">
+            <div className="text-xs text-muted-foreground">Status</div>
+            <div className="font-semibold mt-1 capitalize text-foreground">{driver?.status || 'Unknown'}</div>
           </div>
         </div>
       </div>
@@ -2019,42 +2018,42 @@ export default function MobileDriverDashboard() {
       <div className="mx-4 space-y-2">
         <h3 className="text-lg font-bold mb-3">Settings</h3>
 
-        <Card className="cursor-pointer hover:bg-gray-50" data-testid="card-gps-settings">
+        <Card className="bg-card border-border hover:border-primary/30 transition-all cursor-pointer" data-testid="card-gps-settings">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <MapPin className="h-5 w-5 text-gray-600" />
+              <MapPin className="h-5 w-5 text-primary" />
               <div>
-                <div className="font-semibold">GPS Tracking</div>
-                <div className="text-sm text-gray-500">Manage location sharing</div>
+                <div className="font-semibold text-foreground">GPS Tracking</div>
+                <div className="text-sm text-muted-foreground">Manage location sharing</div>
               </div>
             </div>
-            <ChevronRight className="h-5 w-5 text-gray-400" />
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-gray-50" data-testid="card-notifications">
+        <Card className="bg-card border-border hover:border-primary/30 transition-all cursor-pointer" data-testid="card-notifications">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Bell className="h-5 w-5 text-gray-600" />
+              <Bell className="h-5 w-5 text-primary" />
               <div>
-                <div className="font-semibold">Notifications</div>
-                <div className="text-sm text-gray-500">SMS and push alerts</div>
+                <div className="font-semibold text-foreground">Notifications</div>
+                <div className="text-sm text-muted-foreground">SMS and push alerts</div>
               </div>
             </div>
-            <ChevronRight className="h-5 w-5 text-gray-400" />
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-gray-50" data-testid="card-support">
+        <Card className="bg-card border-border hover:border-primary/30 transition-all cursor-pointer" data-testid="card-support">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Phone className="h-5 w-5 text-gray-600" />
+              <Phone className="h-5 w-5 text-primary" />
               <div>
-                <div className="font-semibold">Contact Support</div>
-                <div className="text-sm text-gray-500">Get help from dispatch</div>
+                <div className="font-semibold text-foreground">Contact Support</div>
+                <div className="text-sm text-muted-foreground">Get help from dispatch</div>
               </div>
             </div>
-            <ChevronRight className="h-5 w-5 text-gray-400" />
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </CardContent>
         </Card>
       </div>
@@ -2390,13 +2389,13 @@ export default function MobileDriverDashboard() {
       <QuickActionsFAB />
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 shadow-lg">
-        <div className="max-w-2xl mx-auto grid grid-cols-5 h-20">
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-30 shadow-lg">
+        <div className="max-w-2xl mx-auto grid grid-cols-5 h-20 p-2 gap-1">
           <button
             onClick={() => setActiveTab('home')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-colors",
-              activeTab === 'home' ? "text-blue-600" : "text-gray-500"
+              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl",
+              activeTab === 'home' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
             )}
             data-testid="tab-home"
           >
@@ -2407,8 +2406,8 @@ export default function MobileDriverDashboard() {
           <button
             onClick={() => setActiveTab('loads')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-colors",
-              activeTab === 'loads' ? "text-blue-600" : "text-gray-500"
+              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl",
+              activeTab === 'loads' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
             )}
             data-testid="tab-loads"
           >
@@ -2419,13 +2418,13 @@ export default function MobileDriverDashboard() {
           <button
             onClick={() => setActiveTab('messages')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-colors relative",
-              activeTab === 'messages' ? "text-blue-600" : "text-gray-500"
+              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl relative",
+              activeTab === 'messages' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
             )}
             data-testid="tab-messages"
           >
             {threads.some(t => t.unreadDispatchMessages > 0) && (
-              <div className="absolute top-2 right-6 w-2 h-2 bg-red-500 rounded-full" />
+              <div className="absolute top-2 right-6 w-2 h-2 bg-destructive rounded-full" />
             )}
             <MessageSquare className="h-6 w-6" />
             <span className="text-xs font-medium">Messages</span>
@@ -2434,8 +2433,8 @@ export default function MobileDriverDashboard() {
           <button
             onClick={() => setActiveTab('documents')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-colors",
-              activeTab === 'documents' ? "text-blue-600" : "text-gray-500"
+              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl",
+              activeTab === 'documents' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
             )}
             data-testid="tab-documents"
           >
@@ -2446,8 +2445,8 @@ export default function MobileDriverDashboard() {
           <button
             onClick={() => setActiveTab('profile')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-colors",
-              activeTab === 'profile' ? "text-blue-600" : "text-gray-500"
+              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl",
+              activeTab === 'profile' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
             )}
             data-testid="tab-profile"
           >

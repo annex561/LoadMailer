@@ -284,15 +284,15 @@ export default function DriverManagement() {
 
   const getDriverStatusBadge = (driver: Driver) => {
     const statusConfig = {
-      available: { label: "Available", className: "bg-success bg-opacity-10 text-success" },
-      on_route: { label: "On Route", className: "bg-warning bg-opacity-10 text-warning" },
-      unavailable: { label: "Unavailable", className: "bg-destructive bg-opacity-10 text-destructive" },
+      available: { label: "Available", className: "bg-success/10 text-success border border-success/30" },
+      on_route: { label: "On Route", className: "bg-primary/10 text-primary border border-primary/30" },
+      unavailable: { label: "Unavailable", className: "bg-muted/10 text-muted-foreground border border-muted/30" },
     };
 
     const config = statusConfig[driver.status as keyof typeof statusConfig] || statusConfig.available;
     
     return (
-      <Badge className={`${config.className} border-0`}>
+      <Badge className={`${config.className} font-medium px-3 py-1`}>
         {config.label}
       </Badge>
     );
@@ -302,11 +302,11 @@ export default function DriverManagement() {
     const isExpired = new Date(token.expiresAt) < new Date();
     
     if (token.isUsed) {
-      return <Badge className="bg-success bg-opacity-10 text-success border-0">Completed</Badge>;
+      return <Badge className="bg-success/10 text-success border border-success/30 font-medium px-3 py-1">Completed</Badge>;
     } else if (isExpired) {
-      return <Badge className="bg-destructive bg-opacity-10 text-destructive border-0">Expired</Badge>;
+      return <Badge className="bg-destructive/10 text-destructive border border-destructive/30 font-medium px-3 py-1">Expired</Badge>;
     } else {
-      return <Badge className="bg-blue-500 bg-opacity-10 text-blue-600 border-0">Sent</Badge>;
+      return <Badge className="bg-primary/10 text-primary border border-primary/30 font-medium px-3 py-1">Sent</Badge>;
     }
   };
 
@@ -350,10 +350,10 @@ export default function DriverManagement() {
     const safetyScore = driver.safetyScore ?? 100;
     const maintenanceScore = driver.maintenanceScore ?? 100;
     const score = Math.round((safetyScore + maintenanceScore) / 2);
-    if (score >= 90) return { label: 'Excellent', color: 'bg-green-100 text-green-800' };
-    if (score >= 75) return { label: 'Good', color: 'bg-blue-100 text-blue-800' };
-    if (score >= 60) return { label: 'Fair', color: 'bg-yellow-100 text-yellow-800' };
-    return { label: 'Needs Attention', color: 'bg-red-100 text-red-800' };
+    if (score >= 90) return { label: 'Excellent', color: 'bg-success/10 text-success border border-success/30' };
+    if (score >= 75) return { label: 'Good', color: 'bg-primary/10 text-primary border border-primary/30' };
+    if (score >= 60) return { label: 'Fair', color: 'bg-warning/10 text-warning border border-warning/30' };
+    return { label: 'Needs Attention', color: 'bg-destructive/10 text-destructive border border-destructive/30' };
   };
 
   // Handle column header click for sorting
@@ -396,12 +396,12 @@ export default function DriverManagement() {
 
   if (driversLoading || tokensLoading) {
     return (
-      <div className="p-6">
+      <div className="p-8 bg-background min-h-screen">
         <div className="animate-pulse space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="h-20 bg-gray-200 rounded"></div>
+              <div key={i} className="bg-card rounded-xl border border-border p-6">
+                <div className="h-20 bg-muted/50 rounded"></div>
               </div>
             ))}
           </div>
@@ -411,30 +411,30 @@ export default function DriverManagement() {
   }
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-8 bg-background min-h-screen">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900" data-testid="heading-driver-management">
+            <h1 className="text-3xl font-bold text-foreground" data-testid="heading-driver-management">
               Driver Management
             </h1>
-            <p className="text-gray-500 mt-1" data-testid="text-driver-count">
+            <p className="text-muted-foreground mt-1" data-testid="text-driver-count">
               {filteredDrivers.length} of {drivers.length} drivers
             </p>
           </div>
           <div className="flex items-center gap-3">
             <Dialog open={showManualOnboardingModal} onOpenChange={setShowManualOnboardingModal}>
               <DialogTrigger asChild>
-                <Button className="bg-teal-600 text-white hover:bg-teal-700" data-testid="button-add-driver">
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm" data-testid="button-add-driver">
                   <UserPlus className="mr-2 w-4 h-4" />
                   Add Driver
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-white border border-gray-300 shadow-lg max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="manual-onboarding-modal">
+              <DialogContent className="bg-card border border-border shadow-lg max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="manual-onboarding-modal">
                 <DialogHeader>
-                  <DialogTitle>Add Driver Manually</DialogTitle>
-                  <DialogDescription>
+                  <DialogTitle className="text-foreground">Add Driver Manually</DialogTitle>
+                  <DialogDescription className="text-muted-foreground">
                     Manually create a driver profile when you have all necessary information ready
                   </DialogDescription>
                 </DialogHeader>
@@ -442,19 +442,19 @@ export default function DriverManagement() {
                   <form onSubmit={manualForm.handleSubmit((data) => createManualDriverMutation.mutate(data))} className="space-y-6">
                     {/* Basic Information */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
+                      <h3 className="text-lg font-semibold text-foreground">Basic Information</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={manualForm.control}
                           name="name"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Full Name *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">Full Name *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   placeholder="John Doe"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-name"
                                 />
                               </FormControl>
@@ -467,13 +467,13 @@ export default function DriverManagement() {
                           name="phone"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Phone Number *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">Phone Number *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   type="tel"
                                   placeholder="+1 (555) 123-4567"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-phone"
                                 />
                               </FormControl>
@@ -487,13 +487,13 @@ export default function DriverManagement() {
                         name="email"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Email Address *</FormLabel>
+                            <FormLabel className="text-foreground font-medium">Email Address *</FormLabel>
                             <FormControl>
                               <Input 
                                 {...field} 
                                 type="email"
                                 placeholder="driver@example.com"
-                                className="bg-white border border-gray-300"
+                                className="bg-input border-border text-foreground"
                                 data-testid="input-manual-email"
                               />
                             </FormControl>
@@ -505,19 +505,19 @@ export default function DriverManagement() {
 
                     {/* License Information */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-900">License Information</h3>
+                      <h3 className="text-lg font-semibold text-foreground">License Information</h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={manualForm.control}
                           name="licenseNumber"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>License Number *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">License Number *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   placeholder="DL123456"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-license"
                                 />
                               </FormControl>
@@ -530,12 +530,12 @@ export default function DriverManagement() {
                           name="licenseState"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>License State *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">License State *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   placeholder="GA"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-license-state"
                                 />
                               </FormControl>
@@ -548,12 +548,12 @@ export default function DriverManagement() {
                           name="licenseExpiry"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>License Expiry *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">License Expiry *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   type="date"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-expiry"
                                 />
                               </FormControl>
@@ -566,21 +566,21 @@ export default function DriverManagement() {
 
                     {/* Equipment & Capacity */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-900">Equipment & Capacity</h3>
+                      <h3 className="text-lg font-semibold text-foreground">Equipment & Capacity</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={manualForm.control}
                           name="equipmentType"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Equipment Type *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">Equipment Type *</FormLabel>
                               <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
-                                  <SelectTrigger className="bg-white border border-gray-300" data-testid="select-equipment-type">
+                                  <SelectTrigger className="bg-input border-border text-foreground" data-testid="select-equipment-type">
                                     <SelectValue placeholder="Select equipment type" />
                                   </SelectTrigger>
                                 </FormControl>
-                                <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                                <SelectContent className="bg-card border-border shadow-lg">
                                   {EQUIPMENT_TYPES.map((equipment) => (
                                     <SelectItem key={equipment.value} value={equipment.value}>
                                       {equipment.label}
@@ -597,14 +597,14 @@ export default function DriverManagement() {
                           name="loadType"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Load Type Preference</FormLabel>
+                              <FormLabel className="text-foreground font-medium">Load Type Preference</FormLabel>
                               <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
-                                  <SelectTrigger className="bg-white border border-gray-300" data-testid="select-load-type">
+                                  <SelectTrigger className="bg-input border-border text-foreground" data-testid="select-load-type">
                                     <SelectValue placeholder="Select load type" />
                                   </SelectTrigger>
                                 </FormControl>
-                                <SelectContent className="bg-white border border-gray-300 shadow-lg">
+                                <SelectContent className="bg-card border-border shadow-lg">
                                   <SelectItem value="full">Full Loads Only</SelectItem>
                                   <SelectItem value="partial">Partial Loads Only</SelectItem>
                                   <SelectItem value="full_partial">Both Full & Partial</SelectItem>
@@ -621,7 +621,7 @@ export default function DriverManagement() {
                           name="maxWeight"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Max Weight (lbs)</FormLabel>
+                              <FormLabel className="text-foreground font-medium">Max Weight (lbs)</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -632,7 +632,7 @@ export default function DriverManagement() {
                                     field.onChange(value === "" ? "" : Number(value));
                                   }}
                                   placeholder="26000"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-weight"
                                 />
                               </FormControl>
@@ -645,7 +645,7 @@ export default function DriverManagement() {
                           name="maxLength"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Max Length (ft)</FormLabel>
+                              <FormLabel className="text-foreground font-medium">Max Length (ft)</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
@@ -656,7 +656,7 @@ export default function DriverManagement() {
                                     field.onChange(value === "" ? "" : Number(value));
                                   }}
                                   placeholder="53"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-length"
                                 />
                               </FormControl>
@@ -669,19 +669,19 @@ export default function DriverManagement() {
 
                     {/* Location */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-900">Location</h3>
+                      <h3 className="text-lg font-semibold text-foreground">Location</h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={manualForm.control}
                           name="city"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>City *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">City *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   placeholder="Atlanta"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-city"
                                 />
                               </FormControl>
@@ -694,12 +694,12 @@ export default function DriverManagement() {
                           name="state"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>State *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">State *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   placeholder="GA"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-location-state"
                                 />
                               </FormControl>
@@ -712,12 +712,12 @@ export default function DriverManagement() {
                           name="zipCode"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>ZIP Code *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">ZIP Code *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   placeholder="30309"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-zip"
                                 />
                               </FormControl>
@@ -730,19 +730,19 @@ export default function DriverManagement() {
 
                     {/* Vehicle Information */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-900">Vehicle Information</h3>
+                      <h3 className="text-lg font-semibold text-foreground">Vehicle Information</h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={manualForm.control}
                           name="vehicleYear"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Vehicle Year *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">Vehicle Year *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   placeholder="2023"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-vehicle-year"
                                 />
                               </FormControl>
@@ -755,12 +755,12 @@ export default function DriverManagement() {
                           name="vehicleMake"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Vehicle Make *</FormLabel>
+                              <FormLabel className="text-foreground font-medium">Vehicle Make *</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   placeholder="Freightliner"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-vehicle-make"
                                 />
                               </FormControl>
@@ -773,12 +773,12 @@ export default function DriverManagement() {
                           name="vehicleModel"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Vehicle Model (Optional)</FormLabel>
+                              <FormLabel className="text-foreground font-medium">Vehicle Model (Optional)</FormLabel>
                               <FormControl>
                                 <Input 
                                   {...field} 
                                   placeholder="Cascadia"
-                                  className="bg-white border border-gray-300"
+                                  className="bg-input border-border text-foreground"
                                   data-testid="input-manual-vehicle-model"
                                 />
                               </FormControl>
@@ -793,7 +793,7 @@ export default function DriverManagement() {
                       <Button 
                         type="button" 
                         variant="outline" 
-                        className="bg-white border border-gray-300"
+                        className="border-border hover:bg-muted"
                         onClick={() => setShowManualOnboardingModal(false)}
                       >
                         Cancel
@@ -801,7 +801,7 @@ export default function DriverManagement() {
                       <Button 
                         type="submit" 
                         disabled={createManualDriverMutation.isPending}
-                        className="bg-teal-600 text-white hover:bg-teal-700"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground"
                         data-testid="button-create-manual-driver"
                       >
                         {createManualDriverMutation.isPending ? "Creating Driver..." : "Create Driver"}
@@ -815,36 +815,85 @@ export default function DriverManagement() {
         </div>
       </div>
 
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="bg-card border-border hover:border-primary/30 transition-all hover:shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Total Drivers</p>
+                <p className="text-4xl font-bold text-primary" data-testid="metric-total-drivers">{drivers.length}</p>
+              </div>
+              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                <Users className="w-6 h-6 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border hover:border-success/30 transition-all hover:shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Available</p>
+                <p className="text-4xl font-bold text-success" data-testid="metric-available-drivers">
+                  {drivers.filter(d => d.status === "available").length}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-success/10 rounded-lg flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-success" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border hover:border-warning/30 transition-all hover:shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">On Route</p>
+                <p className="text-4xl font-bold text-warning" data-testid="metric-onroute-drivers">
+                  {drivers.filter(d => d.status === "on_route").length}
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-warning/10 rounded-lg flex items-center justify-center">
+                <Clock className="w-6 h-6 text-warning" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Search and Filter Section */}
-      <Card className="mb-6">
+      <Card className="mb-6 bg-card border-border">
         <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
             {/* Search Bar */}
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
               <Input
                 type="text"
                 placeholder="Search drivers by name, email, phone, city, or equipment..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-white border-gray-300"
+                className="pl-10 bg-input border-border text-foreground"
                 data-testid="input-search-drivers"
               />
             </div>
             
             {/* Status Filter Tabs */}
             <Tabs value={statusFilter} onValueChange={(value: any) => setStatusFilter(value)} className="w-full lg:w-auto">
-              <TabsList className="grid w-full lg:w-auto grid-cols-4 bg-gray-100" data-testid="tabs-status-filter">
-                <TabsTrigger value="all" className="data-[state=active]:bg-white" data-testid="tab-all">
+              <TabsList className="grid w-full lg:w-auto grid-cols-4 bg-muted" data-testid="tabs-status-filter">
+                <TabsTrigger value="all" className="data-[state=active]:bg-card data-[state=active]:text-foreground" data-testid="tab-all">
                   All
                 </TabsTrigger>
-                <TabsTrigger value="available" className="data-[state=active]:bg-white" data-testid="tab-available">
+                <TabsTrigger value="available" className="data-[state=active]:bg-card data-[state=active]:text-foreground" data-testid="tab-available">
                   Available
                 </TabsTrigger>
-                <TabsTrigger value="on_route" className="data-[state=active]:bg-white" data-testid="tab-on-route">
+                <TabsTrigger value="on_route" className="data-[state=active]:bg-card data-[state=active]:text-foreground" data-testid="tab-on-route">
                   On Route
                 </TabsTrigger>
-                <TabsTrigger value="unavailable" className="data-[state=active]:bg-white" data-testid="tab-unavailable">
+                <TabsTrigger value="unavailable" className="data-[state=active]:bg-card data-[state=active]:text-foreground" data-testid="tab-unavailable">
                   Unavailable
                 </TabsTrigger>
               </TabsList>
@@ -854,12 +903,12 @@ export default function DriverManagement() {
       </Card>
 
       {/* Drivers Table */}
-      <Card>
+      <Card className="bg-card border-border">
         <CardContent className="p-0">
           {filteredDrivers.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Users className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No drivers found</h3>
+            <div className="text-center py-12 text-muted-foreground">
+              <Users className="w-16 h-16 mx-auto text-muted mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No drivers found</h3>
               <p className="text-sm">
                 {searchQuery || statusFilter !== "all" 
                   ? "Try adjusting your search or filter criteria"
@@ -869,9 +918,9 @@ export default function DriverManagement() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="bg-gray-50 hover:bg-gray-50">
+                <TableRow className="bg-muted/50 hover:bg-muted/50 border-b border-border">
                   <TableHead 
-                    className="font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" 
+                    className="font-semibold text-foreground cursor-pointer hover:bg-muted/70 transition-colors" 
                     onClick={() => handleSort('name')}
                     data-testid="header-sort-name"
                   >
@@ -882,9 +931,9 @@ export default function DriverManagement() {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead className="font-semibold text-gray-700">Contact</TableHead>
+                  <TableHead className="font-semibold text-foreground">Contact</TableHead>
                   <TableHead 
-                    className="font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" 
+                    className="font-semibold text-foreground cursor-pointer hover:bg-muted/70 transition-colors" 
                     onClick={() => handleSort('equipment')}
                     data-testid="header-sort-equipment"
                   >
@@ -896,7 +945,7 @@ export default function DriverManagement() {
                     </div>
                   </TableHead>
                   <TableHead 
-                    className="font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" 
+                    className="font-semibold text-foreground cursor-pointer hover:bg-muted/70 transition-colors" 
                     onClick={() => handleSort('status')}
                     data-testid="header-sort-status"
                   >
@@ -907,9 +956,9 @@ export default function DriverManagement() {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead className="font-semibold text-gray-700">Health</TableHead>
+                  <TableHead className="font-semibold text-foreground">Health</TableHead>
                   <TableHead 
-                    className="font-semibold text-gray-700 cursor-pointer hover:bg-gray-100" 
+                    className="font-semibold text-foreground cursor-pointer hover:bg-muted/70 transition-colors" 
                     onClick={() => handleSort('createdAt')}
                     data-testid="header-sort-date-added"
                   >
@@ -920,20 +969,20 @@ export default function DriverManagement() {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead className="font-semibold text-gray-700 text-right">Actions</TableHead>
+                  <TableHead className="font-semibold text-foreground text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredDrivers.map((driver) => (
-                  <TableRow key={driver.id} className="hover:bg-gray-50" data-testid={`driver-row-${driver.id}`}>
+                  <TableRow key={driver.id} className="hover:bg-muted/50 hover:border-primary/30 transition-all border-b border-border" data-testid={`driver-row-${driver.id}`}>
                     {/* Driver Column */}
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                          <Users className="text-teal-600 w-5 h-5" />
+                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                          <Users className="text-primary w-5 h-5" />
                         </div>
                         <div>
-                          <div className="font-medium text-gray-900" data-testid={`text-driver-name-${driver.id}`}>
+                          <div className="font-medium text-foreground" data-testid={`text-driver-name-${driver.id}`}>
                             {driver.name}
                           </div>
                         </div>
@@ -943,10 +992,10 @@ export default function DriverManagement() {
                     {/* Contact Column */}
                     <TableCell>
                       <div className="space-y-1">
-                        <div className="text-sm text-gray-600" data-testid={`text-driver-email-${driver.id}`}>
+                        <div className="text-sm text-foreground" data-testid={`text-driver-email-${driver.id}`}>
                           {driver.email}
                         </div>
-                        <div className="text-sm text-gray-500" data-testid={`text-driver-phone-${driver.id}`}>
+                        <div className="text-sm text-muted-foreground" data-testid={`text-driver-phone-${driver.id}`}>
                           {driver.phone}
                         </div>
                       </div>
@@ -955,10 +1004,10 @@ export default function DriverManagement() {
                     {/* Equipment & Location Column */}
                     <TableCell>
                       <div className="space-y-1">
-                        <div className="text-sm font-medium text-gray-900" data-testid={`text-driver-equipment-${driver.id}`}>
+                        <div className="text-sm font-medium text-foreground" data-testid={`text-driver-equipment-${driver.id}`}>
                           {driver.equipmentType || "Not specified"}
                         </div>
-                        <div className="text-sm text-gray-500 flex items-center gap-1" data-testid={`text-driver-location-${driver.id}`}>
+                        <div className="text-sm text-muted-foreground flex items-center gap-1" data-testid={`text-driver-location-${driver.id}`}>
                           <MapPin className="w-3 h-3" />
                           {driver.city}, {driver.state}
                         </div>
@@ -975,7 +1024,7 @@ export default function DriverManagement() {
                       {(() => {
                         const healthBadge = getHealthBadge(driver);
                         return (
-                          <Badge className={`${healthBadge.color} border-0`}>
+                          <Badge className={`${healthBadge.color} font-medium px-3 py-1`}>
                             {healthBadge.label}
                           </Badge>
                         );
@@ -984,7 +1033,7 @@ export default function DriverManagement() {
 
                     {/* Date Added Column */}
                     <TableCell data-testid={`date-added-driver-${driver.id}`}>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-muted-foreground">
                         {new Date(driver.createdAt).toLocaleDateString('en-US', { 
                           year: 'numeric', 
                           month: 'short', 
@@ -1004,7 +1053,7 @@ export default function DriverManagement() {
                             setPerformanceDriver(driver);
                             setShowPerformanceModal(true);
                           }}
-                          className="text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                          className="text-primary hover:text-primary/90 hover:bg-primary/10 transition-colors"
                           data-testid={`button-performance-${driver.id}`}
                         >
                           <BarChart3 className="w-4 h-4" />
@@ -1015,20 +1064,20 @@ export default function DriverManagement() {
                               variant="ghost" 
                               size="sm" 
                               title="Remove Driver"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="hover:bg-destructive/10 hover:text-destructive transition-colors"
                               data-testid={`button-delete-driver-${driver.id}`}
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent className="bg-white border border-gray-300 shadow-lg">
+                          <AlertDialogContent className="bg-card border-border shadow-lg">
                             <AlertDialogHeader>
-                              <AlertDialogTitle className="flex items-center gap-2">
-                                <AlertTriangle className="w-5 h-5 text-red-600" />
+                              <AlertDialogTitle className="flex items-center gap-2 text-foreground">
+                                <AlertTriangle className="w-5 h-5 text-destructive" />
                                 Remove Driver
                               </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to remove <strong>{driver.name}</strong> from your fleet? 
+                              <AlertDialogDescription className="text-muted-foreground">
+                                Are you sure you want to remove <strong className="text-foreground">{driver.name}</strong> from your fleet? 
                                 This action cannot be undone and will:
                                 <ul className="list-disc list-inside mt-2 space-y-1">
                                   <li>Remove the driver from all future load offers</li>
@@ -1038,13 +1087,13 @@ export default function DriverManagement() {
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel className="bg-white border border-gray-300">
+                              <AlertDialogCancel className="border-border hover:bg-muted">
                                 Cancel
                               </AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() => deleteDriverMutation.mutate(driver.id)}
                                 disabled={deleteDriverMutation.isPending}
-                                className="bg-red-600 text-white hover:bg-red-700"
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 data-testid={`button-confirm-delete-${driver.id}`}
                               >
                                 {deleteDriverMutation.isPending ? "Removing..." : "Remove Driver"}
@@ -1064,10 +1113,10 @@ export default function DriverManagement() {
 
       {/* Invite Driver Modal */}
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
-        <DialogContent data-testid="invite-driver-modal" className="bg-white border border-gray-300 shadow-lg">
+        <DialogContent data-testid="invite-driver-modal" className="bg-card border-border shadow-lg">
           <DialogHeader>
-            <DialogTitle>Invite New Driver</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-foreground">Invite New Driver</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Send an onboarding link via email
             </DialogDescription>
           </DialogHeader>
@@ -1078,13 +1127,13 @@ export default function DriverManagement() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Driver Email</FormLabel>
+                    <FormLabel className="text-foreground font-medium">Driver Email</FormLabel>
                     <FormControl>
                       <Input 
                         {...field} 
                         type="email"
                         placeholder="driver@example.com"
-                        className="bg-white border border-gray-300"
+                        className="bg-input border-border text-foreground"
                         data-testid="input-invite-email"
                       />
                     </FormControl>
@@ -1096,7 +1145,7 @@ export default function DriverManagement() {
                 <Button 
                   type="button" 
                   variant="outline" 
-                  className="bg-white border border-gray-300"
+                  className="border-border hover:bg-muted"
                   onClick={() => setShowInviteModal(false)}
                 >
                   Cancel
@@ -1104,7 +1153,7 @@ export default function DriverManagement() {
                 <Button 
                   type="submit" 
                   disabled={createInviteMutation.isPending}
-                  className="bg-primary text-white hover:bg-blue-700"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
                   data-testid="button-send-invite"
                 >
                   {createInviteMutation.isPending ? "Creating..." : "Create Invite"}
@@ -1117,10 +1166,10 @@ export default function DriverManagement() {
 
       {/* SMS Driver Modal */}
       <Dialog open={showSMSModal} onOpenChange={setShowSMSModal}>
-        <DialogContent data-testid="create-driver-sms-modal" className="bg-white border border-gray-300 shadow-lg">
+        <DialogContent data-testid="create-driver-sms-modal" className="bg-card border-border shadow-lg">
           <DialogHeader>
-            <DialogTitle>Create Driver via SMS</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-foreground">Create Driver via SMS</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Send an onboarding link via text message
             </DialogDescription>
           </DialogHeader>
@@ -1131,13 +1180,13 @@ export default function DriverManagement() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Driver Phone Number</FormLabel>
+                    <FormLabel className="text-foreground font-medium">Driver Phone Number</FormLabel>
                     <FormControl>
                       <Input 
                         {...field} 
                         type="tel"
                         placeholder="+1 (555) 123-4567"
-                        className="bg-white border border-gray-300"
+                        className="bg-input border-border text-foreground"
                         data-testid="input-driver-phone"
                       />
                     </FormControl>
@@ -1150,13 +1199,13 @@ export default function DriverManagement() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Driver Email</FormLabel>
+                    <FormLabel className="text-foreground font-medium">Driver Email</FormLabel>
                     <FormControl>
                       <Input 
                         {...field} 
                         type="email"
                         placeholder="driver@example.com"
-                        className="bg-white border border-gray-300"
+                        className="bg-input border-border text-foreground"
                         data-testid="input-driver-email-sms"
                       />
                     </FormControl>
@@ -1168,7 +1217,7 @@ export default function DriverManagement() {
                 <Button 
                   type="button" 
                   variant="outline" 
-                  className="bg-white border border-gray-300"
+                  className="border-border hover:bg-muted"
                   onClick={() => setShowSMSModal(false)}
                 >
                   Cancel
@@ -1176,7 +1225,7 @@ export default function DriverManagement() {
                 <Button 
                   type="submit" 
                   disabled={createSMSInviteMutation.isPending}
-                  className="bg-green-600 text-white hover:bg-green-700"
+                  className="bg-success hover:bg-success/90 text-success-foreground"
                   data-testid="button-send-sms-invite"
                 >
                   {createSMSInviteMutation.isPending ? "Sending..." : "Send SMS Invite"}
@@ -1189,10 +1238,10 @@ export default function DriverManagement() {
 
       {/* Telegram Driver Modal */}
       <Dialog open={showTelegramModal} onOpenChange={setShowTelegramModal}>
-        <DialogContent data-testid="create-driver-telegram-modal" className="bg-white border border-gray-300 shadow-lg">
+        <DialogContent data-testid="create-driver-telegram-modal" className="bg-card border-border shadow-lg">
           <DialogHeader>
-            <DialogTitle>Create Driver via Telegram</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-foreground">Create Driver via Telegram</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
               Send an onboarding link via Telegram
             </DialogDescription>
           </DialogHeader>
@@ -1203,13 +1252,13 @@ export default function DriverManagement() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Driver Phone Number</FormLabel>
+                    <FormLabel className="text-foreground font-medium">Driver Phone Number</FormLabel>
                     <FormControl>
                       <Input 
                         {...field} 
                         type="tel"
                         placeholder="+1 (555) 123-4567"
-                        className="bg-white border border-gray-300"
+                        className="bg-input border-border text-foreground"
                         data-testid="input-driver-phone-telegram"
                       />
                     </FormControl>
@@ -1222,13 +1271,13 @@ export default function DriverManagement() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Driver Email</FormLabel>
+                    <FormLabel className="text-foreground font-medium">Driver Email</FormLabel>
                     <FormControl>
                       <Input 
                         {...field} 
                         type="email"
                         placeholder="driver@example.com"
-                        className="bg-white border border-gray-300"
+                        className="bg-input border-border text-foreground"
                         data-testid="input-driver-email-telegram"
                       />
                     </FormControl>
@@ -1240,7 +1289,7 @@ export default function DriverManagement() {
                 <Button 
                   type="button" 
                   variant="outline" 
-                  className="bg-white border border-gray-300"
+                  className="border-border hover:bg-muted"
                   onClick={() => setShowTelegramModal(false)}
                 >
                   Cancel
@@ -1248,7 +1297,7 @@ export default function DriverManagement() {
                 <Button 
                   type="submit" 
                   disabled={createTelegramInviteMutation.isPending}
-                  className="bg-blue-600 text-white hover:bg-blue-700"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
                   data-testid="button-send-telegram-invite"
                 >
                   {createTelegramInviteMutation.isPending ? "Sending..." : "Send Telegram Invite"}

@@ -294,25 +294,25 @@ export default function DispatcherDashboard() {
     }
   });
 
-  // Helper functions
+  // Helper functions with vibrant modern styling
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'available': return 'bg-green-500';
-      case 'pending': return 'bg-yellow-500';
-      case 'assigned': return 'bg-blue-500';
-      case 'in_transit': return 'bg-purple-500';
-      case 'delivered': return 'bg-gray-500';
-      case 'cancelled': return 'bg-red-500';
-      default: return 'bg-gray-400';
+      case 'available': return 'bg-success/10 text-success border border-success/30';
+      case 'pending': return 'bg-primary/10 text-primary border border-primary/30';
+      case 'assigned': return 'bg-primary/10 text-primary border border-primary/30';
+      case 'in_transit': return 'bg-primary/10 text-primary border border-primary/30';
+      case 'delivered': return 'bg-success/10 text-success border border-success/30';
+      case 'cancelled': return 'bg-destructive/10 text-destructive border border-destructive/30';
+      default: return 'bg-muted/10 text-muted-foreground border border-muted/30';
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'high': return 'text-red-600 bg-red-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'low': return 'text-green-600 bg-green-100';
-      default: return 'text-gray-600 bg-gray-100';
+      case 'high': return 'bg-destructive/10 text-destructive border border-destructive/30';
+      case 'medium': return 'bg-warning/10 text-warning border border-warning/30';
+      case 'low': return 'bg-success/10 text-success border border-success/30';
+      default: return 'bg-muted/10 text-muted-foreground border border-muted/30';
     }
   };
 
@@ -359,7 +359,7 @@ export default function DispatcherDashboard() {
       description: thread.lastMessage,
       timestamp: new Date(thread.lastMessageTimestamp),
       icon: MessageCircle,
-      color: 'text-blue-500'
+      color: 'text-primary'
     })),
     ...loads
       .filter(l => l.status === 'in_transit' || l.status === 'delivered')
@@ -371,7 +371,7 @@ export default function DispatcherDashboard() {
         description: `Status changed to ${load.status}`,
         timestamp: new Date(load.updatedAt || load.createdAt),
         icon: load.status === 'delivered' ? CheckCircle : Truck,
-        color: load.status === 'delivered' ? 'text-green-500' : 'text-purple-500'
+        color: load.status === 'delivered' ? 'text-success' : 'text-primary'
       }))
   ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 15);
 
@@ -400,7 +400,7 @@ export default function DispatcherDashboard() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-[#0A101A]" data-testid="heading-dispatcher-dashboard">
+          <h1 className="text-3xl font-bold" data-testid="heading-dispatcher-dashboard">
             Mission Control
           </h1>
           <p className="text-muted-foreground">Unified dispatcher workspace</p>
@@ -415,7 +415,7 @@ export default function DispatcherDashboard() {
           <TabsTrigger value="documents" data-testid="tab-documents">
             Documents
             {documents.filter(d => d.approvalStatus === 'pending').length > 0 && (
-              <Badge className="ml-2 bg-red-500">{documents.filter(d => d.approvalStatus === 'pending').length}</Badge>
+              <Badge className="ml-2 bg-destructive/10 text-destructive border border-destructive/30">{documents.filter(d => d.approvalStatus === 'pending').length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="sms" data-testid="tab-sms">SMS Dispatch</TabsTrigger>
@@ -425,73 +425,73 @@ export default function DispatcherDashboard() {
         <TabsContent value="overview" className="space-y-6 mt-6">
           {/* Quick Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-l-4 border-l-purple-500">
+        <Card className="hover:border-primary/30 transition-all hover:-translate-y-1 border-l-4 border-l-primary">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground" data-testid="label-active-loads">
                   Active Loads
                 </p>
-                <p className="text-3xl font-bold text-[#0A101A]" data-testid="count-active-loads">
+                <p className="text-4xl font-bold text-primary" data-testid="count-active-loads">
                   {activeLoads}
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                <Truck className="h-6 w-6 text-purple-600" />
+              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                <Truck className="h-7 w-7 text-primary" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-green-500">
+        <Card className="hover:border-success/30 transition-all hover:-translate-y-1 border-l-4 border-l-success">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground" data-testid="label-available-drivers">
                   Available Drivers
                 </p>
-                <p className="text-3xl font-bold text-[#0A101A]" data-testid="count-available-drivers">
+                <p className="text-4xl font-bold text-success" data-testid="count-available-drivers">
                   {availableDrivers}
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <Users className="h-6 w-6 text-green-600" />
+              <div className="h-14 w-14 rounded-full bg-success/10 flex items-center justify-center border border-success/20">
+                <Users className="h-7 w-7 text-success" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-yellow-500">
+        <Card className="hover:border-warning/30 transition-all hover:-translate-y-1 border-l-4 border-l-warning">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground" data-testid="label-pending-assignments">
                   Pending Assignments
                 </p>
-                <p className="text-3xl font-bold text-[#0A101A]" data-testid="count-pending-assignments">
+                <p className="text-4xl font-bold text-warning" data-testid="count-pending-assignments">
                   {pendingAssignments}
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
-                <ClipboardList className="h-6 w-6 text-yellow-600" />
+              <div className="h-14 w-14 rounded-full bg-warning/10 flex items-center justify-center border border-warning/20">
+                <ClipboardList className="h-7 w-7 text-warning" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-l-4 border-l-blue-500">
+        <Card className="hover:border-primary/30 transition-all hover:-translate-y-1 border-l-4 border-l-primary">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground" data-testid="label-todays-pickups">
                   Today's Pickups
                 </p>
-                <p className="text-3xl font-bold text-[#0A101A]" data-testid="count-todays-pickups">
+                <p className="text-4xl font-bold text-primary" data-testid="count-todays-pickups">
                   {todaysPickups}
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <Calendar className="h-6 w-6 text-blue-600" />
+              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
+                <Calendar className="h-7 w-7 text-primary" />
               </div>
             </div>
           </CardContent>
@@ -561,9 +561,9 @@ export default function DispatcherDashboard() {
         {/* Panel A - Active Loads (Left, 30%) */}
         <div className="lg:col-span-3">
           <Card className="h-[700px]">
-            <CardHeader className="bg-[#0A101A] text-white">
+            <CardHeader className="bg-card border-b border-primary/30">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Package className="h-5 w-5" />
+                <Package className="h-5 w-5 text-primary" />
                 Active Loads ({filteredLoads.length})
               </CardTitle>
             </CardHeader>
@@ -589,7 +589,7 @@ export default function DispatcherDashboard() {
                       loads.length > 0 && (
                         <div key={status}>
                           <div className="flex items-center gap-2 mb-2">
-                            <Badge className={`${getStatusColor(status)} text-white`}>
+                            <Badge className={getStatusColor(status)}>
                               {status.replace('_', ' ')}
                             </Badge>
                             <span className="text-sm text-muted-foreground">({loads.length})</span>
@@ -598,8 +598,8 @@ export default function DispatcherDashboard() {
                             {loads.map((load) => (
                               <Card
                                 key={load.id}
-                                className={`cursor-pointer transition-all hover:shadow-md ${
-                                  selectedLoad?.id === load.id ? 'ring-2 ring-[#00B5B8] shadow-md' : ''
+                                className={`cursor-pointer transition-all hover:bg-muted/50 hover:border-primary/30 ${
+                                  selectedLoad?.id === load.id ? 'ring-2 ring-primary border-primary/50 shadow-lg' : ''
                                 }`}
                                 onClick={() => setSelectedLoad(load)}
                                 data-testid={`card-load-${load.id}`}
@@ -621,12 +621,12 @@ export default function DispatcherDashboard() {
                                     </div>
                                     
                                     <div className="flex items-center justify-between text-xs">
-                                      <div className="flex items-center gap-1 font-medium text-green-600">
+                                      <div className="flex items-center gap-1 font-semibold text-success">
                                         <DollarSign className="h-3 w-3" />
-                                        {load.rate?.toLocaleString() || 'N/A'}
+                                        ${load.rate?.toLocaleString() || 'N/A'}
                                       </div>
                                       {load.assignedDriver && (
-                                        <div className="flex items-center gap-1 text-blue-600">
+                                        <div className="flex items-center gap-1 text-primary font-medium">
                                           <User className="h-3 w-3" />
                                           <span className="truncate max-w-[100px]">
                                             {load.assignedDriver.name}
@@ -681,9 +681,9 @@ export default function DispatcherDashboard() {
         {/* Panel B - Available Drivers (Center, 30%) */}
         <div className="lg:col-span-3">
           <Card className="h-[700px]">
-            <CardHeader className="bg-[#0A101A] text-white">
+            <CardHeader className="bg-card border-b border-primary/30">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Users className="h-5 w-5" />
+                <Users className="h-5 w-5 text-success" />
                 Available Drivers ({filteredDrivers.length})
               </CardTitle>
             </CardHeader>
@@ -717,8 +717,8 @@ export default function DispatcherDashboard() {
                         {filteredDrivers.map((driver) => (
                           <Card
                             key={driver.id}
-                            className={`cursor-pointer transition-all hover:shadow-md ${
-                              selectedDriverId === driver.id ? 'ring-2 ring-[#00B5B8] shadow-md' : ''
+                            className={`cursor-pointer transition-all hover:bg-muted/50 hover:border-primary/30 ${
+                              selectedDriverId === driver.id ? 'ring-2 ring-primary border-primary/50 shadow-lg' : ''
                             }`}
                             onClick={() => setSelectedDriverId(driver.id)}
                             data-testid={`card-driver-${driver.id}`}
@@ -737,9 +737,9 @@ export default function DispatcherDashboard() {
                                   </div>
                                   <Badge 
                                     className={
-                                      driver.status === 'available' ? 'bg-green-500 text-white' :
-                                      driver.status === 'on_route' ? 'bg-blue-500 text-white' :
-                                      'bg-gray-500 text-white'
+                                      driver.status === 'available' ? 'bg-success/10 text-success border border-success/30' :
+                                      driver.status === 'on_route' ? 'bg-primary/10 text-primary border border-primary/30' :
+                                      'bg-muted/10 text-muted-foreground border border-muted/30'
                                     }
                                   >
                                     {driver.status}
@@ -804,9 +804,9 @@ export default function DispatcherDashboard() {
         {/* Panel C - Activity Feed (Right, 40%) */}
         <div className="lg:col-span-4">
           <Card className="h-[700px]">
-            <CardHeader className="bg-[#0A101A] text-white">
+            <CardHeader className="bg-card border-b border-primary/30">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Activity className="h-5 w-5" />
+                <Activity className="h-5 w-5 text-warning" />
                 Activity Feed
               </CardTitle>
             </CardHeader>
@@ -824,14 +824,19 @@ export default function DispatcherDashboard() {
                       return (
                         <div 
                           key={item.id} 
-                          className="flex gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors"
+                          className="flex gap-3 p-3 rounded-lg border hover:bg-muted/50 hover:border-primary/20 transition-all"
                           data-testid={`activity-item-${item.id}`}
                         >
-                          <div className={`flex-shrink-0 ${item.color}`}>
+                          <div className={`flex-shrink-0 p-2 rounded-lg ${
+                            item.type === 'message' ? 'bg-primary/10 text-primary' :
+                            item.type === 'status_change' ? 'bg-success/10 text-success' :
+                            item.type === 'document' ? 'bg-warning/10 text-warning' :
+                            'bg-destructive/10 text-destructive'
+                          }`}>
                             <Icon className="h-5 w-5" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm">{item.title}</p>
+                            <p className="font-semibold text-sm">{item.title}</p>
                             <p className="text-xs text-muted-foreground mt-1 truncate">
                               {item.description}
                             </p>
@@ -840,7 +845,12 @@ export default function DispatcherDashboard() {
                             </p>
                           </div>
                           <div className="flex-shrink-0">
-                            <Badge variant="outline" className="text-xs">
+                            <Badge className={
+                              item.type === 'message' ? 'bg-primary/10 text-primary border border-primary/30' :
+                              item.type === 'status_change' ? 'bg-success/10 text-success border border-success/30' :
+                              item.type === 'document' ? 'bg-warning/10 text-warning border border-warning/30' :
+                              'bg-destructive/10 text-destructive border border-destructive/30'
+                            }>
                               {item.type.replace('_', ' ')}
                             </Badge>
                           </div>
@@ -931,7 +941,7 @@ export default function DispatcherDashboard() {
               {/* Driver location cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {driverLocations?.locations?.map((loc: DriverLocation) => (
-                  <Card key={loc.driverId} data-testid={`gps-location-card-${loc.driverId}`}>
+                  <Card key={loc.driverId} className="hover:border-primary/30 transition-all" data-testid={`gps-location-card-${loc.driverId}`}>
                     <CardContent className="p-4">
                       <div className="space-y-2">
                         <div className="flex justify-between items-start">
@@ -943,22 +953,22 @@ export default function DispatcherDashboard() {
                               {loc.address || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`}
                             </p>
                           </div>
-                          <Badge className={loc.isMoving ? 'bg-green-500' : 'bg-gray-500'}>
+                          <Badge className={loc.isMoving ? 'bg-success/10 text-success border border-success/30' : 'bg-muted/10 text-muted-foreground border border-muted/30'}>
                             {loc.isMoving ? 'Moving' : 'Stationary'}
                           </Badge>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           {loc.speed !== undefined && (
-                            <div className="flex items-center gap-1">
-                              <Navigation className="h-3 w-3 text-muted-foreground" />
+                            <div className="flex items-center gap-1 text-primary font-medium">
+                              <Navigation className="h-3 w-3" />
                               <span>{Math.round(loc.speed)} mph</span>
                             </div>
                           )}
                           {loc.batteryLevel !== undefined && (
-                            <div className="flex items-center gap-1">
-                              <Activity className="h-3 w-3 text-muted-foreground" />
-                              <span>{loc.batteryLevel}% battery</span>
+                            <div className="flex items-center gap-1 font-medium">
+                              <Activity className={`h-3 w-3 ${loc.batteryLevel > 20 ? 'text-success' : 'text-destructive'}`} />
+                              <span className={loc.batteryLevel > 20 ? 'text-success' : 'text-destructive'}>{loc.batteryLevel}%</span>
                             </div>
                           )}
                         </div>
@@ -1013,7 +1023,7 @@ export default function DispatcherDashboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredDocuments.map(doc => (
-                <Card key={doc.id} data-testid={`document-card-${doc.id}`}>
+                <Card key={doc.id} className="hover:border-primary/30 transition-all" data-testid={`document-card-${doc.id}`}>
                   <CardContent className="p-4">
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
@@ -1030,9 +1040,9 @@ export default function DispatcherDashboard() {
                         </div>
                         <Badge 
                           className={
-                            doc.approvalStatus === 'approved' ? 'bg-green-500' :
-                            doc.approvalStatus === 'rejected' ? 'bg-red-500' :
-                            'bg-yellow-500'
+                            doc.approvalStatus === 'approved' ? 'bg-success/10 text-success border border-success/30' :
+                            doc.approvalStatus === 'rejected' ? 'bg-destructive/10 text-destructive border border-destructive/30' :
+                            'bg-warning/10 text-warning border border-warning/30'
                           }
                         >
                           {doc.approvalStatus}
@@ -1058,7 +1068,7 @@ export default function DispatcherDashboard() {
                           <>
                             <Button
                               size="sm"
-                              className="flex-1 bg-green-500 hover:bg-green-600 text-xs"
+                              className="flex-1 bg-success hover:bg-success/90 text-xs text-white"
                               onClick={() => approveDocumentMutation.mutate({ documentId: doc.id })}
                               disabled={approveDocumentMutation.isPending}
                               data-testid={`button-approve-document-${doc.id}`}

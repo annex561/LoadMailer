@@ -1211,16 +1211,16 @@ export default function CommunicationDashboard() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] bg-gray-50" data-testid="communication-dashboard">
+    <div className="flex h-[calc(100vh-8rem)] bg-background" data-testid="communication-dashboard">
       {/* Thread List Sidebar */}
-      <div className="w-80 min-w-80 max-w-80 flex-shrink-0 border-r border-gray-200 bg-gray-50 flex flex-col shadow-sm">
+      <div className="w-80 min-w-80 max-w-80 flex-shrink-0 border-r border-border bg-card flex flex-col shadow-sm">
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 bg-white shadow-sm">
+        <div className="p-4 border-b border-border bg-card shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold text-gray-900">Message Center</h2>
+              <h2 className="text-2xl font-bold text-foreground">Message Center</h2>
               {threads.reduce((sum, thread) => sum + thread.unreadDispatchMessages, 0) > 0 && (
-                <Badge className="bg-red-500 text-white" data-testid="badge-unread-count">
+                <Badge className="bg-destructive text-destructive-foreground" data-testid="badge-unread-count">
                   {threads.reduce((sum, thread) => sum + thread.unreadDispatchMessages, 0)}
                 </Badge>
               )}
@@ -1234,7 +1234,7 @@ export default function CommunicationDashboard() {
                 refetchUnassignedLoads();
               }}
               disabled={threadsLoading}
-              className="hover:shadow-sm transition-all duration-200"
+              className="hover:shadow-sm hover:border-primary/50 transition-all duration-200"
               data-testid="button-refresh"
             >
               <RefreshCw className={`w-4 h-4 transition-transform ${threadsLoading ? 'animate-spin' : ''}`} />
@@ -1244,7 +1244,7 @@ export default function CommunicationDashboard() {
           {/* Search and Filter */}
           <div className="space-y-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Search drivers, loads, routes..."
                 value={searchTerm}
@@ -1254,17 +1254,17 @@ export default function CommunicationDashboard() {
                 }}
                 onFocus={() => setShowDriverDropdown(searchTerm.length > 0)}
                 onBlur={() => setTimeout(() => setShowDriverDropdown(false), 200)}
-                className="pl-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                className="pl-10 bg-input border-border text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                 data-testid="input-search"
               />
               
               {/* Driver Dropdown */}
               {showDriverDropdown && filteredDrivers.length > 0 && (
-                <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-300 rounded-md shadow-xl max-h-60 overflow-y-auto">
+                <div className="absolute z-[100] w-full mt-1 bg-card border border-border rounded-md shadow-xl max-h-60 overflow-y-auto">
                   {filteredDrivers.map((driver) => (
                     <button
                       key={driver.id}
-                      className="w-full text-left px-4 py-3 hover:bg-gray-100 focus:bg-gray-100 flex items-center justify-between transition-colors"
+                      className="w-full text-left px-4 py-3 hover:bg-muted/50 focus:bg-muted/50 flex items-center justify-between transition-all"
                       onClick={() => {
                         startGeneralChatMutation.mutate(driver.id);
                         setSearchTerm("");
@@ -1273,19 +1273,19 @@ export default function CommunicationDashboard() {
                       data-testid={`button-select-driver-${driver.id}`}
                     >
                       <div className="flex items-center gap-3">
-                        <User className="w-5 h-5 text-gray-600" />
+                        <User className="w-5 h-5 text-muted-foreground" />
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{driver.name}</div>
-                          <div className="text-sm text-gray-600">{driver.phone || 'No phone'}</div>
+                          <div className="text-sm font-semibold text-foreground">{driver.name}</div>
+                          <div className="text-sm text-muted-foreground">{driver.phone || 'No phone'}</div>
                         </div>
                       </div>
                       <Badge 
                         className={
                           driver.status === 'available' 
-                            ? "bg-emerald-100 text-emerald-700 border-emerald-300" 
+                            ? "bg-success/10 text-success border border-success/30" 
                             : driver.status === 'on_route'
-                            ? "bg-blue-100 text-blue-700 border-blue-300"
-                            : "bg-gray-100 text-gray-800 border-gray-200"
+                            ? "bg-primary/10 text-primary border border-primary/30"
+                            : "bg-muted/10 text-muted-foreground border border-muted/30"
                         }
                       >
                         {driver.status}
@@ -1296,10 +1296,10 @@ export default function CommunicationDashboard() {
               )}
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="bg-white border border-gray-300" data-testid="select-filter">
+              <SelectTrigger className="bg-input border-border text-foreground" data-testid="select-filter">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-white border border-gray-300 shadow-lg">
+              <SelectContent className="bg-card border-border shadow-lg">
                 <SelectItem value="all">All Conversations</SelectItem>
                 <SelectItem value="active">Active Only</SelectItem>
                 <SelectItem value="unread">Unread Messages</SelectItem>
@@ -1316,15 +1316,15 @@ export default function CommunicationDashboard() {
             {threadsLoading && (
               <div className="p-2 space-y-1.5">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="bg-white border border-gray-200 rounded-lg p-2.5 animate-pulse">
+                  <div key={i} className="bg-card border border-border rounded-lg p-2.5 animate-pulse">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 space-y-2">
-                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                        <div className="h-3 bg-gray-100 rounded w-1/3"></div>
+                        <div className="h-4 bg-muted rounded w-1/2"></div>
+                        <div className="h-3 bg-muted/50 rounded w-1/3"></div>
                       </div>
-                      <div className="w-7 h-7 bg-gray-200 rounded-full"></div>
+                      <div className="w-7 h-7 bg-muted rounded-full"></div>
                     </div>
-                    <div className="h-3 bg-gray-100 rounded w-3/4"></div>
+                    <div className="h-3 bg-muted/50 rounded w-3/4"></div>
                   </div>
                 ))}
               </div>
@@ -1334,8 +1334,8 @@ export default function CommunicationDashboard() {
             {!threadsLoading && sortedThreads.map((thread) => (
               <button
                 key={thread.id}
-                className={`w-full mb-1.5 cursor-pointer transition-all duration-200 ease-in-out hover:bg-blue-50 hover:border-blue-200 hover:shadow-md rounded-lg border ${
-                  selectedThread?.id === thread.id ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-200 shadow-sm' : 'border-gray-200 bg-white'
+                className={`w-full mb-1.5 cursor-pointer transition-all duration-200 ease-in-out hover:bg-muted/50 hover:border-primary/30 hover:shadow-md rounded-lg border ${
+                  selectedThread?.id === thread.id ? 'ring-2 ring-primary border-primary/50 shadow-lg bg-muted/30' : 'border-border bg-card'
                 }`}
                 onClick={() => setSelectedThread(thread)}
                 data-testid={`button-thread-${thread.id}`}
@@ -1345,28 +1345,28 @@ export default function CommunicationDashboard() {
                     <div className="flex-1">
                       <div className="flex items-center gap-1.5 mb-1">
                         <div className={`w-2 h-2 rounded-full ${getStatusDotColor(thread)}`}></div>
-                        <h4 className="font-semibold text-sm text-gray-900">{thread.driverName}</h4>
+                        <h4 className="font-semibold text-sm text-foreground">{thread.driverName}</h4>
                         {getThreadStatusBadge(thread)}
                         {thread.loadNumber && (
-                          <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-[10px] px-1.5 py-0.5">
+                          <Badge className="bg-primary/10 text-primary border border-primary/30 text-[10px] px-1.5 py-0.5">
                             {thread.loadNumber}
                           </Badge>
                         )}
                       </div>
-                      <p className="text-[10px] text-gray-500">{thread.driverPhone || 'No phone'}</p>
+                      <p className="text-[10px] text-muted-foreground">{thread.driverPhone || 'No phone'}</p>
                       {thread.loadOrigin && thread.loadDestination && (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {thread.loadOrigin} → {thread.loadDestination}
                         </p>
                       )}
                       {thread.loadOfferStatus === 'pending' && (
-                        <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-[10px] px-1.5 py-0.5 mt-1">
+                        <Badge className="bg-warning/10 text-warning border border-warning/30 text-[10px] px-1.5 py-0.5 mt-1">
                           Load Offer Pending
                         </Badge>
                       )}
                     </div>
                     <Avatar className="w-7 h-7">
-                      <AvatarFallback className="text-xs bg-gray-200">
+                      <AvatarFallback className="text-xs bg-muted text-muted-foreground">
                         {thread.driverName.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
@@ -1374,11 +1374,11 @@ export default function CommunicationDashboard() {
                   
                   {thread.lastMessageText && (
                     <div className="mt-1.5">
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-xs text-muted-foreground truncate">
                         {thread.lastMessageSender === 'dispatch' ? 'You: ' : ''}
                         {thread.lastMessageText}
                       </p>
-                      <p className="text-[10px] text-gray-400 mt-1">
+                      <p className="text-[10px] text-muted-foreground/70 mt-1">
                         {formatMessageTime(thread.lastMessageAt)}
                       </p>
                     </div>
@@ -1389,11 +1389,11 @@ export default function CommunicationDashboard() {
             
             {/* Empty State */}
             {!threadsLoading && filteredThreads.length === 0 && (
-              <div className="bg-gray-50 rounded-lg p-8 m-4">
+              <div className="bg-muted/30 rounded-lg p-8 m-4">
                 <div className="text-center">
-                  <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-400" data-testid="icon-empty-conversations" />
-                  <p className="text-gray-600 font-medium mb-2" data-testid="text-empty-primary">No conversations yet</p>
-                  <p className="text-sm text-gray-500" data-testid="text-empty-secondary">Search for a driver above to start a conversation</p>
+                  <MessageSquare className="w-16 h-16 mx-auto mb-4 text-muted-foreground" data-testid="icon-empty-conversations" />
+                  <p className="text-foreground font-medium mb-2" data-testid="text-empty-primary">No conversations yet</p>
+                  <p className="text-sm text-muted-foreground" data-testid="text-empty-secondary">Search for a driver above to start a conversation</p>
                 </div>
               </div>
             )}
@@ -1406,17 +1406,17 @@ export default function CommunicationDashboard() {
         {selectedThread ? (
           <>
             {/* Chat Header */}
-            <div className="p-4 border-b border-gray-200 bg-white shadow-sm">
+            <div className="p-4 border-b border-border bg-card shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Avatar className="w-10 h-10">
-                    <AvatarFallback className="bg-blue-100 text-blue-600">
+                    <AvatarFallback className="bg-primary/10 text-primary">
                       {selectedThread.driverName.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <h3 className="font-medium text-gray-900">{selectedThread.driverName}</h3>
-                    <p className="text-sm text-gray-600">
+                    <h3 className="font-medium text-foreground">{selectedThread.driverName}</h3>
+                    <p className="text-sm text-muted-foreground">
                       {selectedThread.driverPhone || 'No phone'} 
                       {selectedThread.loadNumber && ` • Load ${selectedThread.loadNumber}`}
                     </p>
@@ -1429,7 +1429,7 @@ export default function CommunicationDashboard() {
                       variant="outline"
                       size="sm"
                       onClick={() => window.open(`tel:${selectedThread.driverPhone}`, '_self')}
-                      className="hover:shadow-sm transition-all duration-200"
+                      className="hover:shadow-sm hover:border-primary/50 transition-all duration-200"
                       data-testid="button-call-driver"
                     >
                       <Phone className="w-4 h-4" />
@@ -1438,7 +1438,7 @@ export default function CommunicationDashboard() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="hover:shadow-sm transition-all duration-200"
+                    className="hover:shadow-sm hover:border-primary/50 transition-all duration-200"
                     data-testid="button-more-actions"
                   >
                     <MoreVertical className="w-4 h-4" />
@@ -1447,9 +1447,9 @@ export default function CommunicationDashboard() {
               </div>
               
               {/* Load Info & AI Controls */}
-              <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+              <div className="mt-3 p-3 bg-muted/30 rounded-lg">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     {selectedThread.loadOrigin && selectedThread.loadDestination ? (
                       <div className="flex items-center gap-1">
                         <MapPin className="w-4 h-4" />
@@ -1521,7 +1521,7 @@ export default function CommunicationDashboard() {
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="flex-1 p-4 bg-background">
               <div className="space-y-4">
                 {messages.map((message) => (
                   <div
@@ -1532,8 +1532,8 @@ export default function CommunicationDashboard() {
                     <div
                       className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                         message.sender === 'dispatch'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white border border-gray-200 text-gray-900'
+                          ? 'bg-primary/10 text-foreground border border-primary/30'
+                          : 'bg-muted text-foreground'
                       }`}
                     >
                       {message.mediaUrl && message.mediaType?.startsWith('image/') && (
@@ -1548,7 +1548,7 @@ export default function CommunicationDashboard() {
                       )}
                       {message.content && <p className="text-sm">{message.content}</p>}
                       <div className={`flex items-center justify-between mt-1 text-xs ${
-                        message.sender === 'dispatch' ? 'text-blue-100' : 'text-gray-500'
+                        message.sender === 'dispatch' ? 'text-primary/70' : 'text-muted-foreground'
                       }`}>
                         <span>{formatMessageTime(message.createdAt)}</span>
                         {message.sender === 'dispatch' && (
@@ -1570,11 +1570,11 @@ export default function CommunicationDashboard() {
 
             {/* AI Suggestions Panel */}
             {selectedThread?.assistantEnabled && showAiPanel && aiSuggestions.length > 0 && (
-              <div className="border-t border-gray-200 bg-gradient-to-r from-blue-50 to-purple-50 p-3">
+              <div className="border-t border-border bg-primary/5 p-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4 text-yellow-600" />
-                    <h4 className="text-sm font-medium text-gray-800">AI Suggestions</h4>
+                    <Lightbulb className="w-4 h-4 text-warning" />
+                    <h4 className="text-sm font-medium text-foreground">AI Suggestions</h4>
                     <Badge variant="outline" className="text-xs">
                       {aiSuggestions.length} available
                     </Badge>
@@ -1591,12 +1591,12 @@ export default function CommunicationDashboard() {
                 
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {aiSuggestions.slice(0, 3).map((suggestion) => (
-                    <div key={suggestion.id} className="bg-white rounded-lg p-3 border border-gray-200">
+                    <div key={suggestion.id} className="bg-card rounded-lg p-3 border border-border">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
-                          <p className="text-sm text-gray-800 mb-1">{suggestion.suggestedText}</p>
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <Badge className="bg-blue-100 text-blue-800 text-xs">
+                          <p className="text-sm text-foreground mb-1">{suggestion.suggestedText}</p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Badge className="bg-primary/10 text-primary border border-primary/30 text-xs">
                               {suggestion.confidence}% confident
                             </Badge>
                             <span>{suggestion.messageType}</span>
@@ -1604,7 +1604,7 @@ export default function CommunicationDashboard() {
                             <span>{suggestion.tone}</span>
                           </div>
                           {suggestion.reasoning && (
-                            <p className="text-xs text-gray-600 mt-1 italic">{suggestion.reasoning}</p>
+                            <p className="text-xs text-muted-foreground mt-1 italic">{suggestion.reasoning}</p>
                           )}
                         </div>
                         <div className="flex gap-1">
@@ -1637,7 +1637,7 @@ export default function CommunicationDashboard() {
 
             {/* Load Offer Section for General Conversations */}
             {selectedThread?.threadType === 'general' && (
-              <div className="p-3 border-t border-gray-200 bg-blue-50">
+              <div className="p-3 border-t border-border bg-primary/5">
                 <div className="mb-3">
                   {selectedThread.loadOfferStatus === 'pending' && selectedThread.loadId && (
                     <Alert className="border-yellow-300 bg-yellow-50">
@@ -1685,8 +1685,8 @@ export default function CommunicationDashboard() {
             )}
 
             {/* Quick Replies */}
-            <div className="p-3 border-t border-gray-200 bg-gray-50">
-              <h4 className="text-xs font-medium text-gray-700 mb-2">Quick Messages</h4>
+            <div className="p-3 border-t border-border bg-muted/30">
+              <h4 className="text-xs font-medium text-foreground mb-2">Quick Messages</h4>
               <div className="grid grid-cols-2 gap-2 mb-3">
                 {/* Common Dispatcher Messages */}
                 <Button
@@ -1775,10 +1775,10 @@ export default function CommunicationDashboard() {
             </div>
 
             {/* Message Input with AI Smart Compose */}
-            <div className="border-t border-gray-200 bg-white">
+            <div className="border-t border-border bg-card">
               {/* AI Quick Actions */}
               {selectedThread?.assistantEnabled && (
-                <div className="px-4 pt-3 pb-2 border-b border-gray-100">
+                <div className="px-4 pt-3 pb-2 border-b border-border">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-gray-600">AI Assist</span>
                     <div className="flex gap-1">
@@ -1879,7 +1879,7 @@ export default function CommunicationDashboard() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       rows={1}
-                      className="min-h-[40px] resize-none pr-8"
+                      className="min-h-[40px] resize-none pr-8 bg-input border-border text-foreground"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
@@ -1956,6 +1956,7 @@ export default function CommunicationDashboard() {
                     <Button
                       onClick={handleSendMessage}
                       disabled={!newMessage.trim() || sendMessageMutation.isPending}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
                       data-testid="button-send-message"
                     >
                       <Send className="w-4 h-4" />
@@ -1967,14 +1968,14 @@ export default function CommunicationDashboard() {
           </>
         ) : (
           /* No Thread Selected */
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
+          <div className="flex-1 flex items-center justify-center bg-background">
             <div className="text-center">
-              <MessageSquare className="w-20 h-20 mx-auto mb-4 text-gray-400" data-testid="icon-no-selection" />
-              <h3 className="text-lg font-medium text-gray-600 mb-2" data-testid="text-no-selection-primary">Select a conversation</h3>
-              <p className="text-sm text-gray-500 max-w-md mx-auto" data-testid="text-no-selection-secondary">
+              <MessageSquare className="w-20 h-20 mx-auto mb-4 text-muted-foreground" data-testid="icon-no-selection" />
+              <h3 className="text-lg font-medium text-foreground mb-2" data-testid="text-no-selection-primary">Select a conversation</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto" data-testid="text-no-selection-secondary">
                 Choose a conversation from the list to view messages and communicate with drivers
               </p>
-              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-400">
+              <div className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground/70">
                 <span>💬 Real-time messaging</span>
                 <span>•</span>
                 <span>📱 SMS & Zello</span>
