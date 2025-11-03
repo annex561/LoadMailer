@@ -1,0 +1,263 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Truck, Trash2, ChartLine, Eye } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend } from "recharts";
+import { motion, AnimatePresence } from "framer-motion";
+
+// ──────────────────────────────────────────────────────────────
+// Utils
+// ──────────────────────────────────────────────────────────────
+const currency0 = (n:number) => (Number.isFinite(n)?n:0).toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:0});
+const currency2 = (n:number) => (Number.isFinite(n)?n:0).toLocaleString(undefined,{style:'currency',currency:'USD',maximumFractionDigits:2});
+const pct = (n:number) => `${((Number.isFinite(n)?n:0)*100).toFixed(2)}%`;
+
+// ──────────────────────────────────────────────────────────────
+// Defaults / Models
+// ──────────────────────────────────────────────────────────────
+const DEFAULTS = {
+  ratePerMile: 1.30,
+  milesPerWeek: 3200,
+  fuelPrice: 4.0,
+  mpg: 9.0,
+  driverPay: 1000,
+  driverPayType: 'flat' as 'flat'|'perMile'|'percentage',
+  lease: 1800,
+  insurance: 700,
+  maintReserve: 75,
+  safetyReserve: 200,
+  otherOpEx: 0,
+  dispatchPct: 0.10,
+  overheadPct: 0.15,
+};
+
+const newTruck = (i:number, v=DEFAULTS) => ({
+  id: `Truck ${i+1}`,
+  driver: '',
+  miles: v.milesPerWeek,
+  rate: v.ratePerMile,
+  mpg: v.mpg,
+  fuelPrice: v.fuelPrice,
+  driverPayType: v.driverPayType,
+  driverPay: v.driverPay,
+  driverPercent: 25,
+  lease: v.lease,
+  insurance: v.insurance,
+  maintReserve: v.maintReserve,
+  safetyReserve: v.safetyReserve,
+  otherOpEx: v.otherOpEx,
+});
+
+type Vars = typeof DEFAULTS;
+type TruckRow = ReturnType<typeof newTruck>;
+type Kpis = { revenue:number; fuelCost:number; driverPay:number; dispatchFee:number; overheadFee:number; expenses:number; profit:number; margin:number; breakEvenRPM:number };
+
+function computeTruck(t:TruckRow, v:Vars):Kpis{
+  const miles=Number(t.miles)||0, rate=Number(t.rate)||0, mpg=Number(t.mpg)||0, fuelPrice=Number(t.fuelPrice)||0;
+  const revenue = miles*rate;
+  const fuelCost = mpg>0 ? (miles/mpg)*fuelPrice : 0;
+  let driverPay = 0;
+  if(t.driverPayType==='flat') driverPay = Number(t.driverPay)||0;
+  else if(t.driverPayType==='perMile') driverPay = (Number(t.driverPay)||0)*miles;
+  else if(t.driverPayType==='percentage') driverPay = revenue * ((Number(t.driverPercent??25))/100);
+  const dispatchFee = revenue * v.dispatchPct;
+  const overheadFee = revenue * v.overheadPct;
+  const expenses = fuelCost + driverPay + (Number(t.lease)||0) + (Number(t.insurance)||0) + (Number(t.maintReserve)||0) + (Number(t.safetyReserve)||0) + (Number(t.otherOpEx)||0) + dispatchFee + overheadFee;
+  const profit = revenue - expenses;
+  const margin = revenue>0 ? profit/revenue : 0;
+  const breakEvenRPM = miles>0 ? expenses/miles : 0;
+  return { revenue, fuelCost, driverPay, dispatchFee, overheadFee, expenses, profit, margin, breakEvenRPM };
+}
+
+// ──────────────────────────────────────────────────────────────
+// App Component
+// ──────────────────────────────────────────────────────────────
+export default function App() {
+  // Vars first, so nothing references it before init
+  const [vars, setVars] = useState<Vars>(() => {
+    try {
+      const d = Number(localStorage.getItem("lamp_dispatchPct"));
+      const o = Number(localStorage.getItem("lamp_overheadPct"));
+      return {
+        ...DEFAULTS,
+        dispatchPct: Number.isFinite(d) && d >= 0 ? d : DEFAULTS.dispatchPct,
+        overheadPct: Number.isFinite(o) && o >= 0 ? o : DEFAULTS.overheadPct,
+      };
+    } catch {
+      return DEFAULTS;
+    }
+  });
+
+  // Persist globals
+  useEffect(()=>{
+    localStorage.setItem("lamp_dispatchPct", String(vars.dispatchPct));
+    localStorage.setItem("lamp_overheadPct", String(vars.overheadPct));
+  }, [vars.dispatchPct, vars.overheadPct]);
+
+  const [trucks, setTrucks] = useState<TruckRow[]>([newTruck(0), newTruck(1)]);
+  const [driverView, setDriverView] = useState(false);
+  const [showChart, setShowChart] = useState(true);
+
+  const rows = useMemo(() => trucks.map(t => ({ t, kpi: computeTruck(t, vars) })), [trucks, vars]);
+  const fleet = useMemo(() => {
+    const revenue = rows.reduce((s, r) => s + r.kpi.revenue, 0);
+    const expenses = rows.reduce((s, r) => s + r.kpi.expenses, 0);
+    const profit = revenue - expenses;
+    const avgBreakEven = rows.length ? rows.reduce((s, r) => s + r.kpi.breakEvenRPM, 0) / rows.length : 0;
+    return { revenue, expenses, profit, avgBreakEven };
+  }, [rows]);
+
+  const chartData = [
+    { name: 'Revenue', value: Math.round(fleet.revenue) },
+    { name: 'Expenses', value: Math.round(fleet.expenses) },
+    { name: 'Profit', value: Math.round(fleet.profit) },
+  ];
+
+  const removeTruck = (i:number) => setTrucks(ts => ts.filter((_,idx)=>idx!==i));
+  const addTruck = () => setTrucks(ts => [...ts, newTruck(ts.length)]);
+
+  return (
+    <TooltipProvider>
+      <div className="min-h-screen bg-slate-950 text-white p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+
+          {/* Header with view toggle */}
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><Truck className="w-6 h-6 text-teal-400"/> LAMP Fleet Profit Dashboard</h1>
+            <Button variant="secondary" className={`${driverView?"bg-slate-700 hover:bg-slate-600":"bg-teal-600 hover:bg-teal-500"}`} onClick={()=>setDriverView(v=>!v)}>
+              <Eye className="w-4 h-4 mr-2"/>{driverView?"Switch to Manager":"Switch to Driver"}
+            </Button>
+          </div>
+
+          {/* Chart Section (top) */}
+          <Card className="bg-slate-900 border-slate-700">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-teal-400 font-bold flex items-center gap-2"><ChartLine className="w-5 h-5"/>Revenue vs Expenses vs Profit</CardTitle>
+              <Button variant="ghost" className="text-slate-200" onClick={()=>setShowChart(s=>!s)}>{showChart?"📊 Hide Chart":"📊 Show Chart"}</Button>
+            </CardHeader>
+            <AnimatePresence>
+              {showChart && (
+                <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.25}}>
+                  <CardContent className="h-40">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#0ea5a4" />
+                        <XAxis dataKey="name" stroke="#ffffff" tick={{fill:'#ffffff', fontWeight:700}}/>
+                        <YAxis stroke="#ffffff" tick={{fill:'#ffffff'}}/>
+                        <RTooltip formatter={(val:any, name:any)=>[currency0(Number(val)||0), name]} contentStyle={{background:'#0f172a', border:'1px solid #134e4a', color:'#e2e8f0'}}/>
+                        <Legend wrapperStyle={{color:'#14b8a6', fontWeight:700}}/>
+                        <Bar dataKey="value" name="USD" fill="#14b8a6"/>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Card>
+
+          {/* Fleet KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-slate-900 border-slate-700"><CardContent className="pt-4"><div className="text-xs text-slate-200 font-semibold">Fleet Revenue (wk)</div><div className="text-xl font-semibold text-teal-300 whitespace-nowrap">{currency0(fleet.revenue)}</div></CardContent></Card>
+            <Card className="bg-slate-900 border-slate-700"><CardContent className="pt-4"><div className="text-xs text-slate-200 font-semibold">Fleet Expenses (wk)</div><div className="text-xl font-semibold text-rose-400 whitespace-nowrap">{currency0(fleet.expenses)}</div></CardContent></Card>
+            <Card className="bg-slate-900 border-slate-700"><CardContent className="pt-4"><div className="text-xs text-slate-200 font-semibold">Fleet Profit (wk)</div><div className="text-xl font-bold">{fleet.profit>=0? <span className="text-green-400">+ {currency0(fleet.profit)}</span> : <span className="text-rose-400">– {currency0(Math.abs(fleet.profit))}</span>}</div></CardContent></Card>
+            <Card className="bg-slate-900 border-slate-700"><CardContent className="pt-4"><div className="text-xs text-slate-200 font-semibold">Avg Break-even RPM</div><div className="text-xl font-semibold text-teal-300 whitespace-nowrap">{currency2(fleet.avgBreakEven)}/mi</div></CardContent></Card>
+          </div>
+
+          {/* Global Dispatch/Overhead */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="bg-slate-900 border-slate-700 p-4 flex flex-col items-center justify-center">
+              <div className="text-sm text-slate-200 font-semibold mb-1">Dispatch % (Global)</div>
+              <Input type="number" step="0.01" value={vars.dispatchPct*100} onChange={(e)=>setVars({...vars, dispatchPct:Number(e.target.value)/100})} className="w-24 text-center bg-slate-800 border-slate-600 text-white"/>
+              <div className="text-xs text-teal-400 mt-1">This week: {currency0(fleet.revenue*vars.dispatchPct)}</div>
+            </Card>
+            <Card className="bg-slate-900 border-slate-700 p-4 flex flex-col items-center justify-center">
+              <div className="text-sm text-slate-200 font-semibold mb-1">Overhead % (Global)</div>
+              <Input type="number" step="0.01" value={vars.overheadPct*100} onChange={(e)=>setVars({...vars, overheadPct:Number(e.target.value)/100})} className="w-24 text-center bg-slate-800 border-slate-600 text-white"/>
+              <div className="text-xs text-rose-400 mt-1">This week: {currency0(fleet.revenue*vars.overheadPct)}</div>
+            </Card>
+          </div>
+
+          {/* Trucks Table */}
+          <Card className="bg-slate-900 border-slate-700">
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle className="text-teal-300"><Truck className="inline w-4 h-4 mr-2"/>Trucks (details)</CardTitle>
+              <Button onClick={addTruck} className="bg-teal-600 hover:bg-teal-500 text-white">+ Add Truck</Button>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[14px]">
+                  <thead className="sticky top-0 z-20 bg-slate-800/90 backdrop-blur border-b border-teal-600">
+                    <tr className="text-left text-white font-semibold">
+                      <th className="p-3">Truck</th>
+                      <th className="p-3">Driver</th>
+                      <th className="p-3">Miles</th>
+                      <th className="p-3">Rate/mi</th>
+                      <th className="p-3">MPG</th>
+                      <th className="p-3">Fuel ($)</th>
+                      <th className="p-3">Driver Pay</th>
+                      <th className="p-3">Driver %</th>
+                      <th className="p-3">Lease ($)</th>
+                      <th className="p-3">Insurance ($)</th>
+                      <th className="p-3">Maint ($)</th>
+                      <th className="p-3">Safety ($)</th>
+                      <th className="p-3">Other ($)</th>
+                      <th className="p-3">Dispatch ($)</th>
+                      <th className="p-3">Overhead ($)</th>
+                      <th className="p-3">Revenue</th>
+                      <th className="p-3">Profit</th>
+                      <th className="p-3">Margin</th>
+                      <th className="p-3">Total Exp ($)</th>
+                      <th className="p-3">Break-even $/mi</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(({t,kpi}, i)=> (
+                      <tr key={t.id} className={`${i%2===0?"bg-slate-800":"bg-slate-900"} hover:bg-slate-700 transition-all duration-200 text-white`}>
+                        <td className="p-3"><Input value={t.id} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,id:e.target.value}:tt))} className="h-10 w-32 bg-slate-700 border-slate-500 text-white"/></td>
+                        <td className="p-3"><Input value={t.driver} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,driver:e.target.value}:tt))} className="h-10 w-40 bg-slate-700 border-slate-500 text-white"/></td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.miles} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,miles:Number(e.target.value)}:tt))} className="h-10 w-28 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.rate} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,rate:Number(e.target.value)}:tt))} className="h-10 w-24 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.mpg} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,mpg:Number(e.target.value)}:tt))} className="h-10 w-20 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right text-rose-300">{currency0(kpi.fuelCost)}</td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.driverPay} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,driverPay:Number(e.target.value)}:tt))} className="h-10 w-28 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.driverPercent} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,driverPercent:Number(e.target.value)}:tt))} className="h-10 w-20 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.lease} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,lease:Number(e.target.value)}:tt))} className="h-10 w-28 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.insurance} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,insurance:Number(e.target.value)}:tt))} className="h-10 w-28 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.maintReserve} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,maintReserve:Number(e.target.value)}:tt))} className="h-10 w-24 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.safetyReserve} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,safetyReserve:Number(e.target.value)}:tt))} className="h-10 w-24 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right"><Input type="number" step="any" value={t.otherOpEx} onChange={(e)=>setTrucks(ts=>ts.map((tt,idx)=>idx===i?{...tt,otherOpEx:Number(e.target.value)}:tt))} className="h-10 w-24 bg-slate-700 border-slate-500 text-white text-right"/></td>
+                        <td className="p-3 text-right text-rose-300">{currency0(kpi.dispatchFee)}</td>
+                        <td className="p-3 text-right text-rose-300">{currency0(kpi.overheadFee)}</td>
+                        {!driverView && <td className="p-3 text-right text-teal-300 font-medium">{currency0(kpi.revenue)}</td>}
+                        {!driverView && <td className="p-3 text-right font-semibold">{kpi.profit>=0? <span className="text-green-400">{currency0(kpi.profit)}</span> : <span className="text-rose-400">-{currency0(Math.abs(kpi.profit))}</span>}</td>}
+                        {!driverView && <td className="p-3">{pct(kpi.margin)}</td>}
+                        <td className="p-3 text-right font-medium text-rose-300">{currency0(kpi.expenses)}</td>
+                        <td className="p-3 text-right text-teal-300">{currency2(kpi.breakEvenRPM)}</td>
+                        <td className="p-3 text-right"><Button variant="ghost" size="icon" onClick={()=>removeTruck(i)} className="hover:bg-slate-800 text-white"><Trash2 className="w-4 h-4"/></Button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Sticky Summary Footer */}
+          <div className="sticky bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-teal-700 px-4 py-3 flex flex-wrap items-center gap-6">
+            <div className="text-sm text-slate-200">Trucks: <span className="font-semibold text-teal-300">{trucks.length}</span></div>
+            <div className="text-sm text-slate-200">Driver Pay (wk): <span className="font-semibold text-teal-300">{currency0(rows.reduce((s,r)=>s+r.kpi.driverPay,0))}</span></div>
+            <div className="text-sm text-slate-200">Dispatch (wk): <span className="font-semibold text-rose-400">{currency0(rows.reduce((s,r)=>s+r.kpi.dispatchFee,0))}</span></div>
+            <div className="text-sm text-slate-200">Overhead (wk): <span className="font-semibold text-rose-400">{currency0(rows.reduce((s,r)=>s+r.kpi.overheadFee,0))}</span></div>
+            <div className="ml-auto text-sm text-slate-200">Fleet Profit (wk): {fleet.profit>=0? <span className="font-bold text-green-400">+ {currency0(fleet.profit)}</span> : <span className="font-bold text-rose-400">– {currency0(Math.abs(fleet.profit))}</span>}</div>
+          </div>
+
+          <footer className="text-xs text-slate-400 text-center py-6">© {new Date().getFullYear()} LAMP Logistics • Dark/Teal v2.4 • Chart on top • Global % controls • Editable table • Sticky summary</footer>
+        </div>
+      </div>
+    </TooltipProvider>
+  );
+}
