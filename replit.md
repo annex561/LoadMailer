@@ -31,6 +31,7 @@ Preferred communication style: Simple, everyday language.
 ## Communication System
 - **Unified Messaging**: One conversation stream per driver.
 - **SMS**: Twilio SMS for all driver communications, bidirectional with smart load context and MMS.
+  - **Dashboard Link Format**: Simplified format with only truck emoji (🚛) to avoid carrier spam filters. No bullet point emojis (✅📍💬).
 - **Email**: Nodemailer for automated email notifications using dynamic templates.
 
 ## API Design
