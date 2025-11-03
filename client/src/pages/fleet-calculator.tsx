@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { Truck, Trash2, ChartLine, Eye } from "lucide-react";
+import { Truck, Trash2, ChartLine, Eye, DollarSign, AlertCircle, TrendingUp, Percent, Edit } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Legend } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -108,11 +108,10 @@ export default function FleetCalculator() {
   const addTruck = () => setTrucks(ts => [...ts, newTruck(ts.length)]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6">
+    <div className="min-h-screen bg-background text-foreground p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Truck className="w-8 h-8 text-primary" data-testid="icon-truck"/> 
+        <div className="bg-card border border-border rounded-xl shadow-md p-6 flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
             Fleet Profit Calculator
           </h1>
           <Button 
@@ -126,10 +125,49 @@ export default function FleetCalculator() {
           </Button>
         </div>
 
-        <Card className="bg-card border-border">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <Card className="bg-card border border-border rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow" data-testid="card-revenue">
+            <div className="flex items-start justify-between mb-3">
+              <DollarSign className="w-8 h-8 text-success" />
+            </div>
+            <div className="text-sm text-muted-foreground mb-2">Fleet Revenue (wk)</div>
+            <div className="text-4xl font-bold text-foreground">{currency0(fleet.revenue)}</div>
+          </Card>
+          <Card className="bg-card border border-border rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow" data-testid="card-expenses">
+            <div className="flex items-start justify-between mb-3">
+              <AlertCircle className="w-8 h-8 text-destructive" />
+            </div>
+            <div className="text-sm text-muted-foreground mb-2">Fleet Expenses (wk)</div>
+            <div className="text-4xl font-bold text-foreground">{currency0(fleet.expenses)}</div>
+          </Card>
+          <Card className="bg-card border border-border rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow" data-testid="card-profit">
+            <div className="flex items-start justify-between mb-3">
+              <TrendingUp className="w-8 h-8 text-primary" />
+            </div>
+            <div className="text-sm text-muted-foreground mb-2">Fleet Profit (wk)</div>
+            <div className="text-4xl font-bold">
+              {fleet.profit >= 0 ? (
+                <span className="text-success">{currency0(fleet.profit)}</span>
+              ) : (
+                <span className="text-destructive">{currency0(Math.abs(fleet.profit))}</span>
+              )}
+            </div>
+          </Card>
+          <Card className="bg-card border border-border rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow" data-testid="card-margin">
+            <div className="flex items-start justify-between mb-3">
+              <Percent className="w-8 h-8 text-purple-500" />
+            </div>
+            <div className="text-sm text-muted-foreground mb-2">Profit Margin</div>
+            <div className="text-4xl font-bold text-foreground">
+              {pct(fleet.revenue > 0 ? fleet.profit / fleet.revenue : 0)}
+            </div>
+          </Card>
+        </div>
+
+        <Card className="bg-card border border-border rounded-xl shadow-md">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-primary font-bold flex items-center gap-2">
-              <ChartLine className="w-5 h-5"/>
+            <CardTitle className="text-foreground font-bold flex items-center gap-2">
+              <ChartLine className="w-5 h-5 text-primary"/>
               Revenue vs Expenses vs Profit
             </CardTitle>
             <Button 
@@ -144,7 +182,7 @@ export default function FleetCalculator() {
           <AnimatePresence>
             {showChart && (
               <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.25}}>
-                <CardContent className="h-48">
+                <CardContent className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -152,7 +190,7 @@ export default function FleetCalculator() {
                       <YAxis stroke="hsl(var(--foreground))" tick={{fill:'hsl(var(--foreground))'}}/>
                       <RTooltip 
                         formatter={(val:any) => currency0(Number(val)||0)} 
-                        contentStyle={{background:'hsl(var(--card))', border:'1px solid hsl(var(--border))', color:'hsl(var(--foreground))', borderRadius: '8px'}}
+                        contentStyle={{background:'hsl(var(--card))', border:'1px solid hsl(var(--border))', color:'hsl(var(--foreground))', borderRadius: '12px'}}
                       />
                       <Legend wrapperStyle={{color:'hsl(var(--primary))', fontWeight:600}}/>
                       <Bar dataKey="value" name="Amount (USD)" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]}/>
@@ -164,297 +202,274 @@ export default function FleetCalculator() {
           </AnimatePresence>
         </Card>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="bg-card border-border hover:border-primary/30 transition-all" data-testid="card-revenue">
-            <CardContent className="pt-6">
-              <div className="text-sm text-muted-foreground font-semibold mb-2">Fleet Revenue (wk)</div>
-              <div className="text-2xl font-bold text-primary">{currency0(fleet.revenue)}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border hover:border-destructive/30 transition-all" data-testid="card-expenses">
-            <CardContent className="pt-6">
-              <div className="text-sm text-muted-foreground font-semibold mb-2">Fleet Expenses (wk)</div>
-              <div className="text-2xl font-bold text-destructive">{currency0(fleet.expenses)}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border hover:border-success/30 transition-all" data-testid="card-profit">
-            <CardContent className="pt-6">
-              <div className="text-sm text-muted-foreground font-semibold mb-2">Fleet Profit (wk)</div>
-              <div className="text-2xl font-bold">
-                {fleet.profit >= 0 ? (
-                  <span className="text-success">+ {currency0(fleet.profit)}</span>
-                ) : (
-                  <span className="text-destructive">− {currency0(Math.abs(fleet.profit))}</span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-card border-border hover:border-primary/30 transition-all" data-testid="card-breakeven">
-            <CardContent className="pt-6">
-              <div className="text-sm text-muted-foreground font-semibold mb-2">Avg Break-even RPM</div>
-              <div className="text-2xl font-bold text-primary">{currency2(fleet.avgBreakEven)}/mi</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="bg-card border-border p-6 flex flex-col items-center justify-center" data-testid="card-dispatch">
-            <div className="text-sm font-semibold mb-2">Dispatch % (Global)</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="bg-card border border-border rounded-xl shadow-md p-6" data-testid="card-dispatch">
+            <div className="text-sm font-semibold text-foreground mb-3">Dispatch % (Global)</div>
             <Input 
               type="number" 
               step="0.01" 
               value={vars.dispatchPct * 100} 
               onChange={(e) => setVars({...vars, dispatchPct: Number(e.target.value) / 100})} 
-              className="w-32 text-center bg-input border-border text-foreground"
+              className="w-full text-center bg-input border-border text-foreground mb-2"
               data-testid="input-dispatch-pct"
             />
-            <div className="text-xs text-primary mt-2">This week: {currency0(fleet.revenue * vars.dispatchPct)}</div>
+            <div className="text-xs text-muted-foreground">This week: <span className="font-semibold text-primary">{currency0(fleet.revenue * vars.dispatchPct)}</span></div>
           </Card>
-          <Card className="bg-card border-border p-6 flex flex-col items-center justify-center" data-testid="card-overhead">
-            <div className="text-sm font-semibold mb-2">Overhead % (Global)</div>
+          <Card className="bg-card border border-border rounded-xl shadow-md p-6" data-testid="card-overhead">
+            <div className="text-sm font-semibold text-foreground mb-3">Overhead % (Global)</div>
             <Input 
               type="number" 
               step="0.01" 
               value={vars.overheadPct * 100} 
               onChange={(e) => setVars({...vars, overheadPct: Number(e.target.value) / 100})} 
-              className="w-32 text-center bg-input border-border text-foreground"
+              className="w-full text-center bg-input border-border text-foreground mb-2"
               data-testid="input-overhead-pct"
             />
-            <div className="text-xs text-destructive mt-2">This week: {currency0(fleet.revenue * vars.overheadPct)}</div>
+            <div className="text-xs text-muted-foreground">This week: <span className="font-semibold text-destructive">{currency0(fleet.revenue * vars.overheadPct)}</span></div>
           </Card>
         </div>
 
-        <Card className="bg-card border-border">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-primary flex items-center gap-2">
-              <Truck className="w-5 h-5"/>
-              Trucks (details)
-            </CardTitle>
-            <Button 
-              onClick={addTruck} 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              data-testid="button-add-truck"
-            >
-              + Add Truck
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 z-20 bg-card/95 backdrop-blur border-b border-primary/30">
-                  <tr className="text-left text-foreground font-semibold">
-                    <th className="p-3">Truck</th>
-                    <th className="p-3">Driver</th>
-                    <th className="p-3">Miles</th>
-                    <th className="p-3">Rate/mi</th>
-                    <th className="p-3">MPG</th>
-                    <th className="p-3">Fuel ($)</th>
-                    <th className="p-3">Driver Pay</th>
-                    <th className="p-3">Driver %</th>
-                    <th className="p-3">Lease ($)</th>
-                    <th className="p-3">Insurance ($)</th>
-                    <th className="p-3">Maint ($)</th>
-                    <th className="p-3">Safety ($)</th>
-                    <th className="p-3">Other ($)</th>
-                    <th className="p-3">Dispatch ($)</th>
-                    <th className="p-3">Overhead ($)</th>
-                    <th className="p-3">Revenue</th>
-                    <th className="p-3">Profit</th>
-                    <th className="p-3">Margin</th>
-                    <th className="p-3">Total Exp ($)</th>
-                    <th className="p-3">Break-even $/mi</th>
-                    <th className="p-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(({t, kpi}, i) => (
-                    <tr 
-                      key={t.id} 
-                      className="border-b border-border hover:bg-muted/50 transition-all" 
-                      data-testid={`row-truck-${i}`}
-                    >
-                      <td className="p-3">
-                        <Input 
-                          value={t.id} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, id: e.target.value} : tt))} 
-                          className="h-9 w-32 bg-input border-border text-foreground"
-                          data-testid={`input-truck-id-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          value={t.driver} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, driver: e.target.value} : tt))} 
-                          className="h-9 w-40 bg-input border-border text-foreground"
-                          data-testid={`input-driver-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          value={t.miles} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, miles: Number(e.target.value)} : tt))} 
-                          className="h-9 w-28 bg-input border-border text-foreground text-right"
-                          data-testid={`input-miles-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          value={t.rate} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, rate: Number(e.target.value)} : tt))} 
-                          className="h-9 w-24 bg-input border-border text-foreground text-right"
-                          data-testid={`input-rate-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          step="0.1" 
-                          value={t.mpg} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, mpg: Number(e.target.value)} : tt))} 
-                          className="h-9 w-20 bg-input border-border text-foreground text-right"
-                          data-testid={`input-mpg-${i}`}
-                        />
-                      </td>
-                      <td className="p-3 text-right text-destructive font-medium" data-testid={`text-fuel-cost-${i}`}>
-                        {currency0(kpi.fuelCost)}
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          value={t.driverPay} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, driverPay: Number(e.target.value)} : tt))} 
-                          className="h-9 w-28 bg-input border-border text-foreground text-right"
-                          data-testid={`input-driver-pay-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          value={t.driverPercent} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, driverPercent: Number(e.target.value)} : tt))} 
-                          className="h-9 w-20 bg-input border-border text-foreground text-right"
-                          data-testid={`input-driver-percent-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          value={t.lease} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, lease: Number(e.target.value)} : tt))} 
-                          className="h-9 w-28 bg-input border-border text-foreground text-right"
-                          data-testid={`input-lease-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          value={t.insurance} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, insurance: Number(e.target.value)} : tt))} 
-                          className="h-9 w-28 bg-input border-border text-foreground text-right"
-                          data-testid={`input-insurance-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          value={t.maintReserve} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, maintReserve: Number(e.target.value)} : tt))} 
-                          className="h-9 w-24 bg-input border-border text-foreground text-right"
-                          data-testid={`input-maint-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          value={t.safetyReserve} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, safetyReserve: Number(e.target.value)} : tt))} 
-                          className="h-9 w-24 bg-input border-border text-foreground text-right"
-                          data-testid={`input-safety-${i}`}
-                        />
-                      </td>
-                      <td className="p-3">
-                        <Input 
-                          type="number" 
-                          value={t.otherOpEx} 
-                          onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, otherOpEx: Number(e.target.value)} : tt))} 
-                          className="h-9 w-24 bg-input border-border text-foreground text-right"
-                          data-testid={`input-other-${i}`}
-                        />
-                      </td>
-                      <td className="p-3 text-right text-destructive font-medium" data-testid={`text-dispatch-fee-${i}`}>
-                        {currency0(kpi.dispatchFee)}
-                      </td>
-                      <td className="p-3 text-right text-destructive font-medium" data-testid={`text-overhead-fee-${i}`}>
-                        {currency0(kpi.overheadFee)}
-                      </td>
-                      {!driverView && (
-                        <td className="p-3 text-right text-primary font-semibold" data-testid={`text-revenue-${i}`}>
-                          {currency0(kpi.revenue)}
-                        </td>
-                      )}
-                      {!driverView && (
-                        <td className="p-3 text-right font-bold" data-testid={`text-profit-${i}`}>
-                          {kpi.profit >= 0 ? (
-                            <span className="text-success">{currency0(kpi.profit)}</span>
-                          ) : (
-                            <span className="text-destructive">-{currency0(Math.abs(kpi.profit))}</span>
-                          )}
-                        </td>
-                      )}
-                      {!driverView && (
-                        <td className="p-3 text-muted-foreground" data-testid={`text-margin-${i}`}>
-                          {pct(kpi.margin)}
-                        </td>
-                      )}
-                      <td className="p-3 text-right font-medium text-destructive" data-testid={`text-expenses-${i}`}>
-                        {currency0(kpi.expenses)}
-                      </td>
-                      <td className="p-3 text-right text-primary font-medium" data-testid={`text-breakeven-${i}`}>
-                        {currency2(kpi.breakEvenRPM)}
-                      </td>
-                      <td className="p-3 text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => removeTruck(i)} 
-                          className="hover:bg-destructive/10 hover:text-destructive"
-                          data-testid={`button-delete-truck-${i}`}
-                        >
-                          <Trash2 className="w-4 h-4"/>
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="sticky bottom-0 left-0 right-0 bg-card/95 backdrop-blur border-t border-primary/30 px-6 py-4 flex flex-wrap items-center gap-6 rounded-lg">
-          <div className="text-sm text-muted-foreground">
-            Trucks: <span className="font-semibold text-primary">{trucks.length}</span>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Driver Pay (wk): <span className="font-semibold text-primary">{currency0(rows.reduce((s, r) => s + r.kpi.driverPay, 0))}</span>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Dispatch (wk): <span className="font-semibold text-destructive">{currency0(rows.reduce((s, r) => s + r.kpi.dispatchFee, 0))}</span>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Overhead (wk): <span className="font-semibold text-destructive">{currency0(rows.reduce((s, r) => s + r.kpi.overheadFee, 0))}</span>
-          </div>
-          <div className="ml-auto text-sm text-muted-foreground">
-            Fleet Profit (wk): {fleet.profit >= 0 ? (
-              <span className="font-bold text-success text-lg">+ {currency0(fleet.profit)}</span>
-            ) : (
-              <span className="font-bold text-destructive text-lg">− {currency0(Math.abs(fleet.profit))}</span>
-            )}
-          </div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Truck className="w-6 h-6 text-primary"/>
+            Trucks
+          </h2>
+          <Button 
+            onClick={addTruck} 
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            data-testid="button-add-truck"
+          >
+            + Add Truck
+          </Button>
         </div>
+
+        <div className="grid grid-cols-1 gap-6">
+          {rows.map(({t, kpi}, i) => (
+            <Card 
+              key={t.id} 
+              className="bg-card border border-border rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow"
+              data-testid={`card-truck-${i}`}
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Truck className="w-8 h-8 text-primary" />
+                  <div>
+                    <Input 
+                      value={t.id} 
+                      onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, id: e.target.value} : tt))} 
+                      className="text-lg font-bold bg-transparent border-none p-0 h-auto focus-visible:ring-0 text-foreground"
+                      data-testid={`input-truck-id-${i}`}
+                    />
+                    <Input 
+                      value={t.driver} 
+                      placeholder="Driver name"
+                      onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, driver: e.target.value} : tt))} 
+                      className="text-sm bg-transparent border-none p-0 h-auto focus-visible:ring-0 text-muted-foreground mt-1"
+                      data-testid={`input-driver-${i}`}
+                    />
+                  </div>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => removeTruck(i)} 
+                  className="hover:bg-destructive/10 hover:text-destructive"
+                  data-testid={`button-delete-truck-${i}`}
+                >
+                  <Trash2 className="w-5 h-5"/>
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Weekly Miles</label>
+                  <Input 
+                    type="number" 
+                    value={t.miles} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, miles: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-miles-${i}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Rate/Mile ($)</label>
+                  <Input 
+                    type="number" 
+                    step="0.01" 
+                    value={t.rate} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, rate: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-rate-${i}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">MPG</label>
+                  <Input 
+                    type="number" 
+                    step="0.1" 
+                    value={t.mpg} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, mpg: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-mpg-${i}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Fuel Price ($)</label>
+                  <Input 
+                    type="number" 
+                    step="0.01" 
+                    value={t.fuelPrice} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, fuelPrice: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-fuel-price-${i}`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Driver Pay ($)</label>
+                  <Input 
+                    type="number" 
+                    value={t.driverPay} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, driverPay: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-driver-pay-${i}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Driver %</label>
+                  <Input 
+                    type="number" 
+                    value={t.driverPercent} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, driverPercent: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-driver-percent-${i}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Lease ($)</label>
+                  <Input 
+                    type="number" 
+                    value={t.lease} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, lease: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-lease-${i}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Insurance ($)</label>
+                  <Input 
+                    type="number" 
+                    value={t.insurance} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, insurance: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-insurance-${i}`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Maintenance ($)</label>
+                  <Input 
+                    type="number" 
+                    value={t.maintReserve} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, maintReserve: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-maint-${i}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Safety ($)</label>
+                  <Input 
+                    type="number" 
+                    value={t.safetyReserve} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, safetyReserve: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-safety-${i}`}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Other OpEx ($)</label>
+                  <Input 
+                    type="number" 
+                    value={t.otherOpEx} 
+                    onChange={(e) => setTrucks(ts => ts.map((tt, idx) => idx === i ? {...tt, otherOpEx: Number(e.target.value)} : tt))} 
+                    className="bg-input border-border text-foreground"
+                    data-testid={`input-other-${i}`}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Revenue</div>
+                    <div className="text-lg font-bold text-success" data-testid={`text-revenue-${i}`}>{currency0(kpi.revenue)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Expenses</div>
+                    <div className="text-lg font-bold text-destructive" data-testid={`text-expenses-${i}`}>{currency0(kpi.expenses)}</div>
+                  </div>
+                  {!driverView && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Profit</div>
+                      <div className="text-lg font-bold" data-testid={`text-profit-${i}`}>
+                        {kpi.profit >= 0 ? (
+                          <span className="text-success">{currency0(kpi.profit)}</span>
+                        ) : (
+                          <span className="text-destructive">{currency0(Math.abs(kpi.profit))}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {!driverView && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-1">Margin</div>
+                      <div className="text-lg font-bold text-foreground" data-testid={`text-margin-${i}`}>{pct(kpi.margin)}</div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Break-even</div>
+                    <div className="text-lg font-bold text-primary" data-testid={`text-breakeven-${i}`}>{currency2(kpi.breakEvenRPM)}/mi</div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        <Card className="bg-card border border-border rounded-xl shadow-md p-6 sticky bottom-6">
+          <div className="flex flex-wrap items-center justify-between gap-6">
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Total Trucks</div>
+              <div className="text-2xl font-bold text-primary">{trucks.length}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Driver Pay (wk)</div>
+              <div className="text-2xl font-bold text-foreground">{currency0(rows.reduce((s, r) => s + r.kpi.driverPay, 0))}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Dispatch (wk)</div>
+              <div className="text-2xl font-bold text-destructive">{currency0(rows.reduce((s, r) => s + r.kpi.dispatchFee, 0))}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Overhead (wk)</div>
+              <div className="text-2xl font-bold text-destructive">{currency0(rows.reduce((s, r) => s + r.kpi.overheadFee, 0))}</div>
+            </div>
+            <div className="ml-auto">
+              <div className="text-xs text-muted-foreground mb-1">Fleet Profit (wk)</div>
+              <div className="text-3xl font-bold">
+                {fleet.profit >= 0 ? (
+                  <span className="text-success">{currency0(fleet.profit)}</span>
+                ) : (
+                  <span className="text-destructive">{currency0(Math.abs(fleet.profit))}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );

@@ -425,7 +425,7 @@ export default function DispatcherDashboard() {
         <TabsContent value="overview" className="space-y-6 mt-6">
           {/* Quick Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="hover:border-primary/30 transition-all hover:-translate-y-1 border-l-4 border-l-primary">
+        <Card className="hover:border-primary/30 transition-all hover:-translate-y-1 border-l-4 border-l-primary shadow-md rounded-xl">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -443,7 +443,7 @@ export default function DispatcherDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="hover:border-success/30 transition-all hover:-translate-y-1 border-l-4 border-l-success">
+        <Card className="hover:border-success/30 transition-all hover:-translate-y-1 border-l-4 border-l-success shadow-md rounded-xl">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -461,7 +461,7 @@ export default function DispatcherDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="hover:border-warning/30 transition-all hover:-translate-y-1 border-l-4 border-l-warning">
+        <Card className="hover:border-warning/30 transition-all hover:-translate-y-1 border-l-4 border-l-warning shadow-md rounded-xl">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -479,7 +479,7 @@ export default function DispatcherDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="hover:border-primary/30 transition-all hover:-translate-y-1 border-l-4 border-l-primary">
+        <Card className="hover:border-primary/30 transition-all hover:-translate-y-1 border-l-4 border-l-primary shadow-md rounded-xl">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -560,8 +560,8 @@ export default function DispatcherDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
         {/* Panel A - Active Loads (Left, 30%) */}
         <div className="lg:col-span-3">
-          <Card className="h-[700px]">
-            <CardHeader className="bg-card border-b border-primary/30">
+          <Card className="h-[700px] shadow-md rounded-xl">
+            <CardHeader className="bg-card border-b border-border">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Package className="h-5 w-5 text-primary" />
                 Active Loads ({filteredLoads.length})
@@ -576,7 +576,7 @@ export default function DispatcherDashboard() {
                 </div>
               ) : filteredLoads.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-[600px] text-center p-6">
-                  <Package className="h-16 w-16 text-gray-300 mb-4" />
+                  <Package className="h-16 w-16 text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">No loads found</p>
                   <p className="text-sm text-muted-foreground mt-2">
                     Try adjusting your search or create a new load
@@ -598,7 +598,7 @@ export default function DispatcherDashboard() {
                             {loads.map((load) => (
                               <Card
                                 key={load.id}
-                                className={`cursor-pointer transition-all hover:bg-muted/50 hover:border-primary/30 ${
+                                className={`cursor-pointer transition-all hover:bg-muted/50 hover:border-primary/30 shadow-sm rounded-xl ${
                                   selectedLoad?.id === load.id ? 'ring-2 ring-primary border-primary/50 shadow-lg' : ''
                                 }`}
                                 onClick={() => setSelectedLoad(load)}
@@ -680,8 +680,8 @@ export default function DispatcherDashboard() {
 
         {/* Panel B - Available Drivers (Center, 30%) */}
         <div className="lg:col-span-3">
-          <Card className="h-[700px]">
-            <CardHeader className="bg-card border-b border-primary/30">
+          <Card className="h-[700px] shadow-md rounded-xl">
+            <CardHeader className="bg-card border-b border-border">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Users className="h-5 w-5 text-success" />
                 Available Drivers ({filteredDrivers.length})
@@ -705,7 +705,7 @@ export default function DispatcherDashboard() {
                     </div>
                   ) : filteredDrivers.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-[570px] text-center p-6">
-                      <Users className="h-16 w-16 text-gray-300 mb-4" />
+                      <Users className="h-16 w-16 text-muted-foreground mb-4" />
                       <p className="text-muted-foreground">No drivers found</p>
                       <p className="text-sm text-muted-foreground mt-2">
                         Try adjusting your filter or search
@@ -717,7 +717,7 @@ export default function DispatcherDashboard() {
                         {filteredDrivers.map((driver) => (
                           <Card
                             key={driver.id}
-                            className={`cursor-pointer transition-all hover:bg-muted/50 hover:border-primary/30 ${
+                            className={`cursor-pointer transition-all hover:bg-muted/50 hover:border-primary/30 shadow-sm rounded-xl ${
                               selectedDriverId === driver.id ? 'ring-2 ring-primary border-primary/50 shadow-lg' : ''
                             }`}
                             onClick={() => setSelectedDriverId(driver.id)}
@@ -803,8 +803,8 @@ export default function DispatcherDashboard() {
 
         {/* Panel C - Activity Feed (Right, 40%) */}
         <div className="lg:col-span-4">
-          <Card className="h-[700px]">
-            <CardHeader className="bg-card border-b border-primary/30">
+          <Card className="h-[700px] shadow-md rounded-xl">
+            <CardHeader className="bg-card border-b border-border">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Activity className="h-5 w-5 text-warning" />
                 Activity Feed
@@ -813,7 +813,7 @@ export default function DispatcherDashboard() {
             <CardContent className="p-0">
               {activityFeed.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-[640px] text-center p-6">
-                  <Activity className="h-16 w-16 text-gray-300 mb-4" />
+                  <Activity className="h-16 w-16 text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">No recent activity</p>
                 </div>
               ) : (
@@ -824,7 +824,7 @@ export default function DispatcherDashboard() {
                       return (
                         <div 
                           key={item.id} 
-                          className="flex gap-3 p-3 rounded-lg border hover:bg-muted/50 hover:border-primary/20 transition-all"
+                          className="flex gap-3 p-3 rounded-xl border border-border hover:bg-muted/50 hover:border-primary/20 transition-all shadow-sm"
                           data-testid={`activity-item-${item.id}`}
                         >
                           <div className={`flex-shrink-0 p-2 rounded-lg ${
@@ -867,7 +867,7 @@ export default function DispatcherDashboard() {
 
           {/* Integrated Map View (Toggle) */}
           {showMap && (
-            <Card>
+            <Card className="shadow-md rounded-xl">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
@@ -890,9 +890,9 @@ export default function DispatcherDashboard() {
                     <DriverLocationMap />
                   </div>
                 ) : (
-                  <div className="h-[500px] bg-gray-100 rounded-lg flex items-center justify-center border">
+                  <div className="h-[500px] bg-muted rounded-xl flex items-center justify-center border border-border">
                     <div className="text-center p-6">
-                      <MapIcon className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                      <MapIcon className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
                       <p className="text-muted-foreground mb-2">No active driver locations available</p>
                       <p className="text-sm text-muted-foreground">
                         Driver locations will appear here when GPS tracking is active
@@ -913,7 +913,7 @@ export default function DispatcherDashboard() {
 
         {/* GPS Tracking Tab */}
         <TabsContent value="gps" className="space-y-4 mt-6">
-          <Card>
+          <Card className="shadow-md rounded-xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="w-5 h-5" />
@@ -926,9 +926,9 @@ export default function DispatcherDashboard() {
                 {driverLocations?.locations && driverLocations.locations.length > 0 ? (
                   <DriverLocationMap />
                 ) : (
-                  <div className="h-full bg-gray-100 rounded-lg flex items-center justify-center border">
+                  <div className="h-full bg-muted rounded-xl flex items-center justify-center border border-border">
                     <div className="text-center p-6">
-                      <MapPin className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+                      <MapPin className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
                       <p className="text-muted-foreground mb-2">No active GPS data available</p>
                       <p className="text-sm text-muted-foreground">
                         Driver locations will appear here when GPS tracking is active
@@ -941,7 +941,7 @@ export default function DispatcherDashboard() {
               {/* Driver location cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {driverLocations?.locations?.map((loc: DriverLocation) => (
-                  <Card key={loc.driverId} className="hover:border-primary/30 transition-all" data-testid={`gps-location-card-${loc.driverId}`}>
+                  <Card key={loc.driverId} className="hover:border-primary/30 transition-all shadow-sm rounded-xl" data-testid={`gps-location-card-${loc.driverId}`}>
                     <CardContent className="p-4">
                       <div className="space-y-2">
                         <div className="flex justify-between items-start">
@@ -1014,7 +1014,7 @@ export default function DispatcherDashboard() {
             </div>
           ) : filteredDocuments.length === 0 ? (
             <div className="text-center py-16">
-              <FileText className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+              <FileText className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">No documents found</p>
               <p className="text-sm text-muted-foreground mt-2">
                 {docFilter === 'all' ? 'Documents will appear here once uploaded' : `No ${docFilter} documents`}
@@ -1023,7 +1023,7 @@ export default function DispatcherDashboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredDocuments.map(doc => (
-                <Card key={doc.id} className="hover:border-primary/30 transition-all" data-testid={`document-card-${doc.id}`}>
+                <Card key={doc.id} className="hover:border-primary/30 transition-all shadow-sm rounded-xl" data-testid={`document-card-${doc.id}`}>
                   <CardContent className="p-4">
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
@@ -1103,7 +1103,7 @@ export default function DispatcherDashboard() {
 
         {/* SMS Dispatch Tab */}
         <TabsContent value="sms" className="space-y-4 mt-6">
-          <Card>
+          <Card className="shadow-md rounded-xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageCircle className="w-5 h-5" />
@@ -1198,7 +1198,7 @@ export default function DispatcherDashboard() {
                 <ScrollArea className="h-48">
                   {threads.slice(0, 10).length > 0 ? (
                     threads.slice(0, 10).map(thread => (
-                      <div key={thread.id} className="p-2 border-b" data-testid={`thread-${thread.id}`}>
+                      <div key={thread.id} className="p-2 border-b border-border" data-testid={`thread-${thread.id}`}>
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <p className="text-sm font-medium">{thread.driverName || 'Unknown Driver'}</p>
@@ -1237,7 +1237,7 @@ export default function DispatcherDashboard() {
           </p>
           <div className="space-y-4">
             {assigningLoadId && (
-              <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="p-3 bg-muted rounded-xl">
                 <p className="text-sm font-medium">
                   Load: {loads.find(l => l.id === assigningLoadId)?.loadNumber}
                 </p>
