@@ -546,6 +546,46 @@ export default function CommunicationDashboard() {
     }
   });
 
+  // Send portal link mutation
+  const sendPortalLinkMutation = useMutation({
+    mutationFn: async (driverId: string) => {
+      const response = await fetch(`/api/drivers/${driverId}/send-dashboard-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      // Safely parse JSON response
+      let data;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // Handle non-JSON responses
+        const text = await response.text();
+        data = { success: response.ok, message: text };
+      }
+      
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to send portal link');
+      }
+      
+      return data;
+    },
+    onSuccess: (data) => {
+      toast({ 
+        title: "✅ Portal link sent", 
+        description: `Dashboard access link sent to ${data.driverName || 'driver'}` 
+      });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "❌ Failed to send portal link", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    }
+  });
+
   // Fetch AI suggestions for selected thread
   const { data: aiSuggestions = [], isLoading: aiSuggestionsLoading, refetch: refetchAiSuggestions } = useQuery<AiMessageSuggestion[]>({
     queryKey: ['/api/ai/suggestions', selectedThread?.id],
@@ -1899,6 +1939,20 @@ export default function CommunicationDashboard() {
                         />
                       </DialogContent>
                     </Dialog>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (selectedThread?.driverId) {
+                          sendPortalLinkMutation.mutate(selectedThread.driverId);
+                        }
+                      }}
+                      disabled={!selectedThread?.driverId || sendPortalLinkMutation.isPending}
+                      title="Send driver portal link via SMS"
+                      data-testid="button-send-portal-link"
+                    >
+                      <Truck className="w-4 h-4" />
+                    </Button>
                     <Button
                       onClick={handleSendMessage}
                       disabled={!newMessage.trim() || sendMessageMutation.isPending}
