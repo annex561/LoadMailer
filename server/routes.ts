@@ -1824,9 +1824,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         `Hi ${driver.name}!\n\n` +
         `Access your driver portal:\n` +
         `${link}\n\n` +
-        `✅ View loads\n` +
-        `📍 Track GPS\n` +
-        `💬 Message dispatch\n\n` +
+        `View loads, track GPS, and message dispatch.\n\n` +
         `Questions? Reply here.`;
 
       // Send SMS using smsLoadService
@@ -1928,9 +1926,7 @@ export async function registerRoutes(app: Express): Promise<void> {
             `Hi ${driver.name}!\n\n` +
             `Access your driver portal:\n` +
             `${link}\n\n` +
-            `✅ View loads\n` +
-            `📍 Track GPS\n` +
-            `💬 Message dispatch\n\n` +
+            `View loads, track GPS, and message dispatch.\n\n` +
             `Questions? Reply here.`;
 
           const smsResult = await smsLoadService.sendSMS({
