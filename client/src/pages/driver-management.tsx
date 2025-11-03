@@ -1070,7 +1070,7 @@ export default function DriverManagement() {
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </AlertDialogTrigger>
-                          <AlertDialogContent className="bg-card border-border shadow-lg">
+                          <AlertDialogContent className="bg-card border-border shadow-lg" data-testid={`dialog-delete-driver-${driver.id}`}>
                             <AlertDialogHeader>
                               <AlertDialogTitle className="flex items-center gap-2 text-foreground">
                                 <AlertTriangle className="w-5 h-5 text-destructive" />
@@ -1087,7 +1087,7 @@ export default function DriverManagement() {
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel className="border-border hover:bg-muted">
+                              <AlertDialogCancel className="border-border hover:bg-muted" data-testid={`button-cancel-delete-${driver.id}`}>
                                 Cancel
                               </AlertDialogCancel>
                               <AlertDialogAction
