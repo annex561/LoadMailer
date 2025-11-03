@@ -11,19 +11,19 @@
   --whitesmoke: #F3F5F7;
   --white: #FFFFFF;
   
-  /* Theme Colors - Light Mode */
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(210 25% 7.8431%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(210 25% 7.8431%);
+  /* Theme Colors - Clean Light Mode */
+  --background: hsl(210 20% 98%); /* Very light gray background #F8F9FA */
+  --foreground: hsl(210 24% 16%); /* Dark text #1E2733 */
+  --card: hsl(0 0% 100%); /* Pure white cards */
+  --card-foreground: hsl(210 24% 16%);
   --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(210 25% 7.8431%);
+  --popover-foreground: hsl(210 24% 16%);
   --primary: hsl(181 100% 36%); /* Teal #00B5B8 */
   --primary-foreground: hsl(0 0% 100%);
   --secondary: hsl(211 26% 16%); /* Slate #1E2733 */
   --secondary-foreground: hsl(0 0% 100%);
   --muted: hsl(210 17% 96%); /* Whitesmoke #F3F5F7 */
-  --muted-foreground: hsl(215 13.8% 34.1%);
+  --muted-foreground: hsl(215 16% 47%); /* Medium gray for labels */
   --accent: hsl(181 100% 36%); /* Teal #00B5B8 */
   --accent-foreground: hsl(0 0% 100%);
   --destructive: hsl(355 78% 56%); /* Error #E63946 */
@@ -32,38 +32,35 @@
   --success-foreground: hsl(0 0% 100%);
   --warning: hsl(36 100% 50%);
   --warning-foreground: hsl(0 0% 100%);
-  --border: hsl(214 32% 91%);
-  --input: hsl(214 32% 91%);
-  --ring: hsl(181 100% 36%); /* Teal #00B5B8 */
+  --border: hsl(210 18% 87%); /* Subtle light gray border */
+  --input: hsl(0 0% 100%); /* White input backgrounds */
+  --ring: hsl(181 100% 36%); /* Teal focus ring */
   --chart-1: hsl(181 100% 36%); /* Teal */
   --chart-2: hsl(145 74% 57%); /* Success Green */
   --chart-3: hsl(42.0290 92.8251% 56.2745%);
   --chart-4: hsl(147.1429 78.5047% 41.9608%);
   --chart-5: hsl(341.4894 75.2000% 50.9804%);
-  --sidebar: hsl(0 0% 100%);
-  --sidebar-foreground: hsl(210 25% 7.8431%);
+  --sidebar: hsl(0 0% 100%); /* White sidebar */
+  --sidebar-foreground: hsl(210 24% 16%);
   --sidebar-primary: hsl(181 100% 36%); /* Teal */
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(210 40% 98%);
-  --sidebar-accent-foreground: hsl(222.2 84% 4.9%);
-  --sidebar-border: hsl(214 32% 91%);
+  --sidebar-accent: hsl(181 100% 95%); /* Very light teal for hover */
+  --sidebar-accent-foreground: hsl(210 24% 16%);
+  --sidebar-border: hsl(210 18% 90%);
   --sidebar-ring: hsl(181 100% 36%); /* Teal */
   
   /* TRAQ IQ Font Stack */
   --font-sans: 'Poppins', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
-  --radius: 0.5rem;
-  --shadow-2xs: 0px 2px 0px 0px hsl(207 90% 54% / 0.00);
-  --shadow-xs: 0px 2px 0px 0px hsl(207 90% 54% / 0.00);
-  --shadow-sm: 0px 2px 0px 0px hsl(207 90% 54% / 0.00), 0px 1px 2px -1px hsl(207 90% 54% / 0.00);
-  --shadow: 0px 2px 0px 0px hsl(207 90% 54% / 0.00), 0px 1px 2px -1px hsl(207 90% 54% / 0.00);
-  --shadow-md: 0px 2px 0px 0px hsl(207 90% 54% / 0.00), 0px 2px 4px -1px hsl(207 90% 54% / 0.00);
-  --shadow-lg: 0px 2px 0px 0px hsl(207 90% 54% / 0.00), 0px 4px 6px -1px hsl(207 90% 54% / 0.00);
-  --shadow-xl: 0px 2px 0px 0px hsl(207 90% 54% / 0.00), 0px 8px 10px -1px hsl(207 90% 54% / 0.00);
-  --shadow-2xl: 0px 2px 0px 0px hsl(207 90% 54% / 0.00);
-  --tracking-normal: 0em;
-  --spacing: 0.25rem;
+  --radius: 0.75rem; /* Larger radius for modern look */
+  
+  /* Better shadows for clean design */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 }
 
 .dark {
