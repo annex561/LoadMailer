@@ -1517,9 +1517,9 @@ export default function MobileDriverDashboard() {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col min-h-screen">
+        <div className="flex flex-col h-screen">
           {/* Chat Header */}
-          <div className="bg-blue-600 text-white p-4 flex items-center gap-3 shadow-lg sticky top-0 z-10">
+          <div className="bg-blue-600 text-white p-4 flex items-center gap-3 shadow-lg flex-shrink-0">
             <Button
               variant="ghost"
               size="sm"
@@ -1540,7 +1540,7 @@ export default function MobileDriverDashboard() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 p-4 space-y-3 bg-gray-50 min-h-[400px] overflow-y-auto">
+          <div className="flex-1 p-4 space-y-3 bg-gray-50 overflow-y-auto">
             {messages.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
                 <MessageSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -1579,45 +1579,47 @@ export default function MobileDriverDashboard() {
             )}
           </div>
 
-          {/* AI Quick Suggestions Panel */}
-          {showAISuggestions && aiSuggestions.length > 0 && (
-            <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-t border-purple-200">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-purple-600" />
-                  <span className="text-sm font-semibold text-purple-900">AI Quick Messages</span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAISuggestions(false)}
-                  className="h-6 w-6 p-0"
-                  data-testid="button-close-ai-suggestions"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {aiSuggestions.map((suggestion, index) => (
+          {/* Message Input Area - Sticky at Bottom */}
+          <div className="flex-shrink-0 bg-white border-t border-gray-200">
+            {/* AI Quick Suggestions Panel */}
+            {showAISuggestions && aiSuggestions.length > 0 && (
+              <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 border-b border-purple-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-purple-600" />
+                    <span className="text-sm font-semibold text-purple-900">AI Quick Messages</span>
+                  </div>
                   <Button
-                    key={index}
-                    variant="outline"
-                    className="w-full text-left justify-start h-auto py-3 px-4 bg-white hover:bg-purple-50 border-purple-200 text-sm"
-                    onClick={() => {
-                      setMessageInput(suggestion);
-                      setShowAISuggestions(false);
-                    }}
-                    data-testid={`button-ai-suggestion-${index}`}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAISuggestions(false)}
+                    className="h-6 w-6 p-0"
+                    data-testid="button-close-ai-suggestions"
                   >
-                    {suggestion}
+                    <X className="h-4 w-4" />
                   </Button>
-                ))}
+                </div>
+                <div className="space-y-2">
+                  {aiSuggestions.map((suggestion, index) => (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      className="w-full text-left justify-start h-auto py-3 px-4 bg-white hover:bg-purple-50 border-purple-200 text-sm"
+                      onClick={() => {
+                        setMessageInput(suggestion);
+                        setShowAISuggestions(false);
+                      }}
+                      data-testid={`button-ai-suggestion-${index}`}
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Message Input with AI and Microphone */}
-          <div className="p-4 bg-white border-t border-gray-200 pb-20">
+            {/* Message Input with AI and Microphone */}
+            <div className="p-4 pb-20">
             {/* Quick Actions Row */}
             <div className="flex gap-2 mb-3">
               <Button
