@@ -543,10 +543,6 @@ export default function LoadOpsDashboard() {
         return <GoogleSheetsImport />;
       case '/driver-management':
         return <DriverManagement />;
-      case '/driver-onboarding':
-        return <DriverOnboarding />;
-      case '/simple-registration':
-        return <SimpleDriverRegistration />;
       case '/contacts':
         return <Contacts />;
       case '/sms-dispatching':
@@ -585,8 +581,6 @@ export default function LoadOpsDashboard() {
         return <SmsStatus />;
       case '/debug-token':
         return <DebugToken />;
-      case '/driver-dashboard':
-        return <DriverDashboard />;
       case '/dispatcher':
       case '/dispatcher-dashboard':
         return <DispatcherDashboard />;
