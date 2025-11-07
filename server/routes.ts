@@ -1845,6 +1845,20 @@ export async function registerRoutes(app: Express): Promise<void> {
         });
       } else {
         console.error(`❌ Failed to send dashboard link SMS: ${smsResult.error}`);
+        
+        // Check if this is a Twilio authentication error
+        const isTwilioAuthError = smsResult.error?.includes('Authenticate') || 
+                                   smsResult.error?.includes('401') ||
+                                   smsResult.error?.includes('20003');
+        
+        if (isTwilioAuthError) {
+          return res.status(503).json({
+            success: false,
+            error: 'Twilio authentication failed. Please check your Twilio credentials (ACCOUNT_SID and AUTH_TOKEN) in the environment settings.',
+            technicalError: smsResult.error
+          });
+        }
+        
         res.status(503).json({
           success: false,
           error: smsResult.error || 'Failed to send SMS'
@@ -1853,9 +1867,24 @@ export async function registerRoutes(app: Express): Promise<void> {
 
     } catch (error) {
       console.error('Error sending dashboard link SMS:', error);
+      
+      // Check if this is a Twilio authentication error in the exception
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isTwilioAuthError = errorMessage.includes('Authenticate') || 
+                                 errorMessage.includes('401') ||
+                                 errorMessage.includes('20003');
+      
+      if (isTwilioAuthError) {
+        return res.status(503).json({
+          success: false,
+          error: 'Twilio authentication failed. Please verify your Twilio ACCOUNT_SID and AUTH_TOKEN are correct and active.',
+          technicalError: errorMessage
+        });
+      }
+      
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: errorMessage
       });
     }
   });
