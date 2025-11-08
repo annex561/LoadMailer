@@ -1112,7 +1112,7 @@ export default function MobileDriverDashboard() {
   // HOME TAB
   const HomeTab = () => {
     return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-32">
       {/* Welcome Header */}
       <div className="bg-card border-b border-border p-6 rounded-b-3xl shadow-lg">
         <div className="flex items-center justify-between mb-4">
@@ -1335,7 +1335,7 @@ export default function MobileDriverDashboard() {
 
   // LOADS TAB
   const LoadsTab = () => (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-32">
       {/* Earnings Summary */}
       <div className="bg-card border-b border-border p-6 rounded-b-3xl shadow-lg">
         <h2 className="text-lg font-semibold mb-4 text-foreground">Earnings Overview</h2>
@@ -1701,7 +1701,7 @@ export default function MobileDriverDashboard() {
 
   // DOCUMENTS TAB - Smart Document Management
   const DocumentsTab = () => (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-32">
       <div className="p-4">
         <h2 className="text-xl font-bold mb-4">Documents</h2>
 
@@ -1987,7 +1987,7 @@ export default function MobileDriverDashboard() {
 
   // PROFILE TAB
   const ProfileTab = () => (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-32">
       {/* Profile Header */}
       <div className="bg-card border-b border-border p-6 rounded-b-3xl shadow-lg">
         <div className="flex items-center gap-4 mb-4">
