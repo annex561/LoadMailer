@@ -1724,32 +1724,40 @@ export default function MobileDriverDashboard() {
                 className="hidden"
               />
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <Button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     if (fileInputRef.current) {
                       fileInputRef.current.setAttribute('capture', 'environment');
+                      fileInputRef.current.setAttribute('accept', 'image/*');
                       fileInputRef.current.click();
                     }
                   }}
-                  className="h-12 bg-primary hover:bg-primary/90 text-primary-foreground"
+                  className="h-14 bg-primary hover:bg-primary/90 active:bg-primary text-primary-foreground font-semibold shadow-md active:scale-95 transition-all touch-manipulation"
                   data-testid="button-take-photo"
+                  type="button"
                 >
-                  <Camera className="h-4 w-4 mr-2" />
+                  <Camera className="h-5 w-5 mr-2" />
                   Take Photo
                 </Button>
                 <Button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     if (fileInputRef.current) {
                       fileInputRef.current.removeAttribute('capture');
+                      fileInputRef.current.setAttribute('accept', 'image/*,application/pdf');
                       fileInputRef.current.click();
                     }
                   }}
                   variant="outline"
-                  className="h-12 border-border text-foreground hover:border-primary/30 transition-all"
+                  className="h-14 border-2 border-border text-foreground hover:border-primary hover:bg-primary/5 font-semibold shadow-sm active:scale-95 transition-all touch-manipulation"
                   data-testid="button-choose-file"
+                  type="button"
                 >
-                  <Upload className="h-4 w-4 mr-2" />
+                  <Upload className="h-5 w-5 mr-2" />
                   Choose File
                 </Button>
               </div>
@@ -2389,7 +2397,7 @@ export default function MobileDriverDashboard() {
       <QuickActionsFAB />
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-30 shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-border z-30 shadow-lg backdrop-blur-sm">
         <div className="max-w-2xl mx-auto grid grid-cols-5 h-20 p-2 gap-1">
           <button
             onClick={() => setActiveTab('home')}
