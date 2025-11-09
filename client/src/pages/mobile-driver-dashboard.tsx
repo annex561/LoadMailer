@@ -147,7 +147,6 @@ export default function MobileDriverDashboard() {
   const swipeStartY = useRef(0);
   const currentSwipeId = useRef<string | null>(null);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -172,7 +171,8 @@ export default function MobileDriverDashboard() {
       const loads = await response.json();
       return loads[0] || null;
     },
-    refetchInterval: 10000
+    refetchInterval: 30000,
+    staleTime: 20000
   });
 
   // Fetch driver earnings
@@ -207,7 +207,8 @@ export default function MobileDriverDashboard() {
       const allThreads = await response.json();
       return allThreads.filter((t: any) => t.driverId === driverId);
     },
-    refetchInterval: 5000
+    refetchInterval: activeTab === 'messages' ? 30000 : false,
+    staleTime: 20000
   });
 
   // Fetch messages for selected thread
@@ -220,7 +221,8 @@ export default function MobileDriverDashboard() {
       return response.json();
     },
     enabled: !!selectedThread?.id,
-    refetchInterval: 3000
+    refetchInterval: 15000,
+    staleTime: 10000
   });
 
   // Fetch documents for current load
@@ -252,7 +254,8 @@ export default function MobileDriverDashboard() {
       }>;
     },
     enabled: !!driverId,
-    refetchInterval: 6000
+    refetchInterval: 30000,
+    staleTime: 20000
   });
 
   // Update load status mutation
@@ -1122,7 +1125,7 @@ export default function MobileDriverDashboard() {
           </div>
           <button 
             onClick={() => setShowMenu(!showMenu)}
-            className="bg-primary/10 hover:bg-primary/20 active:bg-primary/30 rounded-full h-14 w-14 p-0 flex items-center justify-center transition-all active:scale-95 touch-manipulation border border-primary/30"
+            className="bg-primary/10 active:bg-primary/30 rounded-full h-14 w-14 p-0 flex items-center justify-center transition-colors duration-150 border border-primary/30"
             data-testid="button-menu"
             aria-label="Open menu"
           >
@@ -1132,15 +1135,15 @@ export default function MobileDriverDashboard() {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-3 mt-4">
-          <div className="bg-card border border-border rounded-2xl p-3 text-center hover:border-primary/30 transition-all">
+          <div className="bg-card border border-border rounded-2xl p-3 text-center">
             <div className="text-3xl font-bold text-success">{driver?.completedLoads || 0}</div>
             <div className="text-xs text-muted-foreground">Loads</div>
           </div>
-          <div className="bg-card border border-border rounded-2xl p-3 text-center hover:border-primary/30 transition-all">
+          <div className="bg-card border border-border rounded-2xl p-3 text-center">
             <div className="text-3xl font-bold text-success">{formatCurrency(earnings?.totalEarnings || 0)}</div>
             <div className="text-xs text-muted-foreground">Earned</div>
           </div>
-          <div className="bg-card border border-border rounded-2xl p-3 text-center hover:border-primary/30 transition-all">
+          <div className="bg-card border border-border rounded-2xl p-3 text-center">
             <div className="text-2xl font-bold text-primary">{driver?.averageRating?.toFixed(1) || '0.0'}</div>
             <div className="text-xs text-muted-foreground">Rating</div>
           </div>
@@ -1715,51 +1718,39 @@ export default function MobileDriverDashboard() {
                 Take a photo or select from gallery
               </p>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,application/pdf"
-                capture="environment"
-                onChange={handleFileCapture}
-                className="hidden"
-              />
-
               <div className="grid grid-cols-2 gap-3">
-                <Button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (fileInputRef.current) {
-                      fileInputRef.current.setAttribute('capture', 'environment');
-                      fileInputRef.current.setAttribute('accept', 'image/*');
-                      fileInputRef.current.click();
-                    }
-                  }}
-                  className="h-14 bg-primary hover:bg-primary/90 active:bg-primary text-primary-foreground font-semibold shadow-md active:scale-95 transition-all touch-manipulation"
+                <label 
+                  htmlFor="camera-input"
+                  className="h-14 bg-primary active:bg-primary/80 text-primary-foreground font-semibold shadow-md rounded-lg flex items-center justify-center cursor-pointer transition-colors duration-150"
                   data-testid="button-take-photo"
-                  type="button"
                 >
+                  <input
+                    id="camera-input"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileCapture}
+                    className="hidden"
+                  />
                   <Camera className="h-5 w-5 mr-2" />
                   Take Photo
-                </Button>
-                <Button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (fileInputRef.current) {
-                      fileInputRef.current.removeAttribute('capture');
-                      fileInputRef.current.setAttribute('accept', 'image/*,application/pdf');
-                      fileInputRef.current.click();
-                    }
-                  }}
-                  variant="outline"
-                  className="h-14 border-2 border-border text-foreground hover:border-primary hover:bg-primary/5 font-semibold shadow-sm active:scale-95 transition-all touch-manipulation"
+                </label>
+                
+                <label 
+                  htmlFor="file-input"
+                  className="h-14 border-2 border-border text-foreground active:bg-primary/10 font-semibold shadow-sm rounded-lg flex items-center justify-center cursor-pointer transition-colors duration-150"
                   data-testid="button-choose-file"
-                  type="button"
                 >
+                  <input
+                    id="file-input"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleFileCapture}
+                    className="hidden"
+                  />
                   <Upload className="h-5 w-5 mr-2" />
                   Choose File
-                </Button>
+                </label>
               </div>
             </CardContent>
           </Card>
@@ -2402,8 +2393,8 @@ export default function MobileDriverDashboard() {
           <button
             onClick={() => setActiveTab('home')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl",
-              activeTab === 'home' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+              "flex flex-col items-center justify-center gap-1 transition-colors duration-150 rounded-xl",
+              activeTab === 'home' ? "bg-primary/20 text-primary" : "text-muted-foreground"
             )}
             data-testid="tab-home"
           >
@@ -2414,8 +2405,8 @@ export default function MobileDriverDashboard() {
           <button
             onClick={() => setActiveTab('loads')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl",
-              activeTab === 'loads' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+              "flex flex-col items-center justify-center gap-1 transition-colors duration-150 rounded-xl",
+              activeTab === 'loads' ? "bg-primary/20 text-primary" : "text-muted-foreground"
             )}
             data-testid="tab-loads"
           >
@@ -2426,8 +2417,8 @@ export default function MobileDriverDashboard() {
           <button
             onClick={() => setActiveTab('messages')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl relative",
-              activeTab === 'messages' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+              "flex flex-col items-center justify-center gap-1 transition-colors duration-150 rounded-xl relative",
+              activeTab === 'messages' ? "bg-primary/20 text-primary" : "text-muted-foreground"
             )}
             data-testid="tab-messages"
           >
@@ -2441,8 +2432,8 @@ export default function MobileDriverDashboard() {
           <button
             onClick={() => setActiveTab('documents')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl",
-              activeTab === 'documents' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+              "flex flex-col items-center justify-center gap-1 transition-colors duration-150 rounded-xl",
+              activeTab === 'documents' ? "bg-primary/20 text-primary" : "text-muted-foreground"
             )}
             data-testid="tab-documents"
           >
@@ -2453,8 +2444,8 @@ export default function MobileDriverDashboard() {
           <button
             onClick={() => setActiveTab('profile')}
             className={cn(
-              "flex flex-col items-center justify-center gap-1 transition-all rounded-xl",
-              activeTab === 'profile' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+              "flex flex-col items-center justify-center gap-1 transition-colors duration-150 rounded-xl",
+              activeTab === 'profile' ? "bg-primary/20 text-primary" : "text-muted-foreground"
             )}
             data-testid="tab-profile"
           >
