@@ -91,6 +91,7 @@ Preferred communication style: Simple, everyday language.
     - **GPS-Based Intelligent Status Buttons**: Context-aware load progression based on 0.5-mile proximity to pickup/delivery locations (Haversine formula, server-side geocoding), with manual fallback.
     - **Enhanced Hamburger Menu**: Profile Settings, Help & Support, Contact Dispatch, Logout.
     - **AI-Powered Messaging**: ChatGPT-assisted message composition for drivers. Generates 3 context-aware variations, quick message buttons, OpenAI integration (via Replit AI Integrations), context-aware message enhancement for professionalism.
+    - **Debounced Typing Protection**: Message input uses debounced typing detection (3s inactivity window) to pause polling during active typing, preventing input field from disappearing due to re-renders. Polling automatically resumes after inactivity or message send.
 - **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized links with multi-layer security (authorization, rate limiting, batch limits, audit logging).
 - **Driver Onboarding**: Supports token-optional flow for both invited and direct registrations, using a multi-step wizard. Also supports simple registration and admin creation.
 
