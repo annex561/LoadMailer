@@ -94,6 +94,7 @@ Preferred communication style: Simple, everyday language.
     - **Debounced Typing Protection**: Message input uses debounced typing detection (3s inactivity window) to pause polling during active typing, preventing input field from disappearing due to re-renders. Polling automatically resumes after inactivity or message send.
 - **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized links with multi-layer security (authorization, rate limiting, batch limits, audit logging).
 - **Driver Onboarding**: Supports token-optional flow for both invited and direct registrations, using a multi-step wizard. Also supports simple registration and admin creation.
+    - **Completion Flow**: Registration success screen focuses on mobile driver dashboard access (NO Zello references). Auto-redirects to `/mobile-driver-dashboard?driverId=${id}` after 2 seconds with manual override button. Cache invalidation ensures new drivers immediately appear in dispatcher's driver list.
 
 # External Dependencies
 
