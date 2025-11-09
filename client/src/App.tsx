@@ -97,6 +97,7 @@ function App() {
           <Route path="/simple-registration" component={SimpleDriverRegistration} />
           <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
           <Route path="/driver-dashboard" component={MobileDriverDashboard} />
+          <Route path="/mobile-driver-dashboard" component={MobileDriverDashboard} />
           
           {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
           <Route>

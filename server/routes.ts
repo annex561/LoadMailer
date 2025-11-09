@@ -849,6 +849,28 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Customer API endpoints
+  app.get('/api/customers', async (req, res) => {
+    try {
+      const customers = await storage.getAllCustomers();
+      res.json(customers);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      res.status(500).json({ error: 'Failed to fetch customers' });
+    }
+  });
+
+  app.post('/api/customers', async (req, res) => {
+    try {
+      const validatedData = insertCustomerSchema.parse(req.body);
+      const customer = await storage.createCustomer(validatedData);
+      res.json(customer);
+    } catch (error) {
+      console.error('Error creating customer:', error);
+      res.status(500).json({ error: 'Failed to create customer' });
+    }
+  });
+
   // PRIORITY: Manual load entry endpoint - register early for proper JSON handling
   app.post('/api/manual-loads', async (req, res) => {
     try {
