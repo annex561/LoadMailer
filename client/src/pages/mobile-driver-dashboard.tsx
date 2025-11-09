@@ -115,6 +115,15 @@ export default function MobileDriverDashboard() {
     }
   }, [driverId]);
   
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
+  
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [messageInput, setMessageInput] = useState('');
@@ -123,6 +132,8 @@ export default function MobileDriverDashboard() {
   const [isRecording, setIsRecording] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Smart document workflow state
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -221,7 +232,7 @@ export default function MobileDriverDashboard() {
       return response.json();
     },
     enabled: !!selectedThread?.id,
-    refetchInterval: 15000,
+    refetchInterval: isTyping ? false : 15000,
     staleTime: 10000
   });
 
@@ -610,10 +621,20 @@ export default function MobileDriverDashboard() {
 
   const handleSendMessage = () => {
     if (!messageInput.trim() || !selectedThread) return;
+    
+    // Stop typing state immediately when sending
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    setIsTyping(false);
+    
     sendMessageMutation.mutate({
       threadId: selectedThread.id,
       content: messageInput
     });
+    
+    // Invalidate to immediately fetch new messages after send
+    queryClient.invalidateQueries({ queryKey: ['/api/communication/messages', selectedThread.id] });
   };
 
   const openNavigation = (address: string, app: 'google' | 'waze') => {
@@ -1668,7 +1689,19 @@ export default function MobileDriverDashboard() {
                   type="text"
                   placeholder="Type a message or use AI help..."
                   value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
+                  onChange={(e) => {
+                    setMessageInput(e.target.value);
+                    
+                    // Set typing state and debounce auto-reset
+                    setIsTyping(true);
+                    if (typingTimeoutRef.current) {
+                      clearTimeout(typingTimeoutRef.current);
+                    }
+                    // Reset typing state after 3 seconds of inactivity
+                    typingTimeoutRef.current = setTimeout(() => {
+                      setIsTyping(false);
+                    }, 3000);
+                  }}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                   className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base text-foreground placeholder:text-muted-foreground"
                   data-testid="input-message"
