@@ -84,7 +84,11 @@ Preferred communication style: Simple, everyday language.
 - **Professional Document Management**: Approval workflow, quality validation, cloud integrations, smart categorization, enhanced viewer, audit trails, automated reminders, PDF generation. Prevents load completion without required documents.
 - **Real-Time GPS Tracking**: Mobile-optimized, secure token-based authentication, 60-second auto-updates, wake lock, GPS health monitor.
 - **Mobile Driver Dashboard (PWA)**: Installable PWA with dynamic authentication, driver stats, load history, WhatsApp-style chat, document upload, profile management.
-    - **PWA Features**: Offline functionality, app icons, smart install prompt.
+    - **PWA Configuration**: 
+        - Manifest: `start_url: /mobile-driver-dashboard`, `theme_color: #00B5B8` (teal), `scope: /`, standalone display mode.
+        - Professional icons: Teal-branded 192x192 and 512x512 app icons with truck logo.
+        - Service Worker: SPA-aware routing with network-first strategy for navigation, offline fallback to cached shell, cache-first for assets.
+        - Offline Support: App shell cached for offline operation, React Router handles client-side navigation.
     - **Authentication**: Dynamic driver authentication via `?driverId=xxx` with localStorage persistence.
     - **Query Guards**: `enabled: !!driverId` for TanStack Query hooks.
     - **Mobile Optimizations**: Pull-to-refresh, swipe gestures, wake lock.
