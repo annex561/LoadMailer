@@ -1,7 +1,8 @@
-const CACHE_NAME = 'load-signal-v1';
+const CACHE_NAME = 'traq-iq-v2';
 const STATIC_CACHE_URLS = [
   '/',
-  '/driver-dashboard',
+  '/index.html',
+  '/mobile-driver-dashboard',
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png'
@@ -33,6 +34,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
+  // Handle API requests - always fetch from network
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request)
@@ -49,26 +51,50 @@ self.addEventListener('fetch', (event) => {
           );
         })
     );
-  } else {
+    return;
+  }
+
+  // Handle navigation requests (SPA routing)
+  if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match(request).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-
-        return fetch(request).then((response) => {
-          if (!response || response.status !== 200 || response.type === 'error') {
-            return response;
-          }
-
+      fetch(request)
+        .then((response) => {
+          // Clone and cache the response
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(request, responseToCache);
           });
-
           return response;
-        });
-      })
+        })
+        .catch(() => {
+          // Offline: return cached index.html for SPA routing
+          return caches.match('/').then((cachedResponse) => {
+            return cachedResponse || caches.match('/index.html');
+          });
+        })
     );
+    return;
   }
+
+  // Handle all other requests (assets, etc.)
+  event.respondWith(
+    caches.match(request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      return fetch(request).then((response) => {
+        if (!response || response.status !== 200 || response.type === 'error') {
+          return response;
+        }
+
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(request, responseToCache);
+        });
+
+        return response;
+      });
+    })
+  );
 });

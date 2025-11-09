@@ -2,10 +2,11 @@
   "name": "TRAQ IQ Driver",
   "short_name": "TRAQ IQ",
   "description": "Driver dashboard for TRAQ IQ logistics platform",
-  "start_url": "/driver-dashboard",
+  "start_url": "/mobile-driver-dashboard",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#1e293b",
+  "theme_color": "#00B5B8",
   "orientation": "portrait-primary",
   "icons": [
     {
@@ -19,6 +20,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
