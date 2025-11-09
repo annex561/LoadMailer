@@ -2157,13 +2157,13 @@ export default function MobileDriverDashboard() {
         <>
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/50 z-40"
+            className="fixed inset-0 bg-black/50 z-[100]"
             onClick={() => setShowMenu(false)}
             data-testid="menu-backdrop"
           />
           
           {/* Menu Panel */}
-          <div className="fixed top-0 right-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out animate-in slide-in-from-right">
+          <div className="fixed top-0 right-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-[110] overflow-y-auto">
             {/* Menu Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
               <div className="flex items-center justify-between mb-4">
