@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { EQUIPMENT_TYPES } from '@shared/equipment-types';
 import { apiRequest } from '@/lib/queryClient';
-import { Truck, User, Phone, Mail, MapPin, CheckCircle, Radio } from 'lucide-react';
+import { Truck, User, Phone, Mail, MapPin, CheckCircle } from 'lucide-react';
 
 interface SimpleDriverData {
   name: string;
@@ -101,7 +101,7 @@ export default function SimpleDriverRegistration() {
     }
   }, []);
 
-  const [zelloInfo, setZelloInfo] = useState<any>(null);
+  const [registeredDriverId, setRegisteredDriverId] = useState<string | null>(null);
 
   const registerDriverMutation = useMutation({
     mutationFn: async (data: SimpleDriverData) => {
@@ -120,18 +120,23 @@ export default function SimpleDriverRegistration() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['/api/drivers'] });
       
-      // Store Zello info if available
-      if (result.zelloAccount) {
-        setZelloInfo(result.zelloAccount);
+      // Store driver ID for redirect
+      if (result.id) {
+        setRegisteredDriverId(result.id);
       }
       
       toast({
         title: 'Registration successful!',
-        description: result.zelloAccount 
-          ? 'Your Zello voice dispatch account has been created!'
-          : 'Welcome to LoadMaster! You can now receive load offers.'
+        description: 'Welcome to TRAQ IQ! Redirecting you to your driver dashboard...'
       });
       setIsComplete(true);
+      
+      // Auto-redirect to mobile dashboard after 2 seconds
+      setTimeout(() => {
+        if (result.id) {
+          window.location.href = `/mobile-driver-dashboard?driverId=${result.id}`;
+        }
+      }, 2000);
     },
     onError: (error: any) => {
       toast({
@@ -167,96 +172,43 @@ export default function SimpleDriverRegistration() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-lg">
           <CardContent className="pt-6">
-            <div className="text-center space-y-4">
-              <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
-              <h3 className="text-2xl font-bold text-green-600">Registration Complete!</h3>
-              <p className="text-muted-foreground">
-                Welcome to TRAQ IQ! Your driver profile has been created successfully. 
-                You can now receive load offers via SMS and Zello voice dispatch.
+            <div className="text-center space-y-6">
+              <CheckCircle className="h-20 w-20 text-green-500 mx-auto" />
+              <h3 className="text-3xl font-bold text-green-600">Registration Complete!</h3>
+              <p className="text-lg text-muted-foreground">
+                Welcome to TRAQ IQ! Your driver profile has been created successfully.
               </p>
               
-              {/* App Download Section - Always Show */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-                <p className="text-sm font-medium text-blue-800 mb-3">
-                  📱 Download the Zello Work app to receive voice dispatch:
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mt-4">
+                <Truck className="h-12 w-12 text-blue-600 mx-auto mb-3" />
+                <p className="text-base font-medium text-blue-900 mb-2">
+                  🚛 Access Your Driver Dashboard
                 </p>
-                <div className="flex gap-3 justify-center">
-                  <a
-                    href="https://apps.apple.com/app/zello-work-push-to-talk-walkie/id1042031418"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
-                    data-testid="link-ios-app"
-                  >
-                    <Phone className="h-4 w-4 mr-2" />
-                    iOS App Store
-                  </a>
-                  <a
-                    href="https://play.google.com/store/apps/details?id=com.loudtalks.work"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                    data-testid="link-android-app"
-                  >
-                    <Phone className="h-4 w-4 mr-2" />
-                    Google Play
-                  </a>
-                </div>
-                <p className="text-xs text-gray-600 mt-3">
-                  Use Network: <span className="font-mono font-bold">lamp1</span>
+                <p className="text-sm text-blue-700 mb-4">
+                  You can now view your loads, communicate with dispatch, upload documents, and track your earnings.
+                </p>
+                <p className="text-xs text-blue-600">
+                  Redirecting you to your dashboard in a moment...
                 </p>
               </div>
               
-              {zelloInfo && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left space-y-3 mt-4">
-                  <h4 className="font-semibold text-yellow-800 flex items-center">
-                    <Radio className="h-5 w-5 mr-2" />
-                    Your Zello Account Credentials
-                  </h4>
-                  
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="text-gray-600">Username:</span>
-                      <span className="ml-2 font-mono font-semibold text-yellow-700">
-                        {zelloInfo.username}
-                      </span>
-                    </div>
-                    
-                    {zelloInfo.password && (
-                      <div>
-                        <span className="text-gray-600">Password:</span>
-                        <span className="ml-2 font-mono font-semibold text-yellow-700">
-                          {zelloInfo.password}
-                        </span>
-                      </div>
-                    )}
-                    
-                    <div>
-                      <span className="text-gray-600">Your Channels:</span>
-                      <div className="ml-2 mt-1">
-                        {zelloInfo.channels?.map((channel: string) => (
-                          <span key={channel} className="inline-block px-2 py-1 bg-white rounded-md text-xs font-medium text-yellow-700 mr-2 mb-1">
-                            #{channel}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-red-50 border border-red-200 rounded-md p-2">
-                    <p className="text-xs text-red-800 font-medium">
-                      ⚠️ Important: Save these credentials! You'll need them to log into the Zello Work app.
-                    </p>
-                  </div>
-                </div>
-              )}
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
+                <p className="text-sm text-teal-800">
+                  📱 <strong>Bookmark this page</strong> on your phone for easy access to your driver dashboard!
+                </p>
+              </div>
               
               <div className="flex gap-4 justify-center pt-4">
-                <Button onClick={() => setLocation('/')} data-testid="button-go-to-dashboard">
-                  Go to Dashboard
-                </Button>
-                <Button variant="outline" onClick={() => window.close()} data-testid="button-close-window">
-                  Close
+                <Button 
+                  onClick={() => {
+                    if (registeredDriverId) {
+                      window.location.href = `/mobile-driver-dashboard?driverId=${registeredDriverId}`;
+                    }
+                  }} 
+                  data-testid="button-go-to-dashboard"
+                  className="bg-teal-600 hover:bg-teal-700"
+                >
+                  Go to Dashboard Now
                 </Button>
               </div>
             </div>
