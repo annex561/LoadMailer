@@ -3486,16 +3486,55 @@ TRAQ IQ Dispatch Team
   // Send message to thread via SMS
   app.post('/api/communication/messages', async (req, res) => {
     try {
-      const { threadId, content, sender = 'dispatch' } = req.body;
+      const { threadId, content, sender = 'dispatch', driverId } = req.body;
       
-      if (!threadId || !content) {
-        return res.status(400).json({ error: 'Thread ID and content are required' });
+      if (!content) {
+        return res.status(400).json({ error: 'Content is required' });
       }
 
-      // Get thread details
-      const thread = await storage.getLoadCommunicationThread(threadId);
-      if (!thread) {
-        return res.status(404).json({ error: 'Communication thread not found' });
+      // Get or find/create thread
+      let thread;
+      
+      if (threadId && threadId !== 'auto') {
+        // Lookup existing thread by ID
+        thread = await storage.getLoadCommunicationThread(threadId);
+        if (!thread) {
+          return res.status(404).json({ error: 'Communication thread not found' });
+        }
+      } else if (driverId) {
+        // Find or create unified thread for this driver (used by mobile dashboard)
+        const allThreads = await storage.getAllLoadCommunicationThreads();
+        thread = allThreads.find(t => t.driverId === driverId && t.threadType === 'unified');
+        
+        if (!thread) {
+          // Create new unified thread for this driver
+          const driver = await storage.getDriver(driverId);
+          if (!driver) {
+            return res.status(404).json({ error: 'Driver not found' });
+          }
+          
+          // Get driver's current active load for context (optional)
+          const activeLoads = await storage.getLoadsByStatus('assigned');
+          const driverLoad = activeLoads.find(load => load.driverId === driverId);
+          
+          thread = await storage.createLoadCommunicationThread({
+            threadType: 'unified',
+            loadId: driverLoad?.id || null,
+            driverId: driverId,
+            status: 'active',
+            lastMessageAt: new Date(),
+            messageCount: 0,
+            unreadDriverMessages: 0,
+            unreadDispatchMessages: 0,
+            driverName: driver.name,
+            driverPhone: driver.phone || driver.phoneNumber || '',
+            loadNumber: driverLoad?.loadNumber || null
+          });
+          
+          console.log(`✅ Created unified thread for driver ${driver.name} (${driverId})`);
+        }
+      } else {
+        return res.status(400).json({ error: 'Either threadId or driverId is required' });
       }
 
       let deliveryMethod = 'none';

@@ -297,7 +297,7 @@ export default function MobileDriverDashboard() {
       const res = await fetch(`/api/communication/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId, content, sender: 'driver' })
+        body: JSON.stringify({ threadId, content, sender: 'driver', driverId })
       });
       if (!res.ok) throw new Error('Failed to send message');
       return res.json();
