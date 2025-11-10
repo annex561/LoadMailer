@@ -3675,7 +3675,7 @@ TRAQ IQ Dispatch Team
 
       // Store message in database
       await storage.createLoadMessage({
-        threadId: threadId,
+        threadId: thread.id,
         loadId: thread.loadId || null,
         senderId: sender === 'driver' ? thread.driverId : null,
         senderRole: sender,
@@ -3689,7 +3689,7 @@ TRAQ IQ Dispatch Team
       });
 
       // Update thread stats
-      await storage.updateLoadCommunicationThread(threadId, {
+      await storage.updateLoadCommunicationThread(thread.id, {
         messageCount: (thread.messageCount || 0) + 1,
         lastMessageAt: new Date(),
         lastMessageText: content.substring(0, 100),
