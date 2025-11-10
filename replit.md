@@ -29,10 +29,17 @@ Preferred communication style: Simple, everyday language.
 - **IDs**: Nanoid-based collision-proof load number generation (LOAD-XXXXXX-nanoid).
 
 ## Communication System
-- **Unified Messaging**: One conversation stream per driver.
+- **Unified Messaging**: One conversation stream per driver with automatic thread creation.
+  - **Auto-Thread Creation**: Unified threads automatically created when driver sends first message from mobile dashboard or SMS.
+  - **Field Mapping**: API boundary maps database fields (`lastMessageText`/`lastMessageAt`) to frontend-expected names (`lastMessage`/`lastMessageTimestamp`).
 - **SMS**: Twilio SMS for all driver communications, bidirectional with smart load context and MMS.
   - **Dashboard Link Format**: Simplified format with only truck emoji (🚛) to avoid carrier spam filters. No bullet point emojis (✅📍💬).
+  - **Driver-to-Dispatcher SMS Relay**: Optional SMS notifications to dispatcher when driver sends in-app messages (requires `DISPATCHER_PHONE_NUMBER` env var).
 - **Email**: Nodemailer for automated email notifications using dynamic templates.
+- **In-App Messaging**: Real-time bidirectional messaging between drivers (mobile dashboard) and dispatchers (SMS Dispatch tab).
+  - Mobile dashboard sends messages with `{threadId: 'auto', driverId, content, sender: 'driver'}`.
+  - Backend auto-discovers or creates unified thread for driver.
+  - Messages appear in Dispatcher Dashboard's SMS Dispatch tab (Recent Messages) and Activity Feed.
 
 ## API Design
 - **Pattern**: RESTful API endpoints.
