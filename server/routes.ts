@@ -3558,6 +3558,72 @@ TRAQ IQ Dispatch Team
             success: false 
           });
         }
+      } else if (sender === 'driver') {
+        // Handle driver-originated messages - send SMS to dispatcher
+        const driver = await storage.getDriver(thread.driverId);
+        if (!driver) {
+          return res.status(404).json({ error: 'Driver not found for this thread' });
+        }
+
+        // Get dispatcher phone number from environment
+        const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER;
+        const normalizedDispatcherPhone = normalizePhoneToE164(dispatcherPhone);
+        
+        if (!normalizedDispatcherPhone) {
+          console.log(`⚠️ Cannot send SMS to dispatcher - DISPATCHER_PHONE_NUMBER not configured`);
+          deliveryMethod = 'app_only';
+          deliverySuccess = true; // Still save the message in app
+        } else {
+          // Format message with driver and load context
+          let smsMessage: string;
+          
+          if (thread.threadType === 'general') {
+            // General chat: Include driver name
+            smsMessage = `Message from ${driver.name}: ${content}`;
+          } else {
+            // Load communication: Include load context with route information
+            const load = thread.loadId ? await storage.getLoad(thread.loadId) : null;
+            if (load) {
+              // Extract locations with improved error handling
+              const pickupLocation = extractCityState(load.pickupAddress);
+              const deliveryLocation = extractCityState(load.deliveryAddress);
+              
+              // Build route info - only show arrow if we have valid locations
+              let routeInfo = '';
+              if (pickupLocation !== 'Location TBD' || deliveryLocation !== 'Location TBD') {
+                routeInfo = ` (${pickupLocation} → ${deliveryLocation})`;
+              }
+              
+              smsMessage = `${driver.name} - Load ${load.loadNumber}${routeInfo}: ${content}`;
+            } else {
+              smsMessage = `${driver.name} - Load Message: ${content}`;
+            }
+          }
+          
+          // Send via SMS to dispatcher
+          try {
+            console.log(`📱 Sending driver message to dispatcher (${normalizedDispatcherPhone})`);
+            
+            const smsResult = await smsService.sendSMS({
+              to: normalizedDispatcherPhone,
+              body: smsMessage
+            });
+            
+            if (smsResult.success) {
+              console.log(`✅ Driver message sent via SMS to dispatcher${smsResult.messageSid ? ` - SID: ${smsResult.messageSid}` : ''}`);
+              deliveryMethod = 'sms';
+              deliverySuccess = true;
+            } else {
+              console.error(`❌ SMS delivery to dispatcher failed: ${smsResult.error}`);
+              deliveryMethod = 'app_only';
+              deliverySuccess = true; // Still save the message in app
+            }
+          } catch (smsError) {
+            console.error(`❌ SMS delivery error to dispatcher:`, smsError);
+            deliveryMethod = 'app_only';
+            deliverySuccess = true; // Still save the message in app
+          }
+        }
       }
 
       // Store message in database
