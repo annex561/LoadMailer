@@ -2983,7 +2983,15 @@ TRAQ IQ Dispatch Team
       console.log('📞 About to call storage.getAllLoadCommunicationThreads()');
       const threads = await storage.getAllLoadCommunicationThreads();
       console.log(`📋 Retrieved ${threads.length} communication threads from storage`);
-      res.json(threads);
+      
+      // Map database field names to frontend-expected names
+      const mappedThreads = threads.map(thread => ({
+        ...thread,
+        lastMessage: thread.lastMessageText,
+        lastMessageTimestamp: thread.lastMessageAt
+      }));
+      
+      res.json(mappedThreads);
     } catch (error) {
       console.error('❌ Error fetching communication threads:', error);
       res.status(500).json({ error: "Failed to fetch communication threads" });
