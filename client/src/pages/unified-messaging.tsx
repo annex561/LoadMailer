@@ -107,8 +107,9 @@ export default function UnifiedMessaging() {
         content,
         sender: "dispatch"
       });
-      console.log("✅ Message sent successfully:", response);
-      return response.json();
+      const data = await response.json();
+      console.log("✅ Message sent successfully:", data);
+      return data;
     },
     onSuccess: (_data, variables) => {
       console.log("🔄 Message sent, refreshing queries...");
