@@ -2986,7 +2986,7 @@ TRAQ IQ Dispatch Team
       
       // For each thread, fetch the last message to get the sender role
       const threadsWithSender = await Promise.all(threads.map(async (thread) => {
-        const messages = await storage.getLoadMessages(thread.id);
+        const messages = await storage.getLoadMessagesByThread(thread.id);
         const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
         
         return {

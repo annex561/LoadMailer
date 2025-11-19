@@ -73,6 +73,7 @@ import AdminOverview from './admin-overview';
 import CommunicationDashboard from './communication-dashboard';
 import AICommunicationInsights from './ai-communication-insights';
 import FleetCalculator from './fleet-calculator';
+import UnifiedMessaging from './unified-messaging';
 import NotFound from './not-found';
 import DriverLocationMap from '@/components/driver-location-map';
 
@@ -594,10 +595,10 @@ export default function LoadOpsDashboard() {
         return <CommunicationDashboard />;
       case '/ai-communication-insights':
         return <AICommunicationInsights />;
+      case '/unified-messaging':
+        return <UnifiedMessaging />;
       case '/twilio-settings':
         return <div className="p-6"><h1 className="text-2xl font-bold">Twilio Settings</h1><p className="mt-4 text-muted-foreground">Twilio configuration page coming soon.</p></div>;
-      case '/unified-messaging':
-        return <div className="p-6"><h1 className="text-2xl font-bold">Unified Messaging</h1><p className="mt-4 text-muted-foreground">Unified messaging interface coming soon.</p></div>;
       case '/driver-tracker':
         return <div className="p-6"><h1 className="text-2xl font-bold">Driver Tracker</h1><p className="mt-4 text-muted-foreground">Driver tracking page coming soon.</p></div>;
       case '/driver-profile':
