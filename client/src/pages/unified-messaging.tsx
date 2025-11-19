@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Search, Send, Truck, Phone, MessageCircle, FileText, CheckCircle, XCircle, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useMessageNotification } from "@/hooks/useNotificationSound";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 interface Driver {
@@ -70,6 +71,7 @@ interface LoadDocument {
 }
 
 export default function UnifiedMessaging() {
+  const { toast } = useToast();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [messageText, setMessageText] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -99,20 +101,33 @@ export default function UnifiedMessaging() {
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async ({ threadId, content }: { threadId: string; content: string }) => {
-      return await apiRequest(`/api/communication/messages`, {
-        method: "POST",
-        body: JSON.stringify({
-          threadId,
-          content,
-          sender: "dispatch"
-        }),
+      console.log("📤 Sending message:", { threadId, content });
+      const response = await apiRequest("POST", `/api/communication/messages`, {
+        threadId,
+        content,
+        sender: "dispatch"
       });
+      console.log("✅ Message sent successfully:", response);
+      return response.json();
     },
     onSuccess: (_data, variables) => {
+      console.log("🔄 Message sent, refreshing queries...");
       // Use the threadId from the mutation variables to avoid stale closure
       queryClient.invalidateQueries({ queryKey: ["/api/communication/threads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/communication/messages", variables.threadId] });
       setMessageText("");
+      toast({
+        title: "Message sent",
+        description: "Your message has been delivered",
+      });
+    },
+    onError: (error: any) => {
+      console.error("❌ Failed to send message:", error);
+      toast({
+        title: "Failed to send message",
+        description: error.message || "An error occurred while sending your message",
+        variant: "destructive",
+      });
     },
   });
 
