@@ -260,14 +260,35 @@ export class GPSHealthMonitorService {
   private normalizePhoneToE164(phoneNumber: string | undefined | null): string | null {
     if (!phoneNumber) return null;
     
-    const digitsOnly = phoneNumber.replace(/\D/g, '');
+    // Trim whitespace
+    const trimmed = phoneNumber.trim();
+    if (!trimmed) return null;
     
+    // If already in E.164 format (starts with +), validate and return
+    if (trimmed.startsWith('+')) {
+      // Validate E.164: must be + followed by 8-15 digits (international standard)
+      const digitsOnly = trimmed.substring(1).replace(/\D/g, '');
+      if (digitsOnly.length >= 8 && digitsOnly.length <= 15) {
+        return `+${digitsOnly}`;
+      } else {
+        console.error(`❌ GPS Monitor - Invalid E.164 format: "${trimmed}" (${digitsOnly.length} digits)`);
+        return null;
+      }
+    }
+    
+    // Strip all non-digit characters (spaces, dashes, parentheses, etc.)
+    const digitsOnly = trimmed.replace(/\D/g, '');
+    
+    // Normalize US numbers only (10 or 11 digits)
     if (digitsOnly.length === 10) {
+      // 10 digits: US number without country code → add +1
       return `+1${digitsOnly}`;
     } else if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
+      // 11 digits starting with 1: US number with country code → add +
       return `+${digitsOnly}`;
     } else {
-      console.error(`❌ Invalid phone number format: "${phoneNumber}" (${digitsOnly.length} digits) - cannot normalize to E.164`);
+      // Not a US number and not already E.164 formatted - reject
+      console.error(`❌ GPS Monitor - Cannot normalize phone: "${trimmed}" (${digitsOnly.length} digits)`);
       return null;
     }
   }

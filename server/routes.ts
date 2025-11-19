@@ -224,22 +224,39 @@ const bulkSmsRateLimiter = rateLimit({
 });
 
 // Helper function to normalize and validate phone numbers for Twilio E.164 format
+// Supports US numbers (10 or 11 digits) and already-formatted E.164 international numbers
 function normalizePhoneToE164(phoneNumber: string | undefined | null): string | null {
   if (!phoneNumber) return null;
   
-  // Strip all non-digit characters
-  const digitsOnly = phoneNumber.replace(/\D/g, '');
+  // Trim whitespace
+  const trimmed = phoneNumber.trim();
+  if (!trimmed) return null;
   
-  // Validate and normalize to E.164 format (+1XXXXXXXXXX)
+  // If already in E.164 format (starts with +), validate and return
+  if (trimmed.startsWith('+')) {
+    // Validate E.164: must be + followed by 8-15 digits (international standard)
+    const digitsOnly = trimmed.substring(1).replace(/\D/g, '');
+    if (digitsOnly.length >= 8 && digitsOnly.length <= 15) {
+      return `+${digitsOnly}`;
+    } else {
+      console.error(`❌ Invalid E.164 format: "${trimmed}" (${digitsOnly.length} digits)`);
+      return null;
+    }
+  }
+  
+  // Strip all non-digit characters (spaces, dashes, parentheses, etc.)
+  const digitsOnly = trimmed.replace(/\D/g, '');
+  
+  // Normalize US numbers only (10 or 11 digits)
   if (digitsOnly.length === 10) {
-    // 10 digits: US number without country code -> add +1
+    // 10 digits: US number without country code → add +1
     return `+1${digitsOnly}`;
   } else if (digitsOnly.length === 11 && digitsOnly.startsWith('1')) {
-    // 11 digits starting with 1: US number with country code -> add +
+    // 11 digits starting with 1: US number with country code → add +
     return `+${digitsOnly}`;
   } else {
-    // Invalid format: cannot normalize to E.164
-    console.error(`❌ Invalid phone number format: "${phoneNumber}" (${digitsOnly.length} digits) - cannot normalize to E.164`);
+    // Not a US number and not already E.164 formatted - reject
+    console.error(`❌ Cannot normalize phone: "${trimmed}" (${digitsOnly.length} digits) - Use E.164 format (+country+number) for international numbers`);
     return null;
   }
 }
@@ -1813,20 +1830,30 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { id } = req.params;
       
+      console.log(`\n📱 ========== DASHBOARD LINK REQUEST ==========`);
+      console.log(`🔍 Driver ID: ${id}`);
+      
       // Get driver details
       const driver = await storage.getDriver(id);
       if (!driver) {
+        console.log(`❌ Driver not found: ${id}`);
         return res.status(404).json({
           success: false,
           error: 'Driver not found'
         });
       }
 
+      console.log(`✅ Driver found: ${driver.name}`);
+      console.log(`📋 Phone fields - phone: "${driver.phone}", phoneNumber: "${driver.phoneNumber}"`);
+
       // Normalize phone number
       const driverPhone = driver.phoneNumber || driver.phone;
+      console.log(`🔍 Using phone field: ${driver.phoneNumber ? 'phoneNumber' : 'phone'} → "${driverPhone}"`);
+      
       const normalizedPhone = normalizePhoneToE164(driverPhone);
       
       if (!normalizedPhone) {
+        console.error(`❌ Phone normalization failed for driver ${driver.name}`);
         return res.status(400).json({
           success: false,
           error: `Driver phone number (${driverPhone}) cannot be normalized to E.164 format`,
@@ -1834,12 +1861,16 @@ export async function registerRoutes(app: Express): Promise<void> {
         });
       }
 
+      console.log(`✅ Phone normalized successfully: ${normalizedPhone}`);
+
       // Create dashboard URL
       const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
+      console.log(`🔗 Dashboard URL: ${dashboardUrl}`);
       
       // Shorten URL for professional appearance
       const shortUrlResult = await urlShortener.shortenUrl(dashboardUrl);
       const link = shortUrlResult.shortUrl || dashboardUrl;
+      console.log(`🔗 ${shortUrlResult.shortUrl ? 'Shortened' : 'Original'} link: ${link}`);
       
       // Create SMS message with TRAQ IQ branding
       const smsMessage = `🚛 TRAQ IQ\n\n` +
@@ -1849,14 +1880,23 @@ export async function registerRoutes(app: Express): Promise<void> {
         `View loads, track GPS, and message dispatch.\n\n` +
         `Questions? Reply here.`;
 
+      console.log(`📨 Sending SMS to ${normalizedPhone}...`);
+      console.log(`📝 Message preview: ${smsMessage.substring(0, 100)}...`);
+
       // Send SMS using smsLoadService
       const smsResult = await smsLoadService.sendSMS({
         to: normalizedPhone,
         body: smsMessage
       });
       
+      console.log(`📊 SMS Result:`, smsResult);
+      
       if (smsResult.success) {
-        console.log(`✅ Dashboard link sent to ${driver.name} (${normalizedPhone})${smsResult.messageSid ? ` - SID: ${smsResult.messageSid}` : ''}`);
+        console.log(`✅ ========== DASHBOARD LINK SENT SUCCESSFULLY ==========`);
+        console.log(`   Driver: ${driver.name}`);
+        console.log(`   Phone: ${normalizedPhone}`);
+        console.log(`   Message SID: ${smsResult.messageSid || 'N/A'}`);
+        console.log(`========================================================\n`);
         
         res.json({
           success: true,
@@ -1866,7 +1906,11 @@ export async function registerRoutes(app: Express): Promise<void> {
           messageId: smsResult.messageSid
         });
       } else {
-        console.error(`❌ Failed to send dashboard link SMS: ${smsResult.error}`);
+        console.error(`❌ ========== DASHBOARD LINK SEND FAILED ==========`);
+        console.error(`   Driver: ${driver.name}`);
+        console.error(`   Phone: ${normalizedPhone}`);
+        console.error(`   Error: ${smsResult.error}`);
+        console.error(`====================================================\n`);
         
         // Check if this is a Twilio authentication error
         const isTwilioAuthError = smsResult.error?.includes('Authenticate') || 

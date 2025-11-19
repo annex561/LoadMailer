@@ -530,27 +530,38 @@ export class SMSCommunicationService {
     }
   }
 
-  private normalizePhoneNumber(phone: string): string {
-    // Remove all non-digits
-    const digits = phone.replace(/\D/g, '');
+  private normalizePhoneNumber(phone: string): string | null {
+    // Trim whitespace
+    const trimmed = phone.trim();
+    if (!trimmed) return null;
     
-    // If it starts with 1 and is 11 digits, format as +1
-    if (digits.length === 11 && digits.startsWith('1')) {
-      return `+${digits}`;
+    // If already in E.164 format (starts with +), validate and return
+    if (trimmed.startsWith('+')) {
+      // Validate E.164: must be + followed by 8-15 digits (international standard)
+      const digitsOnly = trimmed.substring(1).replace(/\D/g, '');
+      if (digitsOnly.length >= 8 && digitsOnly.length <= 15) {
+        return `+${digitsOnly}`;
+      } else {
+        console.error(`❌ SMS Service - Invalid E.164 format: "${trimmed}" (${digitsOnly.length} digits)`);
+        return null;
+      }
     }
     
-    // If it's 10 digits, assume US and add +1
+    // Strip all non-digit characters (spaces, dashes, parentheses, etc.)
+    const digits = trimmed.replace(/\D/g, '');
+    
+    // Normalize US numbers only (10 or 11 digits)
     if (digits.length === 10) {
+      // 10 digits: US number without country code → add +1
       return `+1${digits}`;
+    } else if (digits.length === 11 && digits.startsWith('1')) {
+      // 11 digits starting with 1: US number with country code → add +
+      return `+${digits}`;
+    } else {
+      // Not a US number and not already E.164 formatted - reject
+      console.error(`❌ SMS Service - Cannot normalize phone: "${trimmed}" (${digits.length} digits)`);
+      return null;
     }
-    
-    // If already formatted correctly, return as is
-    if (phone.startsWith('+')) {
-      return phone;
-    }
-    
-    // Default fallback - add +1 prefix
-    return `+1${digits}`;
   }
 
   private async sendSMS(phone: string, message: string): Promise<{ success: boolean; error?: string }> {
@@ -562,6 +573,12 @@ export class SMSCommunicationService {
     try {
       // Normalize phone number to E.164 format for Twilio
       const normalizedPhone = this.normalizePhoneNumber(phone);
+      
+      if (!normalizedPhone) {
+        console.error(`❌ SMS Service - Failed to normalize phone number: ${phone}`);
+        return { success: false, error: `Invalid phone number format: ${phone}` };
+      }
+      
       console.log(`📱 Sending SMS to ${normalizedPhone} (original: ${phone})`);
       
       const result = await smsService.sendSMS({
