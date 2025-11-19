@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, real, jsonb, index, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, real, jsonb, index, pgEnum, unique, foreignKey } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -165,7 +165,10 @@ export const drivers = pgTable("drivers", {
   trackingToken: varchar("tracking_token", { length: 64 }).unique(),
   
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_drivers_company_id").on(table.companyId),
+  unique("drivers_id_company_id_unique").on(table.id, table.companyId),
+]);
 
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -177,14 +180,17 @@ export const customers = pgTable("customers", {
   address: text("address").notNull(),
   status: text("status").notNull().default("active"), // active, inactive
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_customers_company_id").on(table.companyId),
+  unique("customers_id_company_id_unique").on(table.id, table.companyId),
+]);
 
 export const loads = pgTable("loads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // Multi-tenant: nullable during migration
   loadNumber: text("load_number").notNull().unique(),
-  customerId: varchar("customer_id").references(() => customers.id).notNull(),
-  driverId: varchar("driver_id").references(() => drivers.id),
+  customerId: varchar("customer_id").notNull(),
+  driverId: varchar("driver_id"),
   description: text("description").notNull(),
   priority: text("priority").notNull().default("standard"), // standard, high, urgent
   pickupAddress: text("pickup_address").notNull(),
@@ -218,7 +224,20 @@ export const loads = pgTable("loads", {
   gpsTrackingSmsLastSentAt: timestamp("gps_tracking_sms_last_sent_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_loads_company_id").on(table.companyId),
+  unique("loads_id_company_id_unique").on(table.id, table.companyId),
+  foreignKey({
+    columns: [table.customerId, table.companyId],
+    foreignColumns: [customers.id, customers.companyId],
+    name: "loads_customer_company_fk"
+  }),
+  foreignKey({
+    columns: [table.driverId, table.companyId],
+    foreignColumns: [drivers.id, drivers.companyId],
+    name: "loads_driver_company_fk"
+  }),
+]);
 
 export const emailTemplates = pgTable("email_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -594,8 +613,8 @@ export const loadCommunicationThreads = pgTable("load_communication_threads", {
   companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // Multi-tenant: nullable during migration
   // Thread type - always 'unified' for the new simplified messaging system
   threadType: text("thread_type").notNull().default("unified"), // 'unified' for all driver communication
-  loadId: varchar("load_id").references(() => loads.id), // Current/active load context (optional)
-  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  loadId: varchar("load_id"), // Current/active load context (optional)
+  driverId: varchar("driver_id").notNull(),
   status: text("status").notNull().default("active"), // active, archived, closed
   lastMessageAt: timestamp("last_message_at").defaultNow(),
   messageCount: integer("message_count").notNull().default(0),
@@ -629,7 +648,18 @@ export const loadCommunicationThreads = pgTable("load_communication_threads", {
 }, (table) => ({
   uniqueDriverUnifiedThread: index("idx_unique_driver_unified_thread")
     .on(table.driverId)
-    .where(sql`thread_type = 'unified'`)
+    .where(sql`thread_type = 'unified'`),
+  companyIdIndex: index("idx_threads_company_id").on(table.companyId),
+  loadCompanyFk: foreignKey({
+    columns: [table.loadId, table.companyId],
+    foreignColumns: [loads.id, loads.companyId],
+    name: "threads_load_company_fk"
+  }),
+  driverCompanyFk: foreignKey({
+    columns: [table.driverId, table.companyId],
+    foreignColumns: [drivers.id, drivers.companyId],
+    name: "threads_driver_company_fk"
+  }),
 }));
 
 // Load Messages - All communication within a load thread
@@ -637,7 +667,7 @@ export const loadMessages = pgTable("load_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // Multi-tenant: nullable during migration
   threadId: varchar("thread_id").references(() => loadCommunicationThreads.id).notNull(),
-  loadId: varchar("load_id").references(() => loads.id), // nullable for general conversations
+  loadId: varchar("load_id"), // nullable for general conversations
   senderId: varchar("sender_id"), // driver ID or null for dispatch
   senderRole: text("sender_role").notNull(), // 'driver', 'dispatch', 'assistant', 'system'
   senderName: text("sender_name").notNull(), // Display name
@@ -669,7 +699,14 @@ export const loadMessages = pgTable("load_messages", {
   replyToMessageId: varchar("reply_to_message_id").references(() => loadMessages.id), // Thread replies
   
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("idx_messages_company_id").on(table.companyId),
+  foreignKey({
+    columns: [table.loadId, table.companyId],
+    foreignColumns: [loads.id, loads.companyId],
+    name: "messages_load_company_fk"
+  }),
+]);
 
 // Message Attachments - Images, documents, signatures linked to messages
 export const messageAttachments = pgTable("message_attachments", {
