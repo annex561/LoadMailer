@@ -1,11 +1,125 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, real, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, real, jsonb, index, pgEnum } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Enums for multi-tenant subscription system
+export const userRoleEnum = pgEnum("user_role", ["admin", "dispatcher"]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", [
+  "trialing",
+  "active",
+  "past_due",
+  "canceled",
+  "incomplete",
+  "incomplete_expired"
+]);
+export const subscriptionPlanEnum = pgEnum("subscription_plan", ["starter", "pro", "enterprise"]);
+export const paymentMethodTypeEnum = pgEnum("payment_method_type", ["card", "ach", "bank_transfer"]);
+export const invoiceStatusEnum = pgEnum("invoice_status", ["draft", "open", "paid", "void", "uncollectible"]);
+
+// Companies table - the organization/trucking company
+export const companies = pgTable("companies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(), // URL-friendly identifier
+  stripeCustomerId: text("stripe_customer_id").unique(),
+  trialEndsAt: timestamp("trial_ends_at"), // When trial expires
+  billingEmail: text("billing_email").notNull(),
+  website: text("website"),
+  phone: text("phone"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  country: text("country").default("US"),
+  timezone: text("timezone").default("America/New_York"),
+  isActive: boolean("is_active").notNull().default(true),
+  settings: jsonb("settings"), // Company-specific settings
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Subscriptions table - tracks subscription status and plans
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "cascade" }).notNull(),
+  stripeSubscriptionId: text("stripe_subscription_id").unique(),
+  planTier: subscriptionPlanEnum("plan_tier").notNull().default("starter"),
+  status: subscriptionStatusEnum("status").notNull().default("trialing"),
+  collectionMethod: text("collection_method").default("charge_automatically"), // charge_automatically, send_invoice
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  cancelAt: timestamp("cancel_at"),
+  canceledAt: timestamp("canceled_at"),
+  currentPeriodStart: timestamp("current_period_start"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  trialStart: timestamp("trial_start"),
+  trialEnd: timestamp("trial_end"),
+  seatsPurchased: integer("seats_purchased").default(5), // Number of dispatcher seats
+  metadata: jsonb("metadata"), // Additional subscription metadata
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Company Users junction table - links users to companies with roles
+export const companyUsers = pgTable("company_users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  role: userRoleEnum("role").notNull().default("dispatcher"),
+  invitedByUserId: varchar("invited_by_user_id").references(() => users.id),
+  invitedAt: timestamp("invited_at").defaultNow(),
+  acceptedAt: timestamp("accepted_at"),
+  lastActiveAt: timestamp("last_active_at"),
+  isPrimaryAdmin: boolean("is_primary_admin").notNull().default(false), // Company owner
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Payment Methods table - stores payment methods
+export const paymentMethods = pgTable("payment_methods", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "cascade" }).notNull(),
+  stripePaymentMethodId: text("stripe_payment_method_id").unique().notNull(),
+  type: paymentMethodTypeEnum("type").notNull(),
+  // Card fields
+  brand: text("brand"), // visa, mastercard, amex, etc.
+  last4: text("last4"),
+  expMonth: integer("exp_month"),
+  expYear: integer("exp_year"),
+  // ACH/Bank fields
+  bankName: text("bank_name"),
+  accountHolderName: text("account_holder_name"),
+  accountType: text("account_type"), // checking, savings
+  mandateStatus: text("mandate_status"), // active, pending, inactive
+  isDefault: boolean("is_default").notNull().default(false),
+  addedAt: timestamp("added_at").defaultNow(),
+  detachedAt: timestamp("detached_at"), // When payment method was removed
+});
+
+// Billing History table - tracks invoices and payments
+export const billingHistory = pgTable("billing_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "cascade" }).notNull(),
+  stripeInvoiceId: text("stripe_invoice_id").unique(),
+  stripeInvoiceNumber: text("stripe_invoice_number"),
+  amountDue: integer("amount_due").notNull(), // In cents
+  amountPaid: integer("amount_paid").notNull().default(0), // In cents
+  currency: text("currency").notNull().default("usd"),
+  status: invoiceStatusEnum("status").notNull(),
+  periodStart: timestamp("period_start"),
+  periodEnd: timestamp("period_end"),
+  hostedInvoiceUrl: text("hosted_invoice_url"),
+  invoicePdfUrl: text("invoice_pdf_url"),
+  description: text("description"),
+  attemptCount: integer("attempt_count").default(0),
+  nextPaymentAttempt: timestamp("next_payment_attempt"),
+  createdAt: timestamp("created_at").defaultNow(),
+  paidAt: timestamp("paid_at"),
+});
+
 export const drivers = pgTable("drivers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // Multi-tenant: nullable during migration
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
   phone: text("phone").notNull(),
@@ -55,6 +169,7 @@ export const drivers = pgTable("drivers", {
 
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // Multi-tenant: nullable during migration
   name: text("name").notNull(),
   contactPerson: text("contact_person").notNull(),
   email: text("email").notNull(),
@@ -66,6 +181,7 @@ export const customers = pgTable("customers", {
 
 export const loads = pgTable("loads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // Multi-tenant: nullable during migration
   loadNumber: text("load_number").notNull().unique(),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   driverId: varchar("driver_id").references(() => drivers.id),
@@ -475,6 +591,7 @@ export const extractionVerifications = pgTable("extraction_verifications", {
 // One thread per driver containing all messages (load-specific and general)
 export const loadCommunicationThreads = pgTable("load_communication_threads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // Multi-tenant: nullable during migration
   // Thread type - always 'unified' for the new simplified messaging system
   threadType: text("thread_type").notNull().default("unified"), // 'unified' for all driver communication
   loadId: varchar("load_id").references(() => loads.id), // Current/active load context (optional)
@@ -518,6 +635,7 @@ export const loadCommunicationThreads = pgTable("load_communication_threads", {
 // Load Messages - All communication within a load thread
 export const loadMessages = pgTable("load_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // Multi-tenant: nullable during migration
   threadId: varchar("thread_id").references(() => loadCommunicationThreads.id).notNull(),
   loadId: varchar("load_id").references(() => loads.id), // nullable for general conversations
   senderId: varchar("sender_id"), // driver ID or null for dispatch
@@ -2182,16 +2300,53 @@ export const insertDriverEngagementMetricsSchema = createInsertSchema(driverEnga
   createdAt: true,
 });
 
+// Insert Schemas for Multi-Tenant Subscription System
+export const insertCompanySchema = createInsertSchema(companies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCompanyUserSchema = createInsertSchema(companyUsers).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPaymentMethodSchema = createInsertSchema(paymentMethods).omit({
+  id: true,
+  addedAt: true,
+});
+
+export const insertBillingHistorySchema = createInsertSchema(billingHistory).omit({
+  id: true,
+  createdAt: true,
+});
 
 // Insert Types
 export type InsertCommunicationInsights = z.infer<typeof insertCommunicationInsightsSchema>;
 export type InsertAiPerformanceMetrics = z.infer<typeof insertAiPerformanceMetricsSchema>;
 export type InsertDriverEngagementMetrics = z.infer<typeof insertDriverEngagementMetricsSchema>;
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type InsertCompanyUser = z.infer<typeof insertCompanyUserSchema>;
+export type InsertPaymentMethod = z.infer<typeof insertPaymentMethodSchema>;
+export type InsertBillingHistory = z.infer<typeof insertBillingHistorySchema>;
 
 // Select Types
 export type CommunicationInsights = typeof communicationInsights.$inferSelect;
 export type AiPerformanceMetrics = typeof aiPerformanceMetrics.$inferSelect;
 export type DriverEngagementMetrics = typeof driverEngagementMetrics.$inferSelect;
+export type Company = typeof companies.$inferSelect;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type CompanyUser = typeof companyUsers.$inferSelect;
+export type PaymentMethod = typeof paymentMethods.$inferSelect;
+export type BillingHistory = typeof billingHistory.$inferSelect;
 
 // Session storage table - REQUIRED for Replit Auth
 export const sessions = pgTable(
