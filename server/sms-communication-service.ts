@@ -537,12 +537,14 @@ export class SMSCommunicationService {
     
     // If already in E.164 format (starts with +), validate and return
     if (trimmed.startsWith('+')) {
-      // Validate E.164: must be + followed by 8-15 digits (international standard)
-      const digitsOnly = trimmed.substring(1).replace(/\D/g, '');
-      if (digitsOnly.length >= 8 && digitsOnly.length <= 15) {
-        return `+${digitsOnly}`;
+      // For E.164 numbers, only strip spaces and hyphens (not parentheses, extensions, etc.)
+      const cleaned = trimmed.substring(1).replace(/[\s-]/g, '');
+      
+      // Strict validation: must be exactly 8-15 digits, no other characters
+      if (/^\d{8,15}$/.test(cleaned)) {
+        return `+${cleaned}`;
       } else {
-        console.error(`❌ SMS Service - Invalid E.164 format: "${trimmed}" (${digitsOnly.length} digits)`);
+        console.error(`❌ SMS Service - Invalid E.164 format: "${trimmed}" - must be + followed by 8-15 digits`);
         return null;
       }
     }
