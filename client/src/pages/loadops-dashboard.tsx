@@ -1021,10 +1021,12 @@ export default function LoadOpsDashboard() {
   return (
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 bg-sidebar border-r border-sidebar-border transition-all duration-300 flex flex-col shadow-xl",
-        sidebarCollapsed ? "w-16" : "w-64"
-      )}>
+      <aside 
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 bg-[hsl(var(--sidebar))] border-r border-[hsl(var(--sidebar-border))] transition-all duration-300 flex flex-col shadow-xl",
+          sidebarCollapsed ? "w-16" : "w-64"
+        )}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-sidebar-border">
           {!sidebarCollapsed && (
