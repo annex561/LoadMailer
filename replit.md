@@ -27,6 +27,16 @@ Preferred communication style: Simple, everyday language.
 - **ORM**: Drizzle ORM with PostgreSQL dialect.
 - **Schema**: Drivers, Customers, Loads, Email Templates, Email Logs with defined relationships.
 - **IDs**: Nanoid-based collision-proof load number generation (LOAD-XXXXXX-nanoid).
+- **Multi-Tenant Architecture**: Company-centric data isolation with subscription management:
+  - **Companies Table**: Organization records with billing details, trial management, and settings
+  - **Subscriptions Table**: Stripe-integrated subscription plans (Starter/Pro/Enterprise) with status tracking
+  - **Company Users Table**: Role-based access control (admin/dispatcher) linking users to companies
+  - **Payment Methods Table**: Secure storage of Stripe payment methods (card/ACH)
+  - **Billing History Table**: Invoice and payment transaction records
+  - **Data Isolation**: All core tables (drivers, customers, loads, threads, messages) include `company_id` with composite foreign keys enforcing cross-tenant isolation
+  - **Performance**: Indexes on all `company_id` columns for optimized tenant-scoped queries
+  - **Security**: Database-level enforcement prevents data leakage - loads cannot reference drivers/customers from different companies
+  - **Legacy Migration**: Existing data migrated to "Legacy Default Company" with grandfathered Enterprise plan
 
 ## Communication System
 - **Unified Messaging**: One conversation stream per driver with automatic thread creation.
