@@ -47,6 +47,12 @@ Preferred communication style: Simple, everyday language.
   - Mobile dashboard sends messages with `{threadId: 'auto', driverId, content, sender: 'driver'}`.
   - Backend auto-discovers or creates unified thread for driver.
   - Messages appear in Dispatcher Dashboard's SMS Dispatch tab (Recent Messages) and Activity Feed.
+  - **Notification Sounds**: Instant audio feedback (440Hz beep, 200ms) when new messages arrive using Web Audio API. Custom `useNotificationSound` hook with sender role filtering to prevent self-notification.
+  - **Sender Labels**: Clear visual distinction with "You:" prefix for own messages and "Dispatch:"/"Driver Name:" for received messages in both mobile and dispatcher interfaces.
+  - **API Endpoints**: 
+    - `GET /api/communication/threads` - Returns all conversation threads with lastMessageSenderRole
+    - `GET /api/communication/messages/:threadId` - Returns messages for specific thread
+    - `POST /api/communication/messages` - Send message via `apiRequest("POST", url, {threadId, content, sender})`
 
 ## API Design
 - **Pattern**: RESTful API endpoints.
