@@ -34,6 +34,7 @@ import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';
 import { generateMessageSuggestions, improveMessage } from './openai-helper';
+import { stripeService } from './stripe-service';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -865,6 +866,135 @@ export async function registerRoutes(app: Express): Promise<void> {
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString()
       });
+    }
+  });
+
+  // Stripe API endpoints for multi-tenant subscription system
+  
+  // List subscription products (Starter, Pro, Enterprise)
+  app.get('/api/stripe/products', async (req, res) => {
+    try {
+      const products = await stripeService.listProducts(true, 50, 0);
+      res.json({ data: products });
+    } catch (error) {
+      console.error('Error fetching Stripe products:', error);
+      res.status(500).json({ error: 'Failed to fetch subscription products' });
+    }
+  });
+
+  // List subscription prices
+  app.get('/api/stripe/prices', async (req, res) => {
+    try {
+      const prices = await stripeService.listPrices(true, 50, 0);
+      res.json({ data: prices });
+    } catch (error) {
+      console.error('Error fetching Stripe prices:', error);
+      res.status(500).json({ error: 'Failed to fetch subscription prices' });
+    }
+  });
+
+  // Create checkout session for subscription
+  app.post('/api/stripe/create-checkout', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { priceId, companyId } = req.body;
+
+      if (!priceId || !companyId) {
+        return res.status(400).json({ error: 'Missing priceId or companyId' });
+      }
+
+      // Get company details
+      const company = await storage.getCompany(companyId);
+      if (!company) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+
+      // Create or get Stripe customer
+      let customerId = company.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripeService.createCustomer(
+          company.billingEmail,
+          company.id,
+          company.name
+        );
+        await storage.updateCompany(company.id, { stripeCustomerId: customer.id });
+        customerId = customer.id;
+      }
+
+      // Create checkout session with 14-day trial for new subscriptions
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const session = await stripeService.createCheckoutSession(
+        customerId,
+        priceId,
+        `${baseUrl}/checkout/success`,
+        `${baseUrl}/checkout/cancel`,
+        companyId,
+        14 // 14-day trial
+      );
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      res.status(500).json({ error: 'Failed to create checkout session' });
+    }
+  });
+
+  // Create customer portal session for managing subscription
+  app.post('/api/stripe/create-portal', isAuthenticated, async (req: any, res) => {
+    try {
+      const { companyId } = req.body;
+
+      if (!companyId) {
+        return res.status(400).json({ error: 'Missing companyId' });
+      }
+
+      const company = await storage.getCompany(companyId);
+      if (!company || !company.stripeCustomerId) {
+        return res.status(404).json({ error: 'No Stripe customer found for this company' });
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const session = await stripeService.createCustomerPortalSession(
+        company.stripeCustomerId,
+        `${baseUrl}/settings/billing`
+      );
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error('Error creating portal session:', error);
+      res.status(500).json({ error: 'Failed to create billing portal session' });
+    }
+  });
+
+  // Get company subscription status
+  app.get('/api/stripe/subscription', isAuthenticated, async (req: any, res) => {
+    try {
+      const { companyId } = req.query;
+
+      if (!companyId) {
+        return res.status(400).json({ error: 'Missing companyId' });
+      }
+
+      const company = await storage.getCompany(companyId as string);
+      if (!company) {
+        return res.status(404).json({ error: 'Company not found' });
+      }
+
+      // Get subscription from stripe schema (synced via webhooks)
+      const subscription = await stripeService.getCompanySubscription(company.id);
+      
+      res.json({ 
+        subscription,
+        company: {
+          id: company.id,
+          name: company.name,
+          stripeCustomerId: company.stripeCustomerId,
+          trialEndsAt: company.trialEndsAt,
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching subscription:', error);
+      res.status(500).json({ error: 'Failed to fetch subscription' });
     }
   });
 

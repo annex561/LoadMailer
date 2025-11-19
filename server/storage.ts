@@ -18,6 +18,11 @@ export interface IStorage {
   generateTrackingToken(driverId: string): Promise<{ token: string } | undefined>;
   validateTrackingToken(driverId: string, token: string): Promise<boolean>;
 
+  // Company operations (multi-tenant)
+  getCompany(id: string): Promise<any | undefined>;
+  getAllCompanies(): Promise<any[]>;
+  updateCompany(id: string, data: any): Promise<any | undefined>;
+
   // Customer operations
   getCustomer(id: string): Promise<Customer | undefined>;
   getAllCustomers(): Promise<Customer[]>;

@@ -197,6 +197,21 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
+  // Company operations (multi-tenant subscription system)
+  async getCompany(id: string): Promise<any | undefined> {
+    const result = await db.select().from(schema.companies).where(eq(schema.companies.id, id));
+    return result[0];
+  }
+
+  async getAllCompanies(): Promise<any[]> {
+    return await db.select().from(schema.companies);
+  }
+
+  async updateCompany(id: string, updateData: any): Promise<any | undefined> {
+    await db.update(schema.companies).set(updateData).where(eq(schema.companies.id, id));
+    return this.getCompany(id);
+  }
+
   // Load operations
   async getLoad(id: string): Promise<schema.LoadWithRelations | undefined> {
     try {

@@ -4,6 +4,52 @@ import { registerRoutes, createHTTPServer } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+// CRITICAL: Stripe webhook route MUST be registered BEFORE express.json()
+// The webhook needs raw Buffer, not parsed JSON
+app.post(
+  '/api/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const signature = req.headers['stripe-signature'];
+    
+    if (!signature) {
+      return res.status(400).json({ error: 'Missing stripe-signature' });
+    }
+    
+    try {
+      const sig = Array.isArray(signature) ? signature[0] : signature;
+      const { WebhookHandlers } = await import('./stripe-webhook-handler');
+      
+      // Validate that req.body is a Buffer (not parsed JSON)
+      if (!Buffer.isBuffer(req.body)) {
+        const errorMsg = 'STRIPE WEBHOOK ERROR: req.body is not a Buffer. ' +
+          'This means express.json() ran before this webhook route. ' +
+          'FIX: Move this webhook route registration BEFORE app.use(express.json()) in your code.';
+        log(errorMsg);
+        return res.status(500).json({ error: 'Webhook processing error' });
+      }
+      
+      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+      
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      log(`Webhook error: ${error.message}`);
+      
+      // Log helpful error message if it's the common "payload must be Buffer" error
+      if (error.message && error.message.includes('payload must be provided as a string or a Buffer')) {
+        const helpfulMsg = 'STRIPE WEBHOOK ERROR: Payload is not a Buffer. ' +
+          'This usually means express.json() parsed the body before the webhook handler. ' +
+          'FIX: Ensure the webhook route is registered BEFORE app.use(express.json()).';
+        log(helpfulMsg);
+      }
+      
+      res.status(400).json({ error: 'Webhook processing error' });
+    }
+  }
+);
+
+// Now apply JSON middleware for all other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -84,6 +130,40 @@ app.use((req, res, next) => {
 (async () => {
   try {
     log('🚀 Starting server initialization...');
+    
+    // Initialize Stripe schema and sync data BEFORE route registration
+    const databaseUrl = process.env.DATABASE_URL;
+    if (databaseUrl) {
+      try {
+        log('⚙️ Initializing Stripe schema...');
+        const { runMigrations } = await import('stripe-replit-sync');
+        await runMigrations({ databaseUrl, schema: 'stripe' });
+        log('✅ Stripe schema ready');
+
+        log('🔄 Syncing Stripe data from Stripe API...');
+        const { StripeSync } = await import('stripe-replit-sync');
+        const { getStripeSecretKey, getStripeWebhookSecret } = await import('./stripe-client');
+        
+        const secretKey = await getStripeSecretKey();
+        const webhookSecret = await getStripeWebhookSecret();
+        
+        const stripeSync = new StripeSync({
+          poolConfig: {
+            connectionString: databaseUrl,
+            max: 10,
+          },
+          stripeSecretKey: secretKey,
+          stripeWebhookSecret: webhookSecret,
+        });
+        await stripeSync.syncBackfill();
+        log('✅ Stripe data synced to PostgreSQL');
+      } catch (error: any) {
+        log(`⚠️ Stripe initialization failed: ${error.message}`);
+        log('⚠️ Continuing without Stripe - please configure Stripe connection in Replit');
+      }
+    } else {
+      log('⚠️ DATABASE_URL not found - skipping Stripe initialization');
+    }
     
     // Add timeout wrapper for route registration on main app
     const routeRegistrationPromise = registerRoutes(app);
