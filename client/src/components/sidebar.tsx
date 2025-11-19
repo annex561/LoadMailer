@@ -42,10 +42,10 @@ export default function Sidebar() {
 
   return (
     <aside className={cn(
-      "bg-white shadow-lg min-h-screen fixed left-0 top-0 z-40 transition-all duration-300 ease-in-out",
+      "bg-white dark:bg-slate-900 shadow-lg min-h-screen fixed left-0 top-0 z-40 transition-all duration-300 ease-in-out border-r border-gray-200 dark:border-slate-800",
       isCollapsed ? "w-16" : "w-64"
-    )}>
-      <div className="p-6 border-b border-gray-200">
+    )} style={{ backgroundColor: 'white', opacity: 1 }}>
+      <div className="p-6 border-b border-gray-200 dark:border-slate-800">
         <div className="flex items-center justify-between">
           <div className={cn(
             "flex items-center space-x-3 transition-all duration-300",
@@ -56,8 +56,8 @@ export default function Sidebar() {
             </div>
             {!isCollapsed && (
               <div>
-                <h1 className="text-xl font-bold text-gray-900">TRAQ IQ</h1>
-                <p className="text-xs text-gray-500">Smart Logistics Management</p>
+                <h1 className="text-xl font-bold text-gray-900 dark:text-white">TRAQ IQ</h1>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Smart Logistics Management</p>
               </div>
             )}
           </div>
@@ -80,7 +80,7 @@ export default function Sidebar() {
         {/* Core Operations Section */}
         {!isCollapsed && (
           <div className="px-6 py-2">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Core Operations</p>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Core Operations</p>
           </div>
         )}
         <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
@@ -99,8 +99,8 @@ export default function Sidebar() {
                       ? "px-2 justify-center" 
                       : "px-6",
                     isActive
-                      ? "text-primary bg-blue-50 border-r-3 border-primary"
-                      : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                      ? "text-primary bg-blue-50 dark:bg-slate-800 border-r-3 border-primary"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-primary"
                   )}
                   title={isCollapsed ? item.name : undefined}
                 >
@@ -123,7 +123,7 @@ export default function Sidebar() {
         {/* Driver Management Section */}
         {!isCollapsed && (
           <div className="px-6 py-2 mt-6">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Driver Management</p>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Driver Management</p>
           </div>
         )}
         <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
@@ -142,8 +142,8 @@ export default function Sidebar() {
                       ? "px-2 justify-center" 
                       : "px-6",
                     isActive
-                      ? "text-primary bg-blue-50 border-r-3 border-primary"
-                      : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                      ? "text-primary bg-blue-50 dark:bg-slate-800 border-r-3 border-primary"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-primary"
                   )}
                   title={isCollapsed ? item.name : undefined}
                 >
@@ -166,7 +166,7 @@ export default function Sidebar() {
         {/* Communication & Dispatch Section */}
         {!isCollapsed && (
           <div className="px-6 py-2 mt-6">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Communication</p>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Communication</p>
           </div>
         )}
         <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
@@ -185,8 +185,8 @@ export default function Sidebar() {
                       ? "px-2 justify-center" 
                       : "px-6",
                     isActive
-                      ? "text-primary bg-blue-50 border-r-3 border-primary"
-                      : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                      ? "text-primary bg-blue-50 dark:bg-slate-800 border-r-3 border-primary"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-primary"
                   )}
                   title={isCollapsed ? item.name : undefined}
                 >
@@ -209,7 +209,7 @@ export default function Sidebar() {
         {/* AI & Smart Features Section */}
         {!isCollapsed && (
           <div className="px-6 py-2 mt-6">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">AI & Smart Features</p>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">AI & Smart Features</p>
           </div>
         )}
         <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
@@ -228,8 +228,8 @@ export default function Sidebar() {
                       ? "px-2 justify-center" 
                       : "px-6",
                     isActive
-                      ? "text-primary bg-blue-50 border-r-3 border-primary"
-                      : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                      ? "text-primary bg-blue-50 dark:bg-slate-800 border-r-3 border-primary"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-primary"
                   )}
                   title={isCollapsed ? item.name : undefined}
                 >
@@ -252,7 +252,7 @@ export default function Sidebar() {
         {/* System & Reports Section */}
         {!isCollapsed && (
           <div className="px-6 py-2 mt-6">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">System & Reports</p>
+            <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">System & Reports</p>
           </div>
         )}
         <ul className={cn("mt-2 space-y-1", isCollapsed && "px-2")}>
@@ -271,8 +271,8 @@ export default function Sidebar() {
                       ? "px-2 justify-center" 
                       : "px-6",
                     isActive
-                      ? "text-primary bg-blue-50 border-r-3 border-primary"
-                      : "text-gray-700 hover:bg-gray-50 hover:text-primary"
+                      ? "text-primary bg-blue-50 dark:bg-slate-800 border-r-3 border-primary"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-primary"
                   )}
                   title={isCollapsed ? item.name : undefined}
                 >
