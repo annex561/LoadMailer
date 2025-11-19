@@ -9,6 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Search, Send, Truck, Phone, MessageCircle, FileText, CheckCircle, XCircle, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useMessageNotification } from "@/hooks/useNotificationSound";
+import { cn } from "@/lib/utils";
 
 interface Driver {
   id: string;
@@ -27,9 +29,11 @@ interface CommunicationThread {
   loadNumberFromLoad: string | null;
   messageCount: number;
   unreadDispatchMessages: number;
+  unreadDriverMessages?: number;
   lastMessageAt: string;
   lastMessageText?: string;
   lastMessageSender?: string;
+  lastMessageSenderRole?: 'driver' | 'dispatch' | null;
   threadType: string;
 }
 
@@ -88,6 +92,9 @@ export default function UnifiedMessaging() {
     enabled: !!selectedThreadId,
     refetchInterval: 2000, // Poll every 2 seconds
   });
+
+  // Play notification sound for new incoming messages
+  useMessageNotification(messages, !!selectedThreadId);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -222,7 +229,19 @@ export default function UnifiedMessaging() {
                           </div>
                         )}
                         <p className="text-sm text-gray-500 truncate mb-1">
-                          {thread.lastMessageText || "No messages yet"}
+                          {thread.lastMessageText ? (
+                            <>
+                              <span className={cn(
+                                "font-medium",
+                                thread.lastMessageSenderRole === 'driver' ? "text-blue-600" : "text-gray-700"
+                              )}>
+                                {thread.lastMessageSenderRole === 'driver' ? `${thread.driverName}: ` : 'You: '}
+                              </span>
+                              <span>{thread.lastMessageText}</span>
+                            </>
+                          ) : (
+                            'No messages yet'
+                          )}
                         </p>
                         <span className="text-xs text-gray-400">
                           {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
@@ -288,19 +307,30 @@ export default function UnifiedMessaging() {
                     const isDriver = message.senderRole === "driver";
                     const hasDocument = message.metadata?.documentId || message.metadata?.mediaUrl;
                     const documentStatus = message.metadata?.documentStatus;
+                    const senderName = isDriver ? selectedThread.driverName : 'You';
                     
                     return (
                       <div
                         key={message.id}
-                        className={`flex ${isDriver ? "justify-start" : "justify-end"}`}
+                        className={cn("flex flex-col gap-1", isDriver ? "items-start" : "items-end")}
                         data-testid={`message-${message.id}`}
                       >
+                        {/* Sender Name */}
+                        <div className={cn(
+                          "text-xs font-medium px-3",
+                          isDriver ? "text-blue-600" : "text-gray-600"
+                        )}>
+                          {senderName}
+                        </div>
+                        
+                        {/* Message Bubble */}
                         <div
-                          className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                          className={cn(
+                            "max-w-[70%] rounded-2xl px-4 py-3 shadow-sm",
                             isDriver
-                              ? "bg-gray-100 text-gray-900"
-                              : "bg-blue-600 text-white"
-                          }`}
+                              ? "bg-gray-100 text-gray-900 rounded-tl-sm"
+                              : "bg-blue-600 text-white rounded-tr-sm"
+                          )}
                         >
                           {message.metadata?.loadNumber && (
                             <div className="flex items-center gap-1 mb-1 opacity-75">

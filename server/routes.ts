@@ -2984,14 +2984,20 @@ TRAQ IQ Dispatch Team
       const threads = await storage.getAllLoadCommunicationThreads();
       console.log(`📋 Retrieved ${threads.length} communication threads from storage`);
       
-      // Map database field names to frontend-expected names
-      const mappedThreads = threads.map(thread => ({
-        ...thread,
-        lastMessage: thread.lastMessageText,
-        lastMessageTimestamp: thread.lastMessageAt
+      // For each thread, fetch the last message to get the sender role
+      const threadsWithSender = await Promise.all(threads.map(async (thread) => {
+        const messages = await storage.getLoadMessages(thread.id);
+        const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+        
+        return {
+          ...thread,
+          lastMessage: thread.lastMessageText,
+          lastMessageTimestamp: thread.lastMessageAt,
+          lastMessageSenderRole: lastMessage?.senderRole || null
+        };
       }));
       
-      res.json(mappedThreads);
+      res.json(threadsWithSender);
     } catch (error) {
       console.error('❌ Error fetching communication threads:', error);
       res.status(500).json({ error: "Failed to fetch communication threads" });

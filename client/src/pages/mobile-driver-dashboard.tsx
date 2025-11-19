@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { useMessageNotification } from '@/hooks/useNotificationSound';
 import { 
   Home, Package, MessageSquare, FileText, User, MapPin, Clock, DollarSign, 
   Navigation, CheckCircle, AlertCircle, Phone, Camera, Mic, Send, Plus,
@@ -74,7 +75,9 @@ interface CommunicationThread {
   driverName: string;
   lastMessage: string;
   lastMessageAt: string;
+  lastMessageSenderRole?: 'driver' | 'dispatch' | null;
   unreadDispatchMessages: number;
+  unreadDriverMessages?: number;
   messages?: CommunicationMessage[];
 }
 
@@ -235,6 +238,9 @@ export default function MobileDriverDashboard() {
     refetchInterval: isTyping ? false : 15000,
     staleTime: 10000
   });
+
+  // Play notification sound for new incoming messages
+  useMessageNotification(messages, activeTab === 'messages' && !!selectedThread);
 
   // Fetch documents for current load
   const { data: documents = [] } = useQuery({
@@ -1519,13 +1525,25 @@ export default function MobileDriverDashboard() {
                         <div className="font-semibold flex items-center gap-2">
                           Dispatch
                           {thread.unreadDispatchMessages > 0 && (
-                            <Badge className="bg-red-500 text-white text-xs">
+                            <Badge className="bg-red-500 text-white text-xs px-2">
                               {thread.unreadDispatchMessages}
                             </Badge>
                           )}
                         </div>
                         <div className="text-sm text-gray-600 truncate">
-                          {thread.lastMessage || 'No messages yet'}
+                          {thread.lastMessage ? (
+                            <>
+                              <span className={cn(
+                                "font-medium",
+                                thread.lastMessageSenderRole === 'driver' ? "text-primary" : "text-gray-700"
+                              )}>
+                                {thread.lastMessageSenderRole === 'driver' ? 'You: ' : 'Dispatch: '}
+                              </span>
+                              <span>{thread.lastMessage}</span>
+                            </>
+                          ) : (
+                            'No messages yet'
+                          )}
                         </div>
                         <div className="text-xs text-gray-400 mt-1">
                           {formatDate(thread.lastMessageAt)}
@@ -1570,35 +1588,48 @@ export default function MobileDriverDashboard() {
                 <p>No messages yet. Start the conversation!</p>
               </div>
             ) : (
-              messages.map((message: any) => (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "flex",
-                    message.senderRole === 'driver' ? "justify-end" : "justify-start"
-                  )}
-                  data-testid={`message-${message.id}`}
-                >
+              messages.map((message: any) => {
+                const isDriver = message.senderRole === 'driver';
+                const senderName = isDriver ? 'You' : 'Dispatch';
+                
+                return (
                   <div
+                    key={message.id}
                     className={cn(
-                      "max-w-[80%] rounded-2xl px-4 py-2",
-                      message.senderRole === 'driver'
-                        ? "bg-muted text-foreground rounded-br-sm"
-                        : "bg-primary/10 text-foreground border border-primary/30 rounded-bl-sm"
+                      "flex flex-col gap-1",
+                      isDriver ? "items-end" : "items-start"
                     )}
+                    data-testid={`message-${message.id}`}
                   >
-                    <div className="text-sm">{message.textContent || message.content}</div>
+                    {/* Sender Name */}
+                    <div className={cn(
+                      "text-xs font-medium px-3",
+                      isDriver ? "text-muted-foreground" : "text-primary"
+                    )}>
+                      {senderName}
+                    </div>
+                    
+                    {/* Message Bubble */}
                     <div
                       className={cn(
-                        "text-xs mt-1",
-                        message.senderRole === 'driver' ? "text-muted-foreground" : "text-muted-foreground"
+                        "max-w-[80%] rounded-2xl px-4 py-3 shadow-sm",
+                        isDriver
+                          ? "bg-primary text-primary-foreground rounded-tr-sm"
+                          : "bg-card text-foreground border-2 border-primary/20 rounded-tl-sm"
                       )}
                     >
-                      {formatDate(message.createdAt)}
+                      <div className="text-sm whitespace-pre-wrap">{message.textContent || message.content}</div>
+                      <div
+                        className={cn(
+                          "text-xs mt-1.5 opacity-70"
+                        )}
+                      >
+                        {formatDate(message.createdAt)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
