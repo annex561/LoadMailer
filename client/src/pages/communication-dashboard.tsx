@@ -256,10 +256,23 @@ export default function CommunicationDashboard() {
   }, []);
   
   // Fetch communication threads
-  const { data: threads = [], isLoading: threadsLoading, refetch: refetchThreads } = useQuery<LoadCommunicationThread[]>({
+  const { data: threads = [], isLoading: threadsLoading, refetch: refetchThreads, error: threadsError } = useQuery<LoadCommunicationThread[]>({
     queryKey: ['/api/communication/threads'],
     refetchInterval: 2000, // Refresh every 2 seconds for real-time updates
   });
+  
+  // Debug logging for threads query
+  useEffect(() => {
+    console.log('🔍 Threads Query State:', {
+      threadsCount: threads.length,
+      isLoading: threadsLoading,
+      hasError: !!threadsError,
+      error: threadsError
+    });
+    if (threads.length > 0) {
+      console.log('🔍 First thread:', threads[0]);
+    }
+  }, [threads, threadsLoading, threadsError]);
   
   // Monitor for new messages and play notification sound
   useEffect(() => {
@@ -1334,51 +1347,59 @@ export default function CommunicationDashboard() {
             {!threadsLoading && sortedThreads.map((thread) => (
               <button
                 key={thread.id}
-                className={`w-full mb-1.5 cursor-pointer transition-all duration-200 ease-in-out hover:bg-muted/50 hover:border-primary/30 hover:shadow-md rounded-lg border ${
+                className={`w-full mb-2 text-left cursor-pointer transition-all duration-200 ease-in-out hover:bg-muted/50 hover:border-primary/30 hover:shadow-md rounded-lg border ${
                   selectedThread?.id === thread.id ? 'ring-2 ring-primary border-primary/50 shadow-lg bg-muted/30' : 'border-border bg-card'
                 }`}
                 onClick={() => setSelectedThread(thread)}
                 data-testid={`button-thread-${thread.id}`}
               >
-                <div className="p-2.5">
-                  <div className="flex items-start justify-between mb-1.5">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <div className={`w-2 h-2 rounded-full ${getStatusDotColor(thread)}`}></div>
-                        <h4 className="font-semibold text-sm text-foreground">{thread.driverName}</h4>
-                        {getThreadStatusBadge(thread)}
-                        {thread.loadNumber && (
-                          <Badge className="bg-primary/10 text-primary border border-primary/30 text-[10px] px-1.5 py-0.5">
-                            {thread.loadNumber}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">{thread.driverPhone || 'No phone'}</p>
-                      {thread.loadOrigin && thread.loadDestination && (
-                        <p className="text-xs text-muted-foreground">
-                          {thread.loadOrigin} → {thread.loadDestination}
-                        </p>
-                      )}
-                      {thread.loadOfferStatus === 'pending' && (
-                        <Badge className="bg-warning/10 text-warning border border-warning/30 text-[10px] px-1.5 py-0.5 mt-1">
-                          Load Offer Pending
-                        </Badge>
-                      )}
+                <div className="p-3 space-y-2">
+                  {/* Top row: Driver name + Avatar */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${getStatusDotColor(thread)}`}></div>
+                      <h4 className="font-semibold text-sm text-foreground truncate">{thread.driverName}</h4>
                     </div>
-                    <Avatar className="w-7 h-7">
+                    <Avatar className="w-8 h-8 flex-shrink-0">
                       <AvatarFallback className="text-xs bg-muted text-muted-foreground">
                         {thread.driverName.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
                   </div>
                   
+                  {/* Phone number */}
+                  <div className="text-[11px] text-muted-foreground">{thread.driverPhone || 'No phone'}</div>
+                  
+                  {/* Badges row: Status + Load Number */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {getThreadStatusBadge(thread)}
+                    {thread.loadNumber && (
+                      <Badge className="bg-primary/10 text-primary border border-primary/30 text-[10px] px-1.5 py-0.5">
+                        {thread.loadNumber}
+                      </Badge>
+                    )}
+                    {thread.loadOfferStatus === 'pending' && (
+                      <Badge className="bg-warning/10 text-warning border border-warning/30 text-[10px] px-1.5 py-0.5">
+                        Load Offer
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {/* Route (if available) */}
+                  {thread.loadOrigin && thread.loadDestination && (
+                    <div className="text-[11px] text-muted-foreground truncate">
+                      {thread.loadOrigin} → {thread.loadDestination}
+                    </div>
+                  )}
+                  
+                  {/* Last message */}
                   {thread.lastMessageText && (
-                    <div className="mt-1.5">
+                    <div className="space-y-1 pt-1 border-t border-border/50">
                       <p className="text-xs text-muted-foreground truncate">
                         {thread.lastMessageSender === 'dispatch' ? 'You: ' : ''}
                         {thread.lastMessageText}
                       </p>
-                      <p className="text-[10px] text-muted-foreground/70 mt-1">
+                      <p className="text-[10px] text-muted-foreground/70">
                         {formatMessageTime(thread.lastMessageAt)}
                       </p>
                     </div>

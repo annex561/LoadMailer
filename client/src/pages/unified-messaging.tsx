@@ -87,11 +87,16 @@ export default function UnifiedMessaging() {
     queryKey: ["/api/drivers"],
   });
 
-  // Fetch communication threads
-  const { data: threads = [], isLoading: threadsLoading } = useQuery<CommunicationThread[]>({
+  // Fetch communication threads (all types)
+  const { data: allThreads = [], isLoading: threadsLoading } = useQuery<CommunicationThread[]>({
     queryKey: ["/api/communication/threads"],
     refetchInterval: 3000, // Poll every 3 seconds
   });
+
+  // Filter to show ONLY unified active threads (one per driver)
+  const threads = allThreads.filter(thread => 
+    thread.threadType === 'unified' && thread.status === 'active'
+  );
 
   // Fetch messages for selected thread
   const { data: messages = [] } = useQuery<Message[]>({

@@ -1589,17 +1589,12 @@ export class DatabaseStorage implements IStorage {
         loadNumber: schema.loadCommunicationThreads.loadNumber,
         // Load info from loads table (fallback for null values)
         loadNumberFromLoad: schema.loads.loadNumber,
-        lastMessageText: schema.loadCommunicationThreads.lastMessageText
+        lastMessageText: schema.loadCommunicationThreads.lastMessageText,
+        lastMessageSender: schema.loadCommunicationThreads.lastMessageSender
       })
       .from(schema.loadCommunicationThreads)
       .leftJoin(schema.drivers, eq(schema.loadCommunicationThreads.driverId, schema.drivers.id))
       .leftJoin(schema.loads, eq(schema.loadCommunicationThreads.loadId, schema.loads.id))
-      .where(
-        and(
-          eq(schema.loadCommunicationThreads.threadType, 'unified'),
-          eq(schema.loadCommunicationThreads.status, 'active')
-        )
-      )
       .orderBy(desc(schema.loadCommunicationThreads.lastMessageAt));
 
     return threads;
