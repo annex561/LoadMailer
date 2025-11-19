@@ -20,7 +20,11 @@ export function useNotificationSound() {
   return { playSound };
 }
 
-export function useMessageNotification(messages: any[], enabled: boolean = true) {
+export function useMessageNotification(
+  messages: any[], 
+  enabled: boolean = true,
+  watchSenderRole: 'driver' | 'dispatch' = 'driver'
+) {
   const previousCountRef = useRef<number>(0);
   const { playSound } = useNotificationSound();
   const isInitialLoadRef = useRef(true);
@@ -37,7 +41,9 @@ export function useMessageNotification(messages: any[], enabled: boolean = true)
     if (messages.length > previousCountRef.current) {
       const newMessages = messages.slice(previousCountRef.current);
       const hasIncomingMessage = newMessages.some((msg: any) => {
-        return msg.senderRole === 'driver';
+        // Check both senderRole and sender fields for compatibility
+        const messageSender = msg.senderRole || msg.sender;
+        return messageSender === watchSenderRole;
       });
 
       if (hasIncomingMessage) {
@@ -46,7 +52,7 @@ export function useMessageNotification(messages: any[], enabled: boolean = true)
     }
 
     previousCountRef.current = messages.length;
-  }, [messages, enabled, playSound]);
+  }, [messages, enabled, playSound, watchSenderRole]);
 
   return { playSound };
 }

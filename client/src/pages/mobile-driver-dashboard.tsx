@@ -239,8 +239,8 @@ export default function MobileDriverDashboard() {
     staleTime: 10000
   });
 
-  // Play notification sound for new incoming messages
-  useMessageNotification(messages, activeTab === 'messages' && !!selectedThread);
+  // Play notification sound for new incoming messages from dispatch
+  useMessageNotification(messages, activeTab === 'messages' && !!selectedThread, 'dispatch');
 
   // Fetch documents for current load
   const { data: documents = [] } = useQuery({
