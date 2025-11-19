@@ -54,6 +54,7 @@ Preferred communication style: Simple, everyday language.
 - **Component Styling**: Shadcn/ui components modernized with Teal brand color via `--primary` token.
 - **Dark Mode**: Fully functional with Navy background, Slate cards, Teal accents, and Whitesmoke text.
 - **Strict Color Usage**: No hard-coded hex values or utility classes in UI components.
+- **Sidebar Background Fix**: Use `bg-[hsl(var(--sidebar))]` instead of `bg-sidebar` to prevent alpha transparency issues while maintaining theme support.
 
 ## Feature Specifications
 - **Driver Management**: Onboarding, status tracking, payment.
