@@ -88,7 +88,7 @@ export default function UnifiedMessaging() {
 
   // Fetch messages for selected thread
   const { data: messages = [] } = useQuery<Message[]>({
-    queryKey: ["/api/communication/threads", selectedThreadId, "messages"],
+    queryKey: ["/api/communication/messages", selectedThreadId],
     enabled: !!selectedThreadId,
     refetchInterval: 2000, // Poll every 2 seconds
   });
@@ -111,7 +111,7 @@ export default function UnifiedMessaging() {
     onSuccess: (_data, variables) => {
       // Use the threadId from the mutation variables to avoid stale closure
       queryClient.invalidateQueries({ queryKey: ["/api/communication/threads"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/communication/threads", variables.threadId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/communication/messages", variables.threadId] });
       setMessageText("");
     },
   });
