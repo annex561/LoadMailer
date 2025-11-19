@@ -33,6 +33,13 @@ Preferred communication style: Simple, everyday language.
   - **Auto-Thread Creation**: Unified threads automatically created when driver sends first message from mobile dashboard or SMS.
   - **Field Mapping**: API boundary maps database fields (`lastMessageText`/`lastMessageAt`) to frontend-expected names (`lastMessage`/`lastMessageTimestamp`).
 - **SMS**: Twilio SMS for all driver communications, bidirectional with smart load context and MMS.
+  - **Phone Number Normalization**: Automatic E.164 format conversion for reliable Twilio SMS delivery:
+    - **US 10-digit numbers**: Auto-prefixed with +1 (e.g., 5617688349 → +15617688349)
+    - **US 11-digit numbers**: Auto-prefixed with + if starting with 1 (e.g., 15617688349 → +15617688349)
+    - **E.164 international**: Validated 8-15 digits after + (spaces/hyphens stripped)
+    - **Strict validation**: Rejects malformed numbers (parentheses, extensions, trunk codes)
+    - **Whitespace handling**: Trims leading/trailing spaces before processing
+    - **Consistent implementation**: Normalized across routes.ts, gps-health-monitor.ts, sms-communication-service.ts
   - **Dashboard Link Format**: Simplified format with only truck emoji (🚛) to avoid carrier spam filters. No bullet point emojis (✅📍💬).
   - **Driver-to-Dispatcher SMS Relay**: Optional SMS notifications to dispatcher when driver sends in-app messages (requires `DISPATCHER_PHONE_NUMBER` env var).
   - **Dual-Routing Architecture**: Incoming driver SMS automatically routed to multiple load contexts for complete conversation continuity:
