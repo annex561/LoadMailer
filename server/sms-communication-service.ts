@@ -55,134 +55,241 @@ export class SMSCommunicationService {
       // Find or create unified communication thread for this driver (one thread per driver)
       const thread = await this.findOrCreateUnifiedThread(driver);
       
-      // Detect if message is about a specific load
-      const loadContext = await this.detectLoadContext(message, driver);
+      // Cache loads for both detection and dual-routing to avoid redundant queries
+      const allLoads = await storage.getAllLoads();
       
-      // Create message record in database for each media attachment
-      if (mediaUrls.length > 0) {
-        for (let i = 0; i < mediaUrls.length; i++) {
-          const mediaUrl = mediaUrls[i];
-          const mediaType = mediaTypes[i] || 'unknown';
+      // Detect if message is about a specific load
+      const loadContext = await this.detectLoadContextWithCache(message, driver, allLoads);
+      
+      // 🔄 DUAL-ROUTING LOGIC: Determine all load contexts where this message should appear
+      const loadContexts: Array<{ loadId: string | null; loadNumber: string | null; reason: string }> = [];
+      
+      // 1. Always include the detected context (could be explicit load number or driver's current load)
+      if (loadContext) {
+        loadContexts.push({
+          loadId: loadContext.loadId,
+          loadNumber: loadContext.loadNumber,
+          reason: 'detected_from_message'
+        });
+      } else {
+        // No load detected - this is a general conversation
+        loadContexts.push({
+          loadId: null,
+          loadNumber: null,
+          reason: 'general_conversation'
+        });
+      }
+      
+      // 2. Additionally include driver's current active load if different from detected context
+      const currentActiveLoad = allLoads.find(load => 
+        load.driverId === driver.id && 
+        (load.status === 'assigned' || load.status === 'in_transit' || load.status === 'at_pickup' || load.status === 'at_delivery')
+      );
+      
+      if (currentActiveLoad && currentActiveLoad.id !== loadContext?.loadId) {
+        loadContexts.push({
+          loadId: currentActiveLoad.id,
+          loadNumber: currentActiveLoad.loadNumber,
+          reason: 'driver_current_load'
+        });
+        console.log(`🔄 Dual-routing enabled: Message will appear in both ${loadContext?.loadNumber || 'general'} and ${currentActiveLoad.loadNumber}`);
+      }
+      
+      // Save messages to ALL relevant load contexts (implements dual-routing)
+      for (let contextIndex = 0; contextIndex < loadContexts.length; contextIndex++) {
+        const context = loadContexts[contextIndex];
+        const isPrimaryContext = contextIndex === 0;
+        
+        console.log(`💾 Saving to ${context.reason}: ${context.loadNumber || 'general conversation'}${!isPrimaryContext ? ' (secondary, skip thread stats)' : ''}`);
+        
+        // Create message record in database for each media attachment
+        if (mediaUrls.length > 0) {
+          for (let i = 0; i < mediaUrls.length; i++) {
+            const mediaUrl = mediaUrls[i];
+            const mediaType = mediaTypes[i] || 'unknown';
+            
+            await this.createMessageRecord({
+              threadId: thread.id,
+              loadId: context.loadId,
+              senderId: driver.id,
+              senderRole: 'driver',
+              senderName: driver.name,
+              messageType: 'media',
+              textContent: message || `[${mediaType.split('/')[0]} attachment]`,
+              mediaUrl: mediaUrl,
+              mediaType: mediaType,
+              smsMessageId: smsId,
+              metadata: {
+                smsId: smsId,
+                fromPhone: fromPhone,
+                loadNumber: context.loadNumber,
+                mediaIndex: i,
+                totalMedia: mediaUrls.length,
+                routingReason: context.reason
+              }
+            }, isPrimaryContext);
           
-          console.log(`💾 Saving media message: ${mediaType} - ${mediaUrl}`);
-          
+            // 📄 SMART MMS CATEGORIZATION: Auto-categorize documents based on load lifecycle
+            // Only create document for the first (primary) load context to avoid duplicates
+            if (context.loadId && mediaType.startsWith('image/') && context.reason !== 'driver_current_load') {
+              try {
+                // Get load details to determine status
+                const load = await storage.getLoad(context.loadId);
+              
+                if (load) {
+                  // Smart categorization based on load status
+                  let documentType = 'other';
+                  let isRequired = false;
+                  
+                  if (load.status === 'scheduled' || load.status === 'assigned') {
+                    // Before pickup - likely BOL
+                    documentType = 'bol';
+                    isRequired = true;
+                    console.log(`📋 Auto-categorized as BOL (load status: ${load.status})`);
+                  } else if (load.status === 'in_transit' || load.status === 'at_pickup') {
+                    // During transit - likely freight photo
+                    documentType = 'freight_photo';
+                    isRequired = false;
+                    console.log(`📸 Auto-categorized as freight photo (load status: ${load.status})`);
+                  } else if (load.status === 'delivered' || load.status === 'at_delivery') {
+                    // After delivery - likely POD
+                    documentType = 'pod';
+                    isRequired = true;
+                    console.log(`📦 Auto-categorized as POD (load status: ${load.status})`);
+                  } else {
+                    console.log(`📄 Auto-categorized as other (load status: ${load.status})`);
+                  }
+                  
+                  // Extract filename from URL
+                  const fileName = mediaUrl.split('/').pop()?.split('?')[0] || `mms_${Date.now()}.jpg`;
+                  
+                  // Create load document record with smart categorization
+                  const document = await storage.createLoadDocument({
+                    loadId: load.id,
+                    driverId: driver.id,
+                    documentType,
+                    fileName,
+                    fileUrl: mediaUrl,
+                    mimeType: mediaType,
+                    uploadSource: 'mms',
+                    isRequired,
+                    approvalStatus: 'pending',
+                    notes: message || `Sent via MMS at ${new Date().toLocaleString()}`
+                  });
+                  
+                  console.log(`✅ Created load document: ${documentType} for load ${load.loadNumber} (${document.id})`);
+                }
+              } catch (docError) {
+                console.error('Error creating load document from MMS:', docError);
+                // Continue processing - message is still saved even if document creation fails
+              }
+            }
+          }
+        }
+        
+        // Create text message record (even if there are media attachments)
+        if (message && message.trim()) {
           await this.createMessageRecord({
             threadId: thread.id,
-            loadId: loadContext?.loadId || null,
+            loadId: context.loadId,
             senderId: driver.id,
             senderRole: 'driver',
             senderName: driver.name,
-            messageType: 'media',
-            textContent: message || `[${mediaType.split('/')[0]} attachment]`,
-            mediaUrl: mediaUrl,
-            mediaType: mediaType,
+            messageType: this.isStatusUpdate(message) ? 'status_update' : 'text',
+            textContent: message,
             smsMessageId: smsId,
             metadata: {
               smsId: smsId,
               fromPhone: fromPhone,
-              loadNumber: loadContext?.loadNumber,
-              mediaIndex: i,
-              totalMedia: mediaUrls.length
+              loadNumber: context.loadNumber,
+              isStatusUpdate: this.isStatusUpdate(message),
+              hasMedia: mediaUrls.length > 0,
+              routingReason: context.reason
             }
-          });
-          
-          // 📄 SMART MMS CATEGORIZATION: Auto-categorize documents based on load lifecycle
-          if (loadContext?.loadId && mediaType.startsWith('image/')) {
-            try {
-              // Get load details to determine status
-              const load = await storage.getLoad(loadContext.loadId);
-              
-              if (load) {
-                // Smart categorization based on load status
-                let documentType = 'other';
-                let isRequired = false;
-                
-                if (load.status === 'scheduled' || load.status === 'assigned') {
-                  // Before pickup - likely BOL
-                  documentType = 'bol';
-                  isRequired = true;
-                  console.log(`📋 Auto-categorized as BOL (load status: ${load.status})`);
-                } else if (load.status === 'in_transit' || load.status === 'at_pickup') {
-                  // During transit - likely freight photo
-                  documentType = 'freight_photo';
-                  isRequired = false;
-                  console.log(`📸 Auto-categorized as freight photo (load status: ${load.status})`);
-                } else if (load.status === 'delivered' || load.status === 'at_delivery') {
-                  // After delivery - likely POD
-                  documentType = 'pod';
-                  isRequired = true;
-                  console.log(`📦 Auto-categorized as POD (load status: ${load.status})`);
-                } else {
-                  console.log(`📄 Auto-categorized as other (load status: ${load.status})`);
-                }
-                
-                // Extract filename from URL
-                const fileName = mediaUrl.split('/').pop()?.split('?')[0] || `mms_${Date.now()}.jpg`;
-                
-                // Create load document record with smart categorization
-                const document = await storage.createLoadDocument({
-                  loadId: load.id,
-                  driverId: driver.id,
-                  documentType,
-                  fileName,
-                  fileUrl: mediaUrl,
-                  mimeType: mediaType,
-                  uploadSource: 'mms',
-                  isRequired,
-                  approvalStatus: 'pending',
-                  notes: message || `Sent via MMS at ${new Date().toLocaleString()}`
-                });
-                
-                console.log(`✅ Created load document: ${documentType} for load ${load.loadNumber} (${document.id})`);
-              }
-            } catch (docError) {
-              console.error('Error creating load document from MMS:', docError);
-              // Continue processing - message is still saved even if document creation fails
-            }
-          }
+          }, isPrimaryContext);
         }
-      }
-      
-      // Create text message record (even if there are media attachments)
-      if (message && message.trim()) {
-        await this.createMessageRecord({
-          threadId: thread.id,
-          loadId: loadContext?.loadId || null,
-          senderId: driver.id,
-          senderRole: 'driver',
-          senderName: driver.name,
-          messageType: this.isStatusUpdate(message) ? 'status_update' : 'text',
-          textContent: message,
-          smsMessageId: smsId,
-          metadata: {
-            smsId: smsId,
-            fromPhone: fromPhone,
-            loadNumber: loadContext?.loadNumber,
-            isStatusUpdate: this.isStatusUpdate(message),
-            hasMedia: mediaUrls.length > 0
-          }
-        });
       }
 
       // Send acknowledgment to driver
       await this.sendSMS(fromPhone, "✅ Message received. Dispatch has been notified.");
       
-      // Log communication activity
-      await this.logCommunication(loadContext?.loadId || null, thread.id, 'message_sent', driver.id, 'driver', {
+      // Log communication activity for primary load context
+      const primaryContext = loadContexts[0];
+      await this.logCommunication(primaryContext.loadId, thread.id, 'message_sent', driver.id, 'driver', {
         messageType: 'text',
         messageLength: message.length,
         fromPhone: fromPhone,
-        loadContext: loadContext
+        loadContext: primaryContext,
+        totalContexts: loadContexts.length
       });
 
-      console.log(`✅ SMS message processed for driver ${driver.name}${loadContext ? ` (Load: ${loadContext.loadNumber})` : ''}`);
+      console.log(`✅ SMS processed for ${driver.name}. Saved to ${loadContexts.length} context(s): ${loadContexts.map(c => c.loadNumber || 'general').join(', ')}`);
     } catch (error) {
       console.error('Error handling incoming SMS:', error);
     }
   }
 
-  // Detect load context from message content (optional load number references)
+  // Detect load context from message content using cached load list
+  private async detectLoadContextWithCache(
+    message: string, 
+    driver: Driver, 
+    allLoads: any[]
+  ): Promise<{ loadId: string; loadNumber: string } | null> {
+    try {
+      // Extract potential load numbers from message
+      // Supports: LOAD-123, 603006, TN-789, etc.
+      const loadNumberPattern = /(?:LOAD[-\s]?)?(\d{6})|(?:LOAD[-\s]?)(\d+)|([A-Z]{2,4}[-\s]?\d+)/gi;
+      const matches = message.match(loadNumberPattern);
+      
+      if (!matches || matches.length === 0) {
+        // No load number detected - check driver's current active load across all active statuses
+        const driverLoad = allLoads.find(load => 
+          load.driverId === driver.id && 
+          (load.status === 'assigned' || load.status === 'in_transit' || load.status === 'at_pickup' || load.status === 'at_delivery')
+        );
+        
+        if (driverLoad) {
+          return {
+            loadId: driverLoad.id,
+            loadNumber: driverLoad.loadNumber
+          };
+        }
+        
+        return null;
+      }
+      
+      // Try to find a matching load from the cached list
+      for (const match of matches) {
+        const normalizedMatch = match.replace(/[-\s]/g, '').toUpperCase();
+        
+        const load = allLoads.find(l => {
+          const normalized = l.loadNumber.replace(/[-\s]/g, '').toUpperCase();
+          return normalized.includes(normalizedMatch) || normalizedMatch.includes(normalized);
+        });
+        
+        if (load) {
+          return {
+            loadId: load.id,
+            loadNumber: load.loadNumber
+          };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error detecting load context:', error);
+      return null;
+    }
+  }
+
+  // Legacy method - kept for backward compatibility
   private async detectLoadContext(message: string, driver: Driver): Promise<{ loadId: string; loadNumber: string } | null> {
+    const allLoads = await storage.getAllLoads();
+    return this.detectLoadContextWithCache(message, driver, allLoads);
+  }
+
+  // Original detectLoadContext implementation removed - now using cached version
+  private async detectLoadContext_OLD(message: string, driver: Driver): Promise<{ loadId: string; loadNumber: string } | null> {
     try {
       // Extract potential load numbers from message
       // Supports: LOAD-123, 603006, TN-789, etc.
@@ -301,19 +408,24 @@ export class SMSCommunicationService {
     }
   }
 
-  private async createMessageRecord(messageData: InsertLoadMessage): Promise<LoadMessage> {
+  private async createMessageRecord(
+    messageData: InsertLoadMessage, 
+    updateThreadStats: boolean = true
+  ): Promise<LoadMessage> {
     const message = await storage.createLoadMessage(messageData);
     
-    // Update thread stats
-    const thread = await storage.getLoadCommunicationThread(messageData.threadId);
-    if (thread) {
-      await storage.updateLoadCommunicationThread(thread.id, {
-        lastMessageAt: new Date(),
-        messageCount: thread.messageCount + 1,
-        unreadDispatchMessages: messageData.senderRole === 'driver' 
-          ? thread.unreadDispatchMessages + 1 
-          : thread.unreadDispatchMessages
-      });
+    // Update thread stats only for primary messages (prevents duplicate increments in dual-routing)
+    if (updateThreadStats) {
+      const thread = await storage.getLoadCommunicationThread(messageData.threadId);
+      if (thread) {
+        await storage.updateLoadCommunicationThread(thread.id, {
+          lastMessageAt: new Date(),
+          messageCount: thread.messageCount + 1,
+          unreadDispatchMessages: messageData.senderRole === 'driver' 
+            ? thread.unreadDispatchMessages + 1 
+            : thread.unreadDispatchMessages
+        });
+      }
     }
 
     return message;
