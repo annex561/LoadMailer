@@ -280,11 +280,14 @@ export interface IStorage {
   getLoadCommunicationThreadByLoad(loadId: string): Promise<LoadCommunicationThread | undefined>;
   getLoadCommunicationThreadByLoadAndDriver(loadId: string, driverId: string): Promise<LoadCommunicationThread | undefined>;
   getGeneralCommunicationThreadByDriver(driverId: string): Promise<LoadCommunicationThread | undefined>;
+  getUnifiedThreadByDriver(driverId: string): Promise<LoadCommunicationThread | undefined>;
   getAllLoadCommunicationThreads(): Promise<LoadCommunicationThread[]>;
   createLoadCommunicationThread(thread: InsertLoadCommunicationThread): Promise<LoadCommunicationThread>;
   updateLoadCommunicationThread(id: string, thread: Partial<InsertLoadCommunicationThread>): Promise<LoadCommunicationThread | undefined>;
   deleteLoadCommunicationThread(id: string): Promise<boolean>;
   acceptLoadOffer(threadId: string, loadId: string): Promise<boolean>;
+  consolidateDuplicateThreadsForDriver(driverId: string): Promise<{ merged: number; canonical: LoadCommunicationThread | null }>;
+  consolidateAllDuplicateThreads(): Promise<{ totalDrivers: number; totalMerged: number }>;
 
   // Load Message operations
   getLoadMessage(id: string): Promise<LoadMessage | undefined>;

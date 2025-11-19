@@ -2977,6 +2977,7 @@ TRAQ IQ Dispatch Team
   });
   
   // Communication threads route - CRITICAL for dashboard
+  // Enhanced to include driver status and current active load information
   app.get('/api/communication/threads', async (req, res) => {
     try {
       console.log('🚀 Communication threads API called');
@@ -2984,20 +2985,43 @@ TRAQ IQ Dispatch Team
       const threads = await storage.getAllLoadCommunicationThreads();
       console.log(`📋 Retrieved ${threads.length} communication threads from storage`);
       
-      // For each thread, fetch the last message to get the sender role
-      const threadsWithSender = await Promise.all(threads.map(async (thread) => {
+      // Fetch all drivers and loads once for efficiency
+      const allDrivers = await storage.getAllDrivers();
+      const allLoads = await storage.getAllLoads();
+      
+      // For each thread, enrich with driver status and current load info
+      const enrichedThreads = await Promise.all(threads.map(async (thread) => {
         const messages = await storage.getLoadMessagesByThread(thread.id);
         const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+        
+        // Find driver info
+        const driver = allDrivers.find(d => d.id === thread.driverId);
+        
+        // Find driver's current active load (not necessarily the thread's load)
+        const activeLoad = allLoads.find(load => 
+          load.driverId === thread.driverId && 
+          (load.status === 'assigned' || load.status === 'in_transit' || 
+           load.status === 'at_pickup' || load.status === 'at_delivery')
+        );
+        
+        // Determine driver status
+        const driverStatus = activeLoad ? 'Active' : 'Available';
+        const currentLoadNumber = activeLoad?.loadNumber || null;
         
         return {
           ...thread,
           lastMessage: thread.lastMessageText,
           lastMessageTimestamp: thread.lastMessageAt,
-          lastMessageSenderRole: lastMessage?.senderRole || null
+          lastMessageSenderRole: lastMessage?.senderRole || null,
+          // New enhanced fields
+          driverStatus,
+          currentLoadNumber, // Current active load (may differ from thread.loadNumber)
+          driverEquipmentType: driver?.equipmentType || null,
+          driverMood: driver?.currentMood || null
         };
       }));
       
-      res.json(threadsWithSender);
+      res.json(enrichedThreads);
     } catch (error) {
       console.error('❌ Error fetching communication threads:', error);
       res.status(500).json({ error: "Failed to fetch communication threads" });
@@ -3486,6 +3510,47 @@ TRAQ IQ Dispatch Team
     } catch (error) {
       console.error('❌ Error proxying media:', error);
       res.status(500).json({ error: 'Failed to proxy media' });
+    }
+  });
+
+  // Consolidate duplicate threads for a specific driver
+  app.post('/api/communication/consolidate-driver-threads', async (req, res) => {
+    try {
+      const { driverId } = req.body;
+      
+      if (!driverId) {
+        return res.status(400).json({ error: 'Driver ID is required' });
+      }
+      
+      console.log(`🔄 Consolidating threads for driver ${driverId}`);
+      const result = await storage.consolidateDuplicateThreadsForDriver(driverId);
+      
+      res.json({
+        success: true,
+        merged: result.merged,
+        canonicalThread: result.canonical
+      });
+    } catch (error) {
+      console.error('❌ Error consolidating driver threads:', error);
+      res.status(500).json({ error: 'Failed to consolidate driver threads' });
+    }
+  });
+
+  // Consolidate all duplicate threads globally
+  app.post('/api/communication/consolidate-all-threads', async (req, res) => {
+    try {
+      console.log('🚀 Starting global thread consolidation');
+      const result = await storage.consolidateAllDuplicateThreads();
+      
+      res.json({
+        success: true,
+        totalDrivers: result.totalDrivers,
+        totalMerged: result.totalMerged,
+        message: `Consolidated ${result.totalMerged} threads across ${result.totalDrivers} drivers`
+      });
+    } catch (error) {
+      console.error('❌ Error consolidating all threads:', error);
+      res.status(500).json({ error: 'Failed to consolidate threads' });
     }
   });
 

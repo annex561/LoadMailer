@@ -365,43 +365,60 @@ export class SMSCommunicationService {
 
 
   // Find or create a unified communication thread for the driver (one thread per driver)
+  // Implements race condition protection and prevents duplicate threads
   private async findOrCreateUnifiedThread(driver: Driver): Promise<LoadCommunicationThread> {
     try {
-      // Look for existing thread for this driver
-      const allThreads = await storage.getAllLoadCommunicationThreads();
-      let thread = allThreads.find(t => t.driverId === driver.id && t.threadType === 'unified');
+      // STEP 1: Always query for existing thread first (handle race conditions)
+      const existingThread = await storage.getUnifiedThreadByDriver(driver.id);
       
-      if (thread) {
-        return thread;
+      if (existingThread) {
+        console.log(`♻️ Reusing existing unified thread for driver ${driver.name}`);
+        return existingThread;
       }
       
-      // Get driver's current active load for context (optional)
-      const activeLoads = await storage.getLoadsByStatus('assigned');
-      const driverLoad = activeLoads.find(load => load.driverId === driver.id);
-      
-      // Create new unified thread for this driver
-      thread = await storage.createLoadCommunicationThread({
-        threadType: 'unified',
-        loadId: driverLoad?.id || null, // Optional current load context
-        driverId: driver.id,
-        status: 'active',
-        lastMessageAt: new Date(),
-        messageCount: 0,
-        unreadDriverMessages: 0,
-        unreadDispatchMessages: 0,
-        driverName: driver.name,
-        driverPhone: driver.phone || driver.phoneNumber || '',
-        loadNumber: driverLoad?.loadNumber || null
-      });
-      
-      await this.logCommunication(driverLoad?.id || null, thread.id, 'thread_created', driver.id, 'system', {
-        threadType: 'unified',
-        loadNumber: driverLoad?.loadNumber,
-        communicationType: 'sms'
-      });
-      
-      console.log(`✅ Created unified thread for driver ${driver.name}`);
-      return thread;
+      // STEP 2: No thread exists - attempt to create one
+      // The unique index will prevent duplicates even if multiple requests race
+      try {
+        // Get driver's current active load for context (optional)
+        const activeLoads = await storage.getLoadsByStatus('assigned');
+        const driverLoad = activeLoads.find(load => load.driverId === driver.id);
+        
+        // Create new unified thread for this driver
+        const thread = await storage.createLoadCommunicationThread({
+          threadType: 'unified',
+          loadId: driverLoad?.id || null, // Optional current load context
+          driverId: driver.id,
+          status: 'active',
+          lastMessageAt: new Date(),
+          messageCount: 0,
+          unreadDriverMessages: 0,
+          unreadDispatchMessages: 0,
+          driverName: driver.name,
+          driverPhone: driver.phone || driver.phoneNumber || '',
+          loadNumber: driverLoad?.loadNumber || null
+        });
+        
+        await this.logCommunication(driverLoad?.id || null, thread.id, 'thread_created', driver.id, 'system', {
+          threadType: 'unified',
+          loadNumber: driverLoad?.loadNumber,
+          communicationType: 'sms'
+        });
+        
+        console.log(`✅ Created unified thread for driver ${driver.name}`);
+        return thread;
+      } catch (createError: any) {
+        // STEP 3: If creation failed due to race condition (duplicate key), retry query
+        // This handles the case where another request created the thread milliseconds ago
+        if (createError.message && createError.message.includes('duplicate')) {
+          console.log(`⚡ Race condition detected for driver ${driver.name}, fetching existing thread`);
+          const retryThread = await storage.getUnifiedThreadByDriver(driver.id);
+          if (retryThread) {
+            return retryThread;
+          }
+        }
+        // If not a duplicate error or still can't find thread, propagate error
+        throw createError;
+      }
     } catch (error) {
       console.error('Error finding/creating unified thread:', error);
       throw error;

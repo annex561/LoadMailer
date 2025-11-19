@@ -509,7 +509,11 @@ export const loadCommunicationThreads = pgTable("load_communication_threads", {
   lastMessageSender: text("last_message_sender"), // 'driver' or 'dispatch'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  uniqueDriverUnifiedThread: index("idx_unique_driver_unified_thread")
+    .on(table.driverId)
+    .where(sql`thread_type = 'unified'`)
+}));
 
 // Load Messages - All communication within a load thread
 export const loadMessages = pgTable("load_messages", {

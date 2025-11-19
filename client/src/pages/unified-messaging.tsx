@@ -36,6 +36,11 @@ interface CommunicationThread {
   lastMessageSender?: string;
   lastMessageSenderRole?: 'driver' | 'dispatch' | null;
   threadType: string;
+  // Enhanced fields for consolidated view
+  driverStatus?: string; // "Active" or "Available"
+  currentLoadNumber?: string; // Current active load number (separate from thread.loadNumber)
+  driverEquipmentType?: string;
+  driverMood?: string;
 }
 
 interface Message {
@@ -236,11 +241,35 @@ export default function UnifiedMessaging() {
                             </Badge>
                           )}
                         </div>
-                        {(thread.loadNumber || thread.loadNumberFromLoad) && (
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          {thread.driverStatus && (
+                            <Badge 
+                              variant={thread.driverStatus === 'Active' ? 'default' : 'secondary'} 
+                              className={cn(
+                                "text-xs px-2 py-0.5 rounded-full",
+                                thread.driverStatus === 'Active' 
+                                  ? "bg-green-100 text-green-700 hover:bg-green-100" 
+                                  : "bg-gray-100 text-gray-600 hover:bg-gray-100"
+                              )}
+                              data-testid={`badge-status-${thread.driverId}`}
+                            >
+                              {thread.driverStatus}
+                            </Badge>
+                          )}
+                          {thread.currentLoadNumber && (
+                            <div className="flex items-center gap-1 px-2 py-0.5 bg-white border border-gray-300 rounded-full">
+                              <Truck className="w-3 h-3 text-gray-500" />
+                              <span className="text-xs text-gray-700 font-medium">
+                                {thread.currentLoadNumber}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {thread.driverPhone && (
                           <div className="flex items-center gap-1 mb-1">
-                            <Truck className="w-3 h-3 text-gray-400" />
-                            <span className="text-xs text-gray-600 font-medium">
-                              {thread.loadNumber || thread.loadNumberFromLoad}
+                            <Phone className="w-3 h-3 text-gray-400" />
+                            <span className="text-xs text-gray-500">
+                              {thread.driverPhone}
                             </span>
                           </div>
                         )}

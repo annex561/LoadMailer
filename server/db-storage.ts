@@ -1634,6 +1634,122 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async getUnifiedThreadByDriver(driverId: string): Promise<schema.LoadCommunicationThread | undefined> {
+    const result = await db.select()
+      .from(schema.loadCommunicationThreads)
+      .where(
+        and(
+          eq(schema.loadCommunicationThreads.driverId, driverId),
+          eq(schema.loadCommunicationThreads.threadType, 'unified'),
+          eq(schema.loadCommunicationThreads.status, 'active')
+        )
+      )
+      .limit(1);
+    return result[0];
+  }
+
+  async consolidateDuplicateThreadsForDriver(driverId: string): Promise<{ merged: number; canonical: schema.LoadCommunicationThread | null }> {
+    try {
+      console.log(`🔄 Starting thread consolidation for driver ${driverId}`);
+      
+      // Find all unified threads for this driver
+      const allThreads = await db.select()
+        .from(schema.loadCommunicationThreads)
+        .where(
+          and(
+            eq(schema.loadCommunicationThreads.driverId, driverId),
+            eq(schema.loadCommunicationThreads.threadType, 'unified')
+          )
+        )
+        .orderBy(desc(schema.loadCommunicationThreads.createdAt));
+      
+      if (allThreads.length <= 1) {
+        console.log(`✅ Driver ${driverId} has ${allThreads.length} thread(s), no consolidation needed`);
+        return { merged: 0, canonical: allThreads[0] || null };
+      }
+      
+      console.log(`📊 Found ${allThreads.length} threads for driver ${driverId}, consolidating...`);
+      
+      // Select the newest thread as canonical (first in list due to DESC order)
+      const canonicalThread = allThreads[0];
+      const duplicateThreads = allThreads.slice(1);
+      
+      // Re-link all messages from duplicate threads to canonical thread
+      let totalMessagesRelinked = 0;
+      for (const dupThread of duplicateThreads) {
+        const messages = await this.getLoadMessagesByThread(dupThread.id);
+        
+        for (const message of messages) {
+          await db.update(schema.loadMessages)
+            .set({ threadId: canonicalThread.id })
+            .where(eq(schema.loadMessages.id, message.id));
+          totalMessagesRelinked++;
+        }
+        
+        console.log(`📝 Relinked ${messages.length} messages from thread ${dupThread.id}`);
+      }
+      
+      // Recalculate message counts for canonical thread
+      const allMessages = await this.getLoadMessagesByThread(canonicalThread.id);
+      const unreadDispatch = allMessages.filter(m => m.senderRole === 'driver' && !m.isRead).length;
+      const unreadDriver = allMessages.filter(m => m.senderRole === 'dispatch' && !m.isRead).length;
+      
+      await db.update(schema.loadCommunicationThreads)
+        .set({
+          messageCount: allMessages.length,
+          unreadDispatchMessages: unreadDispatch,
+          unreadDriverMessages: unreadDriver,
+          updatedAt: new Date()
+        })
+        .where(eq(schema.loadCommunicationThreads.id, canonicalThread.id));
+      
+      // Soft-delete duplicate threads (archive them)
+      for (const dupThread of duplicateThreads) {
+        await db.update(schema.loadCommunicationThreads)
+          .set({ 
+            status: 'archived',
+            updatedAt: new Date()
+          })
+          .where(eq(schema.loadCommunicationThreads.id, dupThread.id));
+      }
+      
+      console.log(`✅ Consolidated ${duplicateThreads.length} duplicate threads for driver ${driverId}`);
+      console.log(`📊 Total messages relinked: ${totalMessagesRelinked}`);
+      
+      // Return updated canonical thread
+      const updatedCanonical = await this.getLoadCommunicationThread(canonicalThread.id);
+      return { merged: duplicateThreads.length, canonical: updatedCanonical || null };
+    } catch (error) {
+      console.error(`❌ Error consolidating threads for driver ${driverId}:`, error);
+      return { merged: 0, canonical: null };
+    }
+  }
+
+  async consolidateAllDuplicateThreads(): Promise<{ totalDrivers: number; totalMerged: number }> {
+    try {
+      console.log('🚀 Starting global thread consolidation...');
+      
+      // Get all drivers who have unified threads
+      const driversWithThreads = await db.selectDistinct({ driverId: schema.loadCommunicationThreads.driverId })
+        .from(schema.loadCommunicationThreads)
+        .where(eq(schema.loadCommunicationThreads.threadType, 'unified'));
+      
+      let totalMerged = 0;
+      for (const { driverId } of driversWithThreads) {
+        if (driverId) {
+          const result = await this.consolidateDuplicateThreadsForDriver(driverId);
+          totalMerged += result.merged;
+        }
+      }
+      
+      console.log(`✅ Global consolidation complete: ${totalMerged} threads merged across ${driversWithThreads.length} drivers`);
+      return { totalDrivers: driversWithThreads.length, totalMerged };
+    } catch (error) {
+      console.error('❌ Error during global thread consolidation:', error);
+      return { totalDrivers: 0, totalMerged: 0 };
+    }
+  }
+
   async acceptLoadOffer(threadId: string, loadId: string): Promise<boolean> {
     // Get the thread
     const thread = await this.getLoadCommunicationThread(threadId);
