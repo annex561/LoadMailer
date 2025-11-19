@@ -35,6 +35,13 @@ Preferred communication style: Simple, everyday language.
 - **SMS**: Twilio SMS for all driver communications, bidirectional with smart load context and MMS.
   - **Dashboard Link Format**: Simplified format with only truck emoji (🚛) to avoid carrier spam filters. No bullet point emojis (✅📍💬).
   - **Driver-to-Dispatcher SMS Relay**: Optional SMS notifications to dispatcher when driver sends in-app messages (requires `DISPATCHER_PHONE_NUMBER` env var).
+  - **Dual-Routing Architecture**: Incoming driver SMS automatically routed to multiple load contexts for complete conversation continuity:
+    - **Primary Context**: Detected from message content (load number mentions) or driver's current active load
+    - **Secondary Context**: Driver's current active load (if different from primary)
+    - **Thread Stats Protection**: Thread counters (messageCount, unreadDispatchMessages) increment only once per inbound SMS despite dual-routing
+    - **Metadata Tracking**: Each message tagged with `routingReason` (detected_from_message/driver_current_load/general_conversation) and `isPrimaryContext` flag
+    - **Performance**: Optimized with cached database queries (`detectLoadContextWithCache`) to avoid redundant lookups
+    - **Document Handling**: Smart MMS categorization creates documents only for primary context to prevent duplicates
 - **Email**: Nodemailer for automated email notifications using dynamic templates.
 - **In-App Messaging**: Real-time bidirectional messaging between drivers (mobile dashboard) and dispatchers (SMS Dispatch tab).
   - Mobile dashboard sends messages with `{threadId: 'auto', driverId, content, sender: 'driver'}`.
