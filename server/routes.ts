@@ -1921,7 +1921,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         // Send SMS asynchronously without blocking
         setImmediate(async () => {
           try {
-            const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
+            const dashboardUrl = `${getBaseUrl()}/mobile-driver-dashboard?driverId=${driver.id}`;
             
             // Shorten URL for professional appearance
             const shortUrlResult = await urlShortener.shortenUrl(dashboardUrl);
@@ -1996,7 +1996,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       console.log(`✅ Phone normalized successfully: ${normalizedPhone}`);
 
       // Create dashboard URL
-      const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
+      const dashboardUrl = `${getBaseUrl()}/mobile-driver-dashboard?driverId=${driver.id}`;
       console.log(`🔗 Dashboard URL: ${dashboardUrl}`);
       
       // Shorten URL for professional appearance
@@ -2143,7 +2143,7 @@ export async function registerRoutes(app: Express): Promise<void> {
             continue;
           }
 
-          const dashboardUrl = `${getBaseUrl()}/driver-dashboard?driverId=${driver.id}`;
+          const dashboardUrl = `${getBaseUrl()}/mobile-driver-dashboard?driverId=${driver.id}`;
           
           // Shorten URL for professional appearance
           const shortUrlResult = await urlShortener.shortenUrl(dashboardUrl);
