@@ -1,101 +1,95 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* TRAQ IQ Color Palette */
-  --navy: #0A101A;
-  --slate: #1E2733;
-  --teal: #00B5B8;
-  --whitesmoke: #F3F5F7;
-  --white: #FFFFFF;
-  
-  /* Theme Colors - Clean Light Mode */
-  --background: hsl(210 20% 98%); /* Very light gray background #F8F9FA */
-  --foreground: hsl(210 24% 16%); /* Dark text #1E2733 */
-  --card: hsl(0 0% 100%); /* Pure white cards */
-  --card-foreground: hsl(210 24% 16%);
+  /* Theme Colors - Clean Professional Light Mode */
+  --background: hsl(210 40% 98%);
+  --foreground: hsl(222 47% 11%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(222 47% 11%);
   --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(210 24% 16%);
-  --primary: hsl(181 100% 36%); /* Teal #00B5B8 */
+  --popover-foreground: hsl(222 47% 11%);
+  --primary: hsl(168 76% 32%);
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(211 26% 16%); /* Slate #1E2733 */
+  --secondary: hsl(215 28% 17%);
   --secondary-foreground: hsl(0 0% 100%);
-  --muted: hsl(210 17% 96%); /* Whitesmoke #F3F5F7 */
-  --muted-foreground: hsl(215 16% 47%); /* Medium gray for labels */
-  --accent: hsl(181 100% 36%); /* Teal #00B5B8 */
+  --muted: hsl(210 40% 96%);
+  --muted-foreground: hsl(215 20% 45%);
+  --accent: hsl(168 76% 32%);
   --accent-foreground: hsl(0 0% 100%);
-  --destructive: hsl(355 78% 56%); /* Error #E63946 */
+  --destructive: hsl(0 72% 51%);
   --destructive-foreground: hsl(0 0% 100%);
-  --success: hsl(145 74% 57%); /* Success #3AE374 */
+  --success: hsl(142 71% 45%);
   --success-foreground: hsl(0 0% 100%);
-  --warning: hsl(36 100% 50%);
+  --warning: hsl(38 92% 50%);
   --warning-foreground: hsl(0 0% 100%);
-  --border: hsl(210 18% 87%); /* Subtle light gray border */
-  --input: hsl(0 0% 100%); /* White input backgrounds */
-  --ring: hsl(181 100% 36%); /* Teal focus ring */
-  --chart-1: hsl(181 100% 36%); /* Teal */
-  --chart-2: hsl(145 74% 57%); /* Success Green */
-  --chart-3: hsl(42.0290 92.8251% 56.2745%);
-  --chart-4: hsl(147.1429 78.5047% 41.9608%);
-  --chart-5: hsl(341.4894 75.2000% 50.9804%);
-  --sidebar: hsl(0 0% 100%); /* White sidebar */
-  --sidebar-foreground: hsl(210 24% 16%);
-  --sidebar-primary: hsl(181 100% 36%); /* Teal */
+  --border: hsl(214 32% 91%);
+  --input: hsl(214 32% 91%);
+  --ring: hsl(168 76% 32%);
+  --chart-1: hsl(168 76% 32%);
+  --chart-2: hsl(142 71% 45%);
+  --chart-3: hsl(38 92% 50%);
+  --chart-4: hsl(280 65% 60%);
+  --chart-5: hsl(340 75% 55%);
+  --sidebar: hsl(0 0% 100%);
+  --sidebar-foreground: hsl(222 47% 11%);
+  --sidebar-primary: hsl(168 76% 32%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(181 100% 95%); /* Very light teal for hover */
-  --sidebar-accent-foreground: hsl(210 24% 16%);
-  --sidebar-border: hsl(210 18% 90%);
-  --sidebar-ring: hsl(181 100% 36%); /* Teal */
+  --sidebar-accent: hsl(168 76% 96%);
+  --sidebar-accent-foreground: hsl(222 47% 11%);
+  --sidebar-border: hsl(214 32% 91%);
+  --sidebar-ring: hsl(168 76% 32%);
   
-  /* TRAQ IQ Font Stack */
-  --font-sans: 'Poppins', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-serif: Georgia, serif;
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
-  --radius: 0.75rem; /* Larger radius for modern look */
+  --radius: 0.5rem;
   
-  /* Better shadows for clean design */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  /* Professional Shadows */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow: 0 2px 4px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 8px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 8px 16px -2px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+  --shadow-xl: 0 16px 32px -4px rgb(0 0 0 / 0.1), 0 8px 12px -6px rgb(0 0 0 / 0.04);
 }
 
 .dark {
-  /* TRAQ IQ Ultra-Dark Mode - Modern Trading Journal Aesthetic */
-  --background: hsl(222 47% 4%); /* Ultra-dark navy background #0B1120 */
-  --foreground: hsl(210 17% 96%); /* Whitesmoke #F3F5F7 */
-  --card: hsl(218 24% 10%); /* Darker slate cards #151922 */
-  --card-foreground: hsl(210 17% 96%);
-  --popover: hsl(218 24% 10%);
-  --popover-foreground: hsl(210 17% 96%);
-  --primary: hsl(181 100% 42%); /* Brighter teal for pop #14B8A6 */
+  /* Professional Dark Mode */
+  --background: hsl(222 47% 6%);
+  --foreground: hsl(210 40% 98%);
+  --card: hsl(222 47% 10%);
+  --card-foreground: hsl(210 40% 98%);
+  --popover: hsl(222 47% 10%);
+  --popover-foreground: hsl(210 40% 98%);
+  --primary: hsl(168 76% 42%);
   --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(218 24% 14%); /* Slightly lighter than cards */
+  --secondary: hsl(215 28% 20%);
   --secondary-foreground: hsl(0 0% 100%);
-  --muted: hsl(218 24% 12%);
+  --muted: hsl(222 47% 14%);
   --muted-foreground: hsl(215 20% 65%);
-  --accent: hsl(181 100% 42%); /* Brighter teal */
+  --accent: hsl(168 76% 42%);
   --accent-foreground: hsl(0 0% 100%);
-  --destructive: hsl(355 85% 60%); /* Brighter red #F14B5A */
+  --destructive: hsl(0 72% 55%);
   --destructive-foreground: hsl(0 0% 100%);
-  --success: hsl(145 85% 55%); /* Brighter green #2DD45E */
+  --success: hsl(142 71% 50%);
   --success-foreground: hsl(0 0% 100%);
-  --warning: hsl(38 92% 58%); /* Brighter orange/yellow */
+  --warning: hsl(38 92% 55%);
   --warning-foreground: hsl(0 0% 100%);
-  --border: hsl(218 24% 18%); /* Subtle borders */
-  --input: hsl(218 24% 14%);
-  --ring: hsl(181 100% 42%); /* Bright teal focus */
-  --sidebar: hsl(218 24% 8%); /* Darker sidebar */
-  --sidebar-foreground: hsl(210 17% 96%);
-  --sidebar-primary: hsl(181 100% 42%);
+  --border: hsl(222 47% 18%);
+  --input: hsl(222 47% 14%);
+  --ring: hsl(168 76% 42%);
+  --sidebar: hsl(222 47% 8%);
+  --sidebar-foreground: hsl(210 40% 98%);
+  --sidebar-primary: hsl(168 76% 42%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(218 24% 14%);
-  --sidebar-accent-foreground: hsl(210 17% 96%);
-  --sidebar-border: hsl(218 24% 12%);
-  --sidebar-ring: hsl(181 100% 42%);
+  --sidebar-accent: hsl(222 47% 14%);
+  --sidebar-accent-foreground: hsl(210 40% 98%);
+  --sidebar-border: hsl(222 47% 14%);
+  --sidebar-ring: hsl(168 76% 42%);
 }
 
 @layer base {
@@ -105,14 +99,19 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.011em;
+    font-feature-settings: 'cv11', 'ss01';
   }
 
-  /* Modern Typography */
+  /* Clean Typography */
   h1, h2, h3, h4, h5, h6 {
-    @apply font-poppins;
-    letter-spacing: -0.02em;
+    @apply font-semibold tracking-tight;
   }
+
+  h1 { @apply text-2xl md:text-3xl; }
+  h2 { @apply text-xl md:text-2xl; }
+  h3 { @apply text-lg md:text-xl; }
+  h4 { @apply text-base md:text-lg; }
 
   .bg-primary {
     background-color: hsl(var(--primary));
@@ -138,50 +137,6 @@
     color: hsl(var(--success));
   }
 
-  /* Modern Card Enhancements */
-  .card-modern {
-    @apply bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all duration-300;
-  }
-
-  .card-stat {
-    @apply bg-card rounded-xl border border-border shadow-sm hover:shadow-md hover:border-primary/20 transition-all duration-300;
-  }
-
-  /* Improved form styling for better visibility */
-  .form-input-improved {
-    @apply bg-background border-2 border-input text-foreground placeholder:text-muted-foreground;
-    @apply focus:border-primary focus:ring-2 focus:ring-primary/20;
-    @apply transition-colors duration-200;
-  }
-
-  .form-label-improved {
-    @apply text-foreground font-medium;
-  }
-
-  .form-select-improved {
-    @apply bg-background border-2 border-input text-foreground;
-    @apply focus:border-primary focus:ring-2 focus:ring-primary/20;
-    @apply transition-colors duration-200;
-  }
-
-  .form-textarea-improved {
-    @apply bg-background border-2 border-input text-foreground placeholder:text-muted-foreground;
-    @apply focus:border-primary focus:ring-2 focus:ring-primary/20;
-    @apply transition-colors duration-200;
-  }
-
-  .dialog-improved {
-    @apply bg-card border border-border;
-  }
-
-  .dialog-header-improved {
-    @apply border-b border-border pb-4 mb-6;
-  }
-
-  .dialog-title-improved {
-    @apply text-xl font-semibold text-card-foreground;
-  }
-
   .bg-warning {
     background-color: hsl(var(--warning));
   }
@@ -197,6 +152,30 @@
   .text-danger {
     color: hsl(var(--destructive));
   }
+
+  /* Professional Card Styles */
+  .card-clean {
+    @apply bg-card rounded-lg border border-border/60 shadow-sm;
+  }
+
+  .card-elevated {
+    @apply bg-card rounded-lg border border-border/40 shadow-md hover:shadow-lg transition-shadow duration-200;
+  }
+
+  .card-stat {
+    @apply bg-card rounded-lg border border-border/50 shadow-sm hover:border-primary/30 transition-colors duration-200;
+  }
+
+  /* Form Styling */
+  .form-input-clean {
+    @apply bg-background border border-input text-foreground placeholder:text-muted-foreground rounded-md;
+    @apply focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none;
+    @apply transition-colors duration-150;
+  }
+
+  .form-label-clean {
+    @apply text-sm font-medium text-foreground;
+  }
 }
 
 @layer utilities {
@@ -205,63 +184,67 @@
   }
 }
 
-/* TRAQ IQ Modern Button Styling */
+/* Clean Button Styling */
 button {
   font-family: var(--font-sans);
-  font-weight: 600;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  letter-spacing: -0.01em;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.15s ease;
 }
 
-/* Primary Button - Uses Theme Tokens */
 .btn-primary {
-  @apply bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5;
+  @apply bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 py-2 rounded-md shadow-sm transition-all duration-150;
 }
 
 .btn-secondary {
-  @apply bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold px-6 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200;
+  @apply bg-secondary hover:bg-secondary/90 text-secondary-foreground font-medium px-4 py-2 rounded-md shadow-sm transition-all duration-150;
 }
 
 .btn-success {
-  @apply bg-success hover:bg-success/90 text-white font-semibold px-6 py-2.5 rounded-lg shadow-sm hover:shadow-md transition-all duration-200;
+  @apply bg-success hover:bg-success/90 text-white font-medium px-4 py-2 rounded-md shadow-sm transition-all duration-150;
 }
 
 .btn-outline {
-  @apply border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold px-6 py-2.5 rounded-lg transition-all duration-200;
+  @apply border border-border bg-background hover:bg-muted text-foreground font-medium px-4 py-2 rounded-md transition-all duration-150;
 }
 
-/* Form button improvements for TRAQ IQ design */
+.btn-ghost {
+  @apply bg-transparent hover:bg-muted text-foreground font-medium px-4 py-2 rounded-md transition-all duration-150;
+}
+
+/* Form Button */
 .form-button-improved {
   background: hsl(var(--primary)) !important;
   color: hsl(var(--primary-foreground)) !important;
   border: none !important;
-  padding: 10px 20px !important;
-  border-radius: 8px !important;
-  font-weight: 600 !important;
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
   cursor: pointer !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  min-height: 40px !important;
-  min-width: 80px !important;
-  transition: all 0.2s ease !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+  min-height: 36px !important;
+  transition: all 0.15s ease !important;
 }
 
 .form-button-improved:hover:not(:disabled) {
   background: hsl(var(--primary) / 0.9) !important;
-  transform: translateY(-1px) !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 181, 184, 0.2), 0 2px 4px -1px rgba(0, 181, 184, 0.1) !important;
 }
 
-/* Ensure all Select components use theme tokens */
+.form-button-improved:disabled {
+  background: hsl(var(--muted)) !important;
+  cursor: not-allowed !important;
+}
+
+/* Select Components */
 [data-radix-select-content] {
-  background-color: hsl(var(--background)) !important;
+  background-color: hsl(var(--card)) !important;
   border: 1px solid hsl(var(--border)) !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: var(--shadow-lg) !important;
   z-index: 50 !important;
   color: hsl(var(--foreground)) !important;
+  border-radius: 6px !important;
 }
 
 [data-radix-select-trigger] {
@@ -270,96 +253,76 @@ button {
   color: hsl(var(--foreground)) !important;
 }
 
-.form-button-improved:hover {
-  background: hsl(var(--primary) / 0.9) !important;
-  transform: translateY(-1px);
-}
-
-.form-button-improved:disabled {
-  background: hsl(var(--muted)) !important;
-  cursor: not-allowed !important;
-  transform: none !important;
-}
-
 /* Modern Input Styling */
-.input-modern {
-  @apply bg-background border-2 border-input rounded-lg px-4 py-2.5 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200 outline-none text-foreground;
+.input-clean {
+  @apply bg-background border border-input rounded-md px-3 py-2 text-sm;
+  @apply focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none;
+  @apply transition-colors duration-150 text-foreground;
 }
 
-.input-modern:hover {
-  @apply border-primary/30;
+.input-clean:hover:not(:focus) {
+  @apply border-muted-foreground/30;
 }
 
-/* Modern Select Styling */
-.select-modern {
-  @apply bg-background border-2 border-input rounded-lg px-4 py-2.5 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200 outline-none cursor-pointer text-foreground;
-}
-
-.select-modern:hover {
-  @apply border-primary/30;
-}
-
-/* Badge Enhancements */
+/* Badge Styles */
 .badge-primary {
-  @apply bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-semibold border border-primary/20;
+  @apply bg-primary/10 text-primary px-2.5 py-0.5 rounded-full text-xs font-medium;
 }
 
 .badge-success {
-  @apply bg-success/10 text-success px-3 py-1 rounded-full text-xs font-semibold border border-success/20;
+  @apply bg-success/10 text-success px-2.5 py-0.5 rounded-full text-xs font-medium;
 }
 
 .badge-warning {
-  @apply bg-warning/10 text-warning px-3 py-1 rounded-full text-xs font-semibold border border-warning/20;
+  @apply bg-warning/10 text-warning px-2.5 py-0.5 rounded-full text-xs font-medium;
 }
 
 .badge-error {
-  @apply bg-destructive/10 text-destructive px-3 py-1 rounded-full text-xs font-semibold border border-destructive/20;
+  @apply bg-destructive/10 text-destructive px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-neutral {
+  @apply bg-muted text-muted-foreground px-2.5 py-0.5 rounded-full text-xs font-medium;
 }
 
 /* Loading Skeleton */
 .skeleton {
-  @apply animate-pulse bg-muted/50 rounded;
+  @apply animate-pulse bg-muted rounded;
 }
 
-/* Smooth Scrollbar */
-.scrollbar-modern::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Custom Scrollbar */
+.scrollbar-clean::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-.scrollbar-modern::-webkit-scrollbar-track {
-  @apply bg-muted/30 rounded-full;
+.scrollbar-clean::-webkit-scrollbar-track {
+  @apply bg-transparent;
 }
 
-.scrollbar-modern::-webkit-scrollbar-thumb {
-  @apply bg-muted rounded-full hover:bg-muted-foreground/50 transition-colors;
+.scrollbar-clean::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full hover:bg-muted-foreground/30 transition-colors;
 }
 
-/* Professional Stat Card */
+/* Stat Card */
 .stat-card {
-  @apply bg-card rounded-xl border border-border p-6 hover:shadow-lg hover:border-primary/20 transition-all duration-300 hover:-translate-y-1;
+  @apply bg-card rounded-lg border border-border/50 p-5 hover:border-primary/30 transition-all duration-200;
 }
 
-/* Icon Glow Effect */
-.icon-glow {
-  @apply drop-shadow-[0_0_8px_rgba(0,181,184,0.4)];
-}
-
-/* Glass Effect */
-.glass {
-  @apply bg-card/80 backdrop-blur-sm border border-border/20 shadow-lg;
-}
-
-/* Metric Number Styling */
+/* Metric Display */
 .metric-value {
-  @apply font-poppins font-bold text-3xl text-foreground;
+  @apply font-semibold text-2xl text-foreground tracking-tight;
 }
 
-/* Subtle Animation */
+.metric-label {
+  @apply text-sm text-muted-foreground font-medium;
+}
+
+/* Subtle Animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -368,10 +331,58 @@ button {
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeIn 0.2s ease-out;
 }
 
-/* Hover Lift Effect */
-.hover-lift {
-  @apply transition-transform duration-200 hover:-translate-y-1;
+/* Status Indicators */
+.status-dot {
+  @apply w-2 h-2 rounded-full;
+}
+
+.status-dot-active {
+  @apply bg-success;
+}
+
+.status-dot-warning {
+  @apply bg-warning;
+}
+
+.status-dot-error {
+  @apply bg-destructive;
+}
+
+.status-dot-inactive {
+  @apply bg-muted-foreground/40;
+}
+
+/* Table Styles */
+.table-clean {
+  @apply w-full text-sm;
+}
+
+.table-clean th {
+  @apply text-left font-medium text-muted-foreground px-4 py-3 border-b border-border bg-muted/30;
+}
+
+.table-clean td {
+  @apply px-4 py-3 border-b border-border/50;
+}
+
+.table-clean tr:hover td {
+  @apply bg-muted/30;
+}
+
+/* Divider */
+.divider {
+  @apply border-t border-border my-4;
+}
+
+/* Focus Ring */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:ring-offset-background;
+}
+
+/* Glass Effect */
+.glass {
+  @apply bg-card/80 backdrop-blur-sm border border-border/30;
 }

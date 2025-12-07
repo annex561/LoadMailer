@@ -1244,32 +1244,30 @@ export default function LoadOpsDashboard() {
       <div className={cn("flex-1 flex flex-col", sidebarCollapsed ? "ml-16" : "ml-64")}>
         {/* Top Header - Only show on dashboard */}
         {(location === '/' || location === '/loadops-dashboard') && (
-          <header className="bg-white border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Finance Performance for Company</h1>
-                <p className="text-sm text-gray-500">Aug 19, 2025 - Aug 19, 2025</p>
-              </div>
-              <div className="flex items-center space-x-3">
-                <Button variant="outline" size="sm" data-testid="button-quick-reminder">
-                  Quick Reminder
-                </Button>
-                <Button variant="outline" size="sm" data-testid="button-last-revenue">
-                  Last Revenue
-                </Button>
-                <Button size="sm" data-testid="button-actual">
-                  Actual
-                </Button>
-                <Button variant="outline" size="sm" data-testid="button-projected">
-                  Projected
-                </Button>
-              </div>
+          <header className="h-16 bg-card border-b border-border px-6 flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Finance Performance</h1>
+              <p className="text-xs text-muted-foreground">Aug 19, 2025 - Aug 19, 2025</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="button-quick-reminder">
+                Quick Reminder
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="button-last-revenue">
+                Last Revenue
+              </Button>
+              <Button size="sm" className="h-8 text-xs" data-testid="button-actual">
+                Actual
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="button-projected">
+                Projected
+              </Button>
             </div>
           </header>
         )}
 
         {/* Page Content */}
-        <main className={cn("flex-1 overflow-auto", (location === '/' || location === '/loadops-dashboard') ? "p-6" : "")}>
+        <main className={cn("flex-1 overflow-auto bg-background", (location === '/' || location === '/loadops-dashboard') ? "p-6" : "")}>
           {renderContent()}
         </main>
       </div>

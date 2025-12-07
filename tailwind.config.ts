@@ -81,11 +81,9 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Poppins', 'Inter', 'var(--font-sans)', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
         serif: ["var(--font-serif)"],
-        mono: ['JetBrains Mono', 'var(--font-mono)', 'monospace'],
-        inter: ['Inter', 'sans-serif'],
-        poppins: ['Poppins', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
       },
       keyframes: {
         "accordion-down": {

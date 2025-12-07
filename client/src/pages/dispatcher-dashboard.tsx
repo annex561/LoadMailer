@@ -396,14 +396,14 @@ export default function DispatcherDashboard() {
   };
 
   return (
-    <div className="space-y-6 p-6" data-testid="dispatcher-dashboard">
+    <div className="space-y-6 p-6 bg-background" data-testid="dispatcher-dashboard">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold" data-testid="heading-dispatcher-dashboard">
-            Mission Control
+          <h1 className="text-2xl font-semibold text-foreground" data-testid="heading-dispatcher-dashboard">
+            Dispatcher Dashboard
           </h1>
-          <p className="text-muted-foreground">Unified dispatcher workspace</p>
+          <p className="text-sm text-muted-foreground">Fleet management and coordination</p>
         </div>
       </div>
 
@@ -425,85 +425,85 @@ export default function DispatcherDashboard() {
         <TabsContent value="overview" className="space-y-6 mt-6">
           {/* Quick Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="hover:border-primary/30 transition-all hover:-translate-y-1 border-l-4 border-l-primary shadow-md rounded-xl">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground" data-testid="label-active-loads">
-                  Active Loads
-                </p>
-                <p className="text-4xl font-bold text-primary" data-testid="count-active-loads">
-                  {activeLoads}
-                </p>
-              </div>
-              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
-                <Truck className="h-7 w-7 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="border-0 shadow-sm bg-card hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide" data-testid="label-active-loads">
+                      Active Loads
+                    </p>
+                    <p className="text-3xl font-semibold text-foreground mt-1" data-testid="count-active-loads">
+                      {activeLoads}
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Truck className="h-6 w-6 text-primary" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="hover:border-success/30 transition-all hover:-translate-y-1 border-l-4 border-l-success shadow-md rounded-xl">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground" data-testid="label-available-drivers">
-                  Available Drivers
-                </p>
-                <p className="text-4xl font-bold text-success" data-testid="count-available-drivers">
-                  {availableDrivers}
-                </p>
-              </div>
-              <div className="h-14 w-14 rounded-full bg-success/10 flex items-center justify-center border border-success/20">
-                <Users className="h-7 w-7 text-success" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="border-0 shadow-sm bg-card hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide" data-testid="label-available-drivers">
+                      Available Drivers
+                    </p>
+                    <p className="text-3xl font-semibold text-foreground mt-1" data-testid="count-available-drivers">
+                      {availableDrivers}
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-lg bg-success/10 flex items-center justify-center">
+                    <Users className="h-6 w-6 text-success" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="hover:border-warning/30 transition-all hover:-translate-y-1 border-l-4 border-l-warning shadow-md rounded-xl">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground" data-testid="label-pending-assignments">
-                  Pending Assignments
-                </p>
-                <p className="text-4xl font-bold text-warning" data-testid="count-pending-assignments">
-                  {pendingAssignments}
-                </p>
-              </div>
-              <div className="h-14 w-14 rounded-full bg-warning/10 flex items-center justify-center border border-warning/20">
-                <ClipboardList className="h-7 w-7 text-warning" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="border-0 shadow-sm bg-card hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide" data-testid="label-pending-assignments">
+                      Pending
+                    </p>
+                    <p className="text-3xl font-semibold text-foreground mt-1" data-testid="count-pending-assignments">
+                      {pendingAssignments}
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-lg bg-warning/10 flex items-center justify-center">
+                    <ClipboardList className="h-6 w-6 text-warning" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="hover:border-primary/30 transition-all hover:-translate-y-1 border-l-4 border-l-primary shadow-md rounded-xl">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground" data-testid="label-todays-pickups">
-                  Today's Pickups
-                </p>
-                <p className="text-4xl font-bold text-primary" data-testid="count-todays-pickups">
-                  {todaysPickups}
-                </p>
-              </div>
-              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20">
-                <Calendar className="h-7 w-7 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            <Card className="border-0 shadow-sm bg-card hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide" data-testid="label-todays-pickups">
+                      Today's Pickups
+                    </p>
+                    <p className="text-3xl font-semibold text-foreground mt-1" data-testid="count-todays-pickups">
+                      {todaysPickups}
+                    </p>
+                  </div>
+                  <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Calendar className="h-6 w-6 text-primary" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
       {/* Quick Action Buttons */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-2">
         <Link href="/manual-load-entry">
-          <Button className="bg-[#00B5B8] hover:bg-[#009A9D] text-white" data-testid="button-create-load">
+          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" data-testid="button-create-load">
             <Plus className="h-4 w-4 mr-2" />
-            Create New Load
+            Create Load
           </Button>
         </Link>
         <Button 
@@ -557,14 +557,15 @@ export default function DispatcherDashboard() {
       </div>
 
       {/* Main Three-Panel Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
         {/* Panel A - Active Loads (Left, 30%) */}
         <div className="lg:col-span-3">
-          <Card className="h-[700px] shadow-md rounded-xl">
-            <CardHeader className="bg-card border-b border-border">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Package className="h-5 w-5 text-primary" />
-                Active Loads ({filteredLoads.length})
+          <Card className="h-[700px] border-0 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Package className="h-4 w-4 text-primary" />
+                Active Loads
+                <span className="text-muted-foreground font-normal">({filteredLoads.length})</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -680,11 +681,12 @@ export default function DispatcherDashboard() {
 
         {/* Panel B - Available Drivers (Center, 30%) */}
         <div className="lg:col-span-3">
-          <Card className="h-[700px] shadow-md rounded-xl">
-            <CardHeader className="bg-card border-b border-border">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Users className="h-5 w-5 text-success" />
-                Available Drivers ({filteredDrivers.length})
+          <Card className="h-[700px] border-0 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Users className="h-4 w-4 text-success" />
+                Available Drivers
+                <span className="text-muted-foreground font-normal">({filteredDrivers.length})</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -803,10 +805,10 @@ export default function DispatcherDashboard() {
 
         {/* Panel C - Activity Feed (Right, 40%) */}
         <div className="lg:col-span-4">
-          <Card className="h-[700px] shadow-md rounded-xl">
-            <CardHeader className="bg-card border-b border-border">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Activity className="h-5 w-5 text-warning" />
+          <Card className="h-[700px] border-0 shadow-sm">
+            <CardHeader className="pb-3 border-b border-border">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Activity className="h-4 w-4 text-primary" />
                 Activity Feed
               </CardTitle>
             </CardHeader>
@@ -898,7 +900,7 @@ export default function DispatcherDashboard() {
                         Driver locations will appear here when GPS tracking is active
                       </p>
                       <Link href="/gps-tracking">
-                        <Button className="mt-4 bg-[#00B5B8] hover:bg-[#009A9D]" data-testid="button-open-full-map">
+                        <Button className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground" data-testid="button-open-full-map">
                           <Eye className="h-4 w-4 mr-2" />
                           Open GPS Tracking
                         </Button>
@@ -1185,7 +1187,7 @@ export default function DispatcherDashboard() {
                   sendSMSMutation.mutate({ driverId: selectedSMSDriver, message: smsMessage });
                 }}
                 disabled={sendSMSMutation.isPending}
-                className="w-full bg-[#00B5B8] hover:bg-[#009A9D]"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                 data-testid="button-send-sms"
               >
                 <Send className="w-4 h-4 mr-2" />
@@ -1279,7 +1281,7 @@ export default function DispatcherDashboard() {
               <Button 
                 onClick={handleAssignDriver}
                 disabled={!selectedDriverId || assignDriverMutation.isPending}
-                className="bg-[#00B5B8] hover:bg-[#009A9D]"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 data-testid="button-confirm-assign"
               >
                 {assignDriverMutation.isPending ? 'Assigning...' : 'Assign Driver'}
