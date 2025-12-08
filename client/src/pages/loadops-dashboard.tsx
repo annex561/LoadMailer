@@ -325,15 +325,15 @@ const CommunicationCard: React.FC<{
   };
 
   return (
-    <div className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+    <div className="border border-border rounded-lg p-4 bg-card shadow-sm hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
-          <span className="font-semibold text-gray-900">{driver?.name || "Unknown Driver"}</span>
+          <span className="font-semibold text-foreground">{driver?.name || "Unknown Driver"}</span>
           <Badge variant={priority === "HIGH" ? "destructive" : priority === "MEDIUM" ? "secondary" : "outline"}>
             {priority}
           </Badge>
           {unreadCount > 0 && (
-            <Badge variant="default" className="bg-blue-600">
+            <Badge variant="default" className="bg-primary">
               {unreadCount} unread
             </Badge>
           )}
@@ -351,38 +351,38 @@ const CommunicationCard: React.FC<{
         </Button>
       </div>
       
-      <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
-        <div><span className="font-medium">Phone:</span> {driver?.phone || "Not provided"}</div>
-        <div><span className="font-medium">Status:</span> {driver?.status || "Unknown"}</div>
-        <div><span className="font-medium">Total Messages:</span> {thread.messageCount || 0}</div>
-        <div><span className="font-medium">Last Contact:</span> {lastMessage ? new Date(lastMessage.createdAt).toLocaleString() : "No messages"}</div>
+      <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground mb-3">
+        <div><span className="font-medium text-foreground">Phone:</span> {driver?.phone || "Not provided"}</div>
+        <div><span className="font-medium text-foreground">Status:</span> {driver?.status || "Unknown"}</div>
+        <div><span className="font-medium text-foreground">Total Messages:</span> {thread.messageCount || 0}</div>
+        <div><span className="font-medium text-foreground">Last Contact:</span> {lastMessage ? new Date(lastMessage.createdAt).toLocaleString() : "No messages"}</div>
       </div>
       
       {lastMessage && (
-        <div className="text-sm text-gray-700 mb-3 p-2 bg-gray-50 rounded border-l-4 border-gray-300">
+        <div className="text-sm text-muted-foreground mb-3 p-2 bg-muted/50 rounded border-l-4 border-primary/30">
           <div className="flex items-center justify-between mb-1">
-            <span className="font-medium">{lastMessage.isFromDriver ? "Driver" : "Dispatch"}</span>
+            <span className="font-medium text-foreground">{lastMessage.isFromDriver ? "Driver" : "Dispatch"}</span>
             {lastMessage.loadNumber && (
               <Badge variant="outline" className="text-xs">
                 Load: {lastMessage.loadNumber}
               </Badge>
             )}
           </div>
-          <p>{lastMessage.message}</p>
+          <p className="text-foreground">{lastMessage.message}</p>
         </div>
       )}
 
       {/* AI Assistant Panel */}
       {showAiAssistant && (
-        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="mb-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
           <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium text-blue-800">AI Communication Assistant</h4>
+            <h4 className="text-sm font-medium text-foreground">AI Communication Assistant</h4>
             <Button
               variant="outline"
               size="sm"
               onClick={getAiSuggestion}
               disabled={isLoadingAI || !assistantEnabled}
-              className="h-6 px-2 text-xs bg-white"
+              className="h-6 px-2 text-xs bg-card"
               data-testid={`button-get-suggestion-${thread.id}`}
             >
               {isLoadingAI ? '🔄' : '💡'} Suggest
@@ -392,12 +392,12 @@ const CommunicationCard: React.FC<{
           {/* AI Assistant Configuration */}
           <div className="mb-3 space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-blue-700">AI Assistant</label>
+              <label className="text-xs font-medium text-muted-foreground">AI Assistant</label>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => toggleAiAssistant(!assistantEnabled)}
-                className={`h-6 px-2 text-xs ${assistantEnabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}
+                className={`h-6 px-2 text-xs ${assistantEnabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}
                 data-testid={`button-toggle-assistant-${thread.id}`}
               >
                 {assistantEnabled ? 'Enabled' : 'Disabled'}
@@ -407,11 +407,11 @@ const CommunicationCard: React.FC<{
             {assistantEnabled && (
               <>
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-blue-700">Mode</label>
+                  <label className="text-xs font-medium text-muted-foreground">Mode</label>
                   <select
                     value={assistantMode}
                     onChange={(e) => updateAssistantMode(e.target.value)}
-                    className="h-6 px-2 text-xs border border-gray-300 rounded bg-white"
+                    className="h-6 px-2 text-xs border border-border rounded bg-card text-foreground"
                     data-testid={`select-assistant-mode-${thread.id}`}
                   >
                     <option value="off">Off</option>
@@ -422,7 +422,7 @@ const CommunicationCard: React.FC<{
                 
                 {assistantMode === 'autosend' && (
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-blue-700">Auto-Send Threshold</label>
+                    <label className="text-xs font-medium text-muted-foreground">Auto-Send Threshold</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="range"
@@ -431,10 +431,10 @@ const CommunicationCard: React.FC<{
                         step="5"
                         value={autoSendConfidence}
                         onChange={(e) => updateAutoSendConfidence(parseInt(e.target.value))}
-                        className="w-16 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                        className="w-16 h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
                         data-testid={`slider-autosend-confidence-${thread.id}`}
                       />
-                      <span className="text-xs text-blue-600 w-8">{autoSendConfidence}%</span>
+                      <span className="text-xs text-primary w-8">{autoSendConfidence}%</span>
                     </div>
                   </div>
                 )}
@@ -443,28 +443,28 @@ const CommunicationCard: React.FC<{
           </div>
           
           {!assistantEnabled && (
-            <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded mb-2">
+            <div className="text-xs text-muted-foreground bg-muted p-2 rounded mb-2">
               AI assistant is disabled for this thread. Enable it above to get message suggestions.
             </div>
           )}
           
           {aiSuggestion && assistantEnabled && (
             <div className="space-y-2">
-              <div className="bg-white p-2 rounded border text-sm">
+              <div className="bg-card p-2 rounded border border-border text-sm">
                 <div className="flex items-start justify-between mb-1">
-                  <span className="text-xs text-gray-500">Suggested Response</span>
+                  <span className="text-xs text-muted-foreground">Suggested Response</span>
                   <Badge variant="outline" className="text-xs">
                     {Math.round(aiSuggestion.confidence)}% confidence
                   </Badge>
                 </div>
-                <p className="text-gray-800">{aiSuggestion.suggestedText}</p>
+                <p className="text-foreground">{aiSuggestion.suggestedText}</p>
                 {aiSuggestion.reasoning && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     <em>{aiSuggestion.reasoning}</em>
                   </p>
                 )}
                 {aiSuggestion.shouldAutoSend && (
-                  <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                  <div className="text-xs text-success mt-1 flex items-center gap-1">
                     ⚡ High confidence - would auto-send if enabled
                   </div>
                 )}
@@ -474,7 +474,7 @@ const CommunicationCard: React.FC<{
                   variant="outline"
                   size="sm"
                   onClick={useAiSuggestion}
-                  className="h-6 px-2 text-xs bg-white"
+                  className="h-6 px-2 text-xs bg-card"
                   data-testid={`button-use-suggestion-${thread.id}`}
                 >
                   Use This
@@ -483,7 +483,7 @@ const CommunicationCard: React.FC<{
                   variant="outline"
                   size="sm"
                   onClick={dismissAiSuggestion}
-                  className="h-6 px-2 text-xs bg-white"
+                  className="h-6 px-2 text-xs bg-card"
                   data-testid={`button-dismiss-suggestion-${thread.id}`}
                 >
                   Dismiss
@@ -501,14 +501,14 @@ const CommunicationCard: React.FC<{
           value={messageText}
           onChange={(e) => setMessageText(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-          className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           data-testid={`message-input-${thread.id}`}
         />
         <Button 
           onClick={handleSendMessage}
           disabled={!messageText.trim()}
           size="sm"
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-primary hover:bg-primary/90"
           data-testid={`send-message-${thread.id}`}
         >
           Send SMS
@@ -613,89 +613,109 @@ export default function LoadOpsDashboard() {
     return (
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Finance Performance Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {financeMetrics.map((metric, index) => (
-            <Card key={index} className="relative overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">{metric.title}</p>
-                    <div className="mt-2">
-                      <p className={cn("text-2xl font-bold", metric.color)}>{metric.value}</p>
-                      <p className="text-xs text-gray-500">{metric.target}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {financeMetrics.map((metric, index) => {
+            const colorMap: Record<string, string> = {
+              'text-blue-600': 'primary',
+              'text-green-600': 'success',
+              'text-purple-600': 'primary',
+              'text-orange-600': 'warning'
+            };
+            const colorKey = colorMap[metric.color] || 'primary';
+            const bgColors: Record<string, string> = {
+              primary: 'bg-primary/10',
+              success: 'bg-success/10',
+              warning: 'bg-warning/10'
+            };
+            const textColors: Record<string, string> = {
+              primary: 'text-primary',
+              success: 'text-success',
+              warning: 'text-warning'
+            };
+            const barColors: Record<string, string> = {
+              primary: 'bg-primary',
+              success: 'bg-success',
+              warning: 'bg-warning'
+            };
+            return (
+              <Card key={index} className="relative overflow-hidden border-border/50 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{metric.title}</p>
+                      <div className="mt-2">
+                        <p className={cn("text-2xl font-bold", textColors[colorKey])}>{metric.value}</p>
+                        <p className="text-xs text-muted-foreground">{metric.target}</p>
+                      </div>
+                    </div>
+                    <div className={cn("p-3 rounded-xl", bgColors[colorKey])}>
+                      <metric.icon className={cn("w-6 h-6", textColors[colorKey])} />
                     </div>
                   </div>
-                  <div className={cn("p-3 rounded-full bg-gray-100")}>
-                    <metric.icon className={cn("w-6 h-6", metric.color)} />
+                  <div className="mt-4 bg-muted rounded-full h-2">
+                    <div 
+                      className={cn("h-2 rounded-full transition-all duration-500", barColors[colorKey])}
+                      style={{ width: `${metric.percentage}%` }}
+                    />
                   </div>
-                </div>
-                <div className="mt-4 bg-gray-200 rounded-full h-2">
-                  <div 
-                    className={cn("h-2 rounded-full", 
-                      metric.color.includes('blue') ? 'bg-blue-600' :
-                      metric.color.includes('green') ? 'bg-green-600' :
-                      metric.color.includes('purple') ? 'bg-purple-600' : 'bg-orange-600'
-                    )}
-                    style={{ width: `${metric.percentage}%` }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
-        {/* Second Row - Operational Summary, Availability, and Invoices */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Second Row - Operational Summary, Availability, and Safety */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Trip Operational Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">Trip Operational Summary</CardTitle>
+          <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-foreground">Trip Operational Summary</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-2">
               <div className="space-y-6">
                 <div className="text-center">
-                  <p className="text-sm text-gray-600 mb-4">Open Trips</p>
-                  <div className="w-20 h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-2xl font-bold text-blue-600">{loads.length}</span>
+                  <p className="text-sm text-muted-foreground mb-3">Open Trips</p>
+                  <div className="w-24 h-24 mx-auto bg-primary/10 rounded-full flex items-center justify-center border-4 border-primary/20">
+                    <span className="text-3xl font-bold text-primary">{loads.length}</span>
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">Items Available</p>
+                  <p className="text-xs text-muted-foreground mt-2">Items Available</p>
                 </div>
                 
                 <div className="text-center">
-                  <p className="text-sm text-gray-600 mb-4">Assigned Trips</p>
-                  <div className="w-20 h-20 mx-auto bg-red-100 rounded-full flex items-center justify-center">
-                    <span className="text-2xl font-bold text-red-600">
+                  <p className="text-sm text-muted-foreground mb-3">Assigned Trips</p>
+                  <div className="w-24 h-24 mx-auto bg-success/10 rounded-full flex items-center justify-center border-4 border-success/20">
+                    <span className="text-3xl font-bold text-success">
                       {loads.filter((l: any) => l.driverId).length}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">Assigned Trips</p>
+                  <p className="text-xs text-muted-foreground mt-2">Assigned Trips</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Driver & Tractor Availability */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">Driver Availability</CardTitle>
+          <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-foreground">Driver Availability</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-2">
               <div className="space-y-6">
                 {availabilityMetrics.map((metric, index) => (
                   <div key={index}>
-                    <p className="text-sm text-gray-600 mb-3">{metric.title}</p>
-                    <div className="flex justify-center space-x-8">
+                    <p className="text-sm font-medium text-muted-foreground mb-3">{metric.title}</p>
+                    <div className="flex justify-center gap-8">
                       <div className="text-center">
-                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-2">
-                          <span className="text-lg font-bold text-red-600">{metric.unavailable}</span>
+                        <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mb-2 border-2 border-destructive/30">
+                          <span className="text-base font-bold text-destructive">{metric.unavailable}</span>
                         </div>
-                        <p className="text-xs text-gray-500">Not Available</p>
+                        <p className="text-xs text-muted-foreground">Not Available</p>
                       </div>
                       <div className="text-center">
-                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-2">
-                          <span className="text-lg font-bold text-green-600">{metric.available}</span>
+                        <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center mb-2 border-2 border-success/30">
+                          <span className="text-base font-bold text-success">{metric.available}</span>
                         </div>
-                        <p className="text-xs text-gray-500">Available</p>
+                        <p className="text-xs text-muted-foreground">Available</p>
                       </div>
                     </div>
                   </div>
@@ -705,22 +725,25 @@ export default function LoadOpsDashboard() {
           </Card>
 
           {/* Safety Metrics */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">Safety Metrics</CardTitle>
+          <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-foreground">Safety Metrics</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-2">
               <div className="space-y-4">
                 {safetyMetrics.map((metric, index) => (
-                  <div key={index} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">{metric.title}</span>
-                    <div className="flex items-center space-x-2">
-                      <span className={cn("text-lg font-bold", metric.color)}>
+                  <div key={index} className="flex items-center justify-between py-2">
+                    <span className="text-sm text-muted-foreground">{metric.title}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("text-lg font-bold",
+                        metric.status === 'good' ? 'text-foreground' :
+                        metric.status === 'warning' ? 'text-foreground' : 'text-foreground'
+                      )}>
                         {metric.value}
                       </span>
                       <div className={cn("w-3 h-3 rounded-full", 
-                        metric.status === 'good' ? 'bg-green-500' :
-                        metric.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                        metric.status === 'good' ? 'bg-success' :
+                        metric.status === 'warning' ? 'bg-warning' : 'bg-destructive'
                       )} />
                     </div>
                   </div>
@@ -731,11 +754,11 @@ export default function LoadOpsDashboard() {
         </div>
         
         {/* Communication Dispatch Command Center */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mt-8">
-          <Card className="lg:col-span-2 xl:col-span-2">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <MessageSquare className="w-5 h-5" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+          <Card className="lg:col-span-2 xl:col-span-2 border-border/50 shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-primary" />
                 Driver Conversations (Unified Messaging)
               </CardTitle>
             </CardHeader>
@@ -755,8 +778,8 @@ export default function LoadOpsDashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <div className="text-center py-8 text-muted-foreground">
+                  <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground/30" />
                   <p>No driver conversations yet</p>
                   <p className="text-sm mt-2">Unified conversations will appear when drivers send messages</p>
                 </div>
@@ -765,51 +788,51 @@ export default function LoadOpsDashboard() {
           </Card>
 
           {/* Dispatch Quick Stats */}
-          <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                <Headphones className="w-5 h-5" />
+          <Card className="border-border/50 shadow-sm hover:shadow-md transition-shadow">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+                <Headphones className="w-5 h-5 text-primary" />
                 Dispatch Center Stats
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-blue-600" />
-                    <span className="text-sm font-medium">Active Threads</span>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-8 bg-primary rounded-full" />
+                    <span className="text-sm font-medium text-muted-foreground">Active Threads</span>
                   </div>
-                  <span className="text-lg font-bold text-blue-600">
+                  <span className="text-xl font-bold text-foreground">
                     {threads.filter((t: any) => t.unreadCount > 0).length}
                   </span>
                 </div>
                 
-                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-green-600" />
-                    <span className="text-sm font-medium">Available Drivers</span>
+                <div className="flex items-center justify-between p-3 bg-success/5 rounded-lg border border-success/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-8 bg-success rounded-full" />
+                    <span className="text-sm font-medium text-muted-foreground">Available Drivers</span>
                   </div>
-                  <span className="text-lg font-bold text-green-600">
+                  <span className="text-xl font-bold text-foreground">
                     {drivers.filter((d: any) => d.status === "available").length}
                   </span>
                 </div>
                 
-                <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-orange-600" />
-                    <span className="text-sm font-medium">Total Messages</span>
+                <div className="flex items-center justify-between p-3 bg-warning/5 rounded-lg border border-warning/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-8 bg-warning rounded-full" />
+                    <span className="text-sm font-medium text-muted-foreground">Total Messages</span>
                   </div>
-                  <span className="text-lg font-bold text-orange-600">
+                  <span className="text-xl font-bold text-foreground">
                     {threads.reduce((sum: number, t: any) => sum + (t.messageCount || 0), 0)}
                   </span>
                 </div>
                 
-                <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-purple-600" />
-                    <span className="text-sm font-medium">En Route</span>
+                <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg border border-primary/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-1 h-8 bg-primary rounded-full" />
+                    <span className="text-sm font-medium text-muted-foreground">En Route</span>
                   </div>
-                  <span className="text-lg font-bold text-purple-600">
+                  <span className="text-xl font-bold text-foreground">
                     {drivers.filter((d: any) => d.status === "on_route").length}
                   </span>
                 </div>
