@@ -4,7 +4,96 @@
 @tailwind utilities;
 
 :root {
-  /* Theme Colors - Clean Professional Light Mode */
+  /* Theme Colors - Professional Dark Mode (Default) - Matching Reference Design */
+  --background: hsl(220 20% 10%);
+  --foreground: hsl(210 40% 98%);
+  --card: hsl(220 20% 14%);
+  --card-foreground: hsl(210 40% 98%);
+  --popover: hsl(220 20% 14%);
+  --popover-foreground: hsl(210 40% 98%);
+  --primary: hsl(174 100% 42%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(220 20% 20%);
+  --secondary-foreground: hsl(0 0% 100%);
+  --muted: hsl(220 20% 18%);
+  --muted-foreground: hsl(215 20% 65%);
+  --accent: hsl(174 100% 42%);
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(0 72% 55%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --success: hsl(142 71% 50%);
+  --success-foreground: hsl(0 0% 100%);
+  --warning: hsl(38 92% 55%);
+  --warning-foreground: hsl(0 0% 100%);
+  --border: hsl(220 20% 22%);
+  --input: hsl(220 20% 18%);
+  --ring: hsl(174 100% 42%);
+  --chart-1: hsl(174 100% 42%);
+  --chart-2: hsl(142 71% 50%);
+  --chart-3: hsl(38 92% 55%);
+  --chart-4: hsl(280 65% 60%);
+  --chart-5: hsl(340 75% 55%);
+  --sidebar: 220 20% 8%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-primary: 174 100% 42%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 20% 14%;
+  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-border: 220 20% 16%;
+  --sidebar-ring: 174 100% 42%;
+  
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --radius: 0.5rem;
+  
+  /* Professional Shadows */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow: 0 2px 4px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 8px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 8px 16px -2px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+  --shadow-xl: 0 16px 32px -4px rgb(0 0 0 / 0.1), 0 8px 12px -6px rgb(0 0 0 / 0.04);
+}
+
+.dark {
+  /* Same as root - full dark mode */
+  --background: hsl(220 20% 10%);
+  --foreground: hsl(210 40% 98%);
+  --card: hsl(220 20% 14%);
+  --card-foreground: hsl(210 40% 98%);
+  --popover: hsl(220 20% 14%);
+  --popover-foreground: hsl(210 40% 98%);
+  --primary: hsl(174 100% 42%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(220 20% 20%);
+  --secondary-foreground: hsl(0 0% 100%);
+  --muted: hsl(220 20% 18%);
+  --muted-foreground: hsl(215 20% 65%);
+  --accent: hsl(174 100% 42%);
+  --accent-foreground: hsl(0 0% 100%);
+  --destructive: hsl(0 72% 55%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --success: hsl(142 71% 50%);
+  --success-foreground: hsl(0 0% 100%);
+  --warning: hsl(38 92% 55%);
+  --warning-foreground: hsl(0 0% 100%);
+  --border: hsl(220 20% 22%);
+  --input: hsl(220 20% 18%);
+  --ring: hsl(174 100% 42%);
+  --sidebar: 220 20% 8%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-primary: 174 100% 42%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 220 20% 14%;
+  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-border: 220 20% 16%;
+  --sidebar-ring: 174 100% 42%;
+}
+
+/* Light theme - for users who prefer light mode */
+.light {
   --background: hsl(210 40% 98%);
   --foreground: hsl(222 47% 11%);
   --card: hsl(0 0% 100%);
@@ -28,11 +117,6 @@
   --border: hsl(214 32% 91%);
   --input: hsl(214 32% 91%);
   --ring: hsl(174 100% 36%);
-  --chart-1: hsl(174 100% 36%);
-  --chart-2: hsl(142 71% 45%);
-  --chart-3: hsl(38 92% 50%);
-  --chart-4: hsl(280 65% 60%);
-  --chart-5: hsl(340 75% 55%);
   --sidebar: 222 47% 11%;
   --sidebar-foreground: 210 40% 98%;
   --sidebar-primary: 174 100% 42%;
@@ -41,55 +125,6 @@
   --sidebar-accent-foreground: 210 40% 98%;
   --sidebar-border: 222 47% 18%;
   --sidebar-ring: 174 100% 42%;
-  
-  /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
-  --radius: 0.5rem;
-  
-  /* Professional Shadows */
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-  --shadow: 0 2px 4px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 4px 8px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
-  --shadow-lg: 0 8px 16px -2px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
-  --shadow-xl: 0 16px 32px -4px rgb(0 0 0 / 0.1), 0 8px 12px -6px rgb(0 0 0 / 0.04);
-}
-
-.dark {
-  /* Professional Dark Mode */
-  --background: hsl(222 47% 6%);
-  --foreground: hsl(210 40% 98%);
-  --card: hsl(222 47% 10%);
-  --card-foreground: hsl(210 40% 98%);
-  --popover: hsl(222 47% 10%);
-  --popover-foreground: hsl(210 40% 98%);
-  --primary: hsl(174 100% 42%);
-  --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(215 28% 20%);
-  --secondary-foreground: hsl(0 0% 100%);
-  --muted: hsl(222 47% 14%);
-  --muted-foreground: hsl(215 20% 65%);
-  --accent: hsl(174 100% 42%);
-  --accent-foreground: hsl(0 0% 100%);
-  --destructive: hsl(0 72% 55%);
-  --destructive-foreground: hsl(0 0% 100%);
-  --success: hsl(142 71% 50%);
-  --success-foreground: hsl(0 0% 100%);
-  --warning: hsl(38 92% 55%);
-  --warning-foreground: hsl(0 0% 100%);
-  --border: hsl(222 47% 18%);
-  --input: hsl(222 47% 14%);
-  --ring: hsl(174 100% 42%);
-  --sidebar: 222 47% 5%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-primary: 174 100% 45%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 222 47% 12%;
-  --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-border: 222 47% 12%;
-  --sidebar-ring: 174 100% 45%;
 }
 
 @layer base {
