@@ -48,7 +48,7 @@ function NavSection({ title, items, location, isCollapsed }: NavSectionProps) {
     <div className="mb-6">
       {!isCollapsed && (
         <div className="px-4 py-2">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <p className="text-[11px] font-semibold text-[hsl(var(--sidebar-foreground)/0.5)] uppercase tracking-wider">
             {title}
           </p>
         </div>
@@ -67,15 +67,15 @@ function NavSection({ title, items, location, isCollapsed }: NavSectionProps) {
                   "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-all duration-150 relative group",
                   isCollapsed && "justify-center px-2",
                   isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-primary))] border-l-2 border-[hsl(var(--sidebar-primary))]"
+                    : "text-[hsl(var(--sidebar-foreground)/0.7)] hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"
                 )}
                 title={isCollapsed ? item.name : undefined}
               >
                 <Icon className="w-[18px] h-[18px] flex-shrink-0" />
                 {!isCollapsed && <span>{item.name}</span>}
                 {isCollapsed && (
-                  <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-foreground text-background text-xs font-medium rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-[hsl(var(--foreground))] text-[hsl(var(--background))] text-xs font-medium rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-lg">
                     {item.name}
                   </div>
                 )}
@@ -100,11 +100,11 @@ export default function Sidebar() {
 
   return (
     <aside className={cn(
-      "bg-card min-h-screen fixed left-0 top-0 z-40 transition-all duration-200 ease-out border-r border-border",
+      "bg-[hsl(var(--sidebar))] min-h-screen fixed left-0 top-0 z-40 transition-all duration-200 ease-out border-r border-[hsl(var(--sidebar-border))]",
       isCollapsed ? "w-[60px]" : "w-[260px]"
     )}>
       {/* Header */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-border">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-[hsl(var(--sidebar-border))]">
         <div className={cn(
           "flex items-center gap-3 transition-all duration-200",
           isCollapsed && "justify-center w-full"
@@ -114,8 +114,8 @@ export default function Sidebar() {
           </div>
           {!isCollapsed && (
             <div className="flex flex-col">
-              <span className="text-base font-semibold text-foreground tracking-tight">TRAQ IQ</span>
-              <span className="text-[10px] text-muted-foreground font-medium">Fleet Management</span>
+              <span className="text-base font-semibold text-[hsl(var(--sidebar-foreground))] tracking-tight">TRAQ IQ</span>
+              <span className="text-[10px] text-[hsl(var(--sidebar-foreground)/0.6)] font-medium">Fleet Management</span>
             </div>
           )}
         </div>
@@ -134,7 +134,7 @@ export default function Sidebar() {
 
       {/* Expand button when collapsed */}
       {isCollapsed && (
-        <div className="flex justify-center py-3 border-b border-border">
+        <div className="flex justify-center py-3 border-b border-[hsl(var(--sidebar-border))]">
           <Button
             variant="ghost"
             size="sm"
