@@ -1074,7 +1074,7 @@ export default function LoadOpsDashboard() {
           {/* Core Operations Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Core Operations</p>
+              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">Core Operations</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
@@ -1112,7 +1112,7 @@ export default function LoadOpsDashboard() {
           {/* Driver Management Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Driver Management</p>
+              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">Driver Management</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
@@ -1150,7 +1150,7 @@ export default function LoadOpsDashboard() {
           {/* Customer & Communication Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Communication</p>
+              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">Communication</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
@@ -1188,7 +1188,7 @@ export default function LoadOpsDashboard() {
           {/* AI & Smart Features Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">AI & Smart Features</p>
+              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">AI & Smart Features</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
@@ -1226,7 +1226,7 @@ export default function LoadOpsDashboard() {
           {/* System & Reports Section */}
           {!sidebarCollapsed && (
             <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">System & Reports</p>
+              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">System & Reports</p>
             </div>
           )}
           <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
