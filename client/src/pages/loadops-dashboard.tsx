@@ -325,7 +325,7 @@ const CommunicationCard: React.FC<{
   };
 
   return (
-    <div className="border border-border rounded-lg p-4 bg-card shadow-sm hover:shadow-md transition-shadow">
+    <Card className="p-4">
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           <span className="font-semibold text-foreground">{driver?.name || "Unknown Driver"}</span>
@@ -501,7 +501,7 @@ const CommunicationCard: React.FC<{
           value={messageText}
           onChange={(e) => setMessageText(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-          className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+          className="flex-1 px-3 py-2 text-sm border border-border rounded-md bg-muted text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           data-testid={`message-input-${thread.id}`}
         />
         <Button 
@@ -514,7 +514,7 @@ const CommunicationCard: React.FC<{
           Send SMS
         </Button>
       </div>
-    </div>
+    </Card>
   );
 };
 
