@@ -2773,7 +2773,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       // Authorization: Verify document ownership
       if (document.driverId !== driverId) {
-        console.warn(`⚠️ Unauthorized delete attempt: Driver ${driverId} tried to delete document ${documentId} owned by ${document.driverId}`);
+        console.warn('Unauthorized delete attempt:', { requestingDriver: driverId, documentId, ownerDriver: document.driverId });
         return res.status(403).json({ error: 'Not authorized to delete this document' });
       }
       
