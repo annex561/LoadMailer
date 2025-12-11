@@ -199,7 +199,7 @@ const gpsLocationRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: (req, res) => {
     const ip = req.ip || req.socket.remoteAddress;
-    console.log(`⚠️ SECURITY: Rate limit exceeded for GPS updates from IP: ${ip}`);
+    console.log('SECURITY: Rate limit exceeded for GPS updates:', { ip });
     res.status(429).json({ 
       error: "Too many location updates. Please try again later.",
       retryAfter: 60 
@@ -216,7 +216,7 @@ const bulkSmsRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: (req, res) => {
     const ip = req.ip || req.socket.remoteAddress;
-    console.log(`⚠️ SECURITY: Bulk SMS rate limit exceeded from IP: ${ip}`);
+    console.log('SECURITY: Bulk SMS rate limit exceeded:', { ip });
     res.status(429).json({ 
       error: "Bulk send is limited to once per hour. Please try again later.",
       retryAfter: 3600
@@ -294,7 +294,7 @@ function getBaseUrl(): string {
 function requireBulkAuthorization(req: any, res: any, next: any) {
   // Check 1: Is user authenticated via session?
   if (req.isAuthenticated && req.isAuthenticated() && req.user) {
-    console.log(`✅ Bulk operation authorized via session: ${req.user.claims?.email || 'unknown'}`);
+    console.log('Bulk operation authorized via session:', { email: req.user.claims?.email || 'unknown' });
     return next();
   }
 
@@ -303,18 +303,18 @@ function requireBulkAuthorization(req: any, res: any, next: any) {
   const providedKey = req.headers['x-admin-api-key'];
   
   if (adminApiKey && providedKey && providedKey === adminApiKey) {
-    console.log(`✅ Bulk operation authorized via API key from IP: ${req.ip}`);
+    console.log('Bulk operation authorized via API key:', { ip: req.ip });
     return next();
   }
 
   // Check 3: Development bypass (only if explicitly enabled)
   if (process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_BULK === 'true') {
-    console.log(`⚠️ DEV MODE: Bulk operation allowed without auth from IP: ${req.ip}`);
+    console.log('DEV MODE: Bulk operation allowed without auth:', { ip: req.ip });
     return next();
   }
 
   // No valid authorization found
-  console.log(`❌ UNAUTHORIZED bulk operation attempt from IP: ${req.ip}`);
+  console.log('UNAUTHORIZED bulk operation attempt:', { ip: req.ip });
   res.status(401).json({ 
     error: "Unauthorized: Bulk operations require authentication or admin API key"
   });
@@ -324,7 +324,7 @@ function requireBulkAuthorization(req: any, res: any, next: any) {
 // loadId is optional - if null, sends general fleet tracking link instead of load-specific
 async function sendGPSTrackingSMS(driverId: string, loadId: string | null, options: { override?: boolean } = {}): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log(`📍 GPS TRACKING SMS: Starting for driver ${driverId}${loadId ? `, load ${loadId}` : ' (general tracking)'}`);
+    console.log('GPS TRACKING SMS: Starting:', { driverId, loadId: loadId || 'general tracking' });
     
     // THROTTLE CHECK: Prevent SMS spam by checking last send time
     const THROTTLE_MINUTES = 30; // Don't resend within 30 minutes
@@ -338,7 +338,7 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
         
         if (minutesSinceLastSend < THROTTLE_MINUTES) {
           const remainingMinutes = Math.ceil(THROTTLE_MINUTES - minutesSinceLastSend);
-          console.log(`⏸️ GPS TRACKING SMS: Throttled - last sent ${Math.floor(minutesSinceLastSend)} minutes ago for load ${loadId}. Skipping resend (${remainingMinutes} min remaining).`);
+          console.log('GPS TRACKING SMS: Throttled:', { loadId, minutesSinceLastSend: Math.floor(minutesSinceLastSend), remainingMinutes });
           return { 
             success: true, 
             throttled: true, 
@@ -351,16 +351,16 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
     // Generate GPS tracking token for the driver
     const tokenResult = await storage.generateTrackingToken(driverId);
     if (!tokenResult?.token) {
-      console.error(`❌ GPS TRACKING SMS: Failed to generate tracking token for driver ${driverId}`);
+      console.error('GPS TRACKING SMS: Failed to generate tracking token:', { driverId });
       return { success: false, error: "Failed to generate tracking token" };
     }
     const token = tokenResult.token;
-    console.log(`🔐 GPS TRACKING SMS: Generated token for driver ${driverId}`);
+    console.log('GPS TRACKING SMS: Generated token:', { driverId });
     
     // Get driver details to get phone number
     const driver = await storage.getDriver(driverId);
     if (!driver) {
-      console.error(`❌ GPS TRACKING SMS: Driver ${driverId} not found`);
+      console.error('GPS TRACKING SMS: Driver not found:', { driverId });
       return { success: false, error: "Driver not found" };
     }
     
@@ -369,7 +369,7 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
     const normalizedPhone = normalizePhoneToE164(driverPhone);
     
     if (!normalizedPhone) {
-      console.log(`⚠️ GPS TRACKING SMS: Driver ${driver.name} has no valid phone number - cannot send GPS tracking SMS`);
+      console.log('GPS TRACKING SMS: Driver has no valid phone number:', { driverName: driver.name });
       return { success: false, error: "Driver has no valid phone number" };
     }
     
@@ -388,7 +388,7 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
       // Load-specific tracking message
       const load = await storage.getLoad(loadId);
       if (!load) {
-        console.error(`❌ GPS TRACKING SMS: Load ${loadId} not found`);
+        console.error('GPS TRACKING SMS: Load not found:', { loadId });
         return { success: false, error: "Load not found" };
       }
       
@@ -410,8 +410,8 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
       logContext = 'general tracking';
     }
     
-    console.log(`📱 GPS TRACKING SMS: Sending to ${driver.name} (${normalizedPhone}) for ${logContext}`);
-    console.log(`📱 GPS TRACKING SMS: URL: ${trackingUrl}`);
+    console.log('GPS TRACKING SMS: Sending:', { driverName: driver.name, normalizedPhone, logContext });
+    console.log('GPS TRACKING SMS: URL:', { trackingUrl });
     
     // Send SMS using existing SMS service
     const smsResult = await smsService.sendSMS({
@@ -420,8 +420,7 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
     });
     
     if (smsResult.success) {
-      console.log(`✅ GPS TRACKING SMS: Successfully sent to ${driver.name} for ${logContext}`);
-      console.log(`✅ GPS TRACKING SMS: Tracking URL: ${trackingUrl}`);
+      console.log('GPS TRACKING SMS: Successfully sent:', { driverName: driver.name, logContext });
       
       // Update load timestamp to prevent re-sending within throttle window
       if (loadId) {
@@ -429,21 +428,21 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
           await storage.updateLoad(loadId, { 
             gpsTrackingSmsLastSentAt: new Date() 
           });
-          console.log(`✅ GPS TRACKING SMS: Updated throttle timestamp for load ${loadId}`);
+          console.log('GPS TRACKING SMS: Updated throttle timestamp:', { loadId });
         } catch (updateError) {
-          console.error(`⚠️ GPS TRACKING SMS: Failed to update throttle timestamp (non-critical):`, updateError);
+          console.error('GPS TRACKING SMS: Failed to update throttle timestamp (non-critical):', updateError);
           // Don't fail the overall SMS send if timestamp update fails
         }
       }
       
       return { success: true };
     } else {
-      console.error(`❌ GPS TRACKING SMS: Failed to send - ${smsResult.error}`);
+      console.error('GPS TRACKING SMS: Failed to send:', { error: smsResult.error });
       return { success: false, error: smsResult.error || "Failed to send SMS" };
     }
     
   } catch (error) {
-    console.error(`❌ GPS TRACKING SMS: Error sending GPS tracking SMS for driver ${driverId}${loadId ? `, load ${loadId}` : ''}:`, error);
+    console.error('GPS TRACKING SMS: Error sending:', { driverId, loadId }, error);
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
   }
 }
@@ -1268,22 +1267,22 @@ export async function registerRoutes(app: Express): Promise<void> {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
     
     try {
-      console.log(`🔐 SECURITY: Generating tracking token for driver ${driverId} from IP ${ip}`);
+      console.log('SECURITY: Generating tracking token:', { driverId, ip });
       
       const driver = await storage.getDriver(driverId);
       if (!driver) {
-        console.log(`⚠️ SECURITY: Token generation failed - driver ${driverId} not found (IP: ${ip})`);
+        console.log('SECURITY: Token generation failed - driver not found:', { driverId, ip });
         return res.status(404).json({ error: 'Driver not found' });
       }
       
       const result = await storage.generateTrackingToken(driverId);
       
       if (!result) {
-        console.log(`❌ SECURITY: Token generation failed for driver ${driverId} (IP: ${ip})`);
+        console.log('SECURITY: Token generation failed:', { driverId, ip });
         return res.status(500).json({ error: 'Failed to generate tracking token' });
       }
       
-      console.log(`✅ SECURITY: Tracking token generated successfully for driver ${driverId} (IP: ${ip})`);
+      console.log('SECURITY: Tracking token generated successfully:', { driverId, ip });
       
       res.json({
         success: true,
@@ -1291,7 +1290,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         driverId
       });
     } catch (error) {
-      console.error(`❌ SECURITY: Error generating tracking token for driver ${driverId} (IP: ${ip}):`, error);
+      console.error('SECURITY: Error generating tracking token:', { driverId, ip }, error);
       res.status(500).json({ error: 'Failed to generate tracking token' });
     }
   });
@@ -1483,7 +1482,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       if (!validationResult.success) {
         const errors = validationResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
-        console.log(`⚠️ SECURITY: Invalid GPS update rejected from IP ${ip}: ${errors}`);
+        console.log('SECURITY: Invalid GPS update rejected:', { ip, errors });
         return res.status(400).json({ 
           error: 'Invalid request data',
           details: errors
@@ -1495,7 +1494,7 @@ export async function registerRoutes(app: Express): Promise<void> {
 
       // CRITICAL SECURITY CHECK: Validate tracking token
       if (!trackingToken) {
-        console.log(`🚨 SECURITY ALERT: GPS update rejected - missing tracking token for driver ${driverId} from IP ${ip}`);
+        console.log('SECURITY ALERT: GPS update rejected - missing tracking token:', { driverId, ip });
         return res.status(401).json({ 
           error: 'Unauthorized: Tracking token required',
           message: 'GPS tracking requires authentication. Please restart tracking from your dashboard.'
@@ -1506,7 +1505,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const isValidToken = await storage.validateTrackingToken(driverId, trackingToken);
       
       if (!isValidToken) {
-        console.log(`🚨 SECURITY ALERT: GPS update rejected - invalid/mismatched tracking token for driver ${driverId} from IP ${ip}`);
+        console.log('SECURITY ALERT: GPS update rejected - invalid/mismatched tracking token:', { driverId, ip });
         return res.status(401).json({ 
           error: 'Unauthorized: Invalid tracking token',
           message: 'Authentication failed. Please restart tracking from your dashboard.'
@@ -1514,7 +1513,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       // Security audit log - log all location updates with IP for monitoring
-      console.log(`🔒 SECURITY AUDIT: GPS update - Driver: ${driverId}, IP: ${ip}, Coordinates: (${lat}, ${lon}), Speed: ${speed || 'N/A'}, Battery: ${batteryLevel || 'N/A'}%, Time: ${new Date().toISOString()}`);
+      console.log('SECURITY AUDIT: GPS update:', { driverId, ip, lat, lon, speed: speed || 'N/A', batteryLevel: batteryLevel || 'N/A' });
 
       // Get human-readable address from coordinates using reverse geocoding
       const { reverseGeocode } = await import('./geocoding-service');
@@ -1547,7 +1546,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         }
       }
 
-      console.log(`✅ GPS location updated successfully for driver ${driverId}`);
+      console.log('GPS location updated successfully:', { driverId });
 
       res.json({
         success: true,
@@ -1558,7 +1557,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         timestamp: timestamp || new Date().toISOString()
       });
     } catch (error) {
-      console.error(`❌ SECURITY: GPS update error for IP ${ip}:`, error);
+      console.error('SECURITY: GPS update error:', { ip }, error);
       res.status(500).json({ error: "Failed to update driver location" });
     }
   });
@@ -2318,22 +2317,22 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.put("/api/loads/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      console.log(`Updating load ${id} with data:`, req.body);
+      console.log('Updating load:', { id, data: req.body });
       
       const validatedData = insertLoadSchema.partial().parse(req.body);
-      console.log(`Validated data:`, validatedData);
+      console.log('Validated data:', validatedData);
       
       const originalLoad = await storage.getLoad(id);
       
       if (!originalLoad) {
-        console.error(`Load not found: ${id}`);
+        console.error('Load not found:', { id });
         return res.status(404).json({ error: "Load not found" });
       }
       
       const updatedLoad = await storage.updateLoad(id, validatedData);
       
       if (!updatedLoad) {
-        console.error(`Failed to update load: ${id}`);
+        console.error('Failed to update load:', { id });
         return res.status(404).json({ error: "Load not found after update" });
       }
       
@@ -2348,11 +2347,11 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       // Send SMS notifications for driver assignments
       if (validatedData.driverId && validatedData.driverId !== originalLoad.driverId) {
-        console.log(`🚛 Load ${id} assigned to driver ${validatedData.driverId}`);
+        console.log('Load assigned to driver:', { loadId: id, driverId: validatedData.driverId });
         // SMS notifications handled separately
       }
       
-      console.log(`Successfully updated load ${id}`);
+      console.log('Successfully updated load:', { id });
       res.json(updatedLoad);
     } catch (error) {
       console.error('Load update error:', error);
@@ -2601,7 +2600,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: 'Document not found' });
       }
       
-      console.log(`✅ Document ${documentId} approved by ${approvedBy}`);
+      console.log('Document approved:', { documentId, approvedBy });
       res.json({ 
         success: true, 
         message: 'Document approved successfully',
@@ -2668,9 +2667,9 @@ export async function registerRoutes(app: Express): Promise<void> {
               const result = await smsService.sendSMS(driverPhone, smsMessage);
               
               if (result.success) {
-                console.log(`📱 Rejection SMS sent to driver ${driver.name} for document ${documentId}`);
+                console.log('Rejection SMS sent:', { driverName: driver.name, documentId });
               } else {
-                console.error(`Failed to send rejection SMS: ${result.error}`);
+                console.error('Failed to send rejection SMS:', { error: result.error });
               }
             }
           }
@@ -2680,7 +2679,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         // Continue even if SMS fails - rejection is still recorded
       }
       
-      console.log(`❌ Document ${documentId} rejected by ${rejectedBy}: ${reason}`);
+      console.log('Document rejected:', { documentId, rejectedBy, reason });
       res.json({ 
         success: true, 
         message: 'Document rejected and driver notified',
@@ -2717,7 +2716,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       // Authorization: Verify document ownership
       if (existingDoc.driverId !== driverId) {
-        console.warn(`⚠️ Unauthorized recategorize attempt: Driver ${driverId} tried to modify document ${documentId} owned by ${existingDoc.driverId}`);
+        console.warn('Unauthorized recategorize attempt:', { requestingDriver: driverId, documentId, ownerDriver: existingDoc.driverId });
         return res.status(403).json({ error: 'Not authorized to modify this document' });
       }
       
@@ -2736,7 +2735,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(404).json({ error: 'Document not found' });
       }
       
-      console.log(`🔄 Document ${documentId} recategorized to ${category} by driver ${driverId}`);
+      console.log('Document recategorized:', { documentId, category, driverId });
       res.json({ 
         success: true, 
         message: `Document recategorized to ${category}`,
@@ -2783,7 +2782,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(500).json({ error: 'Failed to delete document' });
       }
       
-      console.log(`🗑️ Document ${documentId} (${document.documentType}) deleted by driver ${driverId}`);
+      console.log('Document deleted:', { documentId, documentType: document.documentType, driverId });
       res.json({ 
         success: true, 
         message: 'Document deleted successfully'
@@ -4204,7 +4203,7 @@ TRAQ IQ Dispatch Team
         return res.status(404).json({ error: 'Attachment not found' });
       }
       
-      console.log(`❌ Attachment ${id} rejected by ${reviewerId}: ${notes}`);
+      console.log('Attachment rejected:', { id, reviewerId, notes });
       res.json(attachment);
     } catch (error) {
       console.error('❌ Error rejecting attachment:', error);
@@ -4222,7 +4221,7 @@ TRAQ IQ Dispatch Team
         return res.status(404).json({ error: 'Attachment not found' });
       }
       
-      console.log(`🗑️ Attachment ${id} deleted`);
+      console.log('Attachment deleted:', { id });
       res.json({ success: true });
     } catch (error) {
       console.error('❌ Error deleting attachment:', error);
