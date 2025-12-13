@@ -116,7 +116,7 @@ export class ProvenDATScraper {
           await this.page.waitForSelector('input[name="password"]', { timeout: 15000 });
           await this.page.type('input[name="password"]', DAT_PASSWORD);
           await this.page.click('button[type="submit"]');
-          console.log('✅ Password entered using name="password"');
+          console.log('✅ Credentials entered using password field');
           
         } catch (usernameError) {
           console.log('❌ Both login approaches failed');
