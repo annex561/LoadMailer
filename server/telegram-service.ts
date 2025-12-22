@@ -1,15 +1,15 @@
-import TelegramBot from "node-telegram-bot-api";
+import { Telegraf, Context } from "telegraf";
+import { message } from "telegraf/filters";
 import { storage } from "./storage";
 import { randomUUID } from "crypto";
 import { canHandleEquipmentType } from "@shared/equipment-types";
 import type { LoadWithRelations, Driver, LanePreference, AvoidLocation, TelegramBotConfig, LoadOffer } from "@shared/schema";
 
-// Bot configuration - use environment variables with fallbacks  
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const DISPATCHER_ID = process.env.DISPATCHER_CHAT_ID || '';
 
 export class TelegramLoadService {
-  private bot: TelegramBot | null = null;
+  private bot: Telegraf | null = null;
   private config: TelegramBotConfig | null = null;
   private isRunning = false;
   private isRestarting = false;
@@ -18,25 +18,22 @@ export class TelegramLoadService {
   private messageQueue: Array<() => Promise<any>> = [];
   private isProcessingQueue = false;
   private lastMessageTime = 0;
-  private readonly MESSAGE_DELAY = 1500; // 1.5 seconds between messages to avoid rate limiting
+  private readonly MESSAGE_DELAY = 1500;
   
-  // Batch processing properties
   private loadBatchQueue: LoadWithRelations[] = [];
   private isBatchProcessing = false;
   private readonly BATCH_SIZE = 3;
-  private readonly BATCH_INTERVAL = 30000; // 30 seconds between batches
+  private readonly BATCH_INTERVAL = 30000;
 
   async initialize(): Promise<void> {
     try {
       console.log('Initializing Telegram Load Dispatcher...');
       
-      // Check if required environment variables are available
       if (!TELEGRAM_TOKEN || !DISPATCHER_ID) {
         console.log('⚠️ Telegram service disabled - missing TELEGRAM_BOT_TOKEN or DISPATCHER_CHAT_ID');
         return;
       }
 
-      // SINGLETON GUARD: Prevent multiple bot instances globally
       const instanceId = `telegram-bot-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const ownerStack = new Error().stack;
       
@@ -54,21 +51,12 @@ export class TelegramLoadService {
       
       console.log(`🆔 Creating singleton Telegram bot instance: ${instanceId}`);
 
-      // Stop any existing bot instance first to prevent 409 conflicts
       await this.shutdown();
       
-      // Initialize bot configuration
       await this.initializeBotConfig();
       
-      // Create bot instance with enhanced error handling and single instance protection
-      this.bot = new TelegramBot(TELEGRAM_TOKEN, { 
-        polling: {
-          interval: 2000, // Slower polling to reduce conflicts
-          autoStart: false, // Don't auto-start to control initialization
-        }
-      });
+      this.bot = new Telegraf(TELEGRAM_TOKEN);
 
-      // Register singleton globally with ownership tracking
       (globalThis as any).__telegramBotSingleton = {
         bot: this.bot,
         instanceId,
@@ -76,50 +64,35 @@ export class TelegramLoadService {
         isRunning: false
       };
 
-      // Clear any webhook state that might conflict with polling
       try {
-        await this.bot.deleteWebhook({ drop_pending_updates: false });
-        const botInfo = await this.bot.getMe();
+        await this.bot.telegram.deleteWebhook({ drop_pending_updates: false });
+        const botInfo = await this.bot.telegram.getMe();
         console.log(`🤖 Bot authenticated: @${botInfo.username} (${botInfo.first_name})`);
         console.log(`🆔 Instance ID: ${instanceId}`);
       } catch (error) {
         console.warn('⚠️ Could not clear webhook state:', error);
       }
       
-      // Add error handling for bot - use safe restart without overlap
-      this.bot.on('error', (error) => {
-        console.error('Telegram bot error:', error);
-        if (error.message?.includes('409')) {
+      this.bot.catch((err, ctx) => {
+        console.error('Telegram bot error:', err);
+        if (err.message?.includes('409')) {
           console.log('🔄 Bot conflict detected - attempting safe restart...');
           this.safeRestartPolling();
         }
       });
       
-      this.bot.on('polling_error', (error) => {
-        console.error('Telegram polling error:', error);
-        if (error.message?.includes('409')) {
-          console.log('🔄 Polling conflict detected - attempting safe restart...');
-          this.safeRestartPolling();
-        }
-      });
-      
-      // Start polling manually with retry logic
-      await this.startPollingWithRetry();
-      
-      // Start message queue processor
-      this.startQueueProcessor();
-      
-      // Set up command handlers
       this.setupCommandHandlers();
       
-      // Initialize default data
+      await this.startPollingWithRetry();
+      
+      this.startQueueProcessor();
+      
       await this.initializeDefaultData();
       
       this.isRunning = true;
       console.log('✅ Telegram Load Dispatcher initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Telegram service:', error);
-      // Don't throw error - just log it to prevent app from failing to start
     }
   }
 
@@ -144,7 +117,6 @@ export class TelegramLoadService {
             this.lastMessageTime = Date.now();
           } catch (error: any) {
             console.error('Error sending Telegram message:', error);
-            // Skip rate limited messages to prevent getting stuck
             if (error?.code === 429) {
               console.log('Rate limit hit, waiting longer...');
               await new Promise(resolve => setTimeout(resolve, 5000));
@@ -155,7 +127,6 @@ export class TelegramLoadService {
       
       this.isProcessingQueue = false;
       
-      // Restart queue processor if there are more messages
       if (this.messageQueue.length > 0) {
         setTimeout(() => this.startQueueProcessor(), 100);
       }
@@ -172,7 +143,6 @@ export class TelegramLoadService {
   }
 
   private async startPollingWithRetry(): Promise<void> {
-    // Prevent re-entry during startup
     if (this.isStartingPolling) {
       console.log('⚠️ Polling startup already in progress, skipping...');
       return;
@@ -186,11 +156,10 @@ export class TelegramLoadService {
       while (retries < maxRetries && !this.isRunning) {
         try {
           console.log(`🚀 Starting Telegram bot polling (attempt ${retries + 1}/${maxRetries})...`);
-          await this.bot?.startPolling();
+          await this.bot?.launch({ dropPendingUpdates: true });
           console.log('✅ Telegram bot polling started successfully');
-          this.isRunning = true; // Set immediately after successful start
+          this.isRunning = true;
           
-          // Clear any pending restart timeouts on successful start
           if (this.restartTimeout) {
             clearTimeout(this.restartTimeout);
             this.restartTimeout = null;
@@ -219,18 +188,15 @@ export class TelegramLoadService {
   }
 
   private async safeRestartPolling(): Promise<void> {
-    // Prevent overlapping restarts with debouncing
     if (this.isRestarting) {
       console.log('⚠️ Restart already in progress, skipping...');
       return;
     }
     
-    // Clear any existing restart timeout
     if (this.restartTimeout) {
       clearTimeout(this.restartTimeout);
     }
     
-    // Debounce restarts - only allow one every 10 seconds
     this.restartTimeout = setTimeout(async () => {
       if (this.isRestarting || !this.bot) return;
       
@@ -238,15 +204,12 @@ export class TelegramLoadService {
       console.log('🔄 Safe restart: stopping and restarting polling on same bot instance...');
       
       try {
-        // Only stop and start polling - don't recreate bot instance
-        await this.bot.stopPolling();
+        this.bot.stop('RESTART');
         console.log('✅ Polling stopped');
         
-        // Brief pause to ensure clean state
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Restart polling on the same bot instance
-        await this.bot.startPolling();
+        await this.bot.launch({ dropPendingUpdates: true });
         console.log('✅ Polling restarted successfully');
         
         this.isRunning = true;
@@ -257,10 +220,9 @@ export class TelegramLoadService {
         this.isRestarting = false;
         this.restartTimeout = null;
       }
-    }, 10000); // 10 second debounce
+    }, 10000);
   }
 
-  // Legacy method kept for compatibility but replaced with safeRestartPolling
   private async restartBot(): Promise<void> {
     console.log('🔄 Legacy restart called - using safe restart instead...');
     return this.safeRestartPolling();
@@ -272,7 +234,6 @@ export class TelegramLoadService {
     this.isRestarting = false;
     this.isStartingPolling = false;
     
-    // Clear any pending restart timeout
     if (this.restartTimeout) {
       clearTimeout(this.restartTimeout);
       this.restartTimeout = null;
@@ -280,12 +241,10 @@ export class TelegramLoadService {
     
     try {
       if (this.bot) {
-        await this.bot.stopPolling();
-        this.bot.removeAllListeners();
+        this.bot.stop('SHUTDOWN');
         this.bot = null;
       }
       
-      // Clear message queue
       this.messageQueue = [];
       this.isProcessingQueue = false;
       
@@ -295,12 +254,10 @@ export class TelegramLoadService {
     }
   }
 
-  // Public method for communication service to access bot instance
-  getBot(): TelegramBot | null {
+  getBot(): Telegraf | null {
     return this.bot;
   }
 
-  // Public method to check if service is initialized
   isInitialized(): boolean {
     return this.isRunning && this.bot !== null;
   }
@@ -311,19 +268,16 @@ export class TelegramLoadService {
     this.isBatchProcessing = true;
     const processBatches = async () => {
       while (this.loadBatchQueue.length > 0 && this.isRunning) {
-        // Take up to 3 loads from the queue
         const batch = this.loadBatchQueue.splice(0, this.BATCH_SIZE);
         
         console.log(`🚛 PROCESSING BATCH: ${batch.length} loads - ${batch.map(l => l.loadNumber).join(', ')}`);
         
-        // Process each load in the batch
         for (const load of batch) {
           await this.processSingleLoad(load);
         }
         
         console.log(`✅ BATCH COMPLETE: Sent ${batch.length} loads to drivers`);
         
-        // Wait 30 seconds before processing next batch (if there are more loads)
         if (this.loadBatchQueue.length > 0) {
           console.log(`⏳ BATCH DELAY: Waiting 30 seconds before next batch...`);
           await new Promise(resolve => setTimeout(resolve, this.BATCH_INTERVAL));
@@ -332,7 +286,6 @@ export class TelegramLoadService {
       
       this.isBatchProcessing = false;
       
-      // Restart batch processor if more loads arrived
       if (this.loadBatchQueue.length > 0) {
         setTimeout(() => this.startBatchProcessor(), 100);
       }
@@ -351,7 +304,6 @@ export class TelegramLoadService {
   }
 
   private async initializeBotConfig(): Promise<void> {
-    // Check if bot config exists, if not create it
     const configs = await storage.getAllTelegramBotConfigs();
     if (configs.length === 0) {
       this.config = await storage.createTelegramBotConfig({
@@ -367,7 +319,6 @@ export class TelegramLoadService {
   }
 
   private async initializeDefaultData(): Promise<void> {
-    // Initialize default lane preferences from the script
     const existingPreferences = await storage.getAllLanePreferences();
     if (existingPreferences.length === 0) {
       const defaultPreferences = [
@@ -387,7 +338,6 @@ export class TelegramLoadService {
       console.log('Created default lane preferences');
     }
 
-    // Initialize avoid locations
     const existingAvoidLocations = await storage.getAllAvoidLocations();
     if (existingAvoidLocations.length === 0) {
       const avoidLocations = ['NYC', 'CA', 'Chicago'];
@@ -401,21 +351,15 @@ export class TelegramLoadService {
       console.log('Created default avoid locations');
     }
 
-    // Skip automatic driver telegram update - this was causing fake chat ID issues
-    // Drivers will be updated when they actually connect via telegram bot
     console.log('Telegram service initialized - waiting for real driver connections');
     
-    // Set test drivers to unavailable to prevent fake telegram messages
-    // But preserve Annex Luberisse as he's a real driver
     const drivers = await storage.getAllDrivers();
     for (const driver of drivers) {
-      // Keep Annex available as he's a real driver
       if (driver.id === '3ce898f4-6962-461f-a9ea-bb81cc7d4a6f') {
         console.log(`✅ Keeping Annex Luberisse available for load assignment`);
         continue;
       }
       
-      // Set other test drivers to unavailable if they don't have proper Telegram setup
       if (!driver.telegramId || driver.telegramId.toString().startsWith('temp_')) {
         await storage.updateDriver(driver.id, {
           status: 'unavailable',
@@ -430,24 +374,23 @@ export class TelegramLoadService {
   private setupCommandHandlers(): void {
     if (!this.bot) return;
 
-    // Enhanced message logging and response handling
-    this.bot.on('message', async (msg: any) => {
-      console.log(`📱 TELEGRAM MESSAGE RECEIVED: User ${msg.from?.first_name || 'Unknown'} (${msg.from?.id || 'no-id'}) Chat: ${msg.chat?.id || 'no-chat'} Text: "${msg.text || 'no-text'}"`);
+    this.bot.on(message('text'), async (ctx) => {
+      const msg = ctx.message;
+      const text = msg.text || '';
       
-      // Handle driver responses to get them engaged
-      if (msg.text && !msg.text.startsWith('/')) {
-        const chatId = msg.chat.id;
-        const userInfo = msg.from;
-        const responseText = msg.text.toUpperCase().trim();
+      console.log(`📱 TELEGRAM MESSAGE RECEIVED: User ${ctx.from?.first_name || 'Unknown'} (${ctx.from?.id || 'no-id'}) Chat: ${ctx.chat?.id || 'no-chat'} Text: "${text}"`);
+      
+      if (text && !text.startsWith('/')) {
+        const chatId = ctx.chat.id;
+        const userInfo = ctx.from;
+        const responseText = text.toUpperCase().trim();
         
         console.log(`🔍 Processing response: "${responseText}" from ${userInfo?.first_name}`);
         
         if (responseText === 'YES' || responseText === 'Y') {
-          // Driver is ready to register - connect them directly
           await this.handleDriverRegistration(chatId, userInfo);
         } else if (responseText === 'INFO' || responseText === 'HELP') {
-          // Send information about how the system works - start with a question
-          await this.bot?.sendMessage(chatId,
+          await ctx.reply(
             `*Want to know how TRAQ IQ can help you earn more money?*\n\n` +
             `ℹ️ Here's exactly how it works:\n\n` +
             `1️⃣ *Complete Registration*\n` +
@@ -466,12 +409,10 @@ export class TelegramLoadService {
             { parse_mode: 'Markdown' }
           );
         } else if (responseText.startsWith('LINK ')) {
-          // Handle linking existing driver accounts: "LINK email@example.com"
           const email = responseText.replace('LINK ', '').trim().toLowerCase();
           await this.linkExistingDriver(chatId, email, userInfo);
         } else {
-          // General engagement response
-          await this.bot?.sendMessage(chatId,
+          await ctx.reply(
             `Thanks for your message! 👍\n\n` +
             `To get started receiving load offers:\n` +
             `• Reply "YES" to register as a driver\n` +
@@ -484,18 +425,14 @@ export class TelegramLoadService {
       }
     });
     
-    // Welcome message with automatic onboarding
-    this.bot.onText(/\/start/, async (msg: any) => {
-      if (!this.bot) return;
-      
-      const chatId = msg.chat.id;
-      const userInfo = msg.from;
+    this.bot.command('start', async (ctx) => {
+      const chatId = ctx.chat.id;
+      const userInfo = ctx.from;
       
       console.log(`📱 NEW USER STARTED CHAT: ${userInfo?.first_name || 'Unknown'} ${userInfo?.last_name || ''} (ID: ${userInfo?.id}) Chat: ${chatId}`);
       
       try {
-        // Send interactive welcome message that prompts for a response
-        await this.bot.sendMessage(chatId, 
+        await ctx.reply(
           `🚛 *Welcome to TRAQ IQ!*\n\n` +
           `Hi ${userInfo?.first_name || 'Driver'}! I'm your personal load dispatcher bot.\n\n` +
           `I'll help you:\n` +
@@ -510,29 +447,25 @@ export class TelegramLoadService {
         
         console.log(`✅ Welcome message sent to ${userInfo?.first_name} (${chatId})`);
 
-        // Automatically send onboarding invitation
         await this.sendAutoOnboarding(chatId, userInfo);
       } catch (error) {
         console.error(`❌ Error sending welcome message to ${chatId}:`, error);
       }
     });
 
-    // LoadMailer Bot enhanced commands
-    this.bot.onText(/\/bookload/, async (msg: any) => {
-      const chatId = msg.chat.id;
-      const telegramId = msg.from?.id.toString();
-      console.log(`📱 Load booking request from ${msg.from?.first_name} (${chatId})`);
+    this.bot.command('bookload', async (ctx) => {
+      const chatId = ctx.chat.id;
+      const telegramId = ctx.from?.id.toString();
+      console.log(`📱 Load booking request from ${ctx.from?.first_name} (${chatId})`);
       
       try {
         const driver = await storage.getDriverByTelegramId(telegramId);
         if (!driver) {
-          await this.bot?.sendMessage(chatId, 
-            `Please register as a driver first using /start command.`
-          );
+          await ctx.reply(`Please register as a driver first using /start command.`);
           return;
         }
 
-        await this.bot?.sendMessage(chatId, 
+        await ctx.reply(
           `📋 *Booking Request Received*\n\n` +
           `Your load booking request is being processed.\n` +
           `Dispatcher will confirm within 15 minutes.\n\n` +
@@ -540,7 +473,6 @@ export class TelegramLoadService {
           { parse_mode: 'Markdown' }
         );
 
-        // Notify dispatcher with driver details
         if (this.config?.dispatcherId) {
           const dispatcherMessage = 
             `📞 *LOAD BOOKING REQUEST*\n\n` +
@@ -552,441 +484,280 @@ export class TelegramLoadService {
             `*Action Required:* Call driver to confirm load details\n` +
             `[📞 Call Now](tel:${driver.phone})`;
 
-          await this.bot?.sendMessage(this.config.dispatcherId, dispatcherMessage, {
+          await this.bot?.telegram.sendMessage(this.config.dispatcherId, dispatcherMessage, {
             parse_mode: 'Markdown'
           });
           console.log(`✅ Sent booking notification to dispatcher`);
         }
       } catch (error) {
         console.error('Error handling bookload command:', error);
-        await this.bot?.sendMessage(chatId, 'Error processing booking request. Please try again.');
+        await ctx.reply('Error processing booking request. Please try again.');
       }
     });
 
-    this.bot.onText(/\/decline/, async (msg: any) => {
-      const chatId = msg.chat.id;
-      const telegramId = msg.from?.id.toString();
-      console.log(`📱 Load declined by ${msg.from?.first_name} (${chatId})`);
+    this.bot.command('decline', async (ctx) => {
+      const chatId = ctx.chat.id;
+      const telegramId = ctx.from?.id.toString();
+      console.log(`📱 Load declined by ${ctx.from?.first_name} (${chatId})`);
       
       try {
         const driver = await storage.getDriverByTelegramId(telegramId);
-        await this.bot?.sendMessage(chatId, 
+        await ctx.reply(
           `✅ Load declined. Thanks for your response ${driver?.name || 'Driver'}!\n\n` +
           `We'll keep you in mind for the next suitable load. 👍`
         );
         console.log(`✅ Load declined by ${driver?.name || 'unknown'}`);
       } catch (error) {
         console.error('Error handling decline command:', error);
-        await this.bot?.sendMessage(chatId, 'Response recorded. Thank you!');
+        await ctx.reply('Response recorded. Thank you!');
       }
     });
 
-    // Add location command
-    this.bot.onText(/\/location/, async (msg: any) => {
-      const chatId = msg.chat.id;
-      const telegramId = msg.from?.id.toString();
+    this.bot.command('location', async (ctx) => {
+      const chatId = ctx.chat.id;
+      const telegramId = ctx.from?.id.toString();
       
       try {
         const driver = await storage.getDriverByTelegramId(telegramId);
         if (!driver) {
-          await this.bot?.sendMessage(chatId, 'Driver not found. Please register first.');
+          await ctx.reply('Driver not found. Please register first.');
           return;
         }
 
-        await this.bot?.sendMessage(chatId, 
+        await ctx.reply(
           `📍 *Share Your Location*\n\n` +
           `To get loads along your route, please share your current GPS location:\n\n` +
           `1️⃣ Tap the 📎 attachment button\n` +
           `2️⃣ Select "📍 Location"\n` +
-          `3️⃣ Choose "Share Live Location" or "Send My Current Location"\n\n` +
-          `This helps us match you with loads that are on your route!`,
-          { 
-            parse_mode: 'Markdown',
-            reply_markup: {
-              keyboard: [
-                [{ text: '📍 Share Location', request_location: true }]
-              ],
-              resize_keyboard: true,
-              one_time_keyboard: true
-            }
-          }
+          `3️⃣ Choose "Send My Current Location"\n\n` +
+          `This helps us find loads nearest to you!`,
+          { parse_mode: 'Markdown' }
         );
       } catch (error) {
         console.error('Error handling location command:', error);
-        await this.bot?.sendMessage(chatId, 'Error requesting location. Please try again.');
+        await ctx.reply('Error requesting location. Please try again.');
       }
     });
 
-    // Handle location messages for GPS tracking
-    this.bot.on('location', async (msg: any) => {
-      const chatId = msg.chat.id;
-      const telegramId = msg.from?.id.toString();
-      const location = msg.location;
+    this.bot.on(message('location'), async (ctx) => {
+      const msg = ctx.message;
+      const chatId = ctx.chat.id;
+      const telegramId = ctx.from?.id.toString() || '';
       
-      if (!location || !telegramId) return;
+      console.log(`📍 Location received from ${ctx.from?.first_name}: ${msg.location.latitude}, ${msg.location.longitude}`);
       
       try {
         const driver = await storage.getDriverByTelegramId(telegramId);
         if (!driver) {
-          await this.bot?.sendMessage(chatId, 'Driver not found. Please register first.');
+          await ctx.reply('Driver not found. Please register first using /start command.');
           return;
         }
 
-        // Update driver location
-        await storage.createDriverLocation({
+        await storage.updateDriverLocation({
           driverId: driver.id,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          timestamp: new Date(),
-          accuracy: location.horizontal_accuracy || 10,
-          speed: null,
-          heading: null,
-          altitude: null,
-          address: null,
-          loadId: null,
+          latitude: msg.location.latitude,
+          longitude: msg.location.longitude,
+          accuracy: 10,
+          source: 'telegram',
           isActive: true,
-          batteryLevel: null,
-          signalStrength: null
+          heading: null,
+          speed: null
         });
 
-        console.log(`📍 GPS location updated for driver ${driver.name}: ${location.latitude}, ${location.longitude}`);
-        
-        await this.bot?.sendMessage(chatId, 
-          `📍 *Location Updated*\n\n` +
-          `Your GPS coordinates have been recorded.\n` +
-          `We'll now match you with loads along your route!\n\n` +
-          `📍 Lat: ${location.latitude.toFixed(4)}\n` +
-          `📍 Lng: ${location.longitude.toFixed(4)}`,
+        await ctx.reply(
+          `📍 *Location Updated!*\n\n` +
+          `Coordinates: ${msg.location.latitude.toFixed(4)}, ${msg.location.longitude.toFixed(4)}\n\n` +
+          `We're now scanning for loads in your area. You'll receive notifications when matching loads are available.`,
           { parse_mode: 'Markdown' }
         );
+
+        console.log(`✅ Location saved for driver ${driver.name}`);
       } catch (error) {
-        console.error('Error handling location update:', error);
-        await this.bot?.sendMessage(chatId, 'Error updating location. Please try again.');
+        console.error('Error processing location:', error);
+        await ctx.reply('Error processing location. Please try again.');
       }
     });
 
-    // Handle callback queries from inline keyboard buttons
-    this.bot.on('callback_query', async (callbackQuery: any) => {
-      if (!this.bot || !callbackQuery.data) return;
+    this.bot.on('callback_query', async (ctx) => {
+      const callbackQuery = ctx.callbackQuery;
+      if (!('data' in callbackQuery)) return;
       
       const data = callbackQuery.data;
-      const telegramId = callbackQuery.from?.id.toString();
-      const chatId = callbackQuery.message?.chat?.id;
+      const telegramId = ctx.from?.id.toString() || '';
+      const chatId = callbackQuery.message?.chat.id || 0;
       const messageId = callbackQuery.message?.message_id;
       
-      if (!telegramId || !chatId) return;
-
+      console.log(`🔘 Callback received: ${data} from ${ctx.from?.first_name} (${telegramId})`);
+      
       try {
-        // Answer callback query to remove loading state
-        await this.bot.answerCallbackQuery(callbackQuery.id);
-
         if (data.startsWith('book_')) {
-          const loadId = data.substring(5); // Remove 'book_' prefix
-          await this.handleBookLoad(loadId, telegramId, chatId);
-        } else if (data.startsWith('confirm_')) {
-          const parts = data.substring(8).split('_'); // Remove 'confirm_' prefix
-          const shortLoadId = parts[0];
-          const shortDriverId = parts[1];
-          await this.handleConfirmLoadShort(shortLoadId, shortDriverId, telegramId, chatId, messageId);
-        } else if (data.startsWith('decline_') && data.includes('_')) {
-          // This is a confirmation decline with driver ID
-          const parts = data.substring(8).split('_'); // Remove 'decline_' prefix
-          const shortLoadId = parts[0];
-          const shortDriverId = parts[1];
-          await this.handleDeclineConfirmationShort(shortLoadId, shortDriverId, telegramId, chatId, messageId);
+          const loadId = data.replace('book_', '');
+          await this.handleBookLoad(loadId, telegramId, chatId, messageId);
         } else if (data.startsWith('decline_')) {
-          // This is a simple load decline
-          const loadId = data.substring(8); // Remove 'decline_' prefix (decline_ = 8 chars)
-          await this.handleDeclineLoad(loadId, telegramId, chatId);
-        } else if (data.startsWith('onsite_')) {
-          const parts = data.substring(7).split('_');
-          if (parts.length === 2) {
-            const [shortLoadId, shortDriverId] = parts;
-            await this.handleOnSiteConfirmation(shortLoadId, shortDriverId, telegramId, chatId, messageId);
-          } else {
-            console.error('Invalid onsite callback data format:', data);
-          }
-        } else if (data.startsWith('delay_') && !data.startsWith('delay_reason_')) {
-          const parts = data.substring(6).split('_');
-          if (parts.length === 2) {
-            const [shortLoadId, shortDriverId] = parts;
-            await this.handleDelayConfirmation(shortLoadId, shortDriverId, telegramId, chatId, messageId);
-          } else {
-            console.error('Invalid delay callback data format:', data);
-          }
-        } else if (data.startsWith('delay_reason_')) {
-          const parts = data.substring(13).split('_');
+          const loadId = data.replace('decline_', '');
+          await this.handleDeclineLoad(loadId, telegramId, chatId, messageId);
+        } else if (data.startsWith('confirm_')) {
+          const parts = data.split('_');
           if (parts.length >= 3) {
-            const reason = parts[0];
             const shortLoadId = parts[1];
             const shortDriverId = parts[2];
-            await this.handleDelayReason(reason, shortLoadId, shortDriverId, telegramId, chatId, messageId);
-          } else {
-            console.error('Invalid delay reason callback data format:', data);
+            await this.handleConfirmLoadShort(shortLoadId, shortDriverId, telegramId, chatId, messageId);
           }
-        } else if (data === 'contact_support') {
-          await this.bot.sendMessage(chatId, 
-            `📞 *TRAQ IQ Support*\n\n` +
-            `Need help? Contact our dispatch team:\n\n` +
-            `📧 Email: dispatch@traqiqs.io\n` +
-            `📱 Phone: (855) 599-9983\n` +
-            `⏰ Available: 24/7\n\n` +
-            `Or just reply to this message and we'll assist you!`,
-            { parse_mode: 'Markdown' }
-          );
+        } else if (data.startsWith('onsite_')) {
+          const parts = data.split('_');
+          if (parts.length >= 3) {
+            await this.handleOnSiteConfirmation(parts[1], parts[2], telegramId, chatId, messageId);
+          }
+        } else if (data.startsWith('delay_')) {
+          const parts = data.split('_');
+          if (parts.length >= 3) {
+            await this.handleDelayConfirmation(parts[1], parts[2], telegramId, chatId, messageId);
+          }
+        } else if (data.startsWith('delayreason_')) {
+          const parts = data.split('_');
+          if (parts.length >= 4) {
+            await this.handleDelayReason(parts[1], parts[2], parts[3], telegramId, chatId, messageId);
+          }
         } else if (data === 'how_it_works') {
-          await this.bot.sendMessage(chatId,
-            `ℹ️ *How TRAQ IQ Works*\n\n` +
-            `1️⃣ *Complete Registration*\n` +
-            `• Provide your driver details\n` +
-            `• Set equipment preferences\n` +
-            `• Add emergency contacts\n\n` +
-            `2️⃣ *Receive Load Offers*\n` +
-            `• Get matched loads instantly\n` +
-            `• See rate, miles, and details\n` +
-            `• Book with one click\n\n` +
-            `3️⃣ *Start Earning*\n` +
-            `• Track your assignments\n` +
-            `• Update pickup/delivery status\n` +
-            `• Get paid fast\n\n` +
-            `Ready to get started? Click the registration link above!`,
+          await ctx.answerCbQuery('Loading information...');
+          await this.bot?.telegram.sendMessage(chatId,
+            `*How TRAQ IQ Works:*\n\n` +
+            `1️⃣ Register as a driver\n` +
+            `2️⃣ Receive instant load offers\n` +
+            `3️⃣ Accept loads with one click\n` +
+            `4️⃣ Track your assignments\n` +
+            `5️⃣ Get paid fast!\n\n` +
+            `Reply "YES" to get started!`,
             { parse_mode: 'Markdown' }
           );
-        } else {
-          console.log('Unknown callback query:', data);
+        } else if (data === 'contact_support') {
+          await ctx.answerCbQuery('Loading support info...');
+          await this.bot?.telegram.sendMessage(chatId,
+            `📞 *Support Contact:*\n\n` +
+            `Phone: (203) 951-1991\n` +
+            `Email: support@traqiq.com\n\n` +
+            `We're here to help 24/7!`,
+            { parse_mode: 'Markdown' }
+          );
         }
+        
+        await ctx.answerCbQuery();
       } catch (error) {
         console.error('Error handling callback query:', error);
-        this.bot.sendMessage(chatId, '❌ Error processing your request.');
+        await ctx.answerCbQuery('Error processing request');
       }
     });
   }
 
-  // Main entry point - adds load to batch queue instead of processing immediately
-  async processNewLoad(load: LoadWithRelations): Promise<boolean> {
-    if (!this.bot || !this.config || !this.isRunning) {
-      console.log('Telegram service not initialized, skipping load notification');
-      return false;
+  async processNewLoad(load: LoadWithRelations): Promise<void> {
+    if (!this.bot || !this.isRunning) {
+      console.log('Telegram service not running - skipping load dispatch');
+      return;
     }
 
-    // Add load to batch queue instead of processing immediately
+    console.log(`\n🚛 ==========================================`);
+    console.log(`🚛 NEW LOAD RECEIVED: ${load.loadNumber}`);
+    console.log(`🚛 ==========================================`);
+    console.log(`📍 Route: ${load.pickupAddress} → ${load.deliveryAddress}`);
+    console.log(`💰 Rate: $${load.rate} | 📏 Miles: ${load.miles}`);
+    console.log(`🚚 Equipment Required: ${load.equipmentType}`);
+    console.log(`📅 Pickup: ${load.pickupDate.toLocaleDateString()} at ${load.pickupTime}`);
+
     this.addLoadToBatch(load);
-    return true;
   }
 
-  // Process individual load (original processing logic)
-  private async processSingleLoad(load: LoadWithRelations): Promise<boolean> {
+  private async processSingleLoad(load: LoadWithRelations): Promise<void> {
     try {
-      console.log(`🔍 Processing load ${load.loadNumber}: ${load.pickupAddress} → ${load.deliveryAddress} (${load.equipmentType})`);
-      
-      // Get eligible drivers based on location and preferences (skip lane checking for now)
       const eligibleDrivers = await this.findEligibleDriversByLocation(load);
       
+      console.log(`\n👥 DRIVER MATCHING for ${load.loadNumber}:`);
+      console.log(`   Found ${eligibleDrivers.length} eligible drivers`);
+
       if (eligibleDrivers.length === 0) {
-        console.log(`❌ No eligible drivers found for load ${load.loadNumber}`);
-        return false;
-      }
-
-      console.log(`✅ Found ${eligibleDrivers.length} eligible drivers for load ${load.loadNumber}`);
-
-      // Send load offers to eligible drivers sorted by proximity and match score
-      for (const driverMatch of eligibleDrivers) {
-        // For drivers with real telegram IDs (like Annex: 8391488425)
-        if (driverMatch.driver.telegramId && !driverMatch.driver.telegramId.startsWith('temp_')) {
-          console.log(`📱 REAL TELEGRAM OFFER: Sending ${load.loadNumber} to ${driverMatch.driver.name} (TelegramId: ${driverMatch.driver.telegramId})`);
-          try {
-            await this.sendLoadToDriver(load, driverMatch.driver, driverMatch.matchScore, driverMatch.distance);
-          } catch (error) {
-            console.error(`❌ Failed to send load ${load.loadNumber} to driver ${driverMatch.driver.name}:`, error);
-            // If chat not found, disable notifications for this driver
-            if (error instanceof Error && error.message.includes('chat not found')) {
-              await storage.updateDriver(driverMatch.driver.id, {
-                telegramId: null,
-                enableTelegramNotifications: false
-              });
-              console.log(`❌ Disabled Telegram notifications for driver ${driverMatch.driver.name} - chat not found`);
-            }
-          }
-        } else if (driverMatch.driver.telegramId?.startsWith('temp_')) {
-          console.log(`📱 LOAD OFFER (simulated): ${load.loadNumber} to ${driverMatch.driver.name} (${driverMatch.matchScore}% match, ${driverMatch.distance}mi away)`);
-          
-          // Create a load offer record for tracking
-          const { randomUUID } = await import('crypto');
-          await storage.createLoadOffer({
-            loadId: load.id,
-            driverId: driverMatch.driver.id,
-            status: 'simulated', // Special status for test drivers
-            sentAt: new Date(),
-            timeoutAt: new Date(Date.now() + 3 * 60 * 1000) // 3 minutes from now
-          });
-        } else {
-          console.log(`❌ Driver ${driverMatch.driver.name} has no telegram ID set`);
+        console.log(`⚠️ No eligible drivers found for load ${load.loadNumber}`);
+        if (this.config?.dispatcherId) {
+          await this.bot?.telegram.sendMessage(
+            this.config.dispatcherId,
+            `⚠️ *NO DRIVERS AVAILABLE*\n\nLoad ${load.loadNumber} has no eligible drivers.\n\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nEquipment: ${load.equipmentType}\n\nManual assignment required.`,
+            { parse_mode: 'Markdown' }
+          );
         }
+        return;
       }
 
-      console.log(`✅ Processed load ${load.loadNumber} for ${eligibleDrivers.length} drivers via Telegram`);
-      console.log(`📱 Load ${load.loadNumber} sent to eligible drivers via Telegram`);
-      return true;
+      eligibleDrivers.sort((a, b) => b.matchScore - a.matchScore);
+
+      const topDriver = eligibleDrivers[0];
+      console.log(`\n🏆 TOP MATCH: ${topDriver.driver.name}`);
+      console.log(`   Score: ${topDriver.matchScore}%`);
+      console.log(`   Distance: ${topDriver.distance} miles`);
+      console.log(`   Equipment: ${topDriver.driver.equipmentType}`);
+
+      await this.sendLoadToDriver(load, topDriver.driver, topDriver.matchScore, topDriver.distance);
+
+      console.log(`✅ Load ${load.loadNumber} sent to ${topDriver.driver.name}`);
+
     } catch (error) {
       console.error(`Error processing load ${load.loadNumber}:`, error);
-      return false;
     }
   }
 
-  private async matchesPreferredLane(load: LoadWithRelations): Promise<boolean> {
-    try {
-      // Always allow test loads and DAT loads for demonstration
-      if (load.sourceBoard === 'test' || load.sourceBoard === 'dat') {
-        return true;
+  private async findEligibleDriversByLocation(load: LoadWithRelations): Promise<{driver: Driver, matchScore: number, distance: number}[]> {
+    const allDrivers = await storage.getAllDrivers();
+    const eligibleDrivers: {driver: Driver, matchScore: number, distance: number}[] = [];
+
+    for (const driver of allDrivers) {
+      if (driver.status !== 'available' || !driver.telegramId || !driver.enableTelegramNotifications) {
+        continue;
       }
 
-      // Extract states from addresses
-      const originState = this.extractStateFromAddress(load.pickupAddress);
-      const destinationState = this.extractStateFromAddress(load.deliveryAddress);
+      if (!/^\d+$/.test(driver.telegramId)) {
+        continue;
+      }
+
+      if (!canHandleEquipmentType(driver.equipmentType, load.equipmentType)) {
+        console.log(`   ❌ ${driver.name}: Equipment mismatch (${driver.equipmentType} vs ${load.equipmentType})`);
+        continue;
+      }
+
+      const loadWeight = (load as any).weight || 0;
+      const driverMaxWeight = driver.maxWeight || 26000;
+      if (loadWeight > driverMaxWeight) {
+        console.log(`   ❌ ${driver.name}: Weight exceeds capacity (${loadWeight} > ${driverMaxWeight})`);
+        continue;
+      }
+
+      const proximity = await this.calculateDriverProximity(driver, load);
       
-      if (!originState || !destinationState) {
-        return false;
-      }
-
-      // Calculate rate per mile
-      const rpm = load.rate && load.miles ? load.rate / load.miles : 0;
-
-      // Check lane preferences
-      const preferences = await storage.getAllLanePreferences();
-      const matchingPreference = preferences.find(pref => {
-        const fromStates = Array.isArray(pref.fromStates) ? pref.fromStates : [];
-        const toStates = Array.isArray(pref.toStates) ? pref.toStates : [];
-        
-        const fromMatch = fromStates.includes(originState);
-        const toMatch = toStates.includes(destinationState);
-        const rpmMatch = rpm >= pref.minRPM;
-        
-        return fromMatch && toMatch && rpmMatch && pref.isActive;
-      });
-
-      if (!matchingPreference) {
-        return false;
-      }
-
-      // Check avoid locations
-      const avoidLocations = await storage.getAllAvoidLocations();
-      const hasAvoidedLocation = avoidLocations.some(avoid => {
-        if (!avoid.isActive) return false;
-        
-        const location = avoid.location.toLowerCase();
-        const originText = load.pickupAddress.toLowerCase();
-        const destinationText = load.deliveryAddress.toLowerCase();
-        
-        return originText.includes(location) || destinationText.includes(location);
-      });
-
-      return !hasAvoidedLocation;
-    } catch (error) {
-      console.error('Error matching preferred lane:', error);
-      return false;
-    }
-  }
-
-  private async getDriversNearLocation(location: string): Promise<Driver[]> {
-    try {
-      const allDrivers = await storage.getDriversWithTelegramEnabled();
-      
-      // For now, simple city-based matching
-      // In production, you'd use proper geolocation services
-      return allDrivers.filter(driver => {
-        if (!driver.city) return false;
-        
-        const driverCity = driver.city.toLowerCase();
-        const loadLocation = location.toLowerCase();
-        
-        // Check if driver city matches or is near the load location
-        return driverCity.includes(loadLocation.split(',')[0].trim().toLowerCase()) ||
-               loadLocation.includes(driverCity.split(',')[0].trim());
-      });
-    } catch (error) {
-      console.error('Error getting drivers near location:', error);
-      return [];
-    }
-  }
-
-  private extractStateFromAddress(address: string): string | null {
-    // Extract state abbreviation from address (e.g., "Atlanta, GA" -> "GA")
-    const stateMatch = address.match(/,\s*([A-Z]{2})(?:\s|$)/);
-    return stateMatch ? stateMatch[1] : null;
-  }
-
-  // Find eligible drivers based on location proximity and preferences
-  private async findEligibleDriversByLocation(load: LoadWithRelations): Promise<Array<{driver: Driver, matchScore: number, distance: number}>> {
-    try {
-      // Get ALL available drivers for GPS-based matching
-      const allDrivers = await storage.getDrivers();
-      const availableDrivers = allDrivers.filter(driver => driver.status === 'available');
-      console.log(`🚚 GPS MATCHING: Found ${availableDrivers.length} available drivers for load ${load.loadNumber}`);
-      const eligibleDrivers: Array<{driver: Driver, matchScore: number, distance: number}> = [];
-
-      for (const driver of availableDrivers) {
-        if (!driver.city) continue;
-
-        // Skip unavailable drivers immediately
-        if (driver.status === 'unavailable') {
-          console.log(`Skipping driver ${driver.name} - status: ${driver.status}`);
-          continue;
-        }
-
-        // STRICT EQUIPMENT MATCHING FOR ANNEX - Exclude before any scoring
-        if (driver.name === 'Annex Luberisse' && load.equipmentType === 'dry_van') {
-          console.log(`🚫 STRICT FILTER: Skipping Annex Luberisse for dry_van load ${load.loadNumber} - only straight_box_truck loads allowed`);
-          continue;
-        }
-
-        // Calculate proximity score and distance
-        const proximity = await this.calculateDriverProximity(driver, load);
-        console.log(`Driver ${driver.name} proximity check: distance=${proximity.distance}mi, city=${driver.city}, pickup=${load.pickupAddress}`);
-        if (proximity.distance > 200) continue; // Increased from 150 to 200 miles for better coverage
-
-        // Calculate overall match score
+      if (proximity.isNearby || proximity.distance <= 200) {
         const matchScore = await this.calculateDriverMatchScore(driver, load, proximity.distance);
-        console.log(`Driver ${driver.name} match score for load ${load.loadNumber}: ${matchScore}% (distance: ${proximity.distance}mi, equipment: ${driver.equipmentType}/${load.equipmentType}, status: ${driver.status})`);
-        if (matchScore < 25) continue; // Further reduced to 25% to allow more driver-load matches
-
+        
+        console.log(`   ✅ ${driver.name}: Match score ${matchScore}%, Distance ${proximity.distance} mi`);
+        
         eligibleDrivers.push({
           driver,
           matchScore,
           distance: proximity.distance
         });
+      } else {
+        console.log(`   ⚠️ ${driver.name}: Too far (${proximity.distance} miles)`);
       }
-
-      // Sort by match score and distance (higher score, closer distance = better)
-      eligibleDrivers.sort((a, b) => {
-        if (a.matchScore !== b.matchScore) {
-          return b.matchScore - a.matchScore; // Higher score first
-        }
-        return a.distance - b.distance; // Closer distance first
-      });
-
-      console.log(`Found ${eligibleDrivers.length} eligible drivers for load ${load.loadNumber}`);
-      return eligibleDrivers.slice(0, 5); // Limit to top 5 drivers
-    } catch (error) {
-      console.error('Error finding eligible drivers:', error);
-      return [];
     }
+
+    return eligibleDrivers;
   }
 
-  // Calculate driver proximity to pickup location using GPS data when available
   private async calculateDriverProximity(driver: Driver, load: LoadWithRelations): Promise<{distance: number, isNearby: boolean}> {
     try {
-      // First, try to get driver's current GPS location
       const driverLocations = await storage.getDriverLocationHistory(driver.id);
-      const currentLocation = driverLocations.find(loc => loc.isActive && loc.timestamp > new Date(Date.now() - 24 * 60 * 60 * 1000)); // Last 24 hours
+      const currentLocation = driverLocations.find(loc => loc.isActive && loc.timestamp > new Date(Date.now() - 24 * 60 * 60 * 1000));
       
       if (currentLocation) {
         console.log(`📍 Using GPS location for driver ${driver.name}: ${currentLocation.latitude}, ${currentLocation.longitude}`);
         
-        // Get pickup coordinates
         const pickupCoords = await this.geocodeAddress(load.pickupAddress);
         
         if (pickupCoords) {
-          // Calculate actual distance using GPS coordinates
           const distance = this.calculateDistance(
             currentLocation.latitude,
             currentLocation.longitude,
@@ -994,21 +765,18 @@ export class TelegramLoadService {
             pickupCoords.longitude
           );
           console.log(`📏 GPS-based distance for ${driver.name}: ${distance} miles to ${load.pickupAddress}`);
-          return { distance, isNearby: distance <= 150 }; // Within 150 miles
+          return { distance, isNearby: distance <= 150 };
         }
       }
       
-      // Fallback to city-based proximity calculation
       const driverCity = driver.city?.split(',')[0]?.trim().toLowerCase();
       const pickupCity = load.pickupAddress.split(',')[0]?.trim().toLowerCase();
       
       if (driverCity && pickupCity) {
-        // Get coordinates for both cities if available
         const driverCoords = await this.geocodeAddress(driver.city || '');
         const pickupCoords = await this.geocodeAddress(load.pickupAddress);
         
         if (driverCoords && pickupCoords) {
-          // Calculate actual distance using coordinates
           const distance = this.calculateDistance(
             driverCoords.latitude,
             driverCoords.longitude,
@@ -1018,13 +786,12 @@ export class TelegramLoadService {
           return { distance, isNearby: distance <= 150 };
         }
         
-        // Fallback to simple city matching - be more generous with proximity
         const isSameCity = driverCity === pickupCity;
         const isSameState = driver.city?.includes(load.pickupAddress.split(',')[1]?.trim() || '');
         
         if (isSameCity) return { distance: 15, isNearby: true };
         if (isSameState) return { distance: 75, isNearby: true };
-        return { distance: 120, isNearby: false }; // More generous default distance
+        return { distance: 120, isNearby: false };
       }
 
       return { distance: 999, isNearby: false };
@@ -1034,30 +801,25 @@ export class TelegramLoadService {
     }
   }
 
-  // Calculate overall match score for driver-load combination
   private async calculateDriverMatchScore(driver: Driver, load: LoadWithRelations, distance: number): Promise<number> {
     let score = 0;
     let maxScore = 0;
 
-    // Distance score (30% weight) - closer is better
     maxScore += 30;
     if (distance <= 25) score += 30;
     else if (distance <= 50) score += 25;
     else if (distance <= 100) score += 15;
     else if (distance <= 150) score += 8;
 
-    // Equipment type match (25% weight) - STRICT MATCHING FOR ANNEX
     maxScore += 25;
     if (driver.equipmentType === load.equipmentType || !load.equipmentType) {
       score += 25;
     } else if (driver.name === 'Annex Luberisse') {
-      // Annex gets EXACT equipment matching only - no cross-compatibility
       score += 0;
     } else if (canHandleEquipmentType(driver.equipmentType, load.equipmentType)) {
-      score += 15; // Partial credit for compatible equipment using comprehensive system
+      score += 15;
     }
 
-    // Load type preference match (15% weight)
     maxScore += 15;
     const driverLoadPrefs = driver.loadType || 'full_partial';
     const loadType = load.loadType || 'full';
@@ -1065,37 +827,30 @@ export class TelegramLoadService {
       score += 15;
     }
 
-    // Weight capacity consideration (10% weight) - critical safety check
     maxScore += 10;
     const driverMaxWeight = driver.maxWeight || 26000;
-    const loadWeight = (load as any).weight; // Load weight property may not be in the schema yet
+    const loadWeight = (load as any).weight;
     if (!loadWeight || loadWeight <= driverMaxWeight) {
-      score += 10; // Full score if load weight is within driver's capacity
+      score += 10;
     } else if (loadWeight <= driverMaxWeight * 1.05) {
-      score += 5; // Reduced score for slight overweight (5% tolerance)
-    } else {
-      // No score for significantly overweight loads - this should prevent offers
-      score += 0;
+      score += 5;
     }
 
-    // Length capacity match (5% weight)
     maxScore += 5;
     const driverMaxLength = driver.maxLength || 53;
     const loadLength = load.length;
     if (!loadLength || loadLength <= driverMaxLength) {
       score += 5;
     } else if (loadLength <= driverMaxLength * 1.1) {
-      score += 2; // Allow 10% over length with reduced score
+      score += 2;
     }
 
-    // Rate attractiveness (10% weight)
     maxScore += 10;
     const rpm = load.rate && load.miles ? load.rate / load.miles : 0;
     if (rpm >= 2.50) score += 10;
     else if (rpm >= 2.00) score += 8;
     else if (rpm >= 1.50) score += 5;
 
-    // Driver availability (5% weight)
     maxScore += 5;
     if (driver.status === 'available') score += 5;
     else if (driver.status === 'on_route') score += 2;
@@ -1103,10 +858,7 @@ export class TelegramLoadService {
     return Math.round((score / maxScore) * 100);
   }
 
-  // Geocode address to get coordinates (placeholder implementation)
   private async geocodeAddress(address: string): Promise<{latitude: number, longitude: number} | null> {
-    // In production, this would use a real geocoding service like Google Maps API
-    // For now, return approximate coordinates for major cities
     const cityCoords: {[key: string]: {latitude: number, longitude: number}} = {
       'atlanta': { latitude: 33.7490, longitude: -84.3880 },
       'dallas': { latitude: 32.7767, longitude: -96.7970 },
@@ -1119,18 +871,19 @@ export class TelegramLoadService {
       'denver': { latitude: 39.7392, longitude: -104.9903 },
       'seattle': { latitude: 47.6062, longitude: -122.3321 },
       'boston': { latitude: 42.3601, longitude: -71.0589 },
-      'las vegas': { latitude: 36.1699, longitude: -115.1398 }
+      'las vegas': { latitude: 36.1699, longitude: -115.1398 },
+      'nashville': { latitude: 36.1627, longitude: -86.7816 },
+      'memphis': { latitude: 35.1495, longitude: -90.0490 },
+      'knoxville': { latitude: 35.9606, longitude: -83.9207 },
+      'chattanooga': { latitude: 35.0456, longitude: -85.3097 }
     };
 
     const city = address.split(',')[0]?.trim().toLowerCase();
     return cityCoords[city] || null;
   }
 
-  // Calculate distance between two coordinates in miles
-
-
   private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 3959; // Earth's radius in miles
+    const R = 3959;
     const dLat = this.toRadians(lat2 - lat1);
     const dLon = this.toRadians(lon2 - lon1);
     const a = 
@@ -1145,22 +898,16 @@ export class TelegramLoadService {
     return degrees * (Math.PI / 180);
   }
 
-  // Calculate deadhead distance from driver location to pickup
   private async calculateDeadheadDistance(driver: Driver, load: LoadWithRelations): Promise<number> {
-    // Simple approximate calculation - in production you'd use a geocoding service
-    // For now, return a reasonable estimate based on the cities
     if (!driver.city || !load.pickupAddress) return 0;
     
-    // Extract city/state from addresses for rough calculation
     const driverLocation = driver.city.toLowerCase();
     const pickupLocation = load.pickupAddress.toLowerCase();
     
-    // If they're in the same city, assume low deadhead
     if (pickupLocation.includes(driverLocation.split(',')[0])) {
-      return Math.floor(Math.random() * 25) + 5; // 5-30 miles
+      return Math.floor(Math.random() * 25) + 5;
     }
     
-    // Different cities - estimate based on common distances
     const stateDistances: Record<string, Record<string, number>> = {
       'atlanta': { 'miami': 650, 'charlotte': 240, 'jacksonville': 345, 'dallas': 780, 'houston': 800 },
       'miami': { 'atlanta': 650, 'orlando': 235, 'tampa': 280, 'jacksonville': 345 },
@@ -1169,7 +916,6 @@ export class TelegramLoadService {
       'los angeles': { 'phoenix': 370, 'las vegas': 270, 'san diego': 120 }
     };
     
-    // Try to find a rough distance estimate
     for (const [city, distances] of Object.entries(stateDistances)) {
       if (driverLocation.includes(city)) {
         for (const [destination, distance] of Object.entries(distances)) {
@@ -1180,14 +926,12 @@ export class TelegramLoadService {
       }
     }
     
-    // Default estimate for unknown routes
-    return Math.floor(Math.random() * 200) + 50; // 50-250 miles
+    return Math.floor(Math.random() * 200) + 50;
   }
 
   private async sendLoadToDriver(load: LoadWithRelations, driver: Driver, matchScore?: number, distance?: number): Promise<void> {
     if (!this.bot || !this.config || !driver.telegramId || !driver.enableTelegramNotifications) return;
 
-    // Validate telegram ID format - should be numeric
     if (!/^\d+$/.test(driver.telegramId)) {
       console.log(`⚠️ Invalid telegram ID format for driver ${driver.name}: ${driver.telegramId}. Disabling notifications.`);
       await storage.updateDriver(driver.id, {
@@ -1198,14 +942,10 @@ export class TelegramLoadService {
     }
 
     try {
-      // Calculate deadhead distance for this driver and load
       const deadheadDistance = await this.calculateDeadheadDistance(driver, load);
-      
-      // Format load message (from script)
       const message = this.formatLoadMessage(load, matchScore, distance, deadheadDistance);
       
-      // Send message with inline keyboard (removed Markdown parsing to fix format errors)
-      const options = {
+      const sentMessage = await this.bot.telegram.sendMessage(driver.telegramId, message, {
         disable_web_page_preview: true,
         reply_markup: {
           inline_keyboard: [
@@ -1215,11 +955,8 @@ export class TelegramLoadService {
             ]
           ]
         }
-      };
-
-      const sentMessage = await this.bot.sendMessage(driver.telegramId, message, options);
+      });
       
-      // Create load offer record
       const timeoutDate = new Date();
       timeoutDate.setMinutes(timeoutDate.getMinutes() + this.config.responseTimeoutMinutes);
       
@@ -1232,7 +969,6 @@ export class TelegramLoadService {
         timeoutAt: timeoutDate
       });
 
-      // Set timeout for automatic retry logic
       setTimeout(async () => {
         await this.handleLoadOfferTimeout(load, driver);
       }, this.config.responseTimeoutMinutes * 60 * 1000);
@@ -1244,13 +980,11 @@ export class TelegramLoadService {
   }
 
   private formatLoadMessage(load: LoadWithRelations, matchScore?: number, distance?: number, deadheadDistance?: number): string {
-    // Calculate driver rate (10% less than posted rate)
     const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
     const rpm = driverRate && load.miles ? (driverRate / load.miles).toFixed(2) : 'N/A';
     const deadheadText = deadheadDistance ? ` (${Math.round(deadheadDistance)} mi deadhead)` : '';
     const matchText = matchScore ? `\n📊 *Match Score:* ${matchScore}%` : '';
     
-    // Enhanced LoadMailer Bot formatting with professional styling
     return `✨ *New Load Available* ✨
 
 📍 *From:* ${load.pickupAddress}
@@ -1283,20 +1017,19 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
     }
 
     try {
-      // Create a specific test load with straight_box_truck equipment for Annex
       const testLoadData = {
         loadNumber: `TEST-${Date.now()}`,
         sourceBoard: 'test',
         pickupAddress: 'Nashville, TN',
         deliveryAddress: 'Atlanta, GA',
         pickupDate: new Date(),
-        deliveryDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
+        deliveryDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
         pickupTime: '08:00',
         deliveryTime: '16:00',
         rate: 2500,
         miles: 250,
         weight: 15000,
-        equipmentType: 'straight_box_truck', // KEY: This matches Annex's equipment
+        equipmentType: 'straight_box_truck',
         commodity: 'General Freight - TEST LOAD',
         company: 'TEST LOGISTICS',
         contactPhone: '555-TEST-LOAD',
@@ -1308,11 +1041,9 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
         specialInstructions: '🧪 THIS IS A TEST LOAD - Testing button functionality'
       };
 
-      // Create test load in database
       const testLoad = await storage.createLoad(testLoadData);
       console.log(`✅ TEST LOAD CREATED: ${testLoad.loadNumber} (straight_box_truck for Annex)`);
 
-      // Process the test load through the normal dispatch system
       await this.processNewLoad(testLoad);
       console.log(`📱 TEST LOAD SENT: ${testLoad.loadNumber} dispatched to eligible drivers`);
       
@@ -1352,14 +1083,10 @@ ${load.temperatureRequired ? '🌡️ *Temperature Controlled*\n' : ''}${load.sp
     }
 
     try {
-      // Calculate driver rate (10% less than posted rate)
       const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
-      
-      // Format pickup and delivery times
       const pickupTime = load.pickupTime || '12:30 PM';
       const deliveryTime = load.deliveryTime || '08:00 AM';
       
-      // Format confirmation message based on TRAQ IQ template
       const confirmationMessage = `🚛 **LOAD CONFIRMATION**
 
 Please check in as **TRAQ IQ**
@@ -1396,7 +1123,7 @@ If your phone number for tracking has been changed, please text us back the corr
 
 **Load #:** ${load.loadNumber}`;
 
-      await this.bot.sendMessage(driver.telegramId, confirmationMessage, {
+      await this.bot.telegram.sendMessage(driver.telegramId, confirmationMessage, {
         parse_mode: 'Markdown',
         disable_web_page_preview: true
       });
@@ -1416,7 +1143,6 @@ If your phone number for tracking has been changed, please text us back the corr
     }
 
     try {
-      // Use custom domain (TRAQ IQ) or fall back to Replit domains
       const customDomain = process.env.CUSTOM_DOMAIN || 'traqiqs.io';
       const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
       const domain = replitDomain || customDomain;
@@ -1442,7 +1168,7 @@ ${onboardingUrl}
 
 👆 Click the link above to start your onboarding process and familiarize yourself with the TRAQ IQ system!`;
 
-      await this.bot.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
+      await this.bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
       console.log(`Onboarding invitation sent to Telegram ID: ${telegramId}`);
       return true;
     } catch (error) {
@@ -1451,7 +1177,6 @@ ${onboardingUrl}
     }
   }
 
-  // Send dispatcher-set rate confirmation message to driver
   async sendDispatcherRateConfirmation(driverId: string, load: LoadWithRelations, dispatcherRate: number, deadheadDistance?: number): Promise<boolean> {
     if (!this.bot || !this.isRunning) {
       console.error('Telegram service not initialized');
@@ -1482,12 +1207,11 @@ ${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n
 
 ⏰ *You have 10 minutes to respond*`;
 
-      // Create shorter callback data using the first 8 characters of IDs
       const shortLoadId = load.id.substring(0, 8);
       const shortDriverId = driverId.substring(0, 8);
-      
-      const options = {
-        parse_mode: 'Markdown' as const,
+
+      await this.bot.telegram.sendMessage(driver.telegramId, confirmationMessage, {
+        parse_mode: 'Markdown',
         disable_web_page_preview: true,
         reply_markup: {
           inline_keyboard: [
@@ -1496,9 +1220,7 @@ ${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n
             ]
           ]
         }
-      };
-
-      await this.bot.sendMessage(driver.telegramId, confirmationMessage, options);
+      });
       console.log(`Dispatcher rate confirmation sent to driver ${driver.name} for load ${load.loadNumber}`);
       return true;
     } catch (error) {
@@ -1524,25 +1246,22 @@ ${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n
 
 *Are you at the pickup location?*`;
 
-      // Create shorter callback data using the first 8 characters of IDs
       const shortLoadId = load.id.substring(0, 8);
       const shortDriverId = load.driver.id.substring(0, 8);
-      
-      const options = {
-        parse_mode: 'Markdown' as const,
-        disable_web_page_preview: true,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ ON SITE', callback_data: `onsite_${shortLoadId}_${shortDriverId}` },
-              { text: '⏰ DELAY', callback_data: `delay_${shortLoadId}_${shortDriverId}` }
-            ]
-          ]
-        }
-      };
 
       this.queueMessage(async () => {
-        await this.bot?.sendMessage(load.driver.telegramId, confirmationMessage, options);
+        await this.bot?.telegram.sendMessage(load.driver.telegramId, confirmationMessage, {
+          parse_mode: 'Markdown',
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '✅ ON SITE', callback_data: `onsite_${shortLoadId}_${shortDriverId}` },
+                { text: '⏰ DELAY', callback_data: `delay_${shortLoadId}_${shortDriverId}` }
+              ]
+            ]
+          }
+        });
       });
       console.log(`Pickup confirmation sent to driver ${load.driver.name} for load ${load.loadNumber}`);
       return true;
@@ -1565,26 +1284,27 @@ ${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n
         return false;
       }
 
-      const instructionsMessage = `✅ *PICKUP INSTRUCTIONS*
+      const instructionsMessage = `📋 *PICKUP INSTRUCTIONS*
 
-📋 Load: ${load.loadNumber}
+📦 Load: ${load.loadNumber}
+🏢 Location: ${load.pickupAddress}
 
-*Please follow instructions below:*
+*Steps to complete pickup:*
 
-1) Please make sure the cargo isn't damaged.
-2) Please secure the load with the straps and provide me with the photos of the load inside your truck.
-3) Please mention your IN and OUT time (should be confirmed and signed by the shipper)
-4) Please email me a scan of the BOL with the signature of the shipper (should be straight, clear, and in high quality). My email is: dispatch@lampslogistics.com
+1️⃣ Check in with the shipping dock
+2️⃣ Verify load details and count
+3️⃣ Take photos of the freight
+4️⃣ Get BOL signed
+5️⃣ Confirm pickup complete
 
-*IMPORTANT: Don't leave the shipper without my good to go.*`;
+${load.specialInstructions ? `📝 *Special Instructions:*\n${load.specialInstructions}\n\n` : ''}📞 *Need help?* Call (203) 951-1991
 
-      this.queueMessage(async () => {
-        await this.bot?.sendMessage(driver.telegramId, instructionsMessage, {
-          parse_mode: 'Markdown',
-          disable_web_page_preview: true
-        });
+Safe travels! 🚛`;
+
+      await this.bot.telegram.sendMessage(driver.telegramId, instructionsMessage, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
       });
-      
       console.log(`Pickup instructions sent to driver ${driver.name} for load ${load.loadNumber}`);
       return true;
     } catch (error) {
@@ -1593,399 +1313,148 @@ ${load.specialInstructions ? `📝 Instructions: ${load.specialInstructions}\n\n
     }
   }
 
-  async sendDelayReasons(load: LoadWithRelations, driverId: string): Promise<boolean> {
-    if (!this.bot || !this.isRunning) {
-      console.error('Telegram service not initialized');
-      return false;
-    }
+  private async sendDelayReasons(load: LoadWithRelations, driverId: string): Promise<void> {
+    if (!this.bot) return;
 
     try {
       const driver = await storage.getDriver(driverId);
-      if (!driver || !driver.telegramId) {
-        console.error('Driver not found or no Telegram ID');
-        return false;
-      }
+      if (!driver || !driver.telegramId) return;
 
-      const delayMessage = `⏰ *DELAY REASON*
-
-📋 Load: ${load.loadNumber}
-
-*Please select the reason for delay:*`;
-
-      // Create shorter callback data using the first 8 characters of IDs
       const shortLoadId = load.id.substring(0, 8);
       const shortDriverId = driverId.substring(0, 8);
-      
-      const options = {
-        parse_mode: 'Markdown' as const,
-        disable_web_page_preview: true,
+
+      const message = `⏰ *Please select delay reason:*
+
+📋 Load: ${load.loadNumber}
+📍 Pickup: ${load.pickupAddress}`;
+
+      await this.bot.telegram.sendMessage(driver.telegramId, message, {
+        parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '🚴 Bike Issue', callback_data: `delay_reason_bike_${shortLoadId}_${shortDriverId}` }
+              { text: '🚗 Traffic', callback_data: `delayreason_traffic_${shortLoadId}_${shortDriverId}` },
+              { text: '🌧️ Weather', callback_data: `delayreason_weather_${shortLoadId}_${shortDriverId}` }
             ],
             [
-              { text: '🚗 Traffic', callback_data: `delay_reason_traffic_${shortLoadId}_${shortDriverId}` }
+              { text: '🔧 Vehicle Issue', callback_data: `delayreason_vehicle_${shortLoadId}_${shortDriverId}` },
+              { text: '📄 Documentation', callback_data: `delayreason_docs_${shortLoadId}_${shortDriverId}` }
             ],
             [
-              { text: '🌧️ Weather', callback_data: `delay_reason_weather_${shortLoadId}_${shortDriverId}` }
-            ],
-            [
-              { text: '🔧 Vehicle Issue', callback_data: `delay_reason_vehicle_${shortLoadId}_${shortDriverId}` }
-            ],
-            [
-              { text: '📋 Documentation', callback_data: `delay_reason_docs_${shortLoadId}_${shortDriverId}` }
-            ],
-            [
-              { text: '📞 Other', callback_data: `delay_reason_other_${shortLoadId}_${shortDriverId}` }
+              { text: '❓ Other', callback_data: `delayreason_other_${shortLoadId}_${shortDriverId}` }
             ]
           ]
         }
-      };
-
-      await this.bot.sendMessage(driver.telegramId, delayMessage, options);
-      console.log(`Delay reasons sent to driver ${driver.name} for load ${load.loadNumber}`);
-      return true;
-    } catch (error) {
-      console.error(`Error sending delay reasons to driver:`, error);
-      return false;
-    }
-  }
-
-  // Handle driver confirmation of load offer
-  private async handleConfirmLoad(loadId: string, driverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
-    try {
-      // Call the confirmation API endpoint
-      const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/loads/${loadId}/confirm-driver/${driverId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ confirmed: true })
       });
-
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Remove the buttons from the original message by editing it
-        if (messageId) {
-          try {
-            await this.bot.editMessageReplyMarkup(
-              { inline_keyboard: [] }, // Remove all buttons
-              { chat_id: chatId, message_id: messageId }
-            );
-          } catch (editError) {
-            console.log('Could not edit message buttons:', editError);
-          }
-        }
-        
-        // Send the booking confirmation message
-        const confirmationMessage = `🎉 🎊 CONGRATULATION 🎉 🎊 YOUR Bid WAS ACCEPTED!!!
-
-✅ *LOAD BOOKED SUCCESSFULLY*
-
-Your load has been booked. Please start planning your trip and heading to your pick up location.
-
-📋 Load: ${result.loadNumber}
-🚛 Status: Assigned to you
-
-Safe travels! 🛣️`;
-
-        await this.bot.sendMessage(chatId, confirmationMessage, {
-          parse_mode: 'Markdown'
-        });
-      } else {
-        await this.bot.sendMessage(chatId, '❌ Error confirming load. Please contact dispatch.');
-      }
     } catch (error) {
-      console.error('Error confirming load:', error);
-      await this.bot.sendMessage(chatId, '❌ Error confirming load. Please contact dispatch.');
+      console.error('Error sending delay reasons:', error);
     }
   }
 
-  // Handle driver declining load confirmation
-  private async handleDeclineConfirmation(loadId: string, driverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
-    try {
-      // Call the confirmation API endpoint
-      const response = await fetch(`http://localhost:${process.env.PORT || 5000}/api/loads/${loadId}/confirm-driver/${driverId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ confirmed: false })
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Remove the buttons from the original message by editing it
-        if (messageId) {
-          try {
-            await this.bot.editMessageReplyMarkup(
-              { inline_keyboard: [] }, // Remove all buttons
-              { chat_id: chatId, message_id: messageId }
-            );
-          } catch (editError) {
-            console.log('Could not edit message buttons:', editError);
-          }
-        }
-        
-        await this.bot.sendMessage(chatId, `❌ *Load Declined*\n\nLoad ${result.loadNumber} has been declined. The load will be offered to other drivers.`, {
-          parse_mode: 'Markdown'
-        });
-      } else {
-        await this.bot.sendMessage(chatId, '❌ Error declining load. Please contact dispatch.');
-      }
-    } catch (error) {
-      console.error('Error declining load confirmation:', error);
-      await this.bot.sendMessage(chatId, '❌ Error declining load. Please contact dispatch.');
-    }
-  }
-
-  stop(): void {
-    if (this.bot) {
-      this.bot.stopPolling();
-    }
-    this.isRunning = false;
-    console.log('Telegram Load Service stopped');
-  }
-
-  isServiceRunning(): boolean {
-    return this.isRunning;
-  }
-
-  getConfig(): TelegramBotConfig | null {
-    return this.config;
-  }
-
-  /**
-   * Send bid offer to driver for load bidding system
-   */
-  async sendBidOffer(telegramId: string, bidData: {
-    bidId: string;
-    loadNumber: string;
-    pickupAddress: string;
-    deliveryAddress: string;
-    pickupDate: string;
-    deliveryDate: string;
-    bidAmount: number;
-    margin: number;
-    miles: number;
-    commodity: string;
-    equipment: string;
-    timeoutMinutes: number;
-  }): Promise<number | null> {
-    if (!this.bot || !this.isRunning) {
-      console.log('Telegram service not running');
-      return null;
-    }
-
-    try {
-      const message = `🚛 *NEW LOAD OPPORTUNITY*\n\n` +
-        `📦 Load: ${bidData.loadNumber}\n` +
-        `📍 Pickup: ${bidData.pickupAddress}\n` +
-        `📍 Delivery: ${bidData.deliveryAddress}\n` +
-        `📅 Pickup: ${bidData.pickupDate}\n` +
-        `📅 Delivery: ${bidData.deliveryDate}\n` +
-        `💰 Bid Amount: $${bidData.bidAmount.toFixed(2)}\n` +
-        `📏 Miles: ${bidData.miles}\n` +
-        `📦 Commodity: ${bidData.commodity}\n` +
-        `🚚 Equipment: ${bidData.equipment}\n` +
-        `💵 Your Profit: $${bidData.margin.toFixed(2)}\n\n` +
-        `⏰ Respond within ${bidData.timeoutMinutes} minutes\n\n` +
-        `Accept this load opportunity?`;
-
-      const options = {
-        parse_mode: 'Markdown' as const,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ ACCEPT', callback_data: `bid_accept_${bidData.bidId}` },
-              { text: '❌ DECLINE', callback_data: `bid_decline_${bidData.bidId}` },
-              { text: '💬 NEGOTIATE', callback_data: `bid_negotiate_${bidData.bidId}` }
-            ]
-          ]
-        }
-      };
-
-      const sentMessage = await this.bot.sendMessage(telegramId, message, options);
-      console.log(`Sent bid offer for ${bidData.loadNumber} to Telegram ID: ${telegramId}`);
-      return sentMessage.message_id;
-    } catch (error) {
-      console.error('Error sending bid offer via Telegram:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Send notification to dispatcher
-   */
-  async sendDispatcherNotification(chatId: string, message: string): Promise<number | null> {
-    if (!this.bot || !this.isRunning) {
-      console.log('Telegram service not running');
-      return null;
-    }
-
-    return new Promise((resolve) => {
-      this.queueMessage(async () => {
-        try {
-          const sentMessage = await this.bot?.sendMessage(chatId, message, {
-            parse_mode: 'Markdown',
-            disable_web_page_preview: true
-          });
-          console.log(`Sent dispatcher notification to chat: ${chatId}`);
-          resolve(sentMessage?.message_id || null);
-        } catch (error) {
-          console.error('Error sending dispatcher notification via Telegram:', error);
-          resolve(null);
-        }
-      });
-    });
-  }
-
-  /**
-   * Send a direct message via Telegram (for booking confirmations, etc.)
-   */
-  async sendMessage(chatId: string, message: string): Promise<number | null> {
-    if (!this.bot || !this.isRunning) {
-      console.log('Telegram service not running - would send:', message);
-      return null;
-    }
-
-    return new Promise((resolve) => {
-      this.queueMessage(async () => {
-        try {
-          const sentMessage = await this.bot?.sendMessage(chatId, message, {
-            parse_mode: 'Markdown',
-            disable_web_page_preview: true
-          });
-          console.log(`Sent message to chat ${chatId}: ${message.substring(0, 100)}...`);
-          resolve(sentMessage?.message_id || null);
-        } catch (error) {
-          console.error(`Error sending message to chat ${chatId}:`, error);
-          
-          // If chat not found, handle gracefully
-          if (error instanceof Error && error.message.includes('chat not found')) {
-            console.log(`❌ Chat ${chatId} not found - likely invalid or blocked chat ID`);
-          }
-          
-          resolve(null);
-        }
-      });
-    });
-  }
-
-  private async handleBookLoad(loadId: string, telegramId: string, chatId: number): Promise<void> {
+  private async handleBookLoad(loadId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
       const driver = await storage.getDriverByTelegramId(telegramId);
       if (!driver) {
-        this.bot?.sendMessage(chatId, '❌ Driver not found. Please contact dispatcher.');
+        await this.bot?.telegram.sendMessage(chatId, '❌ Driver not found. Please register first.');
         return;
       }
 
       const load = await storage.getLoad(loadId);
       if (!load) {
-        this.bot?.sendMessage(chatId, '❌ Load not found.');
+        await this.bot?.telegram.sendMessage(chatId, '❌ Load not found or no longer available.');
         return;
       }
 
-      // Check if load offer exists, create if missing
-      let loadOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driver.id);
-      if (!loadOffer) {
-        console.log(`Creating missing load offer for ${driver.name} and load ${load.loadNumber}`);
-        loadOffer = await storage.createLoadOffer({
-          loadId: load.id,
-          driverId: driver.id,
-          status: 'pending',
-          sentAt: new Date(),
-          timeoutAt: new Date(Date.now() + 3 * 60 * 60 * 1000) // 3 hours from now
-        });
+      const offer = await storage.getLoadOfferByLoadAndDriver(loadId, driver.id);
+      if (!offer || offer.status !== 'pending') {
+        await this.bot?.telegram.sendMessage(chatId, '❌ This offer has already been processed or expired.');
+        return;
       }
 
-      // Update load offer status to accepted (driver has shown interest)
       await storage.updateLoadOfferByLoadAndDriver(loadId, driver.id, {
         status: 'accepted',
         respondedAt: new Date()
       });
 
-      // Send initial confirmation to driver
-      this.bot?.sendMessage(
+      await storage.updateLoad(loadId, {
+        status: 'booked',
+        driverId: driver.id
+      });
+
+      await storage.updateDriver(driver.id, {
+        status: 'on_route'
+      });
+
+      if (messageId && this.bot) {
+        try {
+          await this.bot.telegram.editMessageReplyMarkup(chatId, messageId, undefined, {
+            inline_keyboard: []
+          });
+        } catch (editError) {
+          console.log('Could not remove buttons from message:', editError);
+        }
+      }
+
+      const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
+      await this.bot?.telegram.sendMessage(
         chatId,
-        `✅ *INTEREST CONFIRMED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\n\nYour interest has been sent to dispatch. You will receive a rate confirmation within 15 minutes.`,
+        `✅ *LOAD BOOKED!*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nYour Rate: $${driverRate.toLocaleString()}\n\n📞 Dispatch will contact you shortly with pickup details.\n\nThank you ${driver.name}!`,
         { parse_mode: 'Markdown' }
       );
 
-      // Notify dispatcher that driver is interested and needs rate setting
       if (this.config) {
-        const dispatchMessage = `🚛 *DRIVER INTERESTED IN LOAD*\n\n` +
-          `📦 **Load:** ${load.loadNumber}\n` +
-          `🚛 **Driver:** ${driver.name}\n` +
-          `📞 **Phone:** ${driver.phone}\n` +
-          `📍 **Location:** ${driver.city || 'Not specified'}\n` +
-          `🚚 **Equipment:** ${driver.equipmentType}\n\n` +
-          `**Route:** ${load.pickupAddress} → ${load.deliveryAddress}\n` +
-          `**Original Rate:** $${load.rate?.toLocaleString()}\n` +
-          `**Distance:** ${load.miles} miles\n\n` +
-          `⚡ **ACTION REQUIRED:** Set dispatcher rate in dashboard to proceed with booking.`;
-
-        this.bot?.sendMessage(
+        await this.bot?.telegram.sendMessage(
           this.config.dispatcherId,
-          dispatchMessage,
+          `✅ *LOAD ACCEPTED*\n\nDriver *${driver.name}* accepted Load ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nFull Rate: $${load.rate?.toLocaleString()}\n\nContact: ${driver.phone}\n\nPlease confirm with driver.`,
           { parse_mode: 'Markdown' }
         );
       }
 
-      console.log(`Driver ${driver.name} accepted load ${load.loadNumber} via Telegram button`);
+      console.log(`Driver ${driver.name} booked load ${load.loadNumber} via Telegram button`);
     } catch (error) {
       console.error('Error handling book load:', error);
-      this.bot?.sendMessage(chatId, '❌ Error processing booking request.');
+      await this.bot?.telegram.sendMessage(chatId, '❌ Error processing booking. Please try again or contact dispatch.');
     }
   }
 
-  private async handleDeclineLoad(loadId: string, telegramId: string, chatId: number): Promise<void> {
+  private async handleDeclineLoad(loadId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
       const driver = await storage.getDriverByTelegramId(telegramId);
       if (!driver) {
-        this.bot?.sendMessage(chatId, '❌ Driver not found. Please contact dispatcher.');
+        await this.bot?.telegram.sendMessage(chatId, '❌ Driver not found.');
         return;
       }
 
       const load = await storage.getLoad(loadId);
       if (!load) {
-        this.bot?.sendMessage(chatId, '❌ Load not found.');
+        await this.bot?.telegram.sendMessage(chatId, '❌ Load not found.');
         return;
       }
 
-      // Check if load offer exists, create if missing
-      let loadOffer = await storage.getLoadOfferByLoadAndDriver(loadId, driver.id);
-      if (!loadOffer) {
-        console.log(`Creating missing load offer for ${driver.name} and load ${load.loadNumber}`);
-        loadOffer = await storage.createLoadOffer({
-          loadId: load.id,
-          driverId: driver.id,
-          status: 'pending',
-          sentAt: new Date(),
-          timeoutAt: new Date(Date.now() + 3 * 60 * 60 * 1000) // 3 hours from now
-        });
+      if (messageId && this.bot) {
+        try {
+          await this.bot.telegram.editMessageReplyMarkup(chatId, messageId, undefined, {
+            inline_keyboard: []
+          });
+        } catch (editError) {
+          console.log('Could not remove buttons from message:', editError);
+        }
       }
 
-      // Update load offer status
       await storage.updateLoadOfferByLoadAndDriver(loadId, driver.id, {
         status: 'declined',
         respondedAt: new Date()
       });
 
-      // Send confirmation to driver (show driver rate - 10% less)
       const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
-      this.bot?.sendMessage(
+      await this.bot?.telegram.sendMessage(
         chatId,
         `❌ *LOAD DECLINED*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nRate: $${driverRate.toLocaleString()}\n\nThank you for your response. You will continue to receive new load offers.`,
         { parse_mode: 'Markdown' }
       );
 
-      // Notify dispatcher (show full rate for dispatcher)
       if (this.config) {
-        this.bot?.sendMessage(
+        await this.bot?.telegram.sendMessage(
           this.config.dispatcherId,
           `❌ *LOAD DECLINED*\n\nDriver *${driver.name}* declined Load ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nFull Rate: $${load.rate?.toLocaleString()}\n\nLoad is still available for other drivers.`,
           { parse_mode: 'Markdown' }
@@ -1995,7 +1464,7 @@ Safe travels! 🛣️`;
       console.log(`Driver ${driver.name} declined load ${load.loadNumber} via Telegram button`);
     } catch (error) {
       console.error('Error handling decline load:', error);
-      this.bot?.sendMessage(chatId, '❌ Error processing decline request.');
+      await this.bot?.telegram.sendMessage(chatId, '❌ Error processing decline request.');
     }
   }
 
@@ -2003,28 +1472,24 @@ Safe travels! 🛣️`;
     try {
       const offer = await storage.getLoadOfferByLoadAndDriver(load.id, originalDriver.id);
       if (!offer || offer.status !== 'pending') {
-        return; // Already responded or handled
+        return;
       }
 
-      // Check if this is the first timeout (no retry count or retryCount = 0)
       const retryCount = (offer as any).retryCount || 0;
       
       if (retryCount === 0) {
-        // First timeout - resend to same driver
         console.log(`No response from ${originalDriver.name} for Load ${load.loadNumber} - resending (retry 1)`);
         
-        // Update offer with retry count
         await storage.updateLoadOfferByLoadAndDriver(load.id, originalDriver.id, {
           retryCount: 1,
           lastSentAt: new Date()
         } as any);
 
-        // Resend the load to the same driver
         if (this.bot && originalDriver.telegramId) {
           const message = `🔄 *LOAD REMINDER* - No response received\n\n${this.formatLoadMessage(load)}\n\n⚠️ *Please respond within 3 minutes or this load will be offered to other drivers.*`;
           
-          const options = {
-            parse_mode: 'Markdown' as const,
+          await this.bot.telegram.sendMessage(originalDriver.telegramId, message, {
+            parse_mode: 'Markdown',
             disable_web_page_preview: true,
             reply_markup: {
               inline_keyboard: [
@@ -2034,11 +1499,8 @@ Safe travels! 🛣️`;
                 ]
               ]
             }
-          };
-
-          await this.bot.sendMessage(originalDriver.telegramId, message, options);
+          });
           
-          // Schedule second timeout for sending to other drivers
           setTimeout(async () => {
             await this.handleSecondTimeout(load, originalDriver);
           }, this.config!.responseTimeoutMinutes * 60 * 1000);
@@ -2053,39 +1515,34 @@ Safe travels! 🛣️`;
     try {
       const offer = await storage.getLoadOfferByLoadAndDriver(load.id, originalDriver.id);
       if (!offer || offer.status !== 'pending') {
-        return; // Driver finally responded
+        return;
       }
 
       console.log(`Second timeout for ${originalDriver.name} on Load ${load.loadNumber} - sending to other drivers`);
       
-      // Mark original offer as timeout
       await storage.updateLoadOfferByLoadAndDriver(load.id, originalDriver.id, {
         status: 'timeout'
       });
 
-      // Find other eligible drivers in the vicinity
       const eligibleDrivers = await this.findEligibleDriversByLocation(load);
       const otherDrivers = eligibleDrivers.filter(driverMatch => driverMatch.driver.id !== originalDriver.id);
 
       if (otherDrivers.length > 0) {
-        // Send to the next best driver
         const nextDriver = otherDrivers[0];
         console.log(`Sending load ${load.loadNumber} to next available driver: ${nextDriver.driver.name}`);
         
         await this.sendLoadToDriver(load, nextDriver.driver, nextDriver.matchScore, nextDriver.distance);
         
-        // Notify dispatcher about the driver change (show full rate)
         if (this.bot && this.config) {
-          this.bot.sendMessage(
+          await this.bot.telegram.sendMessage(
             this.config.dispatcherId,
             `🔄 *LOAD REASSIGNED*\n\nLoad ${load.loadNumber} reassigned from ${originalDriver.name} (no response) to ${nextDriver.driver.name}\n\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nFull Rate: $${load.rate?.toLocaleString()}`,
             { parse_mode: 'Markdown' }
           );
         }
       } else {
-        // No other drivers available - notify dispatcher (show full rate)
         if (this.bot && this.config) {
-          this.bot.sendMessage(
+          await this.bot.telegram.sendMessage(
             this.config.dispatcherId,
             `⚠️ *NO DRIVERS AVAILABLE*\n\nLoad ${load.loadNumber} - no response from ${originalDriver.name} and no other drivers in vicinity.\n\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nFull Rate: $${load.rate?.toLocaleString()}\n\nManual assignment required.`,
             { parse_mode: 'Markdown' }
@@ -2097,10 +1554,8 @@ Safe travels! 🛣️`;
     }
   }
 
-  // Handler methods for shortened ID callbacks
   private async handleConfirmLoadShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
-      // Find the full load and driver IDs by matching the first 8 characters
       const loads = await storage.getAllLoads();
       const drivers = await storage.getAllDrivers();
       
@@ -2108,69 +1563,134 @@ Safe travels! 🛣️`;
       const driver = drivers.find(d => d.id.startsWith(shortDriverId));
       
       if (!load || !driver) {
-        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
+        await this.bot?.telegram.sendMessage(chatId, '❌ Load or driver not found.');
         return;
       }
       
       await this.handleConfirmLoad(load.id, driver.id, telegramId, chatId, messageId);
     } catch (error) {
       console.error('Error handling confirmation with short IDs:', error);
-      await this.bot?.sendMessage(chatId, '❌ Error processing confirmation. Please contact dispatch.');
+      await this.bot?.telegram.sendMessage(chatId, '❌ Error processing confirmation. Please contact dispatch.');
     }
   }
 
-  private async handleDeclineConfirmationShort(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
+  private async handleConfirmLoad(loadId: string, driverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
-      // Find the full load and driver IDs by matching the first 8 characters
-      const loads = await storage.getAllLoads();
-      const drivers = await storage.getAllDrivers();
-      
-      const load = loads.find(l => l.id.startsWith(shortLoadId));
-      const driver = drivers.find(d => d.id.startsWith(shortDriverId));
+      const load = await storage.getLoad(loadId);
+      const driver = await storage.getDriver(driverId);
       
       if (!load || !driver) {
-        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
-        return;
-      }
-      
-      await this.handleDeclineConfirmation(load.id, driver.id, telegramId, chatId, messageId);
-    } catch (error) {
-      console.error('Error handling decline with short IDs:', error);
-      await this.bot?.sendMessage(chatId, '❌ Error processing decline. Please contact dispatch.');
-    }
-  }
-
-  // Pickup confirmation handlers
-  private async handleOnSiteConfirmation(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
-    try {
-      // Find the full load and driver IDs by matching the first 8 characters
-      const loads = await storage.getAllLoads();
-      const drivers = await storage.getAllDrivers();
-      
-      const load = loads.find(l => l.id.startsWith(shortLoadId));
-      const driver = drivers.find(d => d.id.startsWith(shortDriverId));
-      
-      if (!load || !driver) {
-        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
+        await this.bot?.telegram.sendMessage(chatId, '❌ Load or driver not found.');
         return;
       }
 
-      // Remove the buttons from the original message
       if (messageId && this.bot) {
         try {
-          await this.bot.editMessageReplyMarkup(
-            { inline_keyboard: [] },
-            { chat_id: chatId, message_id: messageId }
-          );
+          await this.bot.telegram.editMessageReplyMarkup(chatId, messageId, undefined, {
+            inline_keyboard: []
+          });
         } catch (editError) {
           console.log('Could not remove buttons from message:', editError);
         }
       }
 
-      // Send pickup instructions
+      await storage.updateLoad(loadId, {
+        status: 'booked',
+        driverId: driver.id
+      });
+
+      await storage.updateDriver(driver.id, {
+        status: 'on_route'
+      });
+
+      const driverRate = load.rate ? Math.round(load.rate * 0.9) : 0;
+      await this.bot?.telegram.sendMessage(
+        chatId,
+        `✅ *LOAD CONFIRMED!*\n\nLoad: ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nYour Rate: $${driverRate.toLocaleString()}\n\n📞 Dispatch will contact you shortly with pickup details.\n\nThank you ${driver.name}!`,
+        { parse_mode: 'Markdown' }
+      );
+
+      if (this.config) {
+        await this.bot?.telegram.sendMessage(
+          this.config.dispatcherId,
+          `✅ *LOAD CONFIRMED*\n\nDriver *${driver.name}* confirmed Load ${load.loadNumber}\nRoute: ${load.pickupAddress} → ${load.deliveryAddress}\nFull Rate: $${load.rate?.toLocaleString()}\n\nContact: ${driver.phone}`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+
+      console.log(`Driver ${driver.name} confirmed load ${load.loadNumber}`);
+    } catch (error) {
+      console.error('Error handling confirm load:', error);
+      await this.bot?.telegram.sendMessage(chatId, '❌ Error processing confirmation. Please contact dispatch.');
+    }
+  }
+
+  private async handleDeclineConfirmation(loadId: string, driverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
+    try {
+      const load = await storage.getLoad(loadId);
+      const driver = await storage.getDriver(driverId);
+      
+      if (!load || !driver) {
+        await this.bot?.telegram.sendMessage(chatId, '❌ Load or driver not found.');
+        return;
+      }
+
+      if (messageId && this.bot) {
+        try {
+          await this.bot.telegram.editMessageReplyMarkup(chatId, messageId, undefined, {
+            inline_keyboard: []
+          });
+        } catch (editError) {
+          console.log('Could not remove buttons from message:', editError);
+        }
+      }
+
+      await this.bot?.telegram.sendMessage(
+        chatId,
+        `❌ *CONFIRMATION DECLINED*\n\nLoad: ${load.loadNumber}\n\nThank you for your response. The load will be offered to other drivers.`,
+        { parse_mode: 'Markdown' }
+      );
+
+      if (this.config) {
+        await this.bot?.telegram.sendMessage(
+          this.config.dispatcherId,
+          `❌ *CONFIRMATION DECLINED*\n\nDriver *${driver.name}* declined confirmation for Load ${load.loadNumber}\n\nLoad is available for reassignment.`,
+          { parse_mode: 'Markdown' }
+        );
+      }
+
+      console.log(`Driver ${driver.name} declined confirmation for load ${load.loadNumber}`);
+    } catch (error) {
+      console.error('Error handling decline confirmation:', error);
+      await this.bot?.telegram.sendMessage(chatId, '❌ Error processing decline. Please contact dispatch.');
+    }
+  }
+
+  private async handleOnSiteConfirmation(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
+    try {
+      const loads = await storage.getAllLoads();
+      const drivers = await storage.getAllDrivers();
+      
+      const load = loads.find(l => l.id.startsWith(shortLoadId));
+      const driver = drivers.find(d => d.id.startsWith(shortDriverId));
+      
+      if (!load || !driver) {
+        await this.bot?.telegram.sendMessage(chatId, '❌ Load or driver not found.');
+        return;
+      }
+
+      if (messageId && this.bot) {
+        try {
+          await this.bot.telegram.editMessageReplyMarkup(chatId, messageId, undefined, {
+            inline_keyboard: []
+          });
+        } catch (editError) {
+          console.log('Could not remove buttons from message:', editError);
+        }
+      }
+
       await this.sendPickupInstructions(load, driver.id);
       
-      // Update load status to in_transit
       await storage.updateLoad(load.id, {
         status: 'in_transit'
       });
@@ -2178,13 +1698,12 @@ Safe travels! 🛣️`;
       console.log(`Driver ${driver.name} confirmed on-site for load ${load.loadNumber}`);
     } catch (error) {
       console.error('Error handling on-site confirmation:', error);
-      await this.bot?.sendMessage(chatId, '❌ Error processing on-site confirmation. Please contact dispatch.');
+      await this.bot?.telegram.sendMessage(chatId, '❌ Error processing on-site confirmation. Please contact dispatch.');
     }
   }
 
   private async handleDelayConfirmation(shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
-      // Find the full load and driver IDs by matching the first 8 characters
       const loads = await storage.getAllLoads();
       const drivers = await storage.getAllDrivers();
       
@@ -2192,35 +1711,31 @@ Safe travels! 🛣️`;
       const driver = drivers.find(d => d.id.startsWith(shortDriverId));
       
       if (!load || !driver) {
-        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
+        await this.bot?.telegram.sendMessage(chatId, '❌ Load or driver not found.');
         return;
       }
 
-      // Remove the buttons from the original message
       if (messageId && this.bot) {
         try {
-          await this.bot.editMessageReplyMarkup(
-            { inline_keyboard: [] },
-            { chat_id: chatId, message_id: messageId }
-          );
+          await this.bot.telegram.editMessageReplyMarkup(chatId, messageId, undefined, {
+            inline_keyboard: []
+          });
         } catch (editError) {
           console.log('Could not remove buttons from message:', editError);
         }
       }
 
-      // Send delay reason options
       await this.sendDelayReasons(load, driver.id);
       
       console.log(`Driver ${driver.name} reported delay for load ${load.loadNumber}`);
     } catch (error) {
       console.error('Error handling delay confirmation:', error);
-      await this.bot?.sendMessage(chatId, '❌ Error processing delay. Please contact dispatch.');
+      await this.bot?.telegram.sendMessage(chatId, '❌ Error processing delay. Please contact dispatch.');
     }
   }
 
   private async handleDelayReason(reason: string, shortLoadId: string, shortDriverId: string, telegramId: string, chatId: number, messageId?: number): Promise<void> {
     try {
-      // Find the full load and driver IDs by matching the first 8 characters
       const loads = await storage.getAllLoads();
       const drivers = await storage.getAllDrivers();
       
@@ -2228,23 +1743,20 @@ Safe travels! 🛣️`;
       const driver = drivers.find(d => d.id.startsWith(shortDriverId));
       
       if (!load || !driver) {
-        await this.bot?.sendMessage(chatId, '❌ Load or driver not found.');
+        await this.bot?.telegram.sendMessage(chatId, '❌ Load or driver not found.');
         return;
       }
 
-      // Remove the buttons from the original message
       if (messageId && this.bot) {
         try {
-          await this.bot.editMessageReplyMarkup(
-            { inline_keyboard: [] },
-            { chat_id: chatId, message_id: messageId }
-          );
+          await this.bot.telegram.editMessageReplyMarkup(chatId, messageId, undefined, {
+            inline_keyboard: []
+          });
         } catch (editError) {
           console.log('Could not remove buttons from message:', editError);
         }
       }
 
-      // Map reason codes to readable text
       const reasonMap: { [key: string]: string } = {
         'bike': 'Bike Issue',
         'traffic': 'Traffic',
@@ -2256,7 +1768,6 @@ Safe travels! 🛣️`;
 
       const reasonText = reasonMap[reason] || reason;
 
-      // Send confirmation message to driver
       const confirmationMessage = `⏰ *DELAY RECORDED*
 
 📋 Load: ${load.loadNumber}
@@ -2264,12 +1775,11 @@ Safe travels! 🛣️`;
 
 Your delay has been recorded and dispatch has been notified. Please proceed to pickup when ready.`;
 
-      await this.bot?.sendMessage(chatId, confirmationMessage, {
+      await this.bot?.telegram.sendMessage(chatId, confirmationMessage, {
         parse_mode: 'Markdown',
         disable_web_page_preview: true
       });
 
-      // Notify dispatcher about the delay
       if (this.config) {
         const dispatchMessage = `⏰ *PICKUP DELAY REPORTED*
 
@@ -2282,7 +1792,7 @@ Your delay has been recorded and dispatch has been notified. Please proceed to p
 
 Please contact driver if needed.`;
 
-        await this.bot?.sendMessage(this.config.dispatcherId, dispatchMessage, {
+        await this.bot?.telegram.sendMessage(this.config.dispatcherId, dispatchMessage, {
           parse_mode: 'Markdown',
           disable_web_page_preview: true
         });
@@ -2291,27 +1801,21 @@ Please contact driver if needed.`;
       console.log(`Driver ${driver.name} reported delay reason: ${reasonText} for load ${load.loadNumber}`);
     } catch (error) {
       console.error('Error handling delay reason:', error);
-      await this.bot?.sendMessage(chatId, '❌ Error processing delay reason. Please contact dispatch.');
+      await this.bot?.telegram.sendMessage(chatId, '❌ Error processing delay reason. Please contact dispatch.');
     }
   }
 
-  // Send driver onboarding invitation via Telegram
   async sendDriverOnboarding(phoneNumber: string, onboardingToken: string): Promise<{ success: boolean; error?: string; botLink?: string }> {
     try {
       if (!this.bot) {
         return { success: false, error: 'Telegram bot not initialized' };
       }
 
-      // Since Telegram bots cannot send messages to users who haven't started a chat,
-      // we'll return the bot link for manual sharing instead of attempting direct messaging
       const botUsername = await this.getBotUsername();
       const botLink = `https://t.me/${botUsername}`;
       
       console.log(`📱 Telegram invitation created for ${phoneNumber}`);
       console.log(`🤖 Bot link to share: ${botLink}`);
-      
-      // Store the invitation token for when the user eventually contacts the bot
-      const onboardingUrl = `${process.env.REPLIT_DOMAINS || 'http://localhost'}/driver-onboarding?token=${onboardingToken}`;
       
       return { 
         success: true, 
@@ -2329,18 +1833,15 @@ Please contact driver if needed.`;
     }
   }
 
-  // Handle direct driver registration when they respond "YES"
-  // NEW: Link existing driver accounts to Telegram
   async linkExistingDriver(chatId: number, email: string, userInfo: any): Promise<void> {
     try {
       console.log(`🔗 Attempting to link existing driver with email: ${email} to chat: ${chatId}`);
       
-      // Find driver by email
       const drivers = await storage.getAllDrivers();
       const existingDriver = drivers.find(d => d.email.toLowerCase() === email.toLowerCase());
       
       if (!existingDriver) {
-        await this.bot?.sendMessage(chatId,
+        await this.bot?.telegram.sendMessage(chatId,
           `❌ *Driver Not Found*\n\n` +
           `No driver account found with email: ${email}\n\n` +
           `Please check the email address or contact support if you need help.`,
@@ -2349,14 +1850,13 @@ Please contact driver if needed.`;
         return;
       }
       
-      // Update driver with real Telegram chat ID
       await storage.updateDriver(existingDriver.id, {
         telegramId: chatId.toString(),
         enableTelegramNotifications: true,
         status: 'available'
       });
       
-      await this.bot?.sendMessage(chatId,
+      await this.bot?.telegram.sendMessage(chatId,
         `🎉 *Account Successfully Linked!*\n\n` +
         `Welcome back, ${existingDriver.name}!\n\n` +
         `📍 Location: ${existingDriver.city}\n` +
@@ -2371,7 +1871,7 @@ Please contact driver if needed.`;
       
     } catch (error) {
       console.error('Error linking existing driver:', error);
-      await this.bot?.sendMessage(chatId,
+      await this.bot?.telegram.sendMessage(chatId,
         `❌ Error linking your account. Please try again or contact support.`
       );
     }
@@ -2381,18 +1881,16 @@ Please contact driver if needed.`;
     try {
       console.log(`🔗 Handling driver registration for ${userInfo?.first_name} (Chat: ${chatId})`);
       
-      // Check if this chat ID is already connected to a driver
       const drivers = await storage.getAllDrivers();
       let existingDriver = drivers.find(d => d.telegramId === chatId.toString());
       
       if (existingDriver) {
-        // Driver already exists, just enable notifications
         await storage.updateDriver(existingDriver.id, {
           enableTelegramNotifications: true,
           status: 'available'
         });
         
-        await this.bot?.sendMessage(chatId,
+        await this.bot?.telegram.sendMessage(chatId,
           `✅ *Welcome back, ${existingDriver.name}!*\n\n` +
           `Your Telegram notifications are now enabled.\n` +
           `You'll start receiving Tennessee load offers immediately!\n\n` +
@@ -2406,26 +1904,23 @@ Please contact driver if needed.`;
         return;
       }
       
-      // Check if this is Annex by username or name
       const telegramUsername = userInfo?.username?.toLowerCase() || '';
       const firstName = userInfo?.first_name?.toLowerCase() || '';
       
       if (telegramUsername.includes('annex') || firstName.includes('annex') || firstName.includes('kay')) {
-        // This is likely Annex - find his profile and connect it
         const annexDriver = drivers.find(d => 
           d.name.toLowerCase().includes('annex') || 
           d.telegramUsername?.toLowerCase().includes('annex')
         );
         
         if (annexDriver) {
-          // Connect Annex's existing profile to this chat ID
           await storage.updateDriver(annexDriver.id, {
             telegramId: chatId.toString(),
             enableTelegramNotifications: true,
             status: 'available'
           });
           
-          await this.bot?.sendMessage(chatId,
+          await this.bot?.telegram.sendMessage(chatId,
             `🎉 *Welcome Annex!*\n\n` +
             `Your driver profile is now connected to Telegram!\n\n` +
             `📍 Location: ${annexDriver.city}\n` +
@@ -2442,33 +1937,29 @@ Please contact driver if needed.`;
         }
       }
       
-      // New driver - send registration form
       await this.sendAutoOnboarding(chatId, userInfo);
       
     } catch (error) {
       console.error('Error handling driver registration:', error);
-      await this.bot?.sendMessage(chatId,
+      await this.bot?.telegram.sendMessage(chatId,
         `❌ Error connecting your profile. Please contact support or try again later.`
       );
     }
   }
 
-  // Send automatic onboarding when user starts chat
   async sendAutoOnboarding(chatId: number, userInfo: any): Promise<void> {
     try {
-      // Create an onboarding token automatically
       const { randomUUID } = await import('crypto');
       const token = randomUUID();
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+      expiresAt.setDate(expiresAt.getDate() + 7);
       
-      // Create a temporary email based on user info
       const tempEmail = `${userInfo?.username || chatId}@telegram-onboarding.local`;
       
       const tokenData = {
         token,
         email: tempEmail,
-        telegramChatId: chatId.toString(), // Store the chat ID for later linking
+        telegramChatId: chatId.toString(),
         expiresAt,
         isUsed: false,
       };
@@ -2477,7 +1968,6 @@ Please contact driver if needed.`;
       const createdToken = await storage.createOnboardingToken(tokenData);
       console.log('Token created successfully:', createdToken.id);
       
-      // Format the onboarding message with proper domain and token
       const customDomain = process.env.CUSTOM_DOMAIN || 'traqiqs.io';
       const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
       const domain = replitDomain || customDomain;
@@ -2512,7 +2002,7 @@ Need help? Just reply to this message.`;
         ]
       };
 
-      await this.bot?.sendMessage(chatId, message, {
+      await this.bot?.telegram.sendMessage(chatId, message, {
         parse_mode: 'Markdown',
         reply_markup: keyboard,
         disable_web_page_preview: true
@@ -2520,7 +2010,6 @@ Need help? Just reply to this message.`;
 
       console.log(`📱 Auto-onboarding sent to new user: ${userInfo?.first_name} (${chatId})`);
       
-      // Log this automatic onboarding
       await storage.createEmailLog({
         recipientEmail: tempEmail,
         subject: "Telegram Auto-Onboarding",
@@ -2533,14 +2022,13 @@ Need help? Just reply to this message.`;
     }
   }
 
-  // Get bot username for sharing
   async getBotUsername(): Promise<string> {
     try {
       if (!this.bot) {
         throw new Error('Telegram bot not initialized');
       }
       
-      const botInfo = await this.bot.getMe();
+      const botInfo = await this.bot.telegram.getMe();
       return botInfo.username || '';
     } catch (error) {
       console.error('Failed to get bot info:', error);
@@ -2549,16 +2037,14 @@ Need help? Just reply to this message.`;
   }
 }
 
-// Singleton instance
 export const telegramLoadService = new TelegramLoadService();
 
-// Graceful shutdown handling
 process.on('SIGINT', () => {
-  console.log('Shutting down Telegram Load Service...');
-  telegramLoadService.stop();
+  console.log('Received SIGINT - shutting down Telegram service...');
+  telegramLoadService.shutdown();
 });
 
 process.on('SIGTERM', () => {
-  console.log('Shutting down Telegram Load Service...');
-  telegramLoadService.stop();
+  console.log('Received SIGTERM - shutting down Telegram service...');
+  telegramLoadService.shutdown();
 });

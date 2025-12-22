@@ -6,7 +6,6 @@ const path = require("path");
 const express = require("express");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const TelegramBot = require("node-telegram-bot-api");
 
 const {
   TELEGRAM_BOT_TOKEN,
@@ -14,8 +13,8 @@ const {
   FORM_SECRET
 } = process.env;
 
-if (!TELEGRAM_BOT_TOKEN || !DISPATCHER_CHAT_ID || !FORM_SECRET) {
-  console.error("❌ Missing env vars: TELEGRAM_BOT_TOKEN, DISPATCHER_CHAT_ID, FORM_SECRET");
+if (!FORM_SECRET) {
+  console.error("❌ Missing env var: FORM_SECRET");
   process.exit(1);
 }
 
@@ -41,11 +40,15 @@ app.use(express.json());
 app.use("/api/", rateLimit({ windowMs: 60_000, max: 150 }));
 app.use(express.static("public"));
 
-// DISABLED: Conflicts with main telegram service - use main system instead
+// DISABLED: All Telegram bot functionality has been migrated to server/telegram-service.ts using Telegraf
+// This legacy node-telegram-bot-api code is kept for reference but is no longer active
 // const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 const pending = new Map(); // messageId -> { timeoutId, driverName, loadId }
 const loads = new Map(); // loadId -> { base fields..., assignedDriverChatId?, dims?, effectiveFeet? }
 const loadPhotos = new Map(); // loadId -> [photo urls]
+
+/*
+// LEGACY BOT HANDLERS - DISABLED: Now handled by server/telegram-service.ts with Telegraf
 
 // Handle driver commands
 bot.onText(/\/delivered/, async (msg) => {
@@ -169,6 +172,7 @@ bot.on("photo", async (msg) => {
     console.error("Photo upload error:", e);
   }
 });
+*/
 
 // ---------- Utilities ----------
 const toStr = (v) => (v == null ? "" : String(v).trim());
@@ -302,6 +306,7 @@ function findLoadCombinations(availableLoads, driver) {
   return combinations.sort((a, b) => b.combinedRPM - a.combinedRPM);
 }
 
+/* DISABLED: Bot functionality migrated to server/telegram-service.ts
 async function findNextLoads(driver) {
   try {
     // Get all available loads from our load store
@@ -335,7 +340,13 @@ async function findNextLoads(driver) {
     console.error("AI load matching error:", e);
   }
 }
+*/
+function findNextLoads(driver) {
+  // STUB: Telegram functionality migrated to server/telegram-service.ts
+  console.log("findNextLoads called but Telegram bot disabled in server.js");
+}
 
+/* DISABLED: Bot functionality migrated to server/telegram-service.ts
 // Route-aware load matching for drivers en route
 async function findRouteLoads(driver) {
   try {
@@ -381,6 +392,11 @@ async function findRouteLoads(driver) {
   } catch (e) {
     console.error("Route load matching error:", e);
   }
+}
+*/
+function findRouteLoads(driver) {
+  // STUB: Telegram functionality migrated to server/telegram-service.ts
+  console.log("findRouteLoads called but Telegram bot disabled in server.js");
 }
 
 // Helper functions for route matching
@@ -644,6 +660,7 @@ function buildMessage(load, drvScore) {
   );
 }
 
+/* DISABLED: Bot functionality migrated to server/telegram-service.ts
 function sendToDriver(driver, load, loadId, drvScore) {
   const msg = buildMessage(load, drvScore);
   const keyboard = {
@@ -667,7 +684,14 @@ function sendToDriver(driver, load, loadId, drvScore) {
       pending.set(sent.message_id, { timeoutId, driverName: driver.name, loadId });
     });
 }
+*/
+function sendToDriver(driver, load, loadId, drvScore) {
+  // STUB: Telegram functionality migrated to server/telegram-service.ts
+  console.log("sendToDriver called but Telegram bot disabled in server.js");
+  return Promise.resolve();
+}
 
+/* DISABLED: Bot callback handling migrated to server/telegram-service.ts
 // ---------- Callback buttons ----------
 bot.on("callback_query", async (q) => {
   try {
@@ -686,7 +710,7 @@ bot.on("callback_query", async (q) => {
         chat_id: q.message.chat.id, message_id: msgId, parse_mode: "HTML"
       });
 
-      const host = process.env.PUBLIC_URL || ""; // set PUBLIC_URL in Replit (e.g., https://your-repl-name.your-user.repl.co)
+      const host = process.env.PUBLIC_URL || "";
       const dimsUrl = host
         ? `${host}/book-dims?loadId=${encodeURIComponent(loadId)}`
         : undefined;
@@ -700,12 +724,10 @@ bot.on("callback_query", async (q) => {
         ]
       };
 
-      // remember who accepted (to bind dims to the right driver)
       const rec = loads.get(loadId) || {};
       rec.assignedDriverChatId = String(q.from.id || "");
       loads.set(loadId, rec);
       
-      // Set driver destination for route planning
       const assignedDriver = DRIVERS.find(d => String(d.chatId) === String(q.from.id));
       if (assignedDriver && rec.destination) {
         assignedDriver.destination = rec.destination;
@@ -725,12 +747,10 @@ bot.on("callback_query", async (q) => {
       });
       await bot.sendMessage(DISPATCHER_CHAT_ID, `⚠️ ${driverName} declined load <b>${loadId}</b>.`, { parse_mode: "HTML" });
     } else if (action === "confirmdims") {
-      // Move to pickup phase - request photos
       const rec = loads.get(loadId);
       if (rec) {
         const drv = DRIVERS.find(d => String(d.chatId) === String(driverChat));
         if (drv) {
-          // Update load status to pickup phase
           rec.status = "pickup_phase";
           loads.set(loadId, rec);
           
@@ -759,7 +779,6 @@ bot.on("callback_query", async (q) => {
       await bot.answerCallbackQuery(q.id, { text: "Dispatcher notified" });
       await bot.sendMessage(DISPATCHER_CHAT_ID, `⚠️ ${drv?.name || "Driver"} reported a dimension mismatch on <b>${loadId}</b>. Please review.`, { parse_mode: "HTML" });
     } else if (action === "confirmpickup") {
-      // finalize: update driver used feet/weight after photos uploaded
       const rec = loads.get(loadId);
       if (rec) {
         const drv = DRIVERS.find(d => String(d.chatId) === String(driverChat));
@@ -775,7 +794,6 @@ bot.on("callback_query", async (q) => {
           await bot.sendMessage(driverChat, "🚛 Load confirmed! You're en route. Drive safely!");
           await bot.sendMessage(DISPATCHER_CHAT_ID, `🚛 ${drv.name} confirmed pickup of <b>${loadId}</b>. Now en route.`, { parse_mode: "HTML" });
           
-          // Trigger AI load matching for next available loads
           findNextLoads(drv);
         }
       }
@@ -785,6 +803,7 @@ bot.on("callback_query", async (q) => {
     console.error("callback error", e);
   }
 });
+*/
 
 // ---------- API: VA Intake ----------
 app.post("/api/load-intake", async (req, res) => {
@@ -839,12 +858,10 @@ app.post("/api/load-intake", async (req, res) => {
 
     await Promise.all(targets.map(t => sendToDriver(t.d, base, loadId, t.s)));
 
-    // Dispatcher heads-up
+    // Dispatcher heads-up - DISABLED: Bot migrated to server/telegram-service.ts
     const summary = `${base.origin || "?"} → ${base.destination || "?"}${base.miles ? ` (${base.miles} mi)` : ""}  ${has(base.rate) ? `$${base.rate}` : ""}${has(base.rpm) ? ` • $${base.rpm}/mi` : ""}`;
-    await bot.sendMessage(DISPATCHER_CHAT_ID,
-      `🧭 Routed to: ${targets.map(t => t.d.name).join(", ")}\n${summary}`,
-      { parse_mode: "HTML" }
-    );
+    console.log(`Load intake routed to: ${targets.map(t => t.d.name).join(", ")}\n${summary}`);
+    // await bot.sendMessage(DISPATCHER_CHAT_ID, `🧭 Routed to: ...`, { parse_mode: "HTML" });
 
     res.json({ ok: true, routed: targets.map(t => t.d.name) });
   } catch (e) {
@@ -964,11 +981,13 @@ app.post("/api/dispatch/load-dims", async (req, res) => {
       ]
     };
 
-    await bot.sendMessage(driverChatId, explain, { parse_mode: "HTML", reply_markup: keyboard });
-    await bot.sendMessage(DISPATCHER_CHAT_ID, `📨 Asked ${drv.name} to confirm dimensions for <b>${loadId}</b>.`, { parse_mode: "HTML" });
+    // DISABLED: Bot migrated to server/telegram-service.ts
+    console.log(`Load dims for ${loadId}: ${explain}`);
+    // await bot.sendMessage(driverChatId, explain, { parse_mode: "HTML", reply_markup: keyboard });
+    // await bot.sendMessage(DISPATCHER_CHAT_ID, `📨 Asked ${drv.name} to confirm dimensions for <b>${loadId}</b>.`, { parse_mode: "HTML" });
 
     loads.set(loadId, rec);
-    res.send("OK");
+    res.send("OK - Load dimensions saved (Telegram notifications migrated to main service)");
   } catch (e) {
     console.error("load-dims error", e);
     res.status(500).send("Server error");
