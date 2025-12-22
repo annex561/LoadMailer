@@ -1097,31 +1097,284 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createGeofence(geofence: schema.InsertGeofence): Promise<schema.Geofence> { throw new Error('Not implemented'); }
-  async getGeofence(id: string): Promise<schema.Geofence | undefined> { return undefined; }
-  async updateGeofence(id: string, geofence: Partial<schema.InsertGeofence>): Promise<schema.Geofence | undefined> { return undefined; }
-  async deleteGeofence(id: string): Promise<boolean> { return false; }
-  async getAllGeofences(): Promise<schema.Geofence[]> { return []; }
+  async createGeofence(geofence: schema.InsertGeofence): Promise<schema.Geofence> {
+    try {
+      const id = randomUUID();
+      const newGeofence: schema.Geofence = {
+        ...geofence,
+        id,
+        isActive: geofence.isActive ?? true,
+        notificationSettings: geofence.notificationSettings ?? {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await db.insert(schema.geofences).values(newGeofence);
+      console.log(`✅ Created geofence ${id}: ${geofence.name}`);
+      return newGeofence;
+    } catch (error) {
+      console.error('Error creating geofence:', error);
+      throw error;
+    }
+  }
 
-  async createGeofenceEvent(event: schema.InsertGeofenceEvent): Promise<schema.GeofenceEvent> { throw new Error('Not implemented'); }
-  async getGeofenceEvent(id: string): Promise<schema.GeofenceEvent | undefined> { return undefined; }
-  async getGeofenceEventsByDriver(driverId: string): Promise<schema.GeofenceEvent[]> { return []; }
-  async getGeofenceEventsByGeofence(geofenceId: string): Promise<schema.GeofenceEvent[]> { return []; }
-  async getAllGeofenceEvents(): Promise<schema.GeofenceEvent[]> { return []; }
+  async getGeofence(id: string): Promise<schema.Geofence | undefined> {
+    try {
+      const result = await db.select().from(schema.geofences).where(eq(schema.geofences.id, id));
+      return result[0];
+    } catch (error) {
+      console.error('Error getting geofence:', error);
+      return undefined;
+    }
+  }
 
-  async createRoute(route: schema.InsertRoute): Promise<schema.Route> { throw new Error('Not implemented'); }
-  async getRoute(id: string): Promise<schema.Route | undefined> { return undefined; }
-  async updateRoute(id: string, route: Partial<schema.InsertRoute>): Promise<schema.Route | undefined> { return undefined; }
-  async deleteRoute(id: string): Promise<boolean> { return false; }
-  async getRoutesByDriver(driverId: string): Promise<schema.Route[]> { return []; }
-  async getAllRoutes(): Promise<schema.Route[]> { return []; }
+  async updateGeofence(id: string, geofence: Partial<schema.InsertGeofence>): Promise<schema.Geofence | undefined> {
+    try {
+      await db.update(schema.geofences)
+        .set({ ...geofence, updatedAt: new Date() })
+        .where(eq(schema.geofences.id, id));
+      console.log(`✅ Updated geofence ${id}`);
+      return this.getGeofence(id);
+    } catch (error) {
+      console.error('Error updating geofence:', error);
+      return undefined;
+    }
+  }
 
-  async createGpsDevice(device: schema.InsertGpsDevice): Promise<schema.GpsDevice> { throw new Error('Not implemented'); }
-  async getGpsDevice(id: string): Promise<schema.GpsDevice | undefined> { return undefined; }
-  async updateGpsDevice(id: string, device: Partial<schema.InsertGpsDevice>): Promise<schema.GpsDevice | undefined> { return undefined; }
-  async deleteGpsDevice(id: string): Promise<boolean> { return false; }
-  async getGpsDevicesByDriver(driverId: string): Promise<schema.GpsDevice[]> { return []; }
-  async getAllGpsDevices(): Promise<schema.GpsDevice[]> { return []; }
+  async deleteGeofence(id: string): Promise<boolean> {
+    try {
+      const result = await db.delete(schema.geofences).where(eq(schema.geofences.id, id));
+      console.log(`✅ Deleted geofence ${id}`);
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error('Error deleting geofence:', error);
+      return false;
+    }
+  }
+
+  async getAllGeofences(): Promise<schema.Geofence[]> {
+    try {
+      return await db.select().from(schema.geofences).orderBy(desc(schema.geofences.createdAt));
+    } catch (error) {
+      console.error('Error getting all geofences:', error);
+      return [];
+    }
+  }
+
+  async createGeofenceEvent(event: schema.InsertGeofenceEvent): Promise<schema.GeofenceEvent> {
+    try {
+      const id = randomUUID();
+      const newEvent: schema.GeofenceEvent = {
+        ...event,
+        id,
+        wasNotified: event.wasNotified ?? false,
+        createdAt: new Date(),
+      };
+      await db.insert(schema.geofenceEvents).values(newEvent);
+      console.log(`✅ Created geofence event ${id}: ${event.eventType}`);
+      return newEvent;
+    } catch (error) {
+      console.error('Error creating geofence event:', error);
+      throw error;
+    }
+  }
+
+  async getGeofenceEvent(id: string): Promise<schema.GeofenceEvent | undefined> {
+    try {
+      const result = await db.select().from(schema.geofenceEvents).where(eq(schema.geofenceEvents.id, id));
+      return result[0];
+    } catch (error) {
+      console.error('Error getting geofence event:', error);
+      return undefined;
+    }
+  }
+
+  async getGeofenceEventsByDriver(driverId: string): Promise<schema.GeofenceEvent[]> {
+    try {
+      return await db.select()
+        .from(schema.geofenceEvents)
+        .where(eq(schema.geofenceEvents.driverId, driverId))
+        .orderBy(desc(schema.geofenceEvents.timestamp));
+    } catch (error) {
+      console.error('Error getting geofence events by driver:', error);
+      return [];
+    }
+  }
+
+  async getGeofenceEventsByGeofence(geofenceId: string): Promise<schema.GeofenceEvent[]> {
+    try {
+      return await db.select()
+        .from(schema.geofenceEvents)
+        .where(eq(schema.geofenceEvents.geofenceId, geofenceId))
+        .orderBy(desc(schema.geofenceEvents.timestamp));
+    } catch (error) {
+      console.error('Error getting geofence events by geofence:', error);
+      return [];
+    }
+  }
+
+  async getAllGeofenceEvents(): Promise<schema.GeofenceEvent[]> {
+    try {
+      return await db.select().from(schema.geofenceEvents).orderBy(desc(schema.geofenceEvents.timestamp));
+    } catch (error) {
+      console.error('Error getting all geofence events:', error);
+      return [];
+    }
+  }
+
+  async createRoute(route: schema.InsertRoute): Promise<schema.Route> {
+    try {
+      const id = randomUUID();
+      const newRoute: schema.Route = {
+        ...route,
+        id,
+        status: route.status ?? 'planned',
+        plannedRoute: route.plannedRoute ?? null,
+        actualRoute: route.actualRoute ?? null,
+        deviationAlerts: route.deviationAlerts ?? [],
+        trafficData: route.trafficData ?? {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await db.insert(schema.routes).values(newRoute);
+      console.log(`✅ Created route ${id} for load ${route.loadId}`);
+      return newRoute;
+    } catch (error) {
+      console.error('Error creating route:', error);
+      throw error;
+    }
+  }
+
+  async getRoute(id: string): Promise<schema.Route | undefined> {
+    try {
+      const result = await db.select().from(schema.routes).where(eq(schema.routes.id, id));
+      return result[0];
+    } catch (error) {
+      console.error('Error getting route:', error);
+      return undefined;
+    }
+  }
+
+  async updateRoute(id: string, route: Partial<schema.InsertRoute>): Promise<schema.Route | undefined> {
+    try {
+      await db.update(schema.routes)
+        .set({ ...route, updatedAt: new Date() })
+        .where(eq(schema.routes.id, id));
+      console.log(`✅ Updated route ${id}`);
+      return this.getRoute(id);
+    } catch (error) {
+      console.error('Error updating route:', error);
+      return undefined;
+    }
+  }
+
+  async deleteRoute(id: string): Promise<boolean> {
+    try {
+      const result = await db.delete(schema.routes).where(eq(schema.routes.id, id));
+      console.log(`✅ Deleted route ${id}`);
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error('Error deleting route:', error);
+      return false;
+    }
+  }
+
+  async getRoutesByDriver(driverId: string): Promise<schema.Route[]> {
+    try {
+      return await db.select()
+        .from(schema.routes)
+        .where(eq(schema.routes.driverId, driverId))
+        .orderBy(desc(schema.routes.createdAt));
+    } catch (error) {
+      console.error('Error getting routes by driver:', error);
+      return [];
+    }
+  }
+
+  async getAllRoutes(): Promise<schema.Route[]> {
+    try {
+      return await db.select().from(schema.routes).orderBy(desc(schema.routes.createdAt));
+    } catch (error) {
+      console.error('Error getting all routes:', error);
+      return [];
+    }
+  }
+
+  async createGpsDevice(device: schema.InsertGpsDevice): Promise<schema.GpsDevice> {
+    try {
+      const id = randomUUID();
+      const newDevice: schema.GpsDevice = {
+        ...device,
+        id,
+        status: device.status ?? 'active',
+        deviceType: device.deviceType ?? 'mobile',
+        isActive: device.isActive ?? true,
+        settings: device.settings ?? {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      await db.insert(schema.gpsDevices).values(newDevice);
+      console.log(`✅ Created GPS device ${id}: ${device.deviceId}`);
+      return newDevice;
+    } catch (error) {
+      console.error('Error creating GPS device:', error);
+      throw error;
+    }
+  }
+
+  async getGpsDevice(id: string): Promise<schema.GpsDevice | undefined> {
+    try {
+      const result = await db.select().from(schema.gpsDevices).where(eq(schema.gpsDevices.id, id));
+      return result[0];
+    } catch (error) {
+      console.error('Error getting GPS device:', error);
+      return undefined;
+    }
+  }
+
+  async updateGpsDevice(id: string, device: Partial<schema.InsertGpsDevice>): Promise<schema.GpsDevice | undefined> {
+    try {
+      await db.update(schema.gpsDevices)
+        .set({ ...device, updatedAt: new Date() })
+        .where(eq(schema.gpsDevices.id, id));
+      console.log(`✅ Updated GPS device ${id}`);
+      return this.getGpsDevice(id);
+    } catch (error) {
+      console.error('Error updating GPS device:', error);
+      return undefined;
+    }
+  }
+
+  async deleteGpsDevice(id: string): Promise<boolean> {
+    try {
+      const result = await db.delete(schema.gpsDevices).where(eq(schema.gpsDevices.id, id));
+      console.log(`✅ Deleted GPS device ${id}`);
+      return result.rowCount > 0;
+    } catch (error) {
+      console.error('Error deleting GPS device:', error);
+      return false;
+    }
+  }
+
+  async getGpsDevicesByDriver(driverId: string): Promise<schema.GpsDevice[]> {
+    try {
+      return await db.select()
+        .from(schema.gpsDevices)
+        .where(eq(schema.gpsDevices.driverId, driverId))
+        .orderBy(desc(schema.gpsDevices.createdAt));
+    } catch (error) {
+      console.error('Error getting GPS devices by driver:', error);
+      return [];
+    }
+  }
+
+  async getAllGpsDevices(): Promise<schema.GpsDevice[]> {
+    try {
+      return await db.select().from(schema.gpsDevices).orderBy(desc(schema.gpsDevices.createdAt));
+    } catch (error) {
+      console.error('Error getting all GPS devices:', error);
+      return [];
+    }
+  }
 
   async createLoadBoardSource(source: schema.InsertLoadBoardSource): Promise<schema.LoadBoardSource> { 
     const id = randomUUID();
