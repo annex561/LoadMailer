@@ -1,6 +1,6 @@
 # Overview
 
-TRAQ IQ is a comprehensive fleet management system for truck load tracking and logistics coordination. It manages drivers, customers, and loads, focusing on real-time load status tracking, automated communication, and streamlined logistics. Key features include a Tennessee Load Feed, an SMS-based driver onboarding system, real-time GPS tracking, and a professional document management system. The project aims to provide a robust platform for efficient freight management, integrating modern communication tools for dispatch and driver interaction, with ambitions to capture significant market share in the logistics sector.
+TRAQ IQ is a comprehensive fleet management system designed for truck load tracking and logistics coordination. Its core purpose is to manage drivers, customers, and loads efficiently, with a strong emphasis on real-time load status updates, automated communication, and streamlined logistics. Key features include a Tennessee Load Feed, an SMS-based driver onboarding system, real-time GPS tracking, and a professional document management system. The project aims to establish a robust platform for efficient freight management, integrating modern communication tools for dispatch and driver interaction, with significant market potential in the logistics sector.
 
 # User Preferences
 
@@ -9,134 +9,40 @@ Preferred communication style: Simple, everyday language.
 # System Architecture
 
 ## Frontend
-- **Framework**: React 18 with TypeScript and Vite.
-- **UI Components**: Shadcn/ui (Radix UI primitives).
-- **Styling**: Tailwind CSS with custom design tokens.
-- **State Management**: TanStack Query (React Query) for server state.
-- **Routing**: Wouter.
-- **Form Handling**: React Hook Form with Zod validation.
+The frontend is built with React 18 (TypeScript, Vite), using Shadcn/ui (Radix UI) for components, Tailwind CSS for styling, TanStack Query for state management, Wouter for routing, and React Hook Form with Zod for form handling.
 
 ## Backend
-- **Framework**: Express.js with TypeScript.
-- **Data Layer**: Drizzle ORM with PostgreSQL.
-- **Database Adapter**: Neon Database serverless adapter.
-- **Storage Interface**: Abstract storage interface with database implementation.
-- **Scheduler**: Node-cron based job scheduling.
+The backend utilizes Express.js with TypeScript, Drizzle ORM for PostgreSQL (via Neon Database serverless adapter), and Node-cron for job scheduling. It features an abstract storage interface.
 
 ## Database Design
-- **ORM**: Drizzle ORM with PostgreSQL dialect.
-- **Schema**: Drivers, Customers, Loads, Email Templates, Email Logs with defined relationships.
-- **IDs**: Nanoid-based collision-proof load number generation (LOAD-XXXXXX-nanoid).
-- **Multi-Tenant Architecture**: Company-centric data isolation with subscription management:
-  - **Companies Table**: Organization records with billing details, trial management, and settings
-  - **Subscriptions Table**: Stripe-integrated subscription plans (Starter/Pro/Enterprise) with status tracking
-  - **Company Users Table**: Role-based access control (admin/dispatcher) linking users to companies
-  - **Payment Methods Table**: Secure storage of Stripe payment methods (card/ACH)
-  - **Billing History Table**: Invoice and payment transaction records
-  - **Data Isolation**: All core tables (drivers, customers, loads, threads, messages) include `company_id` with composite foreign keys enforcing cross-tenant isolation
-  - **Performance**: Indexes on all `company_id` columns for optimized tenant-scoped queries
-  - **Security**: Database-level enforcement prevents data leakage - loads cannot reference drivers/customers from different companies
-  - **Legacy Migration**: Existing data migrated to "Legacy Default Company" with grandfathered Enterprise plan
+Drizzle ORM is used with a PostgreSQL dialect, defining schemas for Drivers, Customers, Loads, Email Templates, and Email Logs. Load numbers use Nanoid for collision-proof generation. The system implements a multi-tenant architecture with `company_id` for data isolation across Companies, Subscriptions (Stripe integrated), Company Users (role-based access), Payment Methods, and Billing History. Indexes are applied on `company_id` for performance, and database-level security prevents cross-tenant data leakage.
 
 ## Communication System
-- **Unified Messaging**: One conversation stream per driver with automatic thread creation.
-  - **Auto-Thread Creation**: Unified threads automatically created when driver sends first message from mobile dashboard or SMS.
-  - **Field Mapping**: API boundary maps database fields (`lastMessageText`/`lastMessageAt`) to frontend-expected names (`lastMessage`/`lastMessageTimestamp`).
-- **SMS**: Twilio SMS for all driver communications, bidirectional with smart load context and MMS.
-  - **Phone Number Normalization**: Automatic E.164 format conversion for reliable Twilio SMS delivery:
-    - **US 10-digit numbers**: Auto-prefixed with +1 (e.g., 5617688349 → +15617688349)
-    - **US 11-digit numbers**: Auto-prefixed with + if starting with 1 (e.g., 15617688349 → +15617688349)
-    - **E.164 international**: Validated 8-15 digits after + (spaces/hyphens stripped)
-    - **Strict validation**: Rejects malformed numbers (parentheses, extensions, trunk codes)
-    - **Whitespace handling**: Trims leading/trailing spaces before processing
-    - **Consistent implementation**: Normalized across routes.ts, gps-health-monitor.ts, sms-communication-service.ts
-  - **Dashboard Link Format**: Simplified format with only truck emoji (🚛) to avoid carrier spam filters. No bullet point emojis (✅📍💬).
-  - **Driver-to-Dispatcher SMS Relay**: Optional SMS notifications to dispatcher when driver sends in-app messages (requires `DISPATCHER_PHONE_NUMBER` env var).
-  - **Dual-Routing Architecture**: Incoming driver SMS automatically routed to multiple load contexts for complete conversation continuity:
-    - **Primary Context**: Detected from message content (load number mentions) or driver's current active load
-    - **Secondary Context**: Driver's current active load (if different from primary)
-    - **Thread Stats Protection**: Thread counters (messageCount, unreadDispatchMessages) increment only once per inbound SMS despite dual-routing
-    - **Metadata Tracking**: Each message tagged with `routingReason` (detected_from_message/driver_current_load/general_conversation) and `isPrimaryContext` flag
-    - **Performance**: Optimized with cached database queries (`detectLoadContextWithCache`) to avoid redundant lookups
-    - **Document Handling**: Smart MMS categorization creates documents only for primary context to prevent duplicates
-- **Email**: Nodemailer for automated email notifications using dynamic templates.
-- **In-App Messaging**: Real-time bidirectional messaging between drivers (mobile dashboard) and dispatchers (SMS Dispatch tab).
-  - Mobile dashboard sends messages with `{threadId: 'auto', driverId, content, sender: 'driver'}`.
-  - Backend auto-discovers or creates unified thread for driver.
-  - Messages appear in Dispatcher Dashboard's SMS Dispatch tab (Recent Messages) and Activity Feed.
-  - **Notification Sounds**: Instant audio feedback (440Hz beep, 200ms) when new messages arrive using Web Audio API. Custom `useNotificationSound` hook with sender role filtering to prevent self-notification.
-  - **Sender Labels**: Clear visual distinction with "You:" prefix for own messages and "Dispatch:"/"Driver Name:" for received messages in both mobile and dispatcher interfaces.
-  - **API Endpoints**: 
-    - `GET /api/communication/threads` - Returns all conversation threads with lastMessageSenderRole
-    - `GET /api/communication/messages/:threadId` - Returns messages for specific thread
-    - `POST /api/communication/messages` - Send message via `apiRequest("POST", url, {threadId, content, sender})`
+The system features unified messaging with a single conversation stream per driver, including auto-thread creation and field mapping for API consistency. Twilio SMS handles all driver communications, featuring E.164 phone number normalization, simplified dashboard link formats, optional driver-to-dispatcher SMS relay, and a dual-routing architecture for incoming driver SMS to multiple load contexts. Nodemailer is used for automated email notifications. In-app messaging provides real-time bidirectional communication between drivers (mobile dashboard) and dispatchers (SMS Dispatch tab), with notification sounds, clear sender labels, and dedicated API endpoints.
 
 ## API Design
-- **Pattern**: RESTful API endpoints.
-- **Error Handling**: Centralized middleware.
-- **Data Validation**: Zod schemas shared between frontend and backend.
+The project uses RESTful API endpoints with centralized error handling and shared Zod schemas for frontend and backend data validation.
 
 ## UI/UX Design System
-- **Brand Colors**: Navy (#0A101A), Slate (#1E2733), Teal (#00B5B8 - primary), Whitesmoke (#F3F5F7), Success (#3AE374), Error (#E63946).
-- **Typography**: Poppins (primary), Inter (secondary), JetBrains Mono (monospace).
-- **Design Principles**: 8px border-radius, 0.2s ease transitions, button hover effects, 600 font weight for headings.
-- **Theming**: CSS variables and theme tokens for light/dark mode adaptation (`hsl(var(--color))`).
-- **Component Styling**: Shadcn/ui components modernized with Teal brand color via `--primary` token.
-- **Dark Mode**: Fully functional with Navy background, Slate cards, Teal accents, and Whitesmoke text.
-- **Strict Color Usage**: No hard-coded hex values or utility classes in UI components.
-- **Sidebar Background Fix**: Use `bg-[hsl(var(--sidebar))]` instead of `bg-sidebar` to prevent alpha transparency issues while maintaining theme support.
+The design system employs a consistent brand palette (Navy, Slate, Teal, Whitesmoke) and typography (Poppins, Inter, JetBrains Mono). It adheres to principles like 8px border-radius, 0.2s ease transitions, and 600 font weight for headings. Theming is managed with CSS variables and tokens for light/dark mode, with Shadcn/ui components customized with the Teal brand color. Dark mode is fully supported.
 
 ## Feature Specifications
 - **Driver Management**: Onboarding, status tracking, payment.
-- **Load Matching**: Location, equipment, weight, driver availability filtering.
-- **Automated Communication**: SMS for load offers and driver communications.
+- **Load Matching**: Filters by location, equipment, weight, and driver availability.
+- **Automated Communication**: SMS for load offers and driver interactions.
 - **Load Workflow**: Intelligent load retry, post-confirmation messaging, manual entry.
-- **Unified Dispatcher Dashboard**: Mission control center consolidating all dispatcher tools into one workspace with tabbed interface. Features include:
-    - **Four-Tab Layout**: Overview, GPS Tracking, Documents, SMS Dispatch tabs for complete dispatcher workflow.
-    - **Overview Tab**: 
-        - Quick Stats Cards: Real-time metrics for Active Loads, Available Drivers, Pending Assignments, and Today's Pickups.
-        - Three-Panel Layout: Active Loads (left), Available Drivers (center), Activity Feed (right) with color-coded status badges and quick actions.
-        - Quick Actions Bar: Create Load, Assign Driver, Send Message, View GPS - all accessible from top bar.
-        - Smart Search: Live filtering across loads (by number, customer, status) and drivers (by name, equipment).
-    - **GPS Tracking Tab**: 
-        - Live map integration using DriverLocationMap component showing all active driver locations.
-        - Driver telemetry cards displaying: current address, speed, battery level, last update timestamp, moving/stationary status.
-        - Empty state handling for no active GPS data.
-        - Auto-refresh: 60-second intervals for driver locations.
-    - **Documents Tab**: 
-        - Document approval workflow with filter dropdown (all/pending/approved/rejected).
-        - Document cards showing: type, load number, driver name, upload time, status badge.
-        - Quick approve/reject buttons with driver SMS notifications.
-        - Pending document count badge on tab (red).
-        - Auto-refresh: 30-second intervals for documents.
-    - **SMS Dispatch Tab**: 
-        - Driver selection dropdown and message textarea.
-        - Quick message templates: Check Availability, Status Update, Load Assigned.
-        - Form validation (driver and message required).
-        - Recent messages section showing last 10 threads.
-        - Auto-refresh: 15-second intervals for communication threads.
-    - **Auto-Refresh Strategy**: Optimized polling intervals (loads: 30s, drivers/locations: 60s, activity/threads: 15s, documents: 30s) for real-time updates.
-    - **Professional Styling**: Teal/Navy brand colors, responsive design, loading states, empty states, toast notifications.
-- **Streamlined Navigation**: Consolidated sidebar with Dispatcher Dashboard at top of Core Operations. Removed redundant items (Loads, DAT Loads, Manual Load Entry, Driver Management, Driver Messages, GPS Tracking, Document Management) now accessible via unified dashboard.
-- **Communication Dashboard**: Modern interface for driver communications with compact thread list, real-time updates, status indicators, AI-assisted messaging, quick message templates, and MMS preview.
-- **Professional Document Management**: Approval workflow, quality validation, cloud integrations, smart categorization, enhanced viewer, audit trails, automated reminders, PDF generation. Prevents load completion without required documents.
-- **Real-Time GPS Tracking**: Mobile-optimized, secure token-based authentication, 60-second auto-updates, wake lock, GPS health monitor.
-- **Mobile Driver Dashboard (PWA)**: Installable PWA with dynamic authentication, driver stats, load history, WhatsApp-style chat, document upload, profile management.
-    - **PWA Configuration**: 
-        - Manifest: `start_url: /mobile-driver-dashboard`, `theme_color: #00B5B8` (teal), `scope: /`, standalone display mode.
-        - Professional icons: Teal-branded 192x192 and 512x512 app icons with truck logo.
-        - Service Worker: SPA-aware routing with network-first strategy for navigation, offline fallback to cached shell, cache-first for assets.
-        - Offline Support: App shell cached for offline operation, React Router handles client-side navigation.
-    - **Authentication**: Dynamic driver authentication via `?driverId=xxx` with localStorage persistence.
-    - **Query Guards**: `enabled: !!driverId` for TanStack Query hooks.
-    - **Mobile Optimizations**: Pull-to-refresh, swipe gestures, wake lock.
-    - **GPS-Based Intelligent Status Buttons**: Context-aware load progression based on 0.5-mile proximity to pickup/delivery locations (Haversine formula, server-side geocoding), with manual fallback.
-    - **Enhanced Hamburger Menu**: Profile Settings, Help & Support, Contact Dispatch, Logout.
-    - **AI-Powered Messaging**: ChatGPT-assisted message composition for drivers. Generates 3 context-aware variations, quick message buttons, OpenAI integration (via Replit AI Integrations), context-aware message enhancement for professionalism.
-    - **Debounced Typing Protection**: Message input uses debounced typing detection (3s inactivity window) to pause polling during active typing, preventing input field from disappearing due to re-renders. Polling automatically resumes after inactivity or message send.
-- **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized links with multi-layer security (authorization, rate limiting, batch limits, audit logging).
-- **Driver Onboarding**: Supports token-optional flow for both invited and direct registrations, using a multi-step wizard. Also supports simple registration and admin creation.
-    - **Completion Flow**: Registration success screen focuses on mobile driver dashboard access (NO Zello references). Auto-redirects to `/mobile-driver-dashboard?driverId=${id}` after 2 seconds with manual override button. Cache invalidation ensures new drivers immediately appear in dispatcher's driver list.
+- **Unified Dispatcher Dashboard**: A central workspace with four tabs:
+    - **Overview**: Quick stats, active loads, available drivers, activity feed, quick actions, smart search.
+    - **GPS Tracking**: Live map integration, driver telemetry cards, 60-second auto-refresh.
+    - **Documents**: Approval workflow, filterable document cards, quick approve/reject, 30-second auto-refresh.
+    - **SMS Dispatch**: Driver selection, message textarea, quick templates, recent messages, 15-second auto-refresh.
+- **Streamlined Navigation**: Consolidated sidebar with the Dispatcher Dashboard as the primary access point for core operations.
+- **Communication Dashboard**: Modern interface for driver communications with real-time updates and quick message templates.
+- **Professional Document Management**: Approval workflow, quality validation, cloud integrations, smart categorization, and PDF generation, blocking load completion without required documents.
+- **Real-Time GPS Tracking**: Mobile-optimized, secure, with 60-second auto-updates and a GPS health monitor.
+- **Mobile Driver Dashboard (PWA)**: Installable PWA with dynamic authentication, driver stats, load history, chat, document upload, and profile management. Includes GPS-based intelligent status buttons, an enhanced hamburger menu, and AI-powered messaging for drivers. Features debounced typing protection for message input.
+- **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized links with security measures.
+- **Driver Onboarding**: Multi-step wizard supporting token-optional flows for invited and direct registrations, focusing on mobile driver dashboard access.
 
 # External Dependencies
 
@@ -145,8 +51,11 @@ Preferred communication style: Simple, everyday language.
 - **Drizzle Kit**: Database migration and schema management.
 
 ## Messaging & Email Services
-- **Twilio SMS**: Primary communication for all driver notifications, supporting bidirectional communication.
+- **Twilio SMS**: Primary communication for all driver notifications and bidirectional messaging.
 - **Nodemailer**: SMTP email delivery for load lifecycle notifications.
+
+## Payment Processing
+- **Stripe**: Payment processing integrated via `stripe-replit-sync` library for automatic schema management and data synchronization (products, prices, customers, subscriptions).
 
 ## UI Libraries
 - **Radix UI**: Accessible UI primitives.
