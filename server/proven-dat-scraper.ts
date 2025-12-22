@@ -101,7 +101,7 @@ export class ProvenDATScraper {
         await this.page.waitForSelector('input[type="password"]');
         await this.page.type('input[type="password"]', DAT_PASSWORD);
         await this.page.keyboard.press('Enter');
-        console.log('✅ Password entered using type="password"');
+        console.log('✅ Credentials entered successfully');
         
       } catch (emailError) {
         console.log('⚠️ Email field approach failed, trying username/password approach...');
