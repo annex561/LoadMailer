@@ -867,7 +867,7 @@ export default function MobileDriverDashboard() {
       return (
         <Button
           onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'in_transit' })}
-          className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700"
+          className="w-full h-14 text-lg bg-primary hover:bg-primary/90"
           data-testid="button-start-delivery"
         >
           <Navigation className="h-5 w-5 mr-2" />
@@ -881,7 +881,7 @@ export default function MobileDriverDashboard() {
       return (
         <Button
           onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'in_transit' })}
-          className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700"
+          className="w-full h-14 text-lg bg-primary hover:bg-primary/90"
           data-testid="button-start-delivery"
         >
           <Navigation className="h-5 w-5 mr-2" />
@@ -894,7 +894,7 @@ export default function MobileDriverDashboard() {
       return (
         <Button
           onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'in_transit' })}
-          className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+          className="w-full h-14 text-lg bg-success hover:bg-success/90"
           data-testid="button-arrived-pickup"
         >
           <CheckCircle className="h-5 w-5 mr-2" />
@@ -907,14 +907,14 @@ export default function MobileDriverDashboard() {
       <div className="space-y-2">
         <Button
           onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'in_transit' })}
-          className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700"
+          className="w-full h-14 text-lg bg-primary hover:bg-primary/90"
           data-testid="button-en-route-pickup"
         >
           <Navigation className="h-5 w-5 mr-2" />
           En Route to Pickup
         </Button>
         {distance !== null && (
-          <div className="text-xs text-center text-gray-500">
+          <div className="text-xs text-center text-muted-foreground">
             {distance.toFixed(1)} miles from pickup
           </div>
         )}
@@ -968,7 +968,7 @@ export default function MobileDriverDashboard() {
       return (
         <Button
           onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'delivered' })}
-          className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700"
+          className="w-full h-14 text-lg bg-success hover:bg-success/90"
           data-testid="button-mark-delivered"
         >
           <CheckCircle className="h-5 w-5 mr-2" />
@@ -982,7 +982,7 @@ export default function MobileDriverDashboard() {
       return (
         <Button
           onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'delivered' })}
-          className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700"
+          className="w-full h-14 text-lg bg-success hover:bg-success/90"
           data-testid="button-mark-delivered"
         >
           <CheckCircle className="h-5 w-5 mr-2" />
@@ -996,7 +996,7 @@ export default function MobileDriverDashboard() {
       return (
         <Button
           onClick={() => updateLoadStatusMutation.mutate({ loadId: currentLoad.id, status: 'delivered' })}
-          className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700"
+          className="w-full h-14 text-lg bg-success hover:bg-success/90"
           data-testid="button-mark-delivered"
         >
           <CheckCircle className="h-5 w-5 mr-2" />
@@ -1010,7 +1010,7 @@ export default function MobileDriverDashboard() {
       return (
         <Button
           onClick={() => setArrivedAtDelivery(true)}
-          className="w-full h-14 text-lg bg-green-600 hover:bg-green-700"
+          className="w-full h-14 text-lg bg-success hover:bg-success/90"
           data-testid="button-arrived-delivery"
         >
           <MapPin className="h-5 w-5 mr-2" />
@@ -1021,13 +1021,13 @@ export default function MobileDriverDashboard() {
 
     // If not near delivery, show "In Transit" indicator
     return (
-      <div className="w-full py-3 px-4 bg-orange-100 rounded-xl text-center">
-        <div className="flex items-center justify-center gap-2 text-orange-800">
+      <div className="w-full py-3 px-4 bg-warning/10 rounded-xl text-center">
+        <div className="flex items-center justify-center gap-2 text-warning">
           <Truck className="h-5 w-5" />
           <span className="font-semibold">In Transit</span>
         </div>
         {distance !== null && (
-          <div className="text-xs text-orange-600 mt-1">
+          <div className="text-xs text-warning mt-1">
             {distance.toFixed(1)} miles from delivery
           </div>
         )}
@@ -1201,26 +1201,26 @@ export default function MobileDriverDashboard() {
             {/* Route */}
             <div className="space-y-3">
               <div className="flex items-start gap-3">
-                <div className="bg-green-100 rounded-full p-2 mt-1">
-                  <MapPin className="h-4 w-4 text-green-600" />
+                <div className="bg-success/10 rounded-full p-2 mt-1">
+                  <MapPin className="h-4 w-4 text-success" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs text-gray-500">Pickup</div>
+                  <div className="text-xs text-muted-foreground">Pickup</div>
                   <div className="font-semibold text-sm">{currentLoad.pickupAddress}</div>
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-muted-foreground">
                     {formatDate(currentLoad.pickupDate)} • {currentLoad.pickupTime}
                   </div>
                 </div>
               </div>
               
               <div className="flex items-start gap-3">
-                <div className="bg-red-100 rounded-full p-2 mt-1">
-                  <MapPin className="h-4 w-4 text-red-600" />
+                <div className="bg-primary/10 rounded-full p-2 mt-1">
+                  <MapPin className="h-4 w-4 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-xs text-gray-500">Delivery</div>
+                  <div className="text-xs text-muted-foreground">Delivery</div>
                   <div className="font-semibold text-sm">{currentLoad.deliveryAddress}</div>
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-muted-foreground">
                     {formatDate(currentLoad.deliveryDate)} • {currentLoad.deliveryTime}
                   </div>
                 </div>
@@ -1323,9 +1323,9 @@ export default function MobileDriverDashboard() {
       ) : (
         <Card className="mx-4">
           <CardContent className="py-12 text-center">
-            <Truck className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-            <p className="text-gray-500 font-medium">No Active Load</p>
-            <p className="text-sm text-gray-400">You'll see your next load here</p>
+            <Truck className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <p className="text-muted-foreground font-medium">No Active Load</p>
+            <p className="text-sm text-muted-foreground">You'll see your next load here</p>
           </CardContent>
         </Card>
       )}
@@ -1342,13 +1342,13 @@ export default function MobileDriverDashboard() {
                   key={docType}
                   className={cn(
                     "p-4 rounded-xl border-2 text-center",
-                    hasDoc ? "border-green-500 bg-green-50" : "border-gray-200 bg-white"
+                    hasDoc ? "border-success bg-success/10" : "border-border bg-card"
                   )}
                 >
                   {hasDoc ? (
-                    <CheckCircle className="h-6 w-6 mx-auto mb-2 text-green-600" />
+                    <CheckCircle className="h-6 w-6 mx-auto mb-2 text-success" />
                   ) : (
-                    <FileCheck className="h-6 w-6 mx-auto mb-2 text-gray-400" />
+                    <FileCheck className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
                   )}
                   <div className="text-xs font-medium uppercase">
                     {docType.replace('_', ' ')}
@@ -1398,8 +1398,8 @@ export default function MobileDriverDashboard() {
                 className="relative overflow-hidden"
               >
                 {/* Swipe Action Background */}
-                <div className="absolute inset-0 bg-blue-600 flex items-center justify-end px-6">
-                  <div className="flex items-center gap-2 text-white">
+                <div className="absolute inset-0 bg-primary flex items-center justify-end px-6">
+                  <div className="flex items-center gap-2 text-primary-foreground">
                     <Phone className="h-5 w-5" />
                     <span className="font-semibold">Call Customer</span>
                   </div>
@@ -1407,7 +1407,7 @@ export default function MobileDriverDashboard() {
 
                 {/* Main Card */}
                 <div
-                  className="relative bg-white"
+                  className="relative bg-card"
                   style={{
                     transform: swipedItemId === load.id 
                       ? `translateX(-${swipeDistance}px)` 
@@ -1454,8 +1454,8 @@ export default function MobileDriverDashboard() {
             ))
           ) : (
             <div className="text-center py-12">
-              <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500">No load history yet</p>
+              <Package className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-muted-foreground">No load history yet</p>
             </div>
           )}
         </div>
@@ -1484,7 +1484,7 @@ export default function MobileDriverDashboard() {
 
               {/* Main Card */}
               <div
-                className="relative bg-white"
+                className="relative bg-card"
                 style={{
                   transform: swipedItemId === thread.id 
                     ? `translateX(-${swipeDistance}px)` 
@@ -1516,7 +1516,7 @@ export default function MobileDriverDashboard() {
                 }}
               >
                 <Card
-                  className="cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
                   data-testid={`thread-${thread.id}`}
                 >
                   <CardContent className="p-4">
@@ -1525,17 +1525,17 @@ export default function MobileDriverDashboard() {
                         <div className="font-semibold flex items-center gap-2">
                           Dispatch
                           {thread.unreadDispatchMessages > 0 && (
-                            <Badge className="bg-red-500 text-white text-xs px-2">
+                            <Badge className="bg-destructive text-destructive-foreground text-xs px-2">
                               {thread.unreadDispatchMessages}
                             </Badge>
                           )}
                         </div>
-                        <div className="text-sm text-gray-600 truncate">
+                        <div className="text-sm text-muted-foreground truncate">
                           {thread.lastMessage ? (
                             <>
                               <span className={cn(
                                 "font-medium",
-                                thread.lastMessageSenderRole === 'driver' ? "text-primary" : "text-gray-700"
+                                thread.lastMessageSenderRole === 'driver' ? "text-primary" : "text-foreground"
                               )}>
                                 {thread.lastMessageSenderRole === 'driver' ? 'You: ' : 'Dispatch: '}
                               </span>
@@ -1545,11 +1545,11 @@ export default function MobileDriverDashboard() {
                             'No messages yet'
                           )}
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">
+                        <div className="text-xs text-muted-foreground mt-1">
                           {formatDate(thread.lastMessageAt)}
                         </div>
                       </div>
-                      <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0 mt-1" />
+                      <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
                     </div>
                   </CardContent>
                 </Card>
@@ -1575,7 +1575,7 @@ export default function MobileDriverDashboard() {
             </Button>
             <div className="flex-1">
               <div className="font-semibold text-foreground">Dispatch</div>
-              <div className="text-xs text-blue-100">TRAQ IQ Team</div>
+              <div className="text-xs text-primary-foreground/80">TRAQ IQ Team</div>
             </div>
             <Phone className="h-5 w-5" />
           </div>
@@ -1827,7 +1827,7 @@ export default function MobileDriverDashboard() {
             {documents.length > 0 ? (
               documents.map((doc) => (
                 <Card key={doc.id} className="overflow-hidden relative group">
-                  <div className="aspect-video bg-gray-100 flex items-center justify-center relative">
+                  <div className="aspect-video bg-muted flex items-center justify-center relative">
                     {doc.fileUrl && doc.mimeType?.startsWith('image/') ? (
                       <img 
                         src={doc.fileUrl} 
@@ -1835,7 +1835,7 @@ export default function MobileDriverDashboard() {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <FileText className="h-8 w-8 text-gray-400" />
+                      <FileText className="h-8 w-8 text-muted-foreground" />
                     )}
                     
                     {/* Edit Menu Button */}
@@ -1845,7 +1845,7 @@ export default function MobileDriverDashboard() {
                           <Button
                             size="sm"
                             variant="secondary"
-                            className="h-8 w-8 p-0 rounded-full bg-white/90 hover:bg-white shadow"
+                            className="h-8 w-8 p-0 rounded-full bg-card/90 hover:bg-card shadow"
                             data-testid={`button-edit-${doc.id}`}
                           >
                             <MoreVertical className="h-4 w-4" />
@@ -1864,7 +1864,7 @@ export default function MobileDriverDashboard() {
                               setDocumentToDelete(doc);
                               setShowDeleteConfirm(true);
                             }}
-                            className="text-red-600"
+                            className="text-destructive"
                             data-testid={`menu-delete-${doc.id}`}
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
@@ -1876,7 +1876,7 @@ export default function MobileDriverDashboard() {
                   </div>
                   
                   <CardContent className="p-3">
-                    <div className="text-xs font-medium uppercase text-gray-600 mb-1">
+                    <div className="text-xs font-medium uppercase text-muted-foreground mb-1">
                       {doc.documentType.replace('_', ' ')}
                     </div>
                     <Badge
@@ -1895,9 +1895,9 @@ export default function MobileDriverDashboard() {
               ))
             ) : (
               <div className="col-span-2 text-center py-12">
-                <FileText className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-                <p className="text-gray-500">No documents uploaded yet</p>
-                <p className="text-sm text-gray-400 mt-2">
+                <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">No documents uploaded yet</p>
+                <p className="text-sm text-muted-foreground mt-2">
                   Take a photo to get started
                 </p>
               </div>
@@ -1921,7 +1921,7 @@ export default function MobileDriverDashboard() {
               <img 
                 src={pendingFilePreview} 
                 alt="Preview" 
-                className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
+                className="w-full h-48 object-cover rounded-lg border-2 border-border"
               />
             </div>
           )}
@@ -2037,7 +2037,7 @@ export default function MobileDriverDashboard() {
             <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => documentToDelete && deleteDocumentMutation.mutate(documentToDelete.id)}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive/90"
               data-testid="button-confirm-delete"
             >
               Delete
@@ -2140,7 +2140,7 @@ export default function MobileDriverDashboard() {
                 setActiveTab('documents');
                 setShowQuickActions(false);
               }}
-              className="w-full h-12 bg-white text-gray-900 hover:bg-gray-100 shadow-lg"
+              className="w-full h-12 bg-card text-foreground hover:bg-muted shadow-lg"
               data-testid="quick-action-upload"
             >
               <Camera className="h-5 w-5 mr-2" />
@@ -2151,7 +2151,7 @@ export default function MobileDriverDashboard() {
                 setActiveTab('messages');
                 setShowQuickActions(false);
               }}
-              className="w-full h-12 bg-white text-gray-900 hover:bg-gray-100 shadow-lg"
+              className="w-full h-12 bg-card text-foreground hover:bg-muted shadow-lg"
               data-testid="quick-action-message"
             >
               <MessageSquare className="h-5 w-5 mr-2" />
@@ -2162,7 +2162,7 @@ export default function MobileDriverDashboard() {
                 handleStartGPSTracking();
                 setShowQuickActions(false);
               }}
-              className="w-full h-12 bg-white text-gray-900 hover:bg-gray-100 shadow-lg"
+              className="w-full h-12 bg-card text-foreground hover:bg-muted shadow-lg"
               data-testid="quick-action-gps"
             >
               <MapPin className="h-5 w-5 mr-2" />
@@ -2172,7 +2172,7 @@ export default function MobileDriverDashboard() {
         )}
         <Button
           onClick={() => setShowQuickActions(!showQuickActions)}
-          className="w-14 h-14 rounded-full shadow-2xl bg-blue-600 hover:bg-blue-700"
+          className="w-14 h-14 rounded-full shadow-2xl bg-primary hover:bg-primary/90"
           data-testid="button-quick-actions"
         >
           {showQuickActions ? (
@@ -2194,9 +2194,9 @@ export default function MobileDriverDashboard() {
           />
           
           {/* Menu Panel */}
-          <div className="fixed top-0 right-0 h-full w-80 max-w-[90vw] bg-white shadow-2xl z-[110] overflow-y-auto">
+          <div className="fixed top-0 right-0 h-full w-80 max-w-[90vw] bg-card shadow-2xl z-[110] overflow-y-auto">
             {/* Menu Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
+            <div className="bg-gradient-to-r from-primary to-primary/90 text-primary-foreground p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold">Menu</h2>
                 <button
@@ -2216,7 +2216,7 @@ export default function MobileDriverDashboard() {
                 </div>
                 <div>
                   <div className="font-semibold">{driver?.name || 'Driver'}</div>
-                  <div className="text-xs text-blue-100">
+                  <div className="text-xs text-primary-foreground/80">
                     {driver?.status === 'on_route' ? '🚚 On Route' : '✅ Available'}
                   </div>
                 </div>
@@ -2226,19 +2226,19 @@ export default function MobileDriverDashboard() {
             {/* Menu Items */}
             <div className="p-4 space-y-2">
               <button
-                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation"
+                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-muted active:bg-muted transition-colors touch-manipulation"
                 onClick={() => {
                   setShowMenu(false);
                   setActiveTab('profile');
                 }}
                 data-testid="menu-item-profile"
               >
-                <User className="h-5 w-5 text-gray-600" />
-                <span className="font-medium text-gray-900">Profile Settings</span>
+                <User className="h-5 w-5 text-muted-foreground" />
+                <span className="font-medium text-foreground">Profile Settings</span>
               </button>
 
               <button
-                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-gray-100 active:bg-gray-200 transition-colors touch-manipulation"
+                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-muted active:bg-muted transition-colors touch-manipulation"
                 onClick={() => {
                   setShowMenu(false);
                   toast({
@@ -2248,17 +2248,17 @@ export default function MobileDriverDashboard() {
                 }}
                 data-testid="menu-item-help"
               >
-                <HelpCircle className="h-5 w-5 text-gray-600" />
-                <span className="font-medium text-gray-900">Help & Support</span>
+                <HelpCircle className="h-5 w-5 text-muted-foreground" />
+                <span className="font-medium text-foreground">Help & Support</span>
               </button>
 
-              <div className="border-t border-gray-200 my-2" />
+              <div className="border-t border-border my-2" />
 
               <div className="px-2 py-1">
-                <div className="text-xs text-gray-500 font-semibold mb-2">Contact Dispatch</div>
+                <div className="text-xs text-muted-foreground font-semibold mb-2">Contact Dispatch</div>
                 <div className="flex gap-2">
                   <button
-                    className="flex-1 flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-50 hover:bg-blue-100 active:bg-blue-200 transition-colors touch-manipulation"
+                    className="flex-1 flex flex-col items-center gap-2 p-4 rounded-xl bg-primary/10 hover:bg-primary/20 active:bg-primary/20 transition-colors touch-manipulation"
                     onClick={() => {
                       setShowMenu(false);
                       const dispatchPhone = process.env.DISPATCH_PHONE || '+1-800-555-0100';
@@ -2266,11 +2266,11 @@ export default function MobileDriverDashboard() {
                     }}
                     data-testid="menu-item-call-dispatch"
                   >
-                    <Phone className="h-5 w-5 text-blue-600" />
-                    <span className="text-xs font-medium text-blue-700">Call</span>
+                    <Phone className="h-5 w-5 text-primary" />
+                    <span className="text-xs font-medium text-primary">Call</span>
                   </button>
                   <button
-                    className="flex-1 flex flex-col items-center gap-2 p-4 rounded-xl bg-green-50 hover:bg-green-100 active:bg-green-200 transition-colors touch-manipulation"
+                    className="flex-1 flex flex-col items-center gap-2 p-4 rounded-xl bg-success/10 hover:bg-success/20 active:bg-success/20 transition-colors touch-manipulation"
                     onClick={() => {
                       setShowMenu(false);
                       const dispatchPhone = process.env.DISPATCH_PHONE || '+1-800-555-0100';
@@ -2278,16 +2278,16 @@ export default function MobileDriverDashboard() {
                     }}
                     data-testid="menu-item-sms-dispatch"
                   >
-                    <MessageSquare className="h-5 w-5 text-green-600" />
-                    <span className="text-xs font-medium text-green-700">SMS</span>
+                    <MessageSquare className="h-5 w-5 text-success" />
+                    <span className="text-xs font-medium text-success">SMS</span>
                   </button>
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 my-2" />
+              <div className="border-t border-border my-2" />
 
               <button
-                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-red-50 active:bg-red-100 transition-colors text-red-600 touch-manipulation"
+                className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-destructive/10 active:bg-destructive/20 transition-colors text-destructive touch-manipulation"
                 onClick={() => {
                   setShowMenu(false);
                   toast({
@@ -2330,17 +2330,17 @@ export default function MobileDriverDashboard() {
 
     if (isLoading) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="text-center">
-            <RefreshCw className="h-8 w-8 animate-spin mx-auto text-blue-600 mb-2" />
-            <p className="text-gray-600">Loading drivers...</p>
+            <RefreshCw className="h-8 w-8 animate-spin mx-auto text-primary mb-2" />
+            <p className="text-muted-foreground">Loading drivers...</p>
           </div>
         </div>
       );
     }
 
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
+      <div className="min-h-screen bg-background p-4">
         <div className="max-w-2xl mx-auto">
           <Card className="mb-4">
             <CardHeader>
@@ -2363,23 +2363,23 @@ export default function MobileDriverDashboard() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="bg-blue-100 rounded-full p-3">
-                          <User className="h-6 w-6 text-blue-600" />
+                        <div className="bg-primary/10 rounded-full p-3">
+                          <User className="h-6 w-6 text-primary" />
                         </div>
                         <div>
                           <h3 className="font-semibold text-lg">{driver.name}</h3>
-                          <p className="text-sm text-gray-600">{driver.phone}</p>
+                          <p className="text-sm text-muted-foreground">{driver.phone}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <Badge variant={driver.status === 'available' ? 'default' : 'secondary'}>
                               {driver.status}
                             </Badge>
-                            <span className="text-xs text-gray-500">
+                            <span className="text-xs text-muted-foreground">
                               {driver.completedLoads || 0} loads
                             </span>
                           </div>
                         </div>
                       </div>
-                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
                     </div>
                   </CardContent>
                 </Card>
@@ -2387,9 +2387,9 @@ export default function MobileDriverDashboard() {
             ) : (
               <Card>
                 <CardContent className="p-8 text-center">
-                  <AlertCircle className="h-12 w-12 mx-auto text-gray-400 mb-3" />
-                  <p className="text-gray-600">No drivers found</p>
-                  <p className="text-sm text-gray-500 mt-2">
+                  <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                  <p className="text-muted-foreground">No drivers found</p>
+                  <p className="text-sm text-muted-foreground mt-2">
                     Please create a driver first from the Driver Management page
                   </p>
                 </CardContent>
@@ -2402,7 +2402,7 @@ export default function MobileDriverDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Content with Pull-to-Refresh */}
       <div 
         ref={pullContainerRef}
@@ -2424,7 +2424,7 @@ export default function MobileDriverDashboard() {
               transform: `translateY(-${60 - pullDistance}px)`
             }}
           >
-            <div className="flex items-center gap-2 text-blue-600">
+            <div className="flex items-center gap-2 text-primary">
               <RefreshCw 
                 className={cn(
                   "h-5 w-5",
