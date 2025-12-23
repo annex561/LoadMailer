@@ -129,8 +129,6 @@ interface CommunicationMessage {
 type TabType = 'home' | 'loads' | 'messages' | 'documents' | 'profile';
 
 function MobileDriverDashboard() {
-  console.log('[MobileDriverDashboard] Component starting to render');
-  
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [driverId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -219,7 +217,6 @@ function MobileDriverDashboard() {
   });
   
   // WebSocket-based typing indicator for real-time updates - must be after driver query
-  console.log('[MobileDriverDashboard] About to call useTypingIndicator');
   const {
     othersTyping,
     handleInputChange: handleTypingChange,
@@ -232,7 +229,6 @@ function MobileDriverDashboard() {
     participantName: driver?.name || 'Driver',
     enabled: !!selectedThread?.id && !!driverId
   });
-  console.log('[MobileDriverDashboard] useTypingIndicator completed');
 
   // Fetch current load
   const { data: currentLoad, refetch: refetchCurrentLoad } = useQuery({
@@ -259,10 +255,10 @@ function MobileDriverDashboard() {
     }
   });
 
-  // Fetch load history
-  const { data: loadHistory = [] } = useQuery({
+  // Fetch load history - only when loads tab is active for faster initial load
+  const { data: loadHistory = [], isLoading: loadHistoryLoading } = useQuery({
     queryKey: ['/api/drivers', driverId, 'load-history'],
-    enabled: !!driverId,
+    enabled: !!driverId && activeTab === 'loads',
     queryFn: async () => {
       const response = await fetch(`/api/drivers/${driverId}/load-history`);
       if (!response.ok) throw new Error('Failed to fetch load history');
@@ -270,15 +266,14 @@ function MobileDriverDashboard() {
     }
   });
 
-  // Fetch communication threads
-  const { data: threads = [] } = useQuery({
-    queryKey: ['/api/communication/threads'],
-    enabled: !!driverId,
+  // Fetch communication threads - only load when messages tab is active for faster initial load
+  const { data: threads = [], isLoading: threadsLoading } = useQuery({
+    queryKey: ['/api/communication/threads', driverId],
+    enabled: !!driverId && activeTab === 'messages',
     queryFn: async () => {
-      const response = await fetch('/api/communication/threads');
+      const response = await fetch(`/api/communication/threads?driverId=${driverId}`);
       if (!response.ok) throw new Error('Failed to fetch threads');
-      const allThreads = await response.json();
-      return allThreads.filter((t: any) => t.driverId === driverId);
+      return response.json();
     },
     refetchInterval: activeTab === 'messages' ? 30000 : false,
     staleTime: 20000

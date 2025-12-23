@@ -1918,6 +1918,39 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async getThreadsByDriver(driverId: string): Promise<any[]> {
+    const threads = await db
+      .select({
+        id: schema.loadCommunicationThreads.id,
+        loadId: schema.loadCommunicationThreads.loadId,
+        driverId: schema.loadCommunicationThreads.driverId,
+        threadType: schema.loadCommunicationThreads.threadType,
+        status: schema.loadCommunicationThreads.status,
+        messageCount: schema.loadCommunicationThreads.messageCount,
+        unreadDriverMessages: schema.loadCommunicationThreads.unreadDriverMessages,
+        unreadDispatchMessages: schema.loadCommunicationThreads.unreadDispatchMessages,
+        lastMessageAt: schema.loadCommunicationThreads.lastMessageAt,
+        assistantEnabled: schema.loadCommunicationThreads.assistantEnabled,
+        loadOrigin: schema.loadCommunicationThreads.loadOrigin,
+        loadDestination: schema.loadCommunicationThreads.loadDestination,
+        createdAt: schema.loadCommunicationThreads.createdAt,
+        updatedAt: schema.loadCommunicationThreads.updatedAt,
+        driverName: schema.drivers.name,
+        driverPhone: schema.drivers.phone,
+        loadNumber: schema.loadCommunicationThreads.loadNumber,
+        loadNumberFromLoad: schema.loads.loadNumber,
+        lastMessageText: schema.loadCommunicationThreads.lastMessageText,
+        lastMessageSender: schema.loadCommunicationThreads.lastMessageSender
+      })
+      .from(schema.loadCommunicationThreads)
+      .leftJoin(schema.drivers, eq(schema.loadCommunicationThreads.driverId, schema.drivers.id))
+      .leftJoin(schema.loads, eq(schema.loadCommunicationThreads.loadId, schema.loads.id))
+      .where(eq(schema.loadCommunicationThreads.driverId, driverId))
+      .orderBy(desc(schema.loadCommunicationThreads.lastMessageAt));
+
+    return threads;
+  }
+
   async consolidateDuplicateThreadsForDriver(driverId: string): Promise<{ merged: number; canonical: schema.LoadCommunicationThread | null }> {
     try {
       console.log(`🔄 Starting thread consolidation for driver ${driverId}`);

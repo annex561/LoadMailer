@@ -286,6 +286,7 @@ export interface IStorage {
   getLoadCommunicationThreadByLoadAndDriver(loadId: string, driverId: string): Promise<LoadCommunicationThread | undefined>;
   getGeneralCommunicationThreadByDriver(driverId: string): Promise<LoadCommunicationThread | undefined>;
   getUnifiedThreadByDriver(driverId: string): Promise<LoadCommunicationThread | undefined>;
+  getThreadsByDriver(driverId: string): Promise<any[]>;
   getAllLoadCommunicationThreads(): Promise<LoadCommunicationThread[]>;
   createLoadCommunicationThread(thread: InsertLoadCommunicationThread): Promise<LoadCommunicationThread>;
   updateLoadCommunicationThread(id: string, thread: Partial<InsertLoadCommunicationThread>): Promise<LoadCommunicationThread | undefined>;

@@ -3153,14 +3153,26 @@ TRAQ IQ Dispatch Team
   
   // Communication threads route - CRITICAL for dashboard
   // Enhanced to include driver status and current active load information
+  // Supports ?driverId= filter for efficient mobile dashboard loading
   app.get('/api/communication/threads', async (req, res) => {
     try {
-      console.log('🚀 Communication threads API called');
-      console.log('📞 About to call storage.getAllLoadCommunicationThreads()');
-      const threads = await storage.getAllLoadCommunicationThreads();
-      console.log(`📋 Retrieved ${threads.length} communication threads from storage`);
+      const { driverId: filterDriverId } = req.query;
       
-      // Fetch all drivers and loads once for efficiency
+      // Optimized path for driver-specific requests (mobile dashboard)
+      if (filterDriverId && typeof filterDriverId === 'string') {
+        const threads = await storage.getThreadsByDriver(filterDriverId);
+        const enrichedThreads = threads.map(thread => ({
+          ...thread,
+          lastMessage: thread.lastMessageText,
+          lastMessageTimestamp: thread.lastMessageAt
+        }));
+        return res.json(enrichedThreads);
+      }
+      
+      // Full query for dispatcher dashboard
+      let threads = await storage.getAllLoadCommunicationThreads();
+      
+      // Full enrichment only for dispatcher dashboard (no filter)
       const allDrivers = await storage.getAllDrivers();
       const allLoads = await storage.getAllLoads();
       
