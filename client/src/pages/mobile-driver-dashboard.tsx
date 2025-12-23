@@ -120,15 +120,6 @@ export default function MobileDriverDashboard() {
     }
   }, [driverId]);
   
-  // Cleanup typing timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    };
-  }, []);
-  
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [messageInput, setMessageInput] = useState('');
@@ -139,6 +130,15 @@ export default function MobileDriverDashboard() {
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup typing timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
   
   // Smart document workflow state
   const [pendingFile, setPendingFile] = useState<File | null>(null);
