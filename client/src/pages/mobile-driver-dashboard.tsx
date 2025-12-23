@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,41 @@ import { apiRequest } from '@/lib/queryClient';
 import { useMessageNotification } from '@/hooks/useNotificationSound';
 import { useTypingIndicator } from '@/hooks/use-typing-indicator';
 import { TypingIndicator } from '@/components/typing-indicator';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Mobile Dashboard Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="text-center max-w-md">
+            <h2 className="text-xl font-bold text-destructive mb-2">Something went wrong</h2>
+            <p className="text-muted-foreground mb-4">{this.state.error?.message || 'An unexpected error occurred'}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { 
   Home, Package, MessageSquare, FileText, User, MapPin, Clock, DollarSign, 
   Navigation, CheckCircle, AlertCircle, Phone, Camera, Mic, Send, Plus,
@@ -93,7 +128,9 @@ interface CommunicationMessage {
 
 type TabType = 'home' | 'loads' | 'messages' | 'documents' | 'profile';
 
-export default function MobileDriverDashboard() {
+function MobileDriverDashboard() {
+  console.log('[MobileDriverDashboard] Component starting to render');
+  
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [driverId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -109,16 +146,20 @@ export default function MobileDriverDashboard() {
     return localStorage.getItem('load-signal-driver-id') || '';
   });
   
-  // Handle PWA launch redirect in useEffect (cleaner than during render)
+  // Handle PWA launch redirect in useEffect - only once
+  const [hasRedirected, setHasRedirected] = useState(false);
   useEffect(() => {
+    if (hasRedirected) return;
+    
     const params = new URLSearchParams(window.location.search);
     const urlDriverId = params.get('driverId');
     
     // If no driverId in URL but we have one in localStorage, redirect to include it
     if (!urlDriverId && driverId) {
-      window.location.href = `/driver-dashboard?driverId=${driverId}`;
+      setHasRedirected(true);
+      window.location.replace(`/driver-dashboard?driverId=${driverId}`);
     }
-  }, [driverId]);
+  }, [driverId, hasRedirected]);
   
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -178,6 +219,7 @@ export default function MobileDriverDashboard() {
   });
   
   // WebSocket-based typing indicator for real-time updates - must be after driver query
+  console.log('[MobileDriverDashboard] About to call useTypingIndicator');
   const {
     othersTyping,
     handleInputChange: handleTypingChange,
@@ -190,6 +232,7 @@ export default function MobileDriverDashboard() {
     participantName: driver?.name || 'Driver',
     enabled: !!selectedThread?.id && !!driverId
   });
+  console.log('[MobileDriverDashboard] useTypingIndicator completed');
 
   // Fetch current load
   const { data: currentLoad, refetch: refetchCurrentLoad } = useQuery({
@@ -2553,3 +2596,13 @@ export default function MobileDriverDashboard() {
     </div>
   );
 }
+
+function MobileDriverDashboardWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <MobileDriverDashboard />
+    </ErrorBoundary>
+  );
+}
+
+export { MobileDriverDashboardWithErrorBoundary as default };
