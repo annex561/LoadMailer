@@ -9,6 +9,8 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { useMessageNotification } from '@/hooks/useNotificationSound';
+import { useTypingIndicator } from '@/hooks/use-typing-indicator';
+import { TypingIndicator } from '@/components/typing-indicator';
 import { 
   Home, Package, MessageSquare, FileText, User, MapPin, Clock, DollarSign, 
   Navigation, CheckCircle, AlertCircle, Phone, Camera, Mic, Send, Plus,
@@ -173,6 +175,20 @@ export default function MobileDriverDashboard() {
       if (!response.ok) throw new Error('Failed to fetch driver profile');
       return response.json() as Promise<Driver>;
     }
+  });
+  
+  // WebSocket-based typing indicator for real-time updates - must be after driver query
+  const {
+    othersTyping,
+    handleInputChange: handleTypingChange,
+    handleMessageSent: handleTypingSent,
+    isConnected: typingConnected
+  } = useTypingIndicator({
+    threadId: selectedThread?.id || '',
+    participantId: driverId || '',
+    participantType: 'driver',
+    participantName: driver?.name || 'Driver',
+    enabled: !!selectedThread?.id && !!driverId
   });
 
   // Fetch current load
@@ -633,6 +649,9 @@ export default function MobileDriverDashboard() {
       clearTimeout(typingTimeoutRef.current);
     }
     setIsTyping(false);
+    
+    // Notify WebSocket that we stopped typing
+    handleTypingSent();
     
     sendMessageMutation.mutate({
       threadId: selectedThread.id,
@@ -1631,6 +1650,16 @@ export default function MobileDriverDashboard() {
                 );
               })
             )}
+            
+            {/* Typing Indicator - shows when dispatch is typing */}
+            {othersTyping.length > 0 && (
+              <div className="px-4 pb-2" data-testid="typing-indicator-container">
+                <TypingIndicator 
+                  name={othersTyping[0].participantName}
+                  size="sm"
+                />
+              </div>
+            )}
           </div>
 
           {/* Message Input Area - Sticky at Bottom */}
@@ -1722,6 +1751,9 @@ export default function MobileDriverDashboard() {
                   value={messageInput}
                   onChange={(e) => {
                     setMessageInput(e.target.value);
+                    
+                    // Trigger WebSocket typing indicator
+                    handleTypingChange();
                     
                     // Set typing state and debounce auto-reset
                     setIsTyping(true);

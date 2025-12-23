@@ -3953,6 +3953,45 @@ TRAQ IQ Dispatch Team
     }
   });
 
+  // Typing indicator REST API endpoints (fallback for WebSocket)
+  app.post('/api/communication/typing', async (req, res) => {
+    try {
+      const { threadId, participantId, participantType, participantName, isTyping } = req.body;
+      
+      if (!threadId || !participantId) {
+        return res.status(400).json({ error: 'threadId and participantId are required' });
+      }
+      
+      const { typingIndicatorService } = await import('./typing-indicator-service');
+      typingIndicatorService.setTypingStatus(
+        threadId,
+        participantId,
+        participantType || 'dispatch',
+        participantName || 'Someone',
+        isTyping !== false
+      );
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('❌ Error updating typing status:', error);
+      res.status(500).json({ error: 'Failed to update typing status' });
+    }
+  });
+
+  app.get('/api/communication/typing/:threadId', async (req, res) => {
+    try {
+      const { threadId } = req.params;
+      
+      const { typingIndicatorService } = await import('./typing-indicator-service');
+      const typingUsers = typingIndicatorService.getTypingStatus(threadId);
+      
+      res.json({ typing: typingUsers });
+    } catch (error) {
+      console.error('❌ Error getting typing status:', error);
+      res.status(500).json({ error: 'Failed to get typing status' });
+    }
+  });
+
   // AI Message Suggestions endpoint
   app.post('/api/ai/message-suggestions', async (req, res) => {
     try {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,8 @@ import type { LoadWithRelations, Driver } from '@shared/schema';
 import { RateSettingModal } from '@/components/rate-setting-modal';
 import DriverLocationMap from '@/components/driver-location-map';
 import { formatDistanceToNow } from 'date-fns';
+import { useTypingIndicator } from '@/hooks/use-typing-indicator';
+import { TypingIndicator } from '@/components/typing-indicator';
 
 interface LoadOffer {
   id: string;
@@ -156,6 +158,23 @@ export default function DispatcherDashboard() {
       return response.json();
     },
     refetchInterval: 15000
+  });
+  
+  // Find thread for selected driver (for typing indicators) - must be after threads query
+  const selectedDriverThread = threads.find((t: CommunicationThread) => t.driverId === selectedSMSDriver);
+  
+  // WebSocket-based typing indicator for real-time updates
+  const {
+    othersTyping: driversTyping,
+    handleInputChange: handleDispatcherTypingChange,
+    handleMessageSent: handleDispatcherTypingSent,
+    isConnected: dispatcherTypingConnected
+  } = useTypingIndicator({
+    threadId: selectedDriverThread?.id || '',
+    participantId: 'dispatcher',
+    participantType: 'dispatch',
+    participantName: 'Dispatcher',
+    enabled: !!selectedDriverThread?.id && activeTab === 'sms'
   });
 
   // Fetch driver locations for map
@@ -1166,12 +1185,25 @@ export default function DispatcherDashboard() {
                 <label className="text-sm font-medium mb-2 block">Message</label>
                 <Textarea 
                   value={smsMessage}
-                  onChange={(e) => setSmsMessage(e.target.value)}
+                  onChange={(e) => {
+                    setSmsMessage(e.target.value);
+                    handleDispatcherTypingChange();
+                  }}
                   placeholder="Type your message..."
                   rows={4}
                   data-testid="input-sms-message"
                 />
               </div>
+              
+              {/* Typing indicator - shows when driver is typing */}
+              {driversTyping.length > 0 && selectedDriverThread && (
+                <div className="py-2" data-testid="dispatcher-typing-indicator">
+                  <TypingIndicator 
+                    name={driversTyping[0].participantName}
+                    size="sm"
+                  />
+                </div>
+              )}
               
               {/* Send button */}
               <Button 
@@ -1184,6 +1216,7 @@ export default function DispatcherDashboard() {
                     toast({ title: 'Please enter a message', variant: 'destructive' });
                     return;
                   }
+                  handleDispatcherTypingSent();
                   sendSMSMutation.mutate({ driverId: selectedSMSDriver, message: smsMessage });
                 }}
                 disabled={sendSMSMutation.isPending}

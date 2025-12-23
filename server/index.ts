@@ -222,6 +222,15 @@ app.use((req, res, next) => {
     const port = parseInt(process.env.PORT || '5000', 10);
     log(`🔌 Starting server on port ${port}...`);
     
+    // Initialize WebSocket server for typing indicators BEFORE server.listen()
+    try {
+      const { typingIndicatorService } = await import('./typing-indicator-service');
+      typingIndicatorService.initialize(server);
+      log('✅ Typing indicator WebSocket service initialized');
+    } catch (error: any) {
+      log(`⚠️ Typing indicator service failed to initialize: ${error.message}`);
+    }
+    
     // Start listening on the port - this must complete quickly for deployment
     server.listen({
       port,
