@@ -50,7 +50,7 @@ import {
   Home, Package, MessageSquare, FileText, User, MapPin, Clock, DollarSign, 
   Navigation, CheckCircle, AlertCircle, Phone, Camera, Mic, Send, Plus,
   TrendingUp, Star, Truck, ChevronRight, Upload, ExternalLink, Menu,
-  Settings, LogOut, Bell, Filter, Search, Calendar, Download, Share,
+  Settings, LogOut, Bell, Filter, Search, Calendar, Share,
   RefreshCw, Zap, Map, Image as ImageIcon, FileCheck, X, HelpCircle,
   Edit2, Trash2, MoreVertical, RotateCcw, Check
 } from 'lucide-react';
@@ -1105,97 +1105,6 @@ function MobileDriverDashboard() {
     return extractedFirstName && extractedFirstName.length > 0 ? extractedFirstName : 'Driver';
   }, [driver]);
 
-  // PWA Install Banner Component
-  const PWAInstallBanner = () => {
-    const [showBanner, setShowBanner] = useState(false);
-    const [isIOS, setIsIOS] = useState(false);
-    const [isAndroid, setIsAndroid] = useState(false);
-
-    useEffect(() => {
-      // Check if already installed (standalone mode)
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                          (window.navigator as any).standalone === true;
-      
-      // Check if banner was dismissed
-      const wasDismissed = localStorage.getItem('pwa-banner-dismissed') === 'true';
-      
-      // Detect platform
-      const userAgent = window.navigator.userAgent.toLowerCase();
-      const iOS = /iphone|ipad|ipod/.test(userAgent);
-      const android = /android/.test(userAgent);
-      
-      setIsIOS(iOS);
-      setIsAndroid(android);
-      
-      // Show banner if not installed and not dismissed
-      if (!isStandalone && !wasDismissed && (iOS || android)) {
-        setShowBanner(true);
-      }
-    }, []);
-
-    const handleDismiss = (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('🚫 PWA banner dismissed');
-      try {
-        localStorage.setItem('pwa-banner-dismissed', 'true');
-        console.log('✅ localStorage set:', localStorage.getItem('pwa-banner-dismissed'));
-      } catch (error) {
-        console.error('❌ Failed to set localStorage:', error);
-      }
-      setShowBanner(false);
-    };
-
-    if (!showBanner) return null;
-
-    return (
-      <div className="mx-4 mb-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl p-4 shadow-lg relative" data-testid="pwa-install-banner">
-        <button
-          type="button"
-          onClick={handleDismiss}
-          className="absolute top-2 right-2 text-white/80 hover:text-white p-2 rounded-full hover:bg-white/20 transition-colors z-10 cursor-pointer"
-          data-testid="button-dismiss-pwa-banner"
-          aria-label="Dismiss install banner"
-          style={{ pointerEvents: 'auto' }}
-        >
-          <X className="h-5 w-5" style={{ pointerEvents: 'none' }} />
-        </button>
-        
-        <div className="pr-6">
-          <div className="flex items-center gap-2 mb-2">
-            <Download className="h-5 w-5" />
-            <h3 className="font-bold text-lg">Install TRAQ IQ App</h3>
-          </div>
-          
-          <p className="text-sm text-white/90 mb-3">
-            Add this app to your home screen for quick access and a better experience!
-          </p>
-          
-          {isIOS && (
-            <div className="bg-white/20 rounded-xl p-3 text-sm space-y-1.5">
-              <p className="font-semibold mb-1">📱 For iPhone/iPad (Safari only):</p>
-              <p>1. Open this page in <strong>Safari browser</strong></p>
-              <p>2. Tap the <strong>Share</strong> button <span className="inline-block">□↑</span> at the bottom</p>
-              <p>3. Scroll down and tap <strong>"Add to Home Screen"</strong></p>
-              <p>4. Tap <strong>"Add"</strong> in the top right corner</p>
-            </div>
-          )}
-          
-          {isAndroid && (
-            <div className="bg-white/20 rounded-xl p-3 text-sm space-y-1.5">
-              <p className="font-semibold mb-1">📱 For Android (Chrome recommended):</p>
-              <p>1. Look for <strong>"Install app"</strong> popup at the bottom</p>
-              <p className="text-xs text-white/80 ml-4">OR if no popup:</p>
-              <p>2. Tap the <strong>menu (⋮)</strong> at the top right</p>
-              <p>3. Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></p>
-              <p>4. Tap <strong>"Install"</strong> to confirm</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   // HOME TAB
   const HomeTab = () => {
     return (
@@ -1234,8 +1143,6 @@ function MobileDriverDashboard() {
         </div>
       </div>
 
-      {/* PWA Install Banner */}
-      <PWAInstallBanner />
 
       {/* Current Load Card */}
       {currentLoad ? (
