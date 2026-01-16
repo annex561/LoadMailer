@@ -206,7 +206,7 @@ function MobileDriverDashboard() {
   const queryClient = useQueryClient();
 
   // Fetch driver profile
-  const { data: driver } = useQuery({
+  const { data: driver, isLoading: driverLoading } = useQuery({
     queryKey: ['/api/drivers', driverId],
     enabled: !!driverId,
     queryFn: async () => {
@@ -2467,6 +2467,20 @@ function MobileDriverDashboard() {
             )}
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Show loading skeleton immediately while driver data loads
+  if (driverLoading && !driver) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col items-center justify-center p-4">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-slate-700" />
+          <div className="h-6 w-32 bg-slate-700 rounded" />
+          <div className="h-4 w-48 bg-slate-700 rounded" />
+        </div>
+        <p className="text-slate-400 mt-6 text-sm">Loading your dashboard...</p>
       </div>
     );
   }

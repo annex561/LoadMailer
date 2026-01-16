@@ -47,6 +47,7 @@ import ManualDispatch from "@/pages/manual-dispatch";
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 
 
@@ -96,8 +97,16 @@ function App() {
           <Route path="/driver-onboarding" component={DriverOnboarding} />
           <Route path="/simple-registration" component={SimpleDriverRegistration} />
           <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
-          <Route path="/driver-dashboard" component={MobileDriverDashboard} />
-          <Route path="/mobile-driver-dashboard" component={MobileDriverDashboard} />
+          <Route path="/driver-dashboard">
+            <ErrorBoundary>
+              <MobileDriverDashboard />
+            </ErrorBoundary>
+          </Route>
+          <Route path="/mobile-driver-dashboard">
+            <ErrorBoundary>
+              <MobileDriverDashboard />
+            </ErrorBoundary>
+          </Route>
           
           {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
           <Route>
