@@ -1,0 +1,107 @@
+# ================================
+# TrackIQ Replit Bootstrap Script
+# ================================
+# What this does:
+# 1) Unzips TrackIQ_MVP_OptionA_Gmail.zip into your project
+# 2) Validates required Secrets (prints what's missing)
+# 3) Installs deps + Prisma generate + DB migrate
+# 4) Prints the exact URLs to click (admin + OAuth)
+# 5) Starts the dev server
+#
+# Requirements:
+# - You uploaded: TrackIQ_MVP_OptionA_Gmail.zip (in project root)
+# - You set DATABASE_URL in Replit Secrets
+# - You set APP_BASE_URL in Replit Secrets (your public https URL)
+# ================================
+
+set -e
+
+echo "=== [1/6] Checking ZIP file ==="
+if [ ! -f "TrackIQ_MVP_OptionA_Gmail.zip" ]; then
+  echo "ERROR: TrackIQ_MVP_OptionA_Gmail.zip not found in project root."
+  echo "Upload the ZIP first, then re-run this script."
+  exit 1
+fi
+
+echo "=== [2/6] Unzipping project ==="
+if command -v unzip >/dev/null 2>&1; then
+  unzip -o TrackIQ_MVP_OptionA_Gmail.zip >/dev/null
+  echo "Unzip complete (using unzip)."
+else
+  echo "unzip not found. Attempting node unzip fallback..."
+  node -e "try{const AdmZip=require('adm-zip'); const zip=new AdmZip('TrackIQ_MVP_OptionA_Gmail.zip'); zip.extractAllTo('.', true); console.log('Unzip complete (node fallback).');}catch(e){console.error('ERROR: node unzip fallback failed. Install unzip or add adm-zip.'); process.exit(1);} "
+fi
+
+echo "=== [3/6] Validating required Secrets ==="
+missing=0
+
+check_secret () {
+  key="$1"
+  if [ -z "${!key}" ]; then
+    echo "MISSING: $key"
+    missing=1
+  else
+    echo "OK: $key"
+  fi
+}
+
+# Core
+check_secret APP_BASE_URL
+check_secret SESSION_SECRET
+check_secret DATABASE_URL
+
+# Initial Owner
+check_secret OWNER_EMAIL
+check_secret OWNER_INITIAL_PASSWORD
+# OWNER_NAME optional but recommended
+if [ -z "${OWNER_NAME}" ]; then
+  echo "WARN: OWNER_NAME is not set (optional)."
+else
+  echo "OK: OWNER_NAME"
+fi
+
+# Gmail OAuth (required for invites + watch)
+check_secret GMAIL_CLIENT_ID
+check_secret GMAIL_CLIENT_SECRET
+check_secret GMAIL_REDIRECT_URI
+check_secret GMAIL_TOKEN_JSON_PATH
+check_secret INVITE_FROM_EMAIL
+
+# Pub/Sub watch (required for Option A ingestion)
+check_secret PUBSUB_TOPIC_NAME
+# PUBSUB_VERIFICATION_TOKEN optional
+if [ -z "${PUBSUB_VERIFICATION_TOKEN}" ]; then
+  echo "WARN: PUBSUB_VERIFICATION_TOKEN not set (optional)."
+else
+  echo "OK: PUBSUB_VERIFICATION_TOKEN"
+fi
+
+if [ "$missing" -eq 1 ]; then
+  echo ""
+  echo "ERROR: Missing required Secrets above."
+  echo "Fix them in Replit → Tools → Secrets, then re-run this script."
+  exit 1
+fi
+
+echo "=== [4/6] Installing dependencies ==="
+npm install
+
+echo "=== [5/6] Prisma generate + migrate ==="
+npx prisma generate
+npx prisma migrate dev --name init
+
+echo "=== [6/6] Printing your TrackIQ links ==="
+echo ""
+echo "LOGIN:        ${APP_BASE_URL}/login"
+echo "DASHBOARD:    ${APP_BASE_URL}/dashboard"
+echo "ADMIN:        ${APP_BASE_URL}/admin"
+echo "GMAIL OAUTH:  ${APP_BASE_URL}/api/oauth/gmail/start"
+echo ""
+echo "Next steps:"
+echo "1) Open ADMIN → click Connect Gmail OAuth (or open GMAIL OAUTH link above)"
+echo "2) Back in ADMIN → click Register / Refresh Watch"
+echo "3) Invite your VAs (Admin → Invite a user) and assign lanes"
+echo ""
+
+echo "=== Starting server ==="
+npm run dev
