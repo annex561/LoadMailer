@@ -75,6 +75,11 @@ import AICommunicationInsights from './ai-communication-insights';
 import FleetCalculator from './fleet-calculator';
 import UnifiedMessaging from './unified-messaging';
 import NotFound from './not-found';
+import FleetDashboard from './fleet-dashboard';
+import FleetTrucks from './fleet-trucks';
+import FleetWorkOrders from './fleet-work-orders';
+import FleetInspections from './fleet-inspections';
+import FleetVendors from './fleet-vendors';
 import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
@@ -603,6 +608,17 @@ export default function LoadOpsDashboard() {
         return <div className="p-6"><h1 className="text-2xl font-bold">Driver Tracker</h1><p className="mt-4 text-muted-foreground">Driver tracking page coming soon.</p></div>;
       case '/driver-profile':
         return <div className="p-6"><h1 className="text-2xl font-bold">Driver Profile</h1><p className="mt-4 text-muted-foreground">Driver profile page coming soon.</p></div>;
+      case '/fleet':
+      case '/fleet/dashboard':
+        return <FleetDashboard />;
+      case '/fleet/trucks':
+        return <FleetTrucks />;
+      case '/fleet/work-orders':
+        return <FleetWorkOrders />;
+      case '/fleet/inspections':
+        return <FleetInspections />;
+      case '/fleet/vendors':
+        return <FleetVendors />;
       default:
         return <NotFound />;
     }

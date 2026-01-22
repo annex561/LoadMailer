@@ -4,7 +4,7 @@ import {
   Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, 
   UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile, Upload, 
   MapPin, Wrench, Brain, ChevronLeft, ChevronRight, Menu, X, TrendingUp, 
-  Webhook, Sheet, Radio, Calculator
+  Webhook, Sheet, Radio, Calculator, ClipboardCheck, AlertTriangle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,12 @@ const navigation = [
   { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Headphones, section: "core" },
   { name: "Finance Dashboard", href: "/loadops-dashboard", icon: DollarSign, section: "core" },
   { name: "Fleet Calculator", href: "/fleet-calculator", icon: Calculator, section: "core" },
+  
+  { name: "Fleet Dashboard", href: "/fleet", icon: Truck, section: "fleet" },
+  { name: "Trucks", href: "/fleet/trucks", icon: Truck, section: "fleet" },
+  { name: "Work Orders", href: "/fleet/work-orders", icon: Wrench, section: "fleet" },
+  { name: "Inspections", href: "/fleet/inspections", icon: ClipboardCheck, section: "fleet" },
+  { name: "Vendors", href: "/fleet/vendors", icon: Users, section: "fleet" },
   
   { name: "Driver Onboarding", href: "/driver-onboarding", icon: UserPlus, section: "drivers" },
   { name: "Simple Registration", href: "/simple-registration", icon: UserPlus, section: "drivers" },
@@ -93,6 +99,7 @@ export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const coreItems = navigation.filter(item => item.section === "core");
+  const fleetItems = navigation.filter(item => item.section === "fleet");
   const driverItems = navigation.filter(item => item.section === "drivers");
   const commItems = navigation.filter(item => item.section === "comm");
   const smartItems = navigation.filter(item => item.section === "smart");
@@ -150,6 +157,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="py-4 overflow-y-auto scrollbar-clean" style={{ maxHeight: 'calc(100vh - 64px)' }}>
         <NavSection title="Core Operations" items={coreItems} location={location} isCollapsed={isCollapsed} />
+        <NavSection title="Fleet Reliability" items={fleetItems} location={location} isCollapsed={isCollapsed} />
         <NavSection title="Drivers" items={driverItems} location={location} isCollapsed={isCollapsed} />
         <NavSection title="Communication" items={commItems} location={location} isCollapsed={isCollapsed} />
         <NavSection title="AI & Analytics" items={smartItems} location={location} isCollapsed={isCollapsed} />

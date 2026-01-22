@@ -43,6 +43,11 @@ import UnifiedMessaging from "@/pages/unified-messaging";
 import DriverTracker from "@/pages/driver-tracker";
 import DocumentManagement from "@/pages/document-management";
 import ManualDispatch from "@/pages/manual-dispatch";
+import FleetDashboard from "@/pages/fleet-dashboard";
+import FleetTrucks from "@/pages/fleet-trucks";
+import FleetWorkOrders from "@/pages/fleet-work-orders";
+import FleetInspections from "@/pages/fleet-inspections";
+import FleetVendors from "@/pages/fleet-vendors";
 
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
@@ -83,6 +88,12 @@ function Router() {
       <Route path="/taskmagic-status" component={TaskMagicStatusPage} />
       <Route path="/dat-scraper" component={DATScraper} />
       <Route path="/google-sheets-import" component={GoogleSheetsImport} />
+      <Route path="/fleet" component={FleetDashboard} />
+      <Route path="/fleet/dashboard" component={FleetDashboard} />
+      <Route path="/fleet/trucks" component={FleetTrucks} />
+      <Route path="/fleet/work-orders" component={FleetWorkOrders} />
+      <Route path="/fleet/inspections" component={FleetInspections} />
+      <Route path="/fleet/vendors" component={FleetVendors} />
       <Route component={NotFound} />
     </Switch>
   );
