@@ -1,4 +1,4 @@
-import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type LoadDocument, type InsertLoadDocument, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration, type LoadBid, type InsertLoadBid, type BidResponse, type InsertBidResponse, type EmailCampaign, type InsertEmailCampaign, type EmailFollowUp, type InsertEmailFollowUp, type DispatcherNotification, type InsertDispatcherNotification, type LoadBidWithRelations, type EmailCampaignWithFollowUps, type LoadCommunicationThread, type InsertLoadCommunicationThread, type LoadMessage, type InsertLoadMessage, type MessageAttachment, type InsertMessageAttachment, type QuickReplyTemplate, type InsertQuickReplyTemplate, type CommunicationLog, type InsertCommunicationLog, type User, type UpsertUser, type ZelloChannelMessage, type InsertZelloChannelMessage, type ZelloChannelStatus, type InsertZelloChannelStatus, type CommunicationInsights, type AiPerformanceMetrics, type DriverEngagementMetrics, type DocumentExtraction, type InsertDocumentExtraction, type ExtractionVerification, type InsertExtractionVerification } from "@shared/schema";
+import { type Driver, type InsertDriver, type Customer, type InsertCustomer, type Load, type InsertLoad, type LoadWithRelations, type EmailTemplate, type InsertEmailTemplate, type EmailLog, type InsertEmailLog, type EmailLogWithRelations, type OnboardingToken, type InsertOnboardingToken, type DriverLocation, type InsertDriverLocation, type DriverOnboarding, type ReportTemplate, type InsertReportTemplate, type ScraperConfig, type InsertScraperConfig, type ScraperLog, type InsertScraperLog, type LanePreference, type InsertLanePreference, type AvoidLocation, type InsertAvoidLocation, type TelegramBotConfig, type InsertTelegramBotConfig, type LoadOffer, type InsertLoadOffer, type LoadDocument, type InsertLoadDocument, type Geofence, type InsertGeofence, type GeofenceEvent, type InsertGeofenceEvent, type Route, type InsertRoute, type GpsDevice, type InsertGpsDevice, type LoadBoardSource, type InsertLoadBoardSource, type LoadBoardConfiguration, type InsertLoadBoardConfiguration, type ScrapedLoad, type InsertScrapedLoad, type ScraperConfiguration, type InsertScraperConfiguration, type LoadBid, type InsertLoadBid, type BidResponse, type InsertBidResponse, type EmailCampaign, type InsertEmailCampaign, type EmailFollowUp, type InsertEmailFollowUp, type DispatcherNotification, type InsertDispatcherNotification, type LoadBidWithRelations, type EmailCampaignWithFollowUps, type LoadCommunicationThread, type InsertLoadCommunicationThread, type LoadMessage, type InsertLoadMessage, type MessageAttachment, type InsertMessageAttachment, type QuickReplyTemplate, type InsertQuickReplyTemplate, type CommunicationLog, type InsertCommunicationLog, type User, type UpsertUser, type ZelloChannelMessage, type InsertZelloChannelMessage, type ZelloChannelStatus, type InsertZelloChannelStatus, type CommunicationInsights, type AiPerformanceMetrics, type DriverEngagementMetrics, type DocumentExtraction, type InsertDocumentExtraction, type ExtractionVerification, type InsertExtractionVerification, type Truck, type InsertTruck, type Vendor, type InsertVendor, type MaintenancePlan, type InsertMaintenancePlan, type MaintenanceTask, type InsertMaintenanceTask, type TruckPlanAssignment, type InsertTruckPlanAssignment, type PmSchedule, type InsertPmSchedule, type FleetInspection, type InsertFleetInspection, type InspectionItem, type InsertInspectionItem, type WorkOrder, type InsertWorkOrder, type WorkOrderEvent, type InsertWorkOrderEvent, type BreakdownReport, type InsertBreakdownReport, type FleetDocument, type InsertFleetDocument, type FleetNotification, type InsertFleetNotification } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -365,6 +365,73 @@ export interface IStorage {
   updateZelloChannelUnreadCount(channel: string, delta: number): Promise<ZelloChannelStatus | null>;
   getAllZelloChannelStatuses(): Promise<ZelloChannelStatus[]>;
   getZelloMessageById(id: string): Promise<ZelloChannelMessage | null>;
+
+  // MVFRS: Truck operations
+  getTruck(id: string): Promise<Truck | undefined>;
+  getTrucksByCompany(companyId: string): Promise<Truck[]>;
+  createTruck(truck: InsertTruck): Promise<Truck>;
+  updateTruck(id: string, truck: Partial<InsertTruck>): Promise<Truck | undefined>;
+  deleteTruck(id: string): Promise<boolean>;
+
+  // MVFRS: Vendor operations
+  getVendor(id: string): Promise<Vendor | undefined>;
+  getVendorsByCompany(companyId: string): Promise<Vendor[]>;
+  createVendor(vendor: InsertVendor): Promise<Vendor>;
+  updateVendor(id: string, vendor: Partial<InsertVendor>): Promise<Vendor | undefined>;
+  deleteVendor(id: string): Promise<boolean>;
+
+  // MVFRS: Fleet Inspection operations
+  getFleetInspection(id: string): Promise<FleetInspection | undefined>;
+  getFleetInspectionsByTruck(truckId: string): Promise<FleetInspection[]>;
+  getFleetInspectionsByCompany(companyId: string): Promise<FleetInspection[]>;
+  createFleetInspection(inspection: InsertFleetInspection): Promise<FleetInspection>;
+  updateFleetInspection(id: string, inspection: Partial<InsertFleetInspection>): Promise<FleetInspection | undefined>;
+
+  // MVFRS: Inspection Items operations
+  getInspectionItem(id: string): Promise<InspectionItem | undefined>;
+  getInspectionItemsByInspection(inspectionId: string): Promise<InspectionItem[]>;
+  createInspectionItem(item: InsertInspectionItem): Promise<InspectionItem>;
+  updateInspectionItem(id: string, item: Partial<InsertInspectionItem>): Promise<InspectionItem | undefined>;
+  bulkCreateInspectionItems(items: InsertInspectionItem[]): Promise<InspectionItem[]>;
+
+  // MVFRS: Work Order operations
+  getWorkOrder(id: string): Promise<WorkOrder | undefined>;
+  getWorkOrdersByCompany(companyId: string): Promise<WorkOrder[]>;
+  getWorkOrdersByTruck(truckId: string): Promise<WorkOrder[]>;
+  getWorkOrdersByStatus(companyId: string, status: string): Promise<WorkOrder[]>;
+  createWorkOrder(workOrder: InsertWorkOrder): Promise<WorkOrder>;
+  updateWorkOrder(id: string, workOrder: Partial<InsertWorkOrder>): Promise<WorkOrder | undefined>;
+
+  // MVFRS: Work Order Event operations
+  getWorkOrderEvents(workOrderId: string): Promise<WorkOrderEvent[]>;
+  createWorkOrderEvent(event: InsertWorkOrderEvent): Promise<WorkOrderEvent>;
+
+  // MVFRS: Breakdown Report operations
+  getBreakdownReport(id: string): Promise<BreakdownReport | undefined>;
+  getBreakdownReportsByCompany(companyId: string): Promise<BreakdownReport[]>;
+  createBreakdownReport(report: InsertBreakdownReport): Promise<BreakdownReport>;
+  updateBreakdownReport(id: string, report: Partial<InsertBreakdownReport>): Promise<BreakdownReport | undefined>;
+
+  // MVFRS: Fleet Document operations
+  getFleetDocument(id: string): Promise<FleetDocument | undefined>;
+  getFleetDocumentsByCompany(companyId: string): Promise<FleetDocument[]>;
+  getFleetDocumentsBySubject(subjectType: string, subjectId: string): Promise<FleetDocument[]>;
+  getExpiringDocuments(companyId: string, daysAhead: number): Promise<FleetDocument[]>;
+  createFleetDocument(doc: InsertFleetDocument): Promise<FleetDocument>;
+  updateFleetDocument(id: string, doc: Partial<InsertFleetDocument>): Promise<FleetDocument | undefined>;
+
+  // MVFRS: PM Schedule operations
+  getPmSchedule(id: string): Promise<PmSchedule | undefined>;
+  getPmSchedulesByTruck(truckId: string): Promise<PmSchedule[]>;
+  getDuePmSchedules(companyId: string): Promise<PmSchedule[]>;
+  createPmSchedule(schedule: InsertPmSchedule): Promise<PmSchedule>;
+  updatePmSchedule(id: string, schedule: Partial<InsertPmSchedule>): Promise<PmSchedule | undefined>;
+
+  // MVFRS: Maintenance Plan operations
+  getMaintenancePlan(id: string): Promise<MaintenancePlan | undefined>;
+  getMaintenancePlansByCompany(companyId: string): Promise<MaintenancePlan[]>;
+  createMaintenancePlan(plan: InsertMaintenancePlan): Promise<MaintenancePlan>;
+  updateMaintenancePlan(id: string, plan: Partial<InsertMaintenancePlan>): Promise<MaintenancePlan | undefined>;
 }
 
 export class MemStorage implements IStorage {

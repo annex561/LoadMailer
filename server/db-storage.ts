@@ -2569,4 +2569,351 @@ export class DatabaseStorage implements IStorage {
   async getZelloMessageById(id: string): Promise<schema.ZelloChannelMessage | null> {
     return this.zelloChannelMessages.get(id) || null;
   }
+
+  // MVFRS: Truck operations
+  async getTruck(id: string): Promise<schema.Truck | undefined> {
+    const result = await db.select().from(schema.trucks).where(eq(schema.trucks.id, id));
+    return result[0];
+  }
+
+  async getTrucksByCompany(companyId: string): Promise<schema.Truck[]> {
+    return await db.select().from(schema.trucks).where(eq(schema.trucks.companyId, companyId));
+  }
+
+  async createTruck(truck: schema.InsertTruck): Promise<schema.Truck> {
+    const id = randomUUID();
+    const newTruck: schema.Truck = {
+      ...truck,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.trucks).values(newTruck);
+    return newTruck;
+  }
+
+  async updateTruck(id: string, truck: Partial<schema.InsertTruck>): Promise<schema.Truck | undefined> {
+    await db.update(schema.trucks).set({ ...truck, updatedAt: new Date() }).where(eq(schema.trucks.id, id));
+    return this.getTruck(id);
+  }
+
+  async deleteTruck(id: string): Promise<boolean> {
+    const result = await db.delete(schema.trucks).where(eq(schema.trucks.id, id));
+    return result.rowCount > 0;
+  }
+
+  // MVFRS: Vendor operations
+  async getVendor(id: string): Promise<schema.Vendor | undefined> {
+    const result = await db.select().from(schema.vendors).where(eq(schema.vendors.id, id));
+    return result[0];
+  }
+
+  async getVendorsByCompany(companyId: string): Promise<schema.Vendor[]> {
+    return await db.select().from(schema.vendors).where(eq(schema.vendors.companyId, companyId));
+  }
+
+  async createVendor(vendor: schema.InsertVendor): Promise<schema.Vendor> {
+    const id = randomUUID();
+    const newVendor: schema.Vendor = {
+      ...vendor,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.vendors).values(newVendor);
+    return newVendor;
+  }
+
+  async updateVendor(id: string, vendor: Partial<schema.InsertVendor>): Promise<schema.Vendor | undefined> {
+    await db.update(schema.vendors).set({ ...vendor, updatedAt: new Date() }).where(eq(schema.vendors.id, id));
+    return this.getVendor(id);
+  }
+
+  async deleteVendor(id: string): Promise<boolean> {
+    const result = await db.delete(schema.vendors).where(eq(schema.vendors.id, id));
+    return result.rowCount > 0;
+  }
+
+  // MVFRS: Fleet Inspection operations
+  async getFleetInspection(id: string): Promise<schema.FleetInspection | undefined> {
+    const result = await db.select().from(schema.fleetInspections).where(eq(schema.fleetInspections.id, id));
+    return result[0];
+  }
+
+  async getFleetInspectionsByTruck(truckId: string): Promise<schema.FleetInspection[]> {
+    return await db.select().from(schema.fleetInspections)
+      .where(eq(schema.fleetInspections.truckId, truckId))
+      .orderBy(desc(schema.fleetInspections.createdAt));
+  }
+
+  async getFleetInspectionsByCompany(companyId: string): Promise<schema.FleetInspection[]> {
+    return await db.select().from(schema.fleetInspections)
+      .where(eq(schema.fleetInspections.companyId, companyId))
+      .orderBy(desc(schema.fleetInspections.createdAt));
+  }
+
+  async createFleetInspection(inspection: schema.InsertFleetInspection): Promise<schema.FleetInspection> {
+    const id = randomUUID();
+    const newInspection: schema.FleetInspection = {
+      ...inspection,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.fleetInspections).values(newInspection);
+    return newInspection;
+  }
+
+  async updateFleetInspection(id: string, inspection: Partial<schema.InsertFleetInspection>): Promise<schema.FleetInspection | undefined> {
+    await db.update(schema.fleetInspections).set({ ...inspection, updatedAt: new Date() }).where(eq(schema.fleetInspections.id, id));
+    return this.getFleetInspection(id);
+  }
+
+  // MVFRS: Inspection Items operations
+  async getInspectionItem(id: string): Promise<schema.InspectionItem | undefined> {
+    const result = await db.select().from(schema.inspectionItems).where(eq(schema.inspectionItems.id, id));
+    return result[0];
+  }
+
+  async getInspectionItemsByInspection(inspectionId: string): Promise<schema.InspectionItem[]> {
+    return await db.select().from(schema.inspectionItems)
+      .where(eq(schema.inspectionItems.inspectionId, inspectionId));
+  }
+
+  async createInspectionItem(item: schema.InsertInspectionItem): Promise<schema.InspectionItem> {
+    const id = randomUUID();
+    const newItem: schema.InspectionItem = {
+      ...item,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.inspectionItems).values(newItem);
+    return newItem;
+  }
+
+  async updateInspectionItem(id: string, item: Partial<schema.InsertInspectionItem>): Promise<schema.InspectionItem | undefined> {
+    await db.update(schema.inspectionItems).set({ ...item, updatedAt: new Date() }).where(eq(schema.inspectionItems.id, id));
+    return this.getInspectionItem(id);
+  }
+
+  async bulkCreateInspectionItems(items: schema.InsertInspectionItem[]): Promise<schema.InspectionItem[]> {
+    const createdItems: schema.InspectionItem[] = [];
+    for (const item of items) {
+      const created = await this.createInspectionItem(item);
+      createdItems.push(created);
+    }
+    return createdItems;
+  }
+
+  // MVFRS: Work Order operations
+  async getWorkOrder(id: string): Promise<schema.WorkOrder | undefined> {
+    const result = await db.select().from(schema.workOrders).where(eq(schema.workOrders.id, id));
+    return result[0];
+  }
+
+  async getWorkOrdersByCompany(companyId: string): Promise<schema.WorkOrder[]> {
+    return await db.select().from(schema.workOrders)
+      .where(eq(schema.workOrders.companyId, companyId))
+      .orderBy(desc(schema.workOrders.createdAt));
+  }
+
+  async getWorkOrdersByTruck(truckId: string): Promise<schema.WorkOrder[]> {
+    return await db.select().from(schema.workOrders)
+      .where(eq(schema.workOrders.truckId, truckId))
+      .orderBy(desc(schema.workOrders.createdAt));
+  }
+
+  async getWorkOrdersByStatus(companyId: string, status: string): Promise<schema.WorkOrder[]> {
+    return await db.select().from(schema.workOrders)
+      .where(and(
+        eq(schema.workOrders.companyId, companyId),
+        eq(schema.workOrders.status, status as any)
+      ))
+      .orderBy(desc(schema.workOrders.createdAt));
+  }
+
+  async createWorkOrder(workOrder: schema.InsertWorkOrder): Promise<schema.WorkOrder> {
+    const id = randomUUID();
+    const newWorkOrder: schema.WorkOrder = {
+      ...workOrder,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.workOrders).values(newWorkOrder);
+    return newWorkOrder;
+  }
+
+  async updateWorkOrder(id: string, workOrder: Partial<schema.InsertWorkOrder>): Promise<schema.WorkOrder | undefined> {
+    await db.update(schema.workOrders).set({ ...workOrder, updatedAt: new Date() }).where(eq(schema.workOrders.id, id));
+    return this.getWorkOrder(id);
+  }
+
+  // MVFRS: Work Order Event operations
+  async getWorkOrderEvents(workOrderId: string): Promise<schema.WorkOrderEvent[]> {
+    return await db.select().from(schema.workOrderEvents)
+      .where(eq(schema.workOrderEvents.workOrderId, workOrderId))
+      .orderBy(desc(schema.workOrderEvents.createdAt));
+  }
+
+  async createWorkOrderEvent(event: schema.InsertWorkOrderEvent): Promise<schema.WorkOrderEvent> {
+    const id = randomUUID();
+    const newEvent: schema.WorkOrderEvent = {
+      ...event,
+      id,
+      createdAt: new Date(),
+    };
+    await db.insert(schema.workOrderEvents).values(newEvent);
+    return newEvent;
+  }
+
+  // MVFRS: Breakdown Report operations
+  async getBreakdownReport(id: string): Promise<schema.BreakdownReport | undefined> {
+    const result = await db.select().from(schema.breakdownReports).where(eq(schema.breakdownReports.id, id));
+    return result[0];
+  }
+
+  async getBreakdownReportsByCompany(companyId: string): Promise<schema.BreakdownReport[]> {
+    return await db.select().from(schema.breakdownReports)
+      .where(eq(schema.breakdownReports.companyId, companyId))
+      .orderBy(desc(schema.breakdownReports.reportedAt));
+  }
+
+  async createBreakdownReport(report: schema.InsertBreakdownReport): Promise<schema.BreakdownReport> {
+    const id = randomUUID();
+    const newReport: schema.BreakdownReport = {
+      ...report,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.breakdownReports).values(newReport);
+    return newReport;
+  }
+
+  async updateBreakdownReport(id: string, report: Partial<schema.InsertBreakdownReport>): Promise<schema.BreakdownReport | undefined> {
+    await db.update(schema.breakdownReports).set({ ...report, updatedAt: new Date() }).where(eq(schema.breakdownReports.id, id));
+    return this.getBreakdownReport(id);
+  }
+
+  // MVFRS: Fleet Document operations
+  async getFleetDocument(id: string): Promise<schema.FleetDocument | undefined> {
+    const result = await db.select().from(schema.fleetDocuments).where(eq(schema.fleetDocuments.id, id));
+    return result[0];
+  }
+
+  async getFleetDocumentsByCompany(companyId: string): Promise<schema.FleetDocument[]> {
+    return await db.select().from(schema.fleetDocuments)
+      .where(eq(schema.fleetDocuments.companyId, companyId))
+      .orderBy(desc(schema.fleetDocuments.expiryDate));
+  }
+
+  async getFleetDocumentsBySubject(subjectType: string, subjectId: string): Promise<schema.FleetDocument[]> {
+    return await db.select().from(schema.fleetDocuments)
+      .where(and(
+        eq(schema.fleetDocuments.subjectType, subjectType as any),
+        eq(schema.fleetDocuments.subjectId, subjectId)
+      ));
+  }
+
+  async getExpiringDocuments(companyId: string, daysAhead: number): Promise<schema.FleetDocument[]> {
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + daysAhead);
+    
+    return await db.select().from(schema.fleetDocuments)
+      .where(and(
+        eq(schema.fleetDocuments.companyId, companyId),
+        eq(schema.fleetDocuments.status, 'ACTIVE'),
+        drizzleSql`${schema.fleetDocuments.expiryDate} <= ${futureDate}`
+      ))
+      .orderBy(schema.fleetDocuments.expiryDate);
+  }
+
+  async createFleetDocument(doc: schema.InsertFleetDocument): Promise<schema.FleetDocument> {
+    const id = randomUUID();
+    const newDoc: schema.FleetDocument = {
+      ...doc,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.fleetDocuments).values(newDoc);
+    return newDoc;
+  }
+
+  async updateFleetDocument(id: string, doc: Partial<schema.InsertFleetDocument>): Promise<schema.FleetDocument | undefined> {
+    await db.update(schema.fleetDocuments).set({ ...doc, updatedAt: new Date() }).where(eq(schema.fleetDocuments.id, id));
+    return this.getFleetDocument(id);
+  }
+
+  // MVFRS: PM Schedule operations
+  async getPmSchedule(id: string): Promise<schema.PmSchedule | undefined> {
+    const result = await db.select().from(schema.pmSchedule).where(eq(schema.pmSchedule.id, id));
+    return result[0];
+  }
+
+  async getPmSchedulesByTruck(truckId: string): Promise<schema.PmSchedule[]> {
+    return await db.select().from(schema.pmSchedule)
+      .where(eq(schema.pmSchedule.truckId, truckId))
+      .orderBy(schema.pmSchedule.dueDate);
+  }
+
+  async getDuePmSchedules(companyId: string): Promise<schema.PmSchedule[]> {
+    return await db.select().from(schema.pmSchedule)
+      .innerJoin(schema.trucks, eq(schema.pmSchedule.truckId, schema.trucks.id))
+      .where(and(
+        eq(schema.trucks.companyId, companyId),
+        or(
+          eq(schema.pmSchedule.status, 'DUE'),
+          eq(schema.pmSchedule.status, 'DUE_SOON'),
+          eq(schema.pmSchedule.status, 'OVERDUE')
+        )
+      )) as any;
+  }
+
+  async createPmSchedule(schedule: schema.InsertPmSchedule): Promise<schema.PmSchedule> {
+    const id = randomUUID();
+    const newSchedule: schema.PmSchedule = {
+      ...schedule,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.pmSchedule).values(newSchedule);
+    return newSchedule;
+  }
+
+  async updatePmSchedule(id: string, schedule: Partial<schema.InsertPmSchedule>): Promise<schema.PmSchedule | undefined> {
+    await db.update(schema.pmSchedule).set({ ...schedule, updatedAt: new Date() }).where(eq(schema.pmSchedule.id, id));
+    return this.getPmSchedule(id);
+  }
+
+  // MVFRS: Maintenance Plan operations
+  async getMaintenancePlan(id: string): Promise<schema.MaintenancePlan | undefined> {
+    const result = await db.select().from(schema.maintenancePlans).where(eq(schema.maintenancePlans.id, id));
+    return result[0];
+  }
+
+  async getMaintenancePlansByCompany(companyId: string): Promise<schema.MaintenancePlan[]> {
+    return await db.select().from(schema.maintenancePlans)
+      .where(eq(schema.maintenancePlans.companyId, companyId));
+  }
+
+  async createMaintenancePlan(plan: schema.InsertMaintenancePlan): Promise<schema.MaintenancePlan> {
+    const id = randomUUID();
+    const newPlan: schema.MaintenancePlan = {
+      ...plan,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await db.insert(schema.maintenancePlans).values(newPlan);
+    return newPlan;
+  }
+
+  async updateMaintenancePlan(id: string, plan: Partial<schema.InsertMaintenancePlan>): Promise<schema.MaintenancePlan | undefined> {
+    await db.update(schema.maintenancePlans).set({ ...plan, updatedAt: new Date() }).where(eq(schema.maintenancePlans.id, id));
+    return this.getMaintenancePlan(id);
+  }
 }

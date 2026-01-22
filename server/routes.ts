@@ -18,7 +18,7 @@ import { DATAPIService } from "./dat-api-service";
 import { DATWebsiteScraper } from "./dat-website-scraper";
 import { RealDATScraper } from "./real-dat-scraper";
 import { DATLoadPoster } from "./dat-load-poster";
-import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema } from "@shared/schema";
+import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema, insertTruckSchema, insertVendorSchema, insertFleetInspectionSchema, insertInspectionItemSchema, insertWorkOrderSchema, insertWorkOrderEventSchema, insertBreakdownReportSchema, insertFleetDocumentSchema, insertMaintenancePlanSchema } from "@shared/schema";
 import { aiCommunicationService } from "./ai-communication-service";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService, objectStorageClient, parseObjectPath } from "./objectStorage";
@@ -4919,6 +4919,622 @@ TRAQ IQ Dispatch Team
 
   app.post('/api/sms/status', handleSmsStatus);
   app.post('/api/sms/status-callback', handleSmsStatus);
+
+  // ==================== MVFRS (Fleet Reliability System) Routes ====================
+  
+  // Trucks CRUD
+  app.get('/api/fleet/trucks', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      const trucks = await storage.getTrucksByCompany(companyId);
+      res.json(trucks);
+    } catch (error) {
+      console.error('Error fetching trucks:', error);
+      res.status(500).json({ error: 'Failed to fetch trucks' });
+    }
+  });
+
+  app.get('/api/fleet/trucks/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const truck = await storage.getTruck(req.params.id);
+      if (!truck) {
+        return res.status(404).json({ error: 'Truck not found' });
+      }
+      res.json(truck);
+    } catch (error) {
+      console.error('Error fetching truck:', error);
+      res.status(500).json({ error: 'Failed to fetch truck' });
+    }
+  });
+
+  app.post('/api/fleet/trucks', isAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertTruckSchema.parse(req.body);
+      const truck = await storage.createTruck(data);
+      res.status(201).json(truck);
+    } catch (error: any) {
+      console.error('Error creating truck:', error);
+      if (error.issues) {
+        return res.status(400).json({ error: 'Validation failed', details: error.issues });
+      }
+      res.status(500).json({ error: 'Failed to create truck' });
+    }
+  });
+
+  app.patch('/api/fleet/trucks/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const truck = await storage.updateTruck(req.params.id, req.body);
+      if (!truck) {
+        return res.status(404).json({ error: 'Truck not found' });
+      }
+      res.json(truck);
+    } catch (error) {
+      console.error('Error updating truck:', error);
+      res.status(500).json({ error: 'Failed to update truck' });
+    }
+  });
+
+  app.delete('/api/fleet/trucks/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const deleted = await storage.deleteTruck(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Truck not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting truck:', error);
+      res.status(500).json({ error: 'Failed to delete truck' });
+    }
+  });
+
+  // Vendors CRUD
+  app.get('/api/fleet/vendors', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      const vendors = await storage.getVendorsByCompany(companyId);
+      res.json(vendors);
+    } catch (error) {
+      console.error('Error fetching vendors:', error);
+      res.status(500).json({ error: 'Failed to fetch vendors' });
+    }
+  });
+
+  app.get('/api/fleet/vendors/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const vendor = await storage.getVendor(req.params.id);
+      if (!vendor) {
+        return res.status(404).json({ error: 'Vendor not found' });
+      }
+      res.json(vendor);
+    } catch (error) {
+      console.error('Error fetching vendor:', error);
+      res.status(500).json({ error: 'Failed to fetch vendor' });
+    }
+  });
+
+  app.post('/api/fleet/vendors', isAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertVendorSchema.parse(req.body);
+      const vendor = await storage.createVendor(data);
+      res.status(201).json(vendor);
+    } catch (error: any) {
+      console.error('Error creating vendor:', error);
+      if (error.issues) {
+        return res.status(400).json({ error: 'Validation failed', details: error.issues });
+      }
+      res.status(500).json({ error: 'Failed to create vendor' });
+    }
+  });
+
+  app.patch('/api/fleet/vendors/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const vendor = await storage.updateVendor(req.params.id, req.body);
+      if (!vendor) {
+        return res.status(404).json({ error: 'Vendor not found' });
+      }
+      res.json(vendor);
+    } catch (error) {
+      console.error('Error updating vendor:', error);
+      res.status(500).json({ error: 'Failed to update vendor' });
+    }
+  });
+
+  app.delete('/api/fleet/vendors/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const deleted = await storage.deleteVendor(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: 'Vendor not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting vendor:', error);
+      res.status(500).json({ error: 'Failed to delete vendor' });
+    }
+  });
+
+  // Fleet Inspections CRUD
+  app.get('/api/fleet/inspections', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      const inspections = await storage.getFleetInspectionsByCompany(companyId);
+      res.json(inspections);
+    } catch (error) {
+      console.error('Error fetching inspections:', error);
+      res.status(500).json({ error: 'Failed to fetch inspections' });
+    }
+  });
+
+  app.get('/api/fleet/inspections/truck/:truckId', isAuthenticated, async (req: any, res) => {
+    try {
+      const inspections = await storage.getFleetInspectionsByTruck(req.params.truckId);
+      res.json(inspections);
+    } catch (error) {
+      console.error('Error fetching truck inspections:', error);
+      res.status(500).json({ error: 'Failed to fetch inspections' });
+    }
+  });
+
+  app.get('/api/fleet/inspections/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const inspection = await storage.getFleetInspection(req.params.id);
+      if (!inspection) {
+        return res.status(404).json({ error: 'Inspection not found' });
+      }
+      const items = await storage.getInspectionItemsByInspection(req.params.id);
+      res.json({ ...inspection, items });
+    } catch (error) {
+      console.error('Error fetching inspection:', error);
+      res.status(500).json({ error: 'Failed to fetch inspection' });
+    }
+  });
+
+  app.post('/api/fleet/inspections', isAuthenticated, async (req: any, res) => {
+    try {
+      const { items, ...inspectionData } = req.body;
+      const data = insertFleetInspectionSchema.parse(inspectionData);
+      const inspection = await storage.createFleetInspection(data);
+      
+      // Create inspection items if provided
+      if (items && Array.isArray(items)) {
+        const createdItems = await storage.bulkCreateInspectionItems(
+          items.map((item: any) => ({ ...item, inspectionId: inspection.id }))
+        );
+        
+        // Check for defects and create work orders automatically
+        const defectItems = createdItems.filter((item: any) => item.status === 'NEEDS_ATTENTION');
+        for (const defect of defectItems) {
+          await storage.createWorkOrder({
+            companyId: inspection.companyId,
+            truckId: inspection.truckId,
+            source: 'INSPECTION' as any,
+            priority: defect.severity || 'ROUTINE',
+            status: 'OPEN' as any,
+            issueCategory: 'OTHER' as any,
+            symptoms: `Inspection defect: ${defect.itemLabel} - ${defect.defectNotes || 'Needs attention'}`,
+            relatedInspectionId: inspection.id,
+          });
+        }
+        
+        return res.status(201).json({ ...inspection, items: createdItems });
+      }
+      
+      res.status(201).json(inspection);
+    } catch (error: any) {
+      console.error('Error creating inspection:', error);
+      if (error.issues) {
+        return res.status(400).json({ error: 'Validation failed', details: error.issues });
+      }
+      res.status(500).json({ error: 'Failed to create inspection' });
+    }
+  });
+
+  app.patch('/api/fleet/inspections/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const inspection = await storage.updateFleetInspection(req.params.id, req.body);
+      if (!inspection) {
+        return res.status(404).json({ error: 'Inspection not found' });
+      }
+      res.json(inspection);
+    } catch (error) {
+      console.error('Error updating inspection:', error);
+      res.status(500).json({ error: 'Failed to update inspection' });
+    }
+  });
+
+  // Work Orders CRUD
+  app.get('/api/fleet/work-orders', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      const status = req.query.status;
+      
+      let workOrders;
+      if (status) {
+        workOrders = await storage.getWorkOrdersByStatus(companyId, status);
+      } else {
+        workOrders = await storage.getWorkOrdersByCompany(companyId);
+      }
+      res.json(workOrders);
+    } catch (error) {
+      console.error('Error fetching work orders:', error);
+      res.status(500).json({ error: 'Failed to fetch work orders' });
+    }
+  });
+
+  app.get('/api/fleet/work-orders/truck/:truckId', isAuthenticated, async (req: any, res) => {
+    try {
+      const workOrders = await storage.getWorkOrdersByTruck(req.params.truckId);
+      res.json(workOrders);
+    } catch (error) {
+      console.error('Error fetching truck work orders:', error);
+      res.status(500).json({ error: 'Failed to fetch work orders' });
+    }
+  });
+
+  app.get('/api/fleet/work-orders/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const workOrder = await storage.getWorkOrder(req.params.id);
+      if (!workOrder) {
+        return res.status(404).json({ error: 'Work order not found' });
+      }
+      const events = await storage.getWorkOrderEvents(req.params.id);
+      res.json({ ...workOrder, events });
+    } catch (error) {
+      console.error('Error fetching work order:', error);
+      res.status(500).json({ error: 'Failed to fetch work order' });
+    }
+  });
+
+  app.post('/api/fleet/work-orders', isAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertWorkOrderSchema.parse(req.body);
+      const workOrder = await storage.createWorkOrder(data);
+      
+      // Create initial event
+      await storage.createWorkOrderEvent({
+        workOrderId: workOrder.id,
+        eventType: 'STATUS_CHANGE' as any,
+        message: 'Work order created',
+        actorUserId: req.user?.claims?.sub,
+      });
+      
+      res.status(201).json(workOrder);
+    } catch (error: any) {
+      console.error('Error creating work order:', error);
+      if (error.issues) {
+        return res.status(400).json({ error: 'Validation failed', details: error.issues });
+      }
+      res.status(500).json({ error: 'Failed to create work order' });
+    }
+  });
+
+  app.patch('/api/fleet/work-orders/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const oldWorkOrder = await storage.getWorkOrder(req.params.id);
+      if (!oldWorkOrder) {
+        return res.status(404).json({ error: 'Work order not found' });
+      }
+      
+      const workOrder = await storage.updateWorkOrder(req.params.id, req.body);
+      
+      // Log status changes
+      if (req.body.status && req.body.status !== oldWorkOrder.status) {
+        await storage.createWorkOrderEvent({
+          workOrderId: workOrder!.id,
+          eventType: 'STATUS_CHANGE' as any,
+          message: `Status changed from ${oldWorkOrder.status} to ${req.body.status}`,
+          actorUserId: req.user?.claims?.sub,
+        });
+      }
+      
+      // Log vendor assignments
+      if (req.body.vendorId && req.body.vendorId !== oldWorkOrder.vendorId) {
+        const vendor = await storage.getVendor(req.body.vendorId);
+        await storage.createWorkOrderEvent({
+          workOrderId: workOrder!.id,
+          eventType: 'VENDOR_ASSIGNED' as any,
+          message: `Assigned to vendor: ${vendor?.name || req.body.vendorId}`,
+          actorUserId: req.user?.claims?.sub,
+        });
+      }
+      
+      res.json(workOrder);
+    } catch (error) {
+      console.error('Error updating work order:', error);
+      res.status(500).json({ error: 'Failed to update work order' });
+    }
+  });
+
+  // Work Order Events
+  app.get('/api/fleet/work-orders/:id/events', isAuthenticated, async (req: any, res) => {
+    try {
+      const events = await storage.getWorkOrderEvents(req.params.id);
+      res.json(events);
+    } catch (error) {
+      console.error('Error fetching work order events:', error);
+      res.status(500).json({ error: 'Failed to fetch events' });
+    }
+  });
+
+  app.post('/api/fleet/work-orders/:id/events', isAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertWorkOrderEventSchema.parse({
+        ...req.body,
+        workOrderId: req.params.id,
+        actorUserId: req.user?.claims?.sub,
+      });
+      const event = await storage.createWorkOrderEvent(data);
+      res.status(201).json(event);
+    } catch (error: any) {
+      console.error('Error creating work order event:', error);
+      if (error.issues) {
+        return res.status(400).json({ error: 'Validation failed', details: error.issues });
+      }
+      res.status(500).json({ error: 'Failed to create event' });
+    }
+  });
+
+  // Breakdown Reports
+  app.get('/api/fleet/breakdowns', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      const reports = await storage.getBreakdownReportsByCompany(companyId);
+      res.json(reports);
+    } catch (error) {
+      console.error('Error fetching breakdown reports:', error);
+      res.status(500).json({ error: 'Failed to fetch breakdown reports' });
+    }
+  });
+
+  app.get('/api/fleet/breakdowns/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const report = await storage.getBreakdownReport(req.params.id);
+      if (!report) {
+        return res.status(404).json({ error: 'Breakdown report not found' });
+      }
+      res.json(report);
+    } catch (error) {
+      console.error('Error fetching breakdown report:', error);
+      res.status(500).json({ error: 'Failed to fetch breakdown report' });
+    }
+  });
+
+  app.post('/api/fleet/breakdowns', isAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertBreakdownReportSchema.parse(req.body);
+      const report = await storage.createBreakdownReport(data);
+      
+      // Automatically create a work order for the breakdown
+      const workOrder = await storage.createWorkOrder({
+        companyId: report.companyId,
+        truckId: report.truckId,
+        driverId: report.driverId,
+        source: 'BREAKDOWN' as any,
+        priority: report.hazard ? 'CRITICAL' : 'URGENT',
+        status: 'OPEN' as any,
+        issueCategory: 'OTHER' as any,
+        symptoms: report.description,
+        safetyHold: report.hazard,
+        downtimeStartAt: report.reportedAt,
+      });
+      
+      // Link breakdown to work order
+      await storage.updateBreakdownReport(report.id, { workOrderId: workOrder.id });
+      
+      res.status(201).json({ ...report, workOrderId: workOrder.id });
+    } catch (error: any) {
+      console.error('Error creating breakdown report:', error);
+      if (error.issues) {
+        return res.status(400).json({ error: 'Validation failed', details: error.issues });
+      }
+      res.status(500).json({ error: 'Failed to create breakdown report' });
+    }
+  });
+
+  app.patch('/api/fleet/breakdowns/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const report = await storage.updateBreakdownReport(req.params.id, req.body);
+      if (!report) {
+        return res.status(404).json({ error: 'Breakdown report not found' });
+      }
+      res.json(report);
+    } catch (error) {
+      console.error('Error updating breakdown report:', error);
+      res.status(500).json({ error: 'Failed to update breakdown report' });
+    }
+  });
+
+  // Fleet Documents
+  app.get('/api/fleet/documents', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      const documents = await storage.getFleetDocumentsByCompany(companyId);
+      res.json(documents);
+    } catch (error) {
+      console.error('Error fetching fleet documents:', error);
+      res.status(500).json({ error: 'Failed to fetch documents' });
+    }
+  });
+
+  app.get('/api/fleet/documents/expiring', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      const daysAhead = parseInt(req.query.days || '30');
+      const documents = await storage.getExpiringDocuments(companyId, daysAhead);
+      res.json(documents);
+    } catch (error) {
+      console.error('Error fetching expiring documents:', error);
+      res.status(500).json({ error: 'Failed to fetch expiring documents' });
+    }
+  });
+
+  app.get('/api/fleet/documents/:subjectType/:subjectId', isAuthenticated, async (req: any, res) => {
+    try {
+      const documents = await storage.getFleetDocumentsBySubject(
+        req.params.subjectType,
+        req.params.subjectId
+      );
+      res.json(documents);
+    } catch (error) {
+      console.error('Error fetching subject documents:', error);
+      res.status(500).json({ error: 'Failed to fetch documents' });
+    }
+  });
+
+  app.post('/api/fleet/documents', isAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertFleetDocumentSchema.parse(req.body);
+      const document = await storage.createFleetDocument(data);
+      res.status(201).json(document);
+    } catch (error: any) {
+      console.error('Error creating fleet document:', error);
+      if (error.issues) {
+        return res.status(400).json({ error: 'Validation failed', details: error.issues });
+      }
+      res.status(500).json({ error: 'Failed to create document' });
+    }
+  });
+
+  app.patch('/api/fleet/documents/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const document = await storage.updateFleetDocument(req.params.id, req.body);
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+      res.json(document);
+    } catch (error) {
+      console.error('Error updating fleet document:', error);
+      res.status(500).json({ error: 'Failed to update document' });
+    }
+  });
+
+  // Maintenance Plans
+  app.get('/api/fleet/maintenance-plans', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      const plans = await storage.getMaintenancePlansByCompany(companyId);
+      res.json(plans);
+    } catch (error) {
+      console.error('Error fetching maintenance plans:', error);
+      res.status(500).json({ error: 'Failed to fetch maintenance plans' });
+    }
+  });
+
+  app.get('/api/fleet/maintenance-plans/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const plan = await storage.getMaintenancePlan(req.params.id);
+      if (!plan) {
+        return res.status(404).json({ error: 'Maintenance plan not found' });
+      }
+      res.json(plan);
+    } catch (error) {
+      console.error('Error fetching maintenance plan:', error);
+      res.status(500).json({ error: 'Failed to fetch maintenance plan' });
+    }
+  });
+
+  app.post('/api/fleet/maintenance-plans', isAuthenticated, async (req: any, res) => {
+    try {
+      const data = insertMaintenancePlanSchema.parse(req.body);
+      const plan = await storage.createMaintenancePlan(data);
+      res.status(201).json(plan);
+    } catch (error: any) {
+      console.error('Error creating maintenance plan:', error);
+      if (error.issues) {
+        return res.status(400).json({ error: 'Validation failed', details: error.issues });
+      }
+      res.status(500).json({ error: 'Failed to create maintenance plan' });
+    }
+  });
+
+  app.patch('/api/fleet/maintenance-plans/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const plan = await storage.updateMaintenancePlan(req.params.id, req.body);
+      if (!plan) {
+        return res.status(404).json({ error: 'Maintenance plan not found' });
+      }
+      res.json(plan);
+    } catch (error) {
+      console.error('Error updating maintenance plan:', error);
+      res.status(500).json({ error: 'Failed to update maintenance plan' });
+    }
+  });
+
+  // PM Schedule
+  app.get('/api/fleet/pm-schedule', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      const schedules = await storage.getDuePmSchedules(companyId);
+      res.json(schedules);
+    } catch (error) {
+      console.error('Error fetching PM schedules:', error);
+      res.status(500).json({ error: 'Failed to fetch PM schedules' });
+    }
+  });
+
+  app.get('/api/fleet/pm-schedule/truck/:truckId', isAuthenticated, async (req: any, res) => {
+    try {
+      const schedules = await storage.getPmSchedulesByTruck(req.params.truckId);
+      res.json(schedules);
+    } catch (error) {
+      console.error('Error fetching truck PM schedules:', error);
+      res.status(500).json({ error: 'Failed to fetch PM schedules' });
+    }
+  });
+
+  // Fleet Dashboard Summary
+  app.get('/api/fleet/dashboard', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.query.companyId || 'default-company';
+      
+      const [trucks, workOrders, expiringDocs, inspections] = await Promise.all([
+        storage.getTrucksByCompany(companyId),
+        storage.getWorkOrdersByCompany(companyId),
+        storage.getExpiringDocuments(companyId, 30),
+        storage.getFleetInspectionsByCompany(companyId),
+      ]);
+      
+      const activeTrucks = trucks.filter((t: any) => t.status === 'ACTIVE').length;
+      const trucksInShop = trucks.filter((t: any) => t.status === 'IN_SHOP').length;
+      const openWorkOrders = workOrders.filter((wo: any) => 
+        ['OPEN', 'TRIAGED', 'ASSIGNED_VENDOR', 'IN_PROGRESS', 'WAITING_PARTS'].includes(wo.status)
+      ).length;
+      const criticalWorkOrders = workOrders.filter((wo: any) => wo.priority === 'CRITICAL' && wo.status !== 'CLOSED').length;
+      
+      res.json({
+        fleetSummary: {
+          totalTrucks: trucks.length,
+          activeTrucks,
+          trucksInShop,
+          outOfService: trucks.filter((t: any) => t.status === 'OUT_OF_SERVICE').length,
+        },
+        workOrders: {
+          total: workOrders.length,
+          open: openWorkOrders,
+          critical: criticalWorkOrders,
+          byStatus: {
+            OPEN: workOrders.filter((wo: any) => wo.status === 'OPEN').length,
+            TRIAGED: workOrders.filter((wo: any) => wo.status === 'TRIAGED').length,
+            ASSIGNED_VENDOR: workOrders.filter((wo: any) => wo.status === 'ASSIGNED_VENDOR').length,
+            IN_PROGRESS: workOrders.filter((wo: any) => wo.status === 'IN_PROGRESS').length,
+            WAITING_PARTS: workOrders.filter((wo: any) => wo.status === 'WAITING_PARTS').length,
+            COMPLETED: workOrders.filter((wo: any) => wo.status === 'COMPLETED').length,
+            CLOSED: workOrders.filter((wo: any) => wo.status === 'CLOSED').length,
+          }
+        },
+        compliance: {
+          expiringDocuments: expiringDocs.length,
+          documentsExpiringIn30Days: expiringDocs,
+        },
+        recentInspections: inspections.slice(0, 10),
+      });
+    } catch (error) {
+      console.error('Error fetching fleet dashboard:', error);
+      res.status(500).json({ error: 'Failed to fetch dashboard data' });
+    }
+  });
+
+  console.log('✅ MVFRS Fleet Reliability routes registered');
+  // ==================== End MVFRS Routes ====================
 
   console.log('✅ Essential routes registered - server ready for startup');
   
