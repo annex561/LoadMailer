@@ -1,0 +1,417 @@
+LOADMAILER / LAMP LOGISTICS — MVFRS (Minimum Viable Fleet Reliability System)
+Maintenance + Inspections + Compliance inside your existing Replit trucking app
+
+Goal:
+1) Prevent breakdowns (PM discipline + early defect capture)
+2) Make inspections feed maintenance automatically (defect → work order)
+3) Create accountability (driver + dispatcher + maintenance coordinator)
+4) Provide a single system of record (your app), while integrating best-in-class tools (QB, ELD, e-sign)
+
+--------------------------------------------------------------------------------
+A) DATA MODEL (DB SCHEMA)
+Recommended: Postgres (Replit) or SQLite (MVP). Use UUID primary keys.
+All timestamps: UTC. Keep a “soft delete” flag on operational records.
+
+1) USERS
+- id (uuid, pk)
+- name (text)
+- email (text, unique, nullable)
+- phone (text, nullable)
+- telegram_id (text, nullable)
+- role (enum: OWNER, DISPATCHER, MAINT_COORD, DRIVER, ACCOUNTING, ADMIN)
+- is_active (bool default true)
+- created_at (timestamp)
+- updated_at (timestamp)
+
+2) DRIVERS (profile layer separate from user for business fields)
+- id (uuid, pk)
+- user_id (uuid, fk users.id, unique)
+- driver_type (enum: COMPANY, OWNER_OPERATOR)
+- home_zip (text)
+- assigned_truck_id (uuid, fk trucks.id, nullable)
+- license_number (text, nullable)
+- license_state (text, nullable)
+- license_expiry (date, nullable)
+- medcard_expiry (date, nullable)
+- onboarding_status (enum: NOT_STARTED, IN_PROGRESS, ACTIVE, SUSPENDED)
+- notes (text, nullable)
+- created_at, updated_at
+
+3) TRUCKS
+- id (uuid, pk)
+- unit_number (text, unique)               // “Truck 01”
+- vin (text, unique, nullable)
+- year (int)
+- make (text)
+- model (text)
+- body_type (enum: BOX_26FT, SPRINTER, STRAIGHT_TRUCK, OTHER)
+- has_liftgate (bool default false)
+- liftgate_type (text, nullable)
+- current_odometer (int default 0)
+- odometer_last_updated_at (timestamp, nullable)
+- status (enum: ACTIVE, IN_SHOP, OUT_OF_SERVICE, SOLD)
+- base_zip (text, nullable)
+- insurance_policy_id (uuid, fk documents.id, nullable)
+- created_at, updated_at
+
+4) VENDORS (repair network)
+- id (uuid, pk)
+- name (text)
+- category (enum: TOWING, MOBILE_MECHANIC, TIRE, DEALER_SERVICE, LIFTGATE, BODY_SHOP, GENERAL_REPAIR, ROADSIDE)
+- phone_24_7 (text, nullable)
+- phone_day (text, nullable)
+- email (text, nullable)
+- address (text, nullable)
+- city (text, nullable)
+- state (text, nullable)
+- zip (text, nullable)
+- service_radius_miles (int, nullable)
+- payment_terms (text, nullable)            // “Net 7”, “Card only”
+- notes (text, nullable)
+- is_preferred (bool default false)
+- created_at, updated_at
+
+5) MAINTENANCE_PLANS (PM templates)
+- id (uuid, pk)
+- name (text)                               // “26ft Box PM”
+- interval_type (enum: MILES, DAYS, BOTH)
+- interval_miles (int, nullable)            // e.g., 5000
+- interval_days (int, nullable)             // e.g., 30
+- grace_miles (int default 250)
+- grace_days (int default 3)
+- created_at, updated_at
+
+6) MAINTENANCE_TASKS (what’s inside a plan)
+- id (uuid, pk)
+- plan_id (uuid, fk maintenance_plans.id)
+- task_name (text)                           // “Oil & Filter”
+- category (enum: ENGINE, BRAKES, TIRES, ELECTRICAL, SUSPENSION, DRIVELINE, LIFTGATE, SAFETY, OTHER)
+- is_safety_critical (bool default false)
+- default_priority (enum: ROUTINE, URGENT, CRITICAL)
+- instructions (text, nullable)
+- created_at, updated_at
+
+7) TRUCK_PLAN_ASSIGNMENTS (which plan applies to which truck)
+- id (uuid, pk)
+- truck_id (uuid, fk trucks.id)
+- plan_id (uuid, fk maintenance_plans.id)
+- start_odometer (int, nullable)
+- start_date (date, nullable)
+- is_active (bool default true)
+- created_at, updated_at
+
+8) PM_SCHEDULE (generated due items per truck based on assigned plan)
+- id (uuid, pk)
+- truck_id (uuid, fk trucks.id)
+- plan_id (uuid, fk maintenance_plans.id)
+- due_type (enum: MILES, DAYS)
+- due_odometer (int, nullable)
+- due_date (date, nullable)
+- status (enum: DUE_SOON, DUE, OVERDUE, SCHEDULED, COMPLETED, SKIPPED)
+- scheduled_for (timestamp, nullable)
+- completed_at (timestamp, nullable)
+- completion_work_order_id (uuid, fk work_orders.id, nullable)
+- created_at, updated_at
+
+9) INSPECTIONS (DVIR + company inspections)
+- id (uuid, pk)
+- inspection_type (enum: PRE_TRIP, POST_TRIP, WEEKLY, MONTHLY_FLEET, QUARTERLY_PM_REVIEW, ANNUAL_DOT_READY)
+- truck_id (uuid, fk trucks.id)
+- driver_id (uuid, fk drivers.id, nullable)       // driver inspections only
+- performed_by_user_id (uuid, fk users.id)        // for fleet inspections
+- odometer (int, nullable)
+- location_text (text, nullable)
+- is_safe_to_operate (bool)
+- summary_notes (text, nullable)
+- created_at, updated_at
+
+10) INSPECTION_ITEMS (checklist results)
+- id (uuid, pk)
+- inspection_id (uuid, fk inspections.id)
+- item_code (text)                          // “TIRES”, “BRAKES”, “LIGHTS”
+- item_label (text)                         // “Tires / PSI / Tread”
+- status (enum: OK, NEEDS_ATTENTION, NOT_APPLICABLE)
+- severity (enum: ROUTINE, URGENT, CRITICAL, nullable)
+- defect_notes (text, nullable)
+- photo_urls (json, nullable)               // store URLs to uploads
+- created_at, updated_at
+
+11) WORK_ORDERS (the operational heart)
+- id (uuid, pk)
+- truck_id (uuid, fk trucks.id)
+- opened_by_user_id (uuid, fk users.id)
+- assigned_to_user_id (uuid, fk users.id, nullable)   // maintenance coordinator
+- driver_id (uuid, fk drivers.id, nullable)
+- source (enum: MANUAL, INSPECTION, PM_SCHEDULE, BREAKDOWN)
+- priority (enum: ROUTINE, URGENT, CRITICAL)
+- status (enum: OPEN, TRIAGED, ASSIGNED_VENDOR, IN_PROGRESS, WAITING_PARTS, COMPLETED, CLOSED, CANCELED)
+- issue_category (enum: ENGINE, BRAKES, TIRES, ELECTRICAL, SUSPENSION, DRIVELINE, LIFTGATE, SAFETY, OTHER)
+- symptoms (text, nullable)
+- safety_hold (bool default false)           // if true, truck cannot be dispatched
+- vendor_id (uuid, fk vendors.id, nullable)
+- estimated_cost (numeric, nullable)
+- actual_cost (numeric, nullable)
+- downtime_start_at (timestamp, nullable)
+- downtime_end_at (timestamp, nullable)
+- resolution_notes (text, nullable)
+- related_inspection_id (uuid, fk inspections.id, nullable)
+- related_pm_schedule_id (uuid, fk pm_schedule.id, nullable)
+- created_at, updated_at
+
+12) WORK_ORDER_EVENTS (audit trail + communications)
+- id (uuid, pk)
+- work_order_id (uuid, fk work_orders.id)
+- actor_user_id (uuid, fk users.id)
+- event_type (enum: NOTE, STATUS_CHANGE, VENDOR_ASSIGNED, COST_UPDATE, PHOTO_ADDED, ESCALATION, CUSTOMER_NOTICE_SENT)
+- message (text, nullable)
+- meta (json, nullable)
+- created_at
+
+13) BREAKDOWN_REPORTS (war room trigger)
+- id (uuid, pk)
+- truck_id (uuid, fk trucks.id)
+- driver_id (uuid, fk drivers.id)
+- reported_at (timestamp)
+- location_text (text)                      // later replace with GPS
+- hazard (bool default false)
+- can_move (bool default false)
+- description (text)
+- photos (json, nullable)
+- work_order_id (uuid, fk work_orders.id, nullable)
+- created_at, updated_at
+
+14) DOCUMENTS (expirations + compliance)
+- id (uuid, pk)
+- doc_type (enum: INSURANCE, REGISTRATION, ANNUAL_INSPECTION, IFTA, UCR, PERMIT, TITLE, LEASE_AGREEMENT, OTHER)
+- subject_type (enum: TRUCK, DRIVER, COMPANY)
+- subject_id (uuid)                          // truck_id or driver_id or company singleton id
+- file_url (text, nullable)
+- issued_date (date, nullable)
+- expiry_date (date, nullable)
+- status (enum: ACTIVE, EXPIRED, REPLACED)
+- notes (text, nullable)
+- created_at, updated_at
+
+15) NOTIFICATIONS (log what got sent)
+- id (uuid, pk)
+- channel (enum: PUSH_NEXTSTEP, EMAIL, SMS, TELEGRAM, IN_APP)
+- recipient_user_id (uuid, fk users.id, nullable)
+- title (text, nullable)
+- message (text)
+- priority (int default 8)
+- related_type (text, nullable)              // “WORK_ORDER”, “PM”, “DOC”
+- related_id (uuid, nullable)
+- status (enum: QUEUED, SENT, FAILED)
+- error (text, nullable)
+- created_at, updated_at
+
+--------------------------------------------------------------------------------
+B) CORE SCREENS (UI LAYOUT)
+Keep it simple: left nav + 6 core modules.
+
+1) Dashboard (Ops Control Panel)
+- “Today’s Alerts” (Overdue PM, Critical Defects, Expiring docs)
+- “Trucks Out of Service” list
+- “Open Work Orders by Priority” (CRITICAL/URGENT/ROUTINE)
+- “Upcoming PM Due (next 7 days / next 500 miles)”
+- Quick buttons: +New Work Order, +Log Breakdown, +New Inspection
+
+2) Trucks
+- Truck list (status, odometer, next PM due, safety hold)
+- Truck detail:
+  - Info tab (VIN/unit/make/model)
+  - Maintenance tab (PM schedule + completed work orders)
+  - Inspections tab (DVIR history + fleet inspections)
+  - Documents tab (insurance/registration/annual insp)
+  - Vendors tab (preferred vendors by zip/state)
+
+3) Inspections (Driver + Fleet)
+- “Start Inspection” flow:
+  - choose truck
+  - choose type (pre/post/weekly/monthly)
+  - odometer entry (required for driver inspections)
+  - checklist with OK / Needs Attention
+  - if Needs Attention → require severity + notes + photo for critical categories
+- After submit: show “Generated Work Orders” (if any)
+
+4) Work Orders
+- Kanban style: OPEN → TRIAGED → ASSIGNED → IN_PROGRESS → COMPLETED → CLOSED
+- Work order detail:
+  - priority + safety hold
+  - vendor assignment
+  - costs + downtime timers
+  - timeline events (audit trail)
+  - close-out summary
+
+5) Vendors
+- directory with category filters
+- quick-call buttons
+- “Preferred vendors by region” (TN/GA/AL/NC)
+
+6) Compliance / Documents
+- expiring next 60/30/7 days
+- upload/replace doc
+- document history
+
+Optional (later):
+7) Analytics
+- cost per mile by truck
+- downtime hours by truck
+- recurring failure categories
+- “sell/replace flags” dashboard
+
+--------------------------------------------------------------------------------
+C) AUTOMATIONS (THE HIGH-ROI RULES)
+These are the automations that make your system behave like a fleet operator.
+
+Use your existing NextStep webhook for push notifications:
+POST https://nextstephq.app/api/webhook
+Headers: Content-Type: application/json
+Body: { "message": "...", "title": "...", "priority": 8 }
+
+1) AUTOMATION: DEFECT → WORK ORDER AUTO-CREATE
+Trigger: inspection_items.status = NEEDS_ATTENTION
+Logic:
+- Create work_order with:
+  - source = INSPECTION
+  - priority = severity mapped:
+      CRITICAL → CRITICAL + safety_hold=true + truck.status=OUT_OF_SERVICE
+      URGENT   → URGENT
+      ROUTINE  → ROUTINE
+  - issue_category inferred from item_code (TIRES/BRAKES/etc.)
+  - symptoms = defect_notes
+  - related_inspection_id = inspection.id
+Notify:
+- If CRITICAL:
+  - Push to OWNER + DISPATCHER + MAINT_COORD
+  - Title: “CRITICAL DEFECT: Truck {unit_number}”
+  - Message: “Truck is on SAFETY HOLD. Work Order {id} created. Resolve before dispatch.”
+- If URGENT:
+  - Push to DISPATCHER + MAINT_COORD
+- If ROUTINE:
+  - In-app only or daily digest
+
+2) AUTOMATION: PM DUE SOON / DUE / OVERDUE
+Trigger: daily scheduler at 6:30 AM local (America/New_York)
+Logic:
+- For each truck:
+  - if due within grace window → DUE_SOON
+  - if at/over threshold → DUE
+  - if beyond grace → OVERDUE + optionally safety_hold=true (your policy)
+Notify:
+- DUE_SOON (500 miles / 7 days):
+  - Push DISPATCHER + MAINT_COORD
+- DUE:
+  - Push DISPATCHER + MAINT_COORD + OWNER
+- OVERDUE:
+  - Push OWNER (priority 9) + set truck “Dispatch Block” flag (recommended)
+
+3) AUTOMATION: “BREAKDOWN MODE” BUTTON
+Trigger: create breakdown_report
+Logic:
+- Auto-create work_order with source=BREAKDOWN priority=CRITICAL
+- Set truck.status=OUT_OF_SERVICE and safety_hold=true
+- Start downtime timer (downtime_start_at=now)
+Notify:
+- OWNER + DISPATCHER + MAINT_COORD
+Message includes:
+- location_text
+- can_move yes/no
+- hazard yes/no
+- vendor category suggestions (TOWING vs MOBILE_MECHANIC)
+Add quick action checklist in work_order_events:
+- “Notify broker/customer using template”
+- “Assign vendor”
+- “Update ETA”
+- “Close breakdown”
+
+4) AUTOMATION: DOCUMENT EXPIRY COUNTDOWN (60/30/7)
+Trigger: daily scheduler at 7:00 AM
+Logic:
+- Find documents expiring in 60/30/7 days
+Notify:
+- 60 days: accounting/ops
+- 30 days: ops + owner
+- 7 days: owner priority 9
+Message:
+- “DOC EXPIRING: {doc_type} for {truck/unit or driver} on {date}”
+
+5) AUTOMATION: ODOMETER UPDATE REQUIRED
+Trigger: driver submits inspection without odometer OR truck current_odometer stale > 7 days
+Notify:
+- DRIVER + DISPATCHER (if assigned)
+Message:
+- “Odometer update required for Truck {unit}. Enter latest miles before next dispatch.”
+
+6) AUTOMATION: CLOSE-OUT QUALITY GATE (forces discipline)
+Trigger: attempting to set work_order status COMPLETED/CLOSED
+Require:
+- actual_cost entered (or set 0 with reason)
+- resolution_notes entered
+- downtime_end_at set if downtime started
+This is how you build real analytics and prevent “messy history.”
+
+--------------------------------------------------------------------------------
+D) ROLE-BASED PERMISSIONS (NON-NEGOTIABLE)
+OWNER / ADMIN:
+- Full access, overrides, policy settings, analytics
+
+DISPATCHER:
+- View trucks, create work orders, view/triage, cannot delete
+- Can place truck “temporary hold” but cannot remove safety hold without MAINT/OWNER
+
+MAINT_COORD:
+- Work orders full, vendor assignment, costs, close-out
+- Can remove safety hold after resolution + notes
+
+DRIVER:
+- Submit inspections + breakdown reports
+- View their own assigned truck status + required tasks
+- Cannot see cost fields
+
+ACCOUNTING:
+- View costs + exports + documents
+- Read-only on inspections
+
+--------------------------------------------------------------------------------
+E) WHAT YOU SHOULD BUILD FIRST (7-DAY MVP)
+Day 1–2:
+- Trucks, Drivers, Vendors tables + UI list pages
+Day 3–4:
+- Inspections (pre/post) + inspection_items + photo upload
+Day 5:
+- Defect → work order auto-create + safety hold logic
+Day 6:
+- Work order Kanban + detail page + events log
+Day 7:
+- Document expiry page + daily scheduler + NextStep push notifications
+
+This gets you an operational system immediately.
+
+--------------------------------------------------------------------------------
+F) WHAT STAYS OUTSIDE THE APP (BUT INTEGRATES)
+- QuickBooks: accounting system of record (your app exports weekly summaries)
+- ELD: do not rebuild; store compliance status + exceptions + provider references
+- DocuSign/PandaDoc: contracts + signatures; your app stores the link + status
+
+--------------------------------------------------------------------------------
+G) OPTIONAL “BIG FLEET” ADD-ONS (LATER, BUT IMPORTANT)
+1) Rotation/Sell Flags
+- rule: if downtime > X hours/quarter or repairs > $X/quarter → “Replace Candidate”
+2) Cost per Mile
+- total repairs + PM / miles
+3) Recurring Failure Detection
+- same issue_category repeating 3+ times in 90 days → “Root Cause Review”
+4) Owner-Operator Compliance
+- require monthly inspection submission + PM proof upload
+- failure → dispatch suspension
+
+--------------------------------------------------------------------------------
+NEXT: IMPLEMENTATION HANDOFF (WHAT I CAN PRODUCE IMMEDIATELY IF YOU WANT)
+1) Exact SQL migrations for Postgres
+2) JSON checklist templates (26ft box truck DVIR)
+3) Work order priority mapping rules (item_code → category + severity defaults)
+4) NextStep push notification payloads for each automation
+5) Broker/customer breakdown message templates (professional, no fluff)
+
+If you confirm “Postgres” or “SQLite” for Replit, I will output the full migrations and checklist JSON in one copy/paste block.
