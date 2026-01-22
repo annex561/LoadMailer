@@ -2410,3 +2410,403 @@ export const users = pgTable("users", {
 // User types for Replit Auth
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+// ============================================================================
+// MVFRS (Minimum Viable Fleet Reliability System) Tables
+// ============================================================================
+
+// Enums for MVFRS
+export const truckBodyTypeEnum = pgEnum("truck_body_type", ["BOX_26FT", "SPRINTER", "STRAIGHT_TRUCK", "OTHER"]);
+export const truckStatusEnum = pgEnum("truck_status", ["ACTIVE", "IN_SHOP", "OUT_OF_SERVICE", "SOLD"]);
+export const vendorCategoryEnum = pgEnum("vendor_category", ["TOWING", "MOBILE_MECHANIC", "TIRE", "DEALER_SERVICE", "LIFTGATE", "BODY_SHOP", "GENERAL_REPAIR", "ROADSIDE"]);
+export const maintenanceIntervalTypeEnum = pgEnum("maintenance_interval_type", ["MILES", "DAYS", "BOTH"]);
+export const maintenanceTaskCategoryEnum = pgEnum("maintenance_task_category", ["ENGINE", "BRAKES", "TIRES", "ELECTRICAL", "SUSPENSION", "DRIVELINE", "LIFTGATE", "SAFETY", "OTHER"]);
+export const priorityEnum = pgEnum("priority", ["ROUTINE", "URGENT", "CRITICAL"]);
+export const pmScheduleStatusEnum = pgEnum("pm_schedule_status", ["DUE_SOON", "DUE", "OVERDUE", "SCHEDULED", "COMPLETED", "SKIPPED"]);
+export const inspectionTypeEnum = pgEnum("inspection_type", ["PRE_TRIP", "POST_TRIP", "WEEKLY", "MONTHLY_FLEET", "QUARTERLY_PM_REVIEW", "ANNUAL_DOT_READY"]);
+export const inspectionItemStatusEnum = pgEnum("inspection_item_status", ["OK", "NEEDS_ATTENTION", "NOT_APPLICABLE"]);
+export const workOrderSourceEnum = pgEnum("work_order_source", ["MANUAL", "INSPECTION", "PM_SCHEDULE", "BREAKDOWN"]);
+export const workOrderStatusEnum = pgEnum("work_order_status", ["OPEN", "TRIAGED", "ASSIGNED_VENDOR", "IN_PROGRESS", "WAITING_PARTS", "COMPLETED", "CLOSED", "CANCELED"]);
+export const workOrderEventTypeEnum = pgEnum("work_order_event_type", ["NOTE", "STATUS_CHANGE", "VENDOR_ASSIGNED", "COST_UPDATE", "PHOTO_ADDED", "ESCALATION", "CUSTOMER_NOTICE_SENT"]);
+export const fleetDocTypeEnum = pgEnum("fleet_doc_type", ["INSURANCE", "REGISTRATION", "ANNUAL_INSPECTION", "IFTA", "UCR", "PERMIT", "TITLE", "LEASE_AGREEMENT", "OTHER"]);
+export const fleetDocSubjectTypeEnum = pgEnum("fleet_doc_subject_type", ["TRUCK", "DRIVER", "COMPANY"]);
+export const fleetDocStatusEnum = pgEnum("fleet_doc_status", ["ACTIVE", "EXPIRED", "REPLACED"]);
+export const notificationChannelEnum = pgEnum("notification_channel", ["PUSH_NEXTSTEP", "EMAIL", "SMS", "TELEGRAM", "IN_APP"]);
+export const notificationStatusEnum = pgEnum("notification_status", ["QUEUED", "SENT", "FAILED"]);
+
+// TRUCKS table
+export const trucks = pgTable("trucks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  unitNumber: text("unit_number").notNull(),
+  vin: text("vin"),
+  year: integer("year").notNull(),
+  make: text("make").notNull(),
+  model: text("model").notNull(),
+  bodyType: truckBodyTypeEnum("body_type").notNull().default("BOX_26FT"),
+  hasLiftgate: boolean("has_liftgate").notNull().default(false),
+  liftgateType: text("liftgate_type"),
+  currentOdometer: integer("current_odometer").notNull().default(0),
+  odometerLastUpdatedAt: timestamp("odometer_last_updated_at"),
+  status: truckStatusEnum("status").notNull().default("ACTIVE"),
+  baseZip: text("base_zip"),
+  insurancePolicyId: varchar("insurance_policy_id"),
+  assignedDriverId: varchar("assigned_driver_id").references(() => drivers.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_trucks_company_id").on(table.companyId),
+  index("idx_trucks_status").on(table.status),
+]);
+
+// VENDORS table (repair network)
+export const vendors = pgTable("vendors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  name: text("name").notNull(),
+  category: vendorCategoryEnum("category").notNull(),
+  phone24_7: text("phone_24_7"),
+  phoneDay: text("phone_day"),
+  email: text("email"),
+  address: text("address"),
+  city: text("city"),
+  state: text("state"),
+  zip: text("zip"),
+  serviceRadiusMiles: integer("service_radius_miles"),
+  paymentTerms: text("payment_terms"),
+  notes: text("notes"),
+  isPreferred: boolean("is_preferred").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_vendors_company_id").on(table.companyId),
+  index("idx_vendors_category").on(table.category),
+]);
+
+// MAINTENANCE_PLANS table (PM templates)
+export const maintenancePlans = pgTable("maintenance_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  name: text("name").notNull(),
+  intervalType: maintenanceIntervalTypeEnum("interval_type").notNull().default("MILES"),
+  intervalMiles: integer("interval_miles"),
+  intervalDays: integer("interval_days"),
+  graceMiles: integer("grace_miles").notNull().default(250),
+  graceDays: integer("grace_days").notNull().default(3),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// MAINTENANCE_TASKS table (what's inside a plan)
+export const maintenanceTasks = pgTable("maintenance_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  planId: varchar("plan_id").references(() => maintenancePlans.id, { onDelete: "cascade" }).notNull(),
+  taskName: text("task_name").notNull(),
+  category: maintenanceTaskCategoryEnum("category").notNull().default("OTHER"),
+  isSafetyCritical: boolean("is_safety_critical").notNull().default(false),
+  defaultPriority: priorityEnum("default_priority").notNull().default("ROUTINE"),
+  instructions: text("instructions"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// TRUCK_PLAN_ASSIGNMENTS table
+export const truckPlanAssignments = pgTable("truck_plan_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  truckId: varchar("truck_id").references(() => trucks.id, { onDelete: "cascade" }).notNull(),
+  planId: varchar("plan_id").references(() => maintenancePlans.id, { onDelete: "cascade" }).notNull(),
+  startOdometer: integer("start_odometer"),
+  startDate: timestamp("start_date"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// PM_SCHEDULE table (generated due items per truck)
+export const pmSchedule = pgTable("pm_schedule", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  truckId: varchar("truck_id").references(() => trucks.id, { onDelete: "cascade" }).notNull(),
+  planId: varchar("plan_id").references(() => maintenancePlans.id, { onDelete: "cascade" }).notNull(),
+  dueType: maintenanceIntervalTypeEnum("due_type").notNull().default("MILES"),
+  dueOdometer: integer("due_odometer"),
+  dueDate: timestamp("due_date"),
+  status: pmScheduleStatusEnum("status").notNull().default("DUE_SOON"),
+  scheduledFor: timestamp("scheduled_for"),
+  completedAt: timestamp("completed_at"),
+  completionWorkOrderId: varchar("completion_work_order_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// INSPECTIONS table (DVIR + company inspections)
+export const fleetInspections = pgTable("fleet_inspections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  inspectionType: inspectionTypeEnum("inspection_type").notNull().default("PRE_TRIP"),
+  truckId: varchar("truck_id").references(() => trucks.id, { onDelete: "cascade" }).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id),
+  performedByUserId: varchar("performed_by_user_id").references(() => users.id),
+  odometer: integer("odometer"),
+  locationText: text("location_text"),
+  isSafeToOperate: boolean("is_safe_to_operate").notNull().default(true),
+  summaryNotes: text("summary_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_fleet_inspections_truck_id").on(table.truckId),
+  index("idx_fleet_inspections_driver_id").on(table.driverId),
+]);
+
+// INSPECTION_ITEMS table (checklist results)
+export const inspectionItems = pgTable("inspection_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  inspectionId: varchar("inspection_id").references(() => fleetInspections.id, { onDelete: "cascade" }).notNull(),
+  itemCode: text("item_code").notNull(),
+  itemLabel: text("item_label").notNull(),
+  status: inspectionItemStatusEnum("status").notNull().default("OK"),
+  severity: priorityEnum("severity"),
+  defectNotes: text("defect_notes"),
+  photoUrls: jsonb("photo_urls"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// WORK_ORDERS table (the operational heart)
+export const workOrders = pgTable("work_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  truckId: varchar("truck_id").references(() => trucks.id, { onDelete: "cascade" }).notNull(),
+  openedByUserId: varchar("opened_by_user_id").references(() => users.id),
+  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
+  driverId: varchar("driver_id").references(() => drivers.id),
+  source: workOrderSourceEnum("source").notNull().default("MANUAL"),
+  priority: priorityEnum("priority").notNull().default("ROUTINE"),
+  status: workOrderStatusEnum("status").notNull().default("OPEN"),
+  issueCategory: maintenanceTaskCategoryEnum("issue_category").notNull().default("OTHER"),
+  symptoms: text("symptoms"),
+  safetyHold: boolean("safety_hold").notNull().default(false),
+  vendorId: varchar("vendor_id").references(() => vendors.id),
+  estimatedCost: real("estimated_cost"),
+  actualCost: real("actual_cost"),
+  downtimeStartAt: timestamp("downtime_start_at"),
+  downtimeEndAt: timestamp("downtime_end_at"),
+  resolutionNotes: text("resolution_notes"),
+  relatedInspectionId: varchar("related_inspection_id").references(() => fleetInspections.id),
+  relatedPmScheduleId: varchar("related_pm_schedule_id").references(() => pmSchedule.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_work_orders_company_id").on(table.companyId),
+  index("idx_work_orders_truck_id").on(table.truckId),
+  index("idx_work_orders_status").on(table.status),
+  index("idx_work_orders_priority").on(table.priority),
+]);
+
+// WORK_ORDER_EVENTS table (audit trail + communications)
+export const workOrderEvents = pgTable("work_order_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workOrderId: varchar("work_order_id").references(() => workOrders.id, { onDelete: "cascade" }).notNull(),
+  actorUserId: varchar("actor_user_id").references(() => users.id),
+  eventType: workOrderEventTypeEnum("event_type").notNull().default("NOTE"),
+  message: text("message"),
+  meta: jsonb("meta"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// BREAKDOWN_REPORTS table (war room trigger)
+export const breakdownReports = pgTable("breakdown_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  truckId: varchar("truck_id").references(() => trucks.id, { onDelete: "cascade" }).notNull(),
+  driverId: varchar("driver_id").references(() => drivers.id).notNull(),
+  reportedAt: timestamp("reported_at").notNull().defaultNow(),
+  locationText: text("location_text").notNull(),
+  hazard: boolean("hazard").notNull().default(false),
+  canMove: boolean("can_move").notNull().default(false),
+  description: text("description").notNull(),
+  photos: jsonb("photos"),
+  workOrderId: varchar("work_order_id").references(() => workOrders.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// FLEET_DOCUMENTS table (expirations + compliance)
+export const fleetDocuments = pgTable("fleet_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  docType: fleetDocTypeEnum("doc_type").notNull(),
+  subjectType: fleetDocSubjectTypeEnum("subject_type").notNull(),
+  subjectId: varchar("subject_id").notNull(),
+  fileUrl: text("file_url"),
+  issuedDate: timestamp("issued_date"),
+  expiryDate: timestamp("expiry_date"),
+  status: fleetDocStatusEnum("status").notNull().default("ACTIVE"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_fleet_documents_subject").on(table.subjectType, table.subjectId),
+  index("idx_fleet_documents_expiry").on(table.expiryDate),
+]);
+
+// FLEET_NOTIFICATIONS table (log what got sent)
+export const fleetNotifications = pgTable("fleet_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  channel: notificationChannelEnum("channel").notNull().default("IN_APP"),
+  recipientUserId: varchar("recipient_user_id").references(() => users.id),
+  title: text("title"),
+  message: text("message").notNull(),
+  priority: integer("priority").notNull().default(8),
+  relatedType: text("related_type"),
+  relatedId: varchar("related_id"),
+  status: notificationStatusEnum("status").notNull().default("QUEUED"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ============================================================================
+// MVFRS Insert Schemas
+// ============================================================================
+
+export const insertTruckSchema = createInsertSchema(trucks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertVendorSchema = createInsertSchema(vendors).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMaintenancePlanSchema = createInsertSchema(maintenancePlans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertMaintenanceTaskSchema = createInsertSchema(maintenanceTasks).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTruckPlanAssignmentSchema = createInsertSchema(truckPlanAssignments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPmScheduleSchema = createInsertSchema(pmSchedule).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFleetInspectionSchema = createInsertSchema(fleetInspections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInspectionItemSchema = createInsertSchema(inspectionItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertWorkOrderSchema = createInsertSchema(workOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertWorkOrderEventSchema = createInsertSchema(workOrderEvents).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertBreakdownReportSchema = createInsertSchema(breakdownReports).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFleetDocumentSchema = createInsertSchema(fleetDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFleetNotificationSchema = createInsertSchema(fleetNotifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// ============================================================================
+// MVFRS Types
+// ============================================================================
+
+export type Truck = typeof trucks.$inferSelect;
+export type InsertTruck = z.infer<typeof insertTruckSchema>;
+
+export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendor = z.infer<typeof insertVendorSchema>;
+
+export type MaintenancePlan = typeof maintenancePlans.$inferSelect;
+export type InsertMaintenancePlan = z.infer<typeof insertMaintenancePlanSchema>;
+
+export type MaintenanceTask = typeof maintenanceTasks.$inferSelect;
+export type InsertMaintenanceTask = z.infer<typeof insertMaintenanceTaskSchema>;
+
+export type TruckPlanAssignment = typeof truckPlanAssignments.$inferSelect;
+export type InsertTruckPlanAssignment = z.infer<typeof insertTruckPlanAssignmentSchema>;
+
+export type PmSchedule = typeof pmSchedule.$inferSelect;
+export type InsertPmSchedule = z.infer<typeof insertPmScheduleSchema>;
+
+export type FleetInspection = typeof fleetInspections.$inferSelect;
+export type InsertFleetInspection = z.infer<typeof insertFleetInspectionSchema>;
+
+export type InspectionItem = typeof inspectionItems.$inferSelect;
+export type InsertInspectionItem = z.infer<typeof insertInspectionItemSchema>;
+
+export type WorkOrder = typeof workOrders.$inferSelect;
+export type InsertWorkOrder = z.infer<typeof insertWorkOrderSchema>;
+
+export type WorkOrderEvent = typeof workOrderEvents.$inferSelect;
+export type InsertWorkOrderEvent = z.infer<typeof insertWorkOrderEventSchema>;
+
+export type BreakdownReport = typeof breakdownReports.$inferSelect;
+export type InsertBreakdownReport = z.infer<typeof insertBreakdownReportSchema>;
+
+export type FleetDocument = typeof fleetDocuments.$inferSelect;
+export type InsertFleetDocument = z.infer<typeof insertFleetDocumentSchema>;
+
+export type FleetNotification = typeof fleetNotifications.$inferSelect;
+export type InsertFleetNotification = z.infer<typeof insertFleetNotificationSchema>;
+
+// Extended types with relations
+export type TruckWithRelations = Truck & {
+  driver?: Driver;
+  workOrders?: WorkOrder[];
+  inspections?: FleetInspection[];
+};
+
+export type WorkOrderWithRelations = WorkOrder & {
+  truck: Truck;
+  vendor?: Vendor;
+  driver?: Driver;
+  events?: WorkOrderEvent[];
+  inspection?: FleetInspection;
+};
+
+export type FleetInspectionWithRelations = FleetInspection & {
+  truck: Truck;
+  driver?: Driver;
+  items: InspectionItem[];
+};

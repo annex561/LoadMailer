@@ -15,6 +15,13 @@
       "when": 1763580760282,
       "tag": "0001_naive_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1769042002773,
+      "tag": "0002_clammy_kronos",
+      "breakpoints": true
     }
   ]
 }
