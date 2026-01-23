@@ -1,0 +1,126 @@
+Phase 2 (Next Upgrade Pack) — What to Build Next
+
+1) Dispatch Gate Integration Into Load Assignment (Highest Leverage)
+
+Right now the gate exists as a checker endpoint + UI indicator.
+
+NextStep: enforce it in the actual workflow:
+
+✅ When dispatch assigns a load to a truck:
+	•	System calls GET /dispatch-gate
+	•	If GREEN → allow
+	•	If YELLOW → require manager override modal
+	•	If RED → block assignment completely (no override unless configured)
+
+Deliverable
+	•	“Dispatch Assignment Guard”
+	•	UI hard-block + override logging
+
+This turns Risk Score into an operational control system.
+
+⸻
+
+2) Daily Auto-Recalc Scheduler + Change-Detection
+
+You already have:
+	•	POST /recalculate-all-risk-scores
+
+But if it’s manual-only, it will drift.
+
+NextStep
+	•	Add scheduler (cron/job):
+	•	Run at 5:00 AM daily
+	•	Optionally run every 4 hours during dispatch window
+	•	Log each run result:
+	•	Count updated
+	•	Count RED/YELLOW/GREEN changes
+	•	Duration
+	•	Error summary
+
+Deliverable
+	•	/api/fleet/risk-scores/job-status
+	•	“Last recalculation” timestamp in UI
+
+⸻
+
+3) Fleet Reliability Inbox (Action Queue)
+
+Your risk score will create pressure — now you need a place to work that pressure.
+
+Goal: give you an “Inbox” list like:
+	•	“Expired insurance docs”
+	•	“PM overdue 12 days”
+	•	“Open work order: brake issue”
+	•	“Breakdown occurred 3 days ago”
+
+These should be sortable + assignable to a VA / mechanic / manager.
+
+Deliverable
+	•	/api/fleet/reliability/inbox
+	•	UI: “Reliability Inbox” screen
+	•	Filters: RED only / YELLOW only / compliance only / maintenance only
+
+⸻
+
+4) Risk Trend Tracking (Score History + Graph)
+
+Right now you calculate a score, but do you store history?
+
+NextStep
+	•	Create truck_risk_score_history table:
+	•	truckId
+	•	totalRisk
+	•	each component score
+	•	timestamp
+	•	reason / trigger (“daily_job”, “manual”, “work_order_closed”, “inspection_failed”)
+
+Frontend
+	•	Add small trend sparkline next to badge
+	•	Show “7-day risk trend” in modal
+
+This will allow:
+	•	Predictive maintenance forecasting
+	•	“Most-improved truck” / “declining truck” detection
+
+⸻
+
+5) Notification Engine (Pushover / NextStep.AI)
+
+This is where the platform becomes alive.
+
+Trigger alerts when:
+	•	Truck goes GREEN → YELLOW
+	•	Truck goes YELLOW → RED
+	•	Safety Hold applied
+	•	Document expires within X days (ex: 14/7/3/1)
+
+Delivery options
+	•	Push notification (Pushover)
+	•	NextStep.AI webhook
+	•	Email/SMS later
+
+⸻
+
+Recommended Next Step (If you want the fastest win)
+
+If your goal is immediate business impact:
+
+✅ Next build: “Dispatch Assignment Guard”
+
+Because it stops you from booking freight onto unreliable units.
+
+That single enforcement integration is what separates:
+	•	“dashboard software”
+from
+	•	“fleet operating system”.
+
+⸻
+
+Quick Clarifier (so I can direct you precisely)
+
+When you say “server running successfully,” are you deploying this as:
+	1.	Replit-hosted API only
+or
+	2.	Replit API + separate frontend hosting (Vercel/Netlify)?
+
+Either way is fine — but it determines how I implement the dispatch-block UX cleanly.

@@ -1,0 +1,126 @@
+import os
+import json
+import urllib.request
+import urllib.parse
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+NEXTSTEP_WEBHOOK_URL = os.getenv("NEXTSTEP_WEBHOOK_URL", "").strip()
+WEBHOOK_TOKEN = os.getenv("WEBHOOK_TOKEN", "").strip()
+
+if not NEXTSTEP_WEBHOOK_URL:
+    raise RuntimeError("Missing NEXTSTEP_WEBHOOK_URL in Replit Secrets.")
+if not WEBHOOK_TOKEN:
+    raise RuntimeError("Missing WEBHOOK_TOKEN in Replit Secrets.")
+
+def to_int(value, default):
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+def forward_to_nextstep(payload: dict) -> tuple[int, str]:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        NEXTSTEP_WEBHOOK_URL,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            return resp.status, body
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace") if e.fp else str(e)
+        return e.code, body
+    except Exception as e:
+        return 0, str(e)
+
+class Handler(BaseHTTPRequestHandler):
+    def _send(self, status_code: int, payload: dict):
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status_code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        # Health check
+        if self.path.startswith("/health"):
+            return self._send(200, {"ok": True})
+
+        # Use query params to keep testing dead simple:
+        # /api/webhook?token=...&message=...&title=...&priority=8
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path != "/api/webhook":
+            return self._send(404, {"ok": False, "error": "Not found"})
+
+        qs = urllib.parse.parse_qs(parsed.query)
+
+        token = (qs.get("token", [""])[0] or "").strip()
+        if token != WEBHOOK_TOKEN:
+            return self._send(401, {"ok": False, "error": "Unauthorized"})
+
+        message = (qs.get("message", [""])[0] or "").strip()
+        title = (qs.get("title", [""])[0] or "").strip()
+        priority = to_int((qs.get("priority", ["8"])[0] or "8").strip(), 8)
+
+        if not message:
+            return self._send(400, {"ok": False, "error": "Missing message"})
+
+        outgoing = {"message": message, "priority": priority}
+        if title:
+            outgoing["title"] = title
+
+        status, resp_body = forward_to_nextstep(outgoing)
+
+        if status == 0:
+            return self._send(502, {"ok": False, "error": "Forwarding failed", "details": resp_body})
+
+        return self._send(200, {"ok": True, "forward_status": status, "nextstep_response": resp_body})
+
+    def do_POST(self):
+        # Optional: allow JSON POST to /api/webhook
+        # Body: {"token":"...","message":"...","title":"...","priority":8}
+        if self.path != "/api/webhook":
+            return self._send(404, {"ok": False, "error": "Not found"})
+
+        content_length = int(self.headers.get("Content-Length", "0") or "0")
+        raw = self.rfile.read(content_length) if content_length > 0 else b"{}"
+
+        try:
+            incoming = json.loads(raw.decode("utf-8"))
+        except Exception:
+            return self._send(400, {"ok": False, "error": "Invalid JSON"})
+
+        token = str(incoming.get("token", "")).strip()
+        if token != WEBHOOK_TOKEN:
+            return self._send(401, {"ok": False, "error": "Unauthorized"})
+
+        message = str(incoming.get("message", "")).strip()
+        title = str(incoming.get("title", "")).strip()
+        priority = to_int(incoming.get("priority", 8), 8)
+
+        if not message:
+            return self._send(400, {"ok": False, "error": "Missing message"})
+
+        outgoing = {"message": message, "priority": priority}
+        if title:
+            outgoing["title"] = title
+
+        status, resp_body = forward_to_nextstep(outgoing)
+
+        if status == 0:
+            return self._send(502, {"ok": False, "error": "Forwarding failed", "details": resp_body})
+
+        return self._send(200, {"ok": True, "forward_status": status, "nextstep_response": resp_body})
+
+def run():
+    port = int(os.getenv("PORT", "3000"))
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    print(f"Server running on port {port}")
+    server.serve_forever()
+
+if __name__ == "__main__":
+    run()
