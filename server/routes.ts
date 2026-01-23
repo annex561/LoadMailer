@@ -38,6 +38,7 @@ import { stripeService } from './stripe-service';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
+import gaLoadsRouter from "./ga-loads-router";
 import twilio from "twilio";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -5623,6 +5624,11 @@ TRAQ IQ Dispatch Team
 
   console.log('✅ MVFRS Fleet Reliability routes registered');
   // ==================== End MVFRS Routes ====================
+
+  // ==================== GA Loads SQLite Routes ====================
+  app.use('/api/ga', gaLoadsRouter);
+  console.log('✅ GA Loads SQLite routes registered');
+  // ==================== End GA Loads Routes ====================
 
   console.log('✅ Essential routes registered - server ready for startup');
   

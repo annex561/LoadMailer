@@ -4,7 +4,7 @@ import {
   Truck, LayoutDashboard, Package, Users, Mail, BarChart3, FileText, 
   UserPlus, Bot, MessageSquare, Headphones, DollarSign, Smile, Upload, 
   MapPin, Wrench, Brain, ChevronLeft, ChevronRight, Menu, X, TrendingUp, 
-  Webhook, Sheet, Radio, Calculator, ClipboardCheck, AlertTriangle
+  Webhook, Sheet, Radio, Calculator, ClipboardCheck, AlertTriangle, Inbox
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ const navigation = [
   { name: "Dispatcher Dashboard", href: "/dispatcher", icon: Headphones, section: "core" },
   { name: "Finance Dashboard", href: "/loadops-dashboard", icon: DollarSign, section: "core" },
   { name: "Fleet Calculator", href: "/fleet-calculator", icon: Calculator, section: "core" },
+  { name: "GA Loads Inbox", href: "/loads-inbox", icon: Inbox, section: "core" },
   
   { name: "Fleet Dashboard", href: "/fleet", icon: Truck, section: "fleet" },
   { name: "Trucks", href: "/fleet/trucks", icon: Truck, section: "fleet" },

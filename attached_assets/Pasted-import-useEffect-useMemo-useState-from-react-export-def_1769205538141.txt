@@ -1,0 +1,172 @@
+import { useEffect, useMemo, useState } from "react";
+
+export default function LoadsInbox() {
+  const [loads, setLoads] = useState([]);
+  const [shortlist, setShortlist] = useState([]);
+  const [minScore, setMinScore] = useState(60);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function refresh() {
+    setLoading(true);
+    setMsg("");
+    try {
+      const [a, b] = await Promise.all([
+        fetch(`/api/ga/loads?limit=100`).then((r) => r.json()),
+        fetch(`/api/ga/loads/shortlist?limit=10`).then((r) => r.json()),
+      ]);
+      setLoads(a.loads || []);
+      setShortlist(b.loads || []);
+    } catch (e) {
+      setMsg(String(e?.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const filtered = useMemo(() => {
+    return loads.filter((l) => (Number(l.score) || 0) >= minScore);
+  }, [loads, minScore]);
+
+  async function act(id, action) {
+    setMsg("");
+    try {
+      const r = await fetch(`/api/ga/loads/${id}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }).then((x) => x.json());
+
+      if (!r.ok) throw new Error(r.error || "Action failed");
+
+      if (action === "quote" && r.email) {
+        setMsg(`QUOTE TEMPLATE READY. To: ${r.email.to || "(no email)"} | Subject: ${r.email.subject}`);
+      } else {
+        setMsg(`${action.toUpperCase()} OK`);
+      }
+
+      await refresh();
+    } catch (e) {
+      setMsg(String(e?.message || e));
+    }
+  }
+
+  return (
+    <div style={{ padding: 16 }}>
+      <h2 style={{ margin: 0 }}>GA Loads Inbox</h2>
+      <p style={{ marginTop: 6, opacity: 0.8 }}>
+        Revenue screen: shortlist the best loads, quote fast, book faster.
+      </p>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center", margin: "12px 0" }}>
+        <button onClick={refresh} disabled={loading}>
+          {loading ? "Loading..." : "Refresh"}
+        </button>
+
+        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          Min Score
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={minScore}
+            onChange={(e) => setMinScore(Number(e.target.value))}
+          />
+          <span style={{ width: 28, display: "inline-block" }}>{minScore}</span>
+        </label>
+      </div>
+
+      {msg ? (
+        <div style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8, marginBottom: 12 }}>
+          {msg}
+        </div>
+      ) : null}
+
+      <h3 style={{ marginBottom: 6 }}>Top 10 Shortlist</h3>
+      <div style={{ overflowX: "auto", border: "1px solid #eee", borderRadius: 10, marginBottom: 18 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#fafafa" }}>
+              <th style={{ textAlign: "left", padding: 10 }}>Score</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Route</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Miles</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Rate</th>
+              <th style={{ textAlign: "left", padding: 10 }}>RPM</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shortlist.map((l) => (
+              <tr key={l.id} style={{ borderTop: "1px solid #eee" }}>
+                <td style={{ padding: 10 }}>{l.score}</td>
+                <td style={{ padding: 10 }}>
+                  {(l.origin_city || "") + ", " + (l.origin_state || "")} → {(l.dest_city || "") + ", " + (l.dest_state || "")}
+                </td>
+                <td style={{ padding: 10 }}>{l.miles ?? "-"}</td>
+                <td style={{ padding: 10 }}>{l.rate_total ?? "-"}</td>
+                <td style={{ padding: 10 }}>{l.rpm ?? "-"}</td>
+                <td style={{ padding: 10 }}>{l.status}</td>
+                <td style={{ padding: 10, display: "flex", gap: 8 }}>
+                  <button onClick={() => act(l.id, "quote")}>Quote</button>
+                  <button onClick={() => act(l.id, "book")}>Book</button>
+                  <button onClick={() => act(l.id, "dismiss")}>Dismiss</button>
+                </td>
+              </tr>
+            ))}
+            {shortlist.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ padding: 10, opacity: 0.7 }}>
+                  No new loads yet. Ingest loads via POST /api/ga/loads/ingest.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style={{ marginBottom: 6 }}>Inbox (Filtered)</h3>
+      <div style={{ overflowX: "auto", border: "1px solid #eee", borderRadius: 10 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#fafafa" }}>
+              <th style={{ textAlign: "left", padding: 10 }}>Score</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Route</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Pickup</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Miles</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Rate</th>
+              <th style={{ textAlign: "left", padding: 10 }}>RPM</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((l) => (
+              <tr key={l.id} style={{ borderTop: "1px solid #eee" }}>
+                <td style={{ padding: 10 }}>{l.score}</td>
+                <td style={{ padding: 10 }}>
+                  {(l.origin_city || "") + ", " + (l.origin_state || "")} → {(l.dest_city || "") + ", " + (l.dest_state || "")}
+                </td>
+                <td style={{ padding: 10 }}>{l.pickup_dt || "-"}</td>
+                <td style={{ padding: 10 }}>{l.miles ?? "-"}</td>
+                <td style={{ padding: 10 }}>{l.rate_total ?? "-"}</td>
+                <td style={{ padding: 10 }}>{l.rpm ?? "-"}</td>
+                <td style={{ padding: 10 }}>{l.status}</td>
+              </tr>
+            ))}
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ padding: 10, opacity: 0.7 }}>
+                  No loads meet min score {minScore}.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

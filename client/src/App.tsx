@@ -48,6 +48,7 @@ import FleetTrucks from "@/pages/fleet-trucks";
 import FleetWorkOrders from "@/pages/fleet-work-orders";
 import FleetInspections from "@/pages/fleet-inspections";
 import FleetVendors from "@/pages/fleet-vendors";
+import LoadsInbox from "@/pages/loads-inbox";
 
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
@@ -94,6 +95,8 @@ function Router() {
       <Route path="/fleet/work-orders" component={FleetWorkOrders} />
       <Route path="/fleet/inspections" component={FleetInspections} />
       <Route path="/fleet/vendors" component={FleetVendors} />
+      <Route path="/loads-inbox" component={LoadsInbox} />
+      <Route path="/ga/loads" component={LoadsInbox} />
       <Route component={NotFound} />
     </Switch>
   );
