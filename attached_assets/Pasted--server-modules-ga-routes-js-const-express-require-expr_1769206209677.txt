@@ -1,0 +1,74 @@
+// server/modules/ga/routes.js
+const express = require("express");
+const router = express.Router();
+
+const { db } = require("./db");
+const { scoreLoad } = require("./scoring");
+
+// Health check (safe)
+router.get("/health", (req, res) => {
+  res.json({ ok: true, module: "ga", ts: new Date().toISOString() });
+});
+
+// Create/Upsert load (manual ingest / later: loadboard ingest)
+router.post("/loads", async (req, res) => {
+  try {
+    const input = req.body || {};
+    const computedScore = scoreLoad(input);
+    const saved = await db.upsertLoad({ ...input, score: computedScore });
+    res.status(201).json(saved);
+  } catch (e) {
+    res.status(500).json({ error: "Failed to upsert load", details: String(e?.message || e) });
+  }
+});
+
+// List loads
+router.get("/loads", async (req, res) => {
+  try {
+    const { status, q } = req.query;
+    const limit = Number(req.query.limit || 50);
+    const offset = Number(req.query.offset || 0);
+
+    const result = await db.listLoads({
+      status: status ? String(status) : undefined,
+      q: q ? String(q) : undefined,
+      limit: Number.isFinite(limit) ? limit : 50,
+      offset: Number.isFinite(offset) ? offset : 0,
+    });
+
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: "Failed to list loads", details: String(e?.message || e) });
+  }
+});
+
+// Get one load
+router.get("/loads/:id", async (req, res) => {
+  try {
+    const row = await db.getLoad(req.params.id);
+    if (!row) return res.status(404).json({ error: "Load not found" });
+    res.json(row);
+  } catch (e) {
+    res.status(500).json({ error: "Failed to get load", details: String(e?.message || e) });
+  }
+});
+
+// Update status/notes (pipeline control)
+router.patch("/loads/:id", async (req, res) => {
+  try {
+    const patch = req.body || {};
+    // If anything relevant changed, recompute score
+    const existing = await db.getLoad(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Load not found" });
+
+    const merged = { ...existing, ...patch };
+    const computedScore = scoreLoad(merged);
+
+    const updated = await db.updateLoad(req.params.id, { ...patch, score: computedScore });
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: "Failed to update load", details: String(e?.message || e) });
+  }
+});
+
+module.exports = router;
