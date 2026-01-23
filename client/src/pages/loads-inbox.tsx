@@ -4,8 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Send, Check, X, Inbox, TrendingUp } from "lucide-react";
+import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History } from "lucide-react";
 
 interface GALoad {
   id: string;
@@ -22,6 +26,33 @@ interface GALoad {
   equipment: string;
   broker_name: string;
   broker_email: string;
+  offered_rate?: number;
+  booked_rate?: number;
+  offered_at?: string;
+  booked_at?: string;
+  assigned_truck_id?: string;
+  assigned_driver_id?: string;
+  ratecon_path?: string;
+}
+
+interface ActivityLog {
+  id: number;
+  load_id: string;
+  action: string;
+  actor: string;
+  details: string;
+  created_at: string;
+}
+
+interface BookModalState {
+  open: boolean;
+  load: GALoad | null;
+  bookedRate: string;
+  truckId: string;
+  driverId: string;
+  overrideReason: string;
+  requiresOverride: boolean;
+  gateStatus: string;
 }
 
 export default function LoadsInbox() {
@@ -30,6 +61,23 @@ export default function LoadsInbox() {
   const [shortlist, setShortlist] = useState<GALoad[]>([]);
   const [minScore, setMinScore] = useState(60);
   const [loading, setLoading] = useState(false);
+  
+  const [bookModal, setBookModal] = useState<BookModalState>({
+    open: false,
+    load: null,
+    bookedRate: "",
+    truckId: "",
+    driverId: "",
+    overrideReason: "",
+    requiresOverride: false,
+    gateStatus: ""
+  });
+  
+  const [activityModal, setActivityModal] = useState<{ open: boolean; loadId: string; activity: ActivityLog[] }>({
+    open: false,
+    loadId: "",
+    activity: []
+  });
 
   async function refresh() {
     setLoading(true);
@@ -55,28 +103,84 @@ export default function LoadsInbox() {
     return loads.filter((l) => (Number(l.score) || 0) >= minScore);
   }, [loads, minScore]);
 
-  async function act(id: string, action: string) {
+  async function act(id: string, action: string, body: any = {}) {
     try {
       const r = await fetch(`/api/ga/loads/${id}/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify(body),
       }).then((x) => x.json());
 
-      if (!r.ok) throw new Error(r.error || "Action failed");
+      if (!r.ok) {
+        if (r.requires_override) {
+          return { requiresOverride: true, gateStatus: r.dispatch_status };
+        }
+        throw new Error(r.error || "Action failed");
+      }
 
       if (action === "quote" && r.email) {
         toast({ 
           title: "Quote Ready", 
           description: `To: ${r.email.to || "(no email)"} | Subject: ${r.email.subject}` 
         });
+      } else if (action === "ratecon/generate") {
+        toast({ title: "RateCon Generated", description: r.ratecon_path });
       } else {
         toast({ title: `${action.charAt(0).toUpperCase() + action.slice(1)} successful` });
       }
 
       await refresh();
+      return { ok: true };
     } catch (e: any) {
       toast({ title: "Action failed", description: e?.message, variant: "destructive" });
+      return { ok: false, error: e?.message };
+    }
+  }
+
+  async function openBookModal(load: GALoad) {
+    setBookModal({
+      open: true,
+      load,
+      bookedRate: String(load.offered_rate || load.rate_total || ""),
+      truckId: load.assigned_truck_id || "",
+      driverId: load.assigned_driver_id || "",
+      overrideReason: "",
+      requiresOverride: false,
+      gateStatus: ""
+    });
+  }
+
+  async function handleBook() {
+    if (!bookModal.load) return;
+
+    const result = await act(bookModal.load.id, "book", {
+      booked_rate: parseFloat(bookModal.bookedRate) || undefined,
+      assigned_truck_id: bookModal.truckId || undefined,
+      assigned_driver_id: bookModal.driverId || undefined,
+      override_reason: bookModal.overrideReason || undefined
+    });
+
+    if (result.requiresOverride) {
+      setBookModal(prev => ({
+        ...prev,
+        requiresOverride: true,
+        gateStatus: result.gateStatus || "YELLOW"
+      }));
+    } else if (result.ok) {
+      setBookModal(prev => ({ ...prev, open: false }));
+    }
+  }
+
+  async function showActivity(loadId: string) {
+    try {
+      const r = await fetch(`/api/ga/loads/${loadId}/activity`).then(x => x.json());
+      setActivityModal({
+        open: true,
+        loadId,
+        activity: r.activity || []
+      });
+    } catch (e: any) {
+      toast({ title: "Error loading activity", description: e?.message, variant: "destructive" });
     }
   }
 
@@ -90,11 +194,65 @@ export default function LoadsInbox() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'new': return <Badge variant="outline">New</Badge>;
+      case 'offered': return <Badge className="bg-purple-500">Offered</Badge>;
       case 'quoted': return <Badge className="bg-blue-500">Quoted</Badge>;
       case 'booked': return <Badge className="bg-green-600">Booked</Badge>;
+      case 'skipped': return <Badge variant="secondary">Skipped</Badge>;
       case 'dismissed': return <Badge variant="secondary">Dismissed</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
+  };
+
+  const renderActions = (l: GALoad, compact = false) => {
+    const isActionable = ["new", "offered", "quoted"].includes(l.status);
+    const isBooked = l.status === "booked";
+    
+    if (!isActionable && !isBooked) return null;
+
+    return (
+      <div className="flex gap-1 flex-wrap">
+        {l.status === "new" && (
+          <>
+            <Button size="sm" variant="outline" onClick={() => act(l.id, "offer", { offered_rate: l.rate_total })}>
+              <DollarSign className="w-3 h-3 mr-1" />
+              Offer
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => act(l.id, "quote")}>
+              <Send className="w-3 h-3 mr-1" />
+              Quote
+            </Button>
+          </>
+        )}
+        {["new", "offered", "quoted"].includes(l.status) && (
+          <>
+            <Button size="sm" variant="default" onClick={() => openBookModal(l)}>
+              <Check className="w-3 h-3 mr-1" />
+              Book
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => act(l.id, "skip", { reason: "Not a fit" })}>
+              <X className="w-3 h-3" />
+            </Button>
+          </>
+        )}
+        {isBooked && !l.ratecon_path && (
+          <Button size="sm" variant="outline" onClick={() => act(l.id, "ratecon/generate")}>
+            <FileText className="w-3 h-3 mr-1" />
+            RateCon
+          </Button>
+        )}
+        {isBooked && l.assigned_truck_id && (
+          <Badge variant="outline" className="ml-1">
+            <Truck className="w-3 h-3 mr-1" />
+            {l.assigned_truck_id.slice(0, 6)}
+          </Badge>
+        )}
+        {!compact && (
+          <Button size="sm" variant="ghost" onClick={() => showActivity(l.id)}>
+            <History className="w-3 h-3" />
+          </Button>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -106,7 +264,7 @@ export default function LoadsInbox() {
             GA Loads Inbox
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Revenue screen: shortlist the best loads, quote fast, book faster.
+            Revenue pipeline: Offer → Book → RateCon → Invoice
           </p>
         </div>
         <Button onClick={refresh} disabled={loading}>
@@ -166,21 +324,7 @@ export default function LoadsInbox() {
                     <TableCell>${l.rate_total ?? "-"}</TableCell>
                     <TableCell>${l.rpm ?? "-"}/mi</TableCell>
                     <TableCell>{getStatusBadge(l.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => act(l.id, "quote")}>
-                          <Send className="w-3 h-3 mr-1" />
-                          Quote
-                        </Button>
-                        <Button size="sm" variant="default" onClick={() => act(l.id, "book")}>
-                          <Check className="w-3 h-3 mr-1" />
-                          Book
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => act(l.id, "dismiss")}>
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                    <TableCell>{renderActions(l)}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -207,12 +351,13 @@ export default function LoadsInbox() {
                 <TableHead>Rate</TableHead>
                 <TableHead>RPM</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     No loads meet min score {minScore}.
                   </TableCell>
                 </TableRow>
@@ -228,6 +373,7 @@ export default function LoadsInbox() {
                     <TableCell>${l.rate_total ?? "-"}</TableCell>
                     <TableCell>${l.rpm ?? "-"}/mi</TableCell>
                     <TableCell>{getStatusBadge(l.status)}</TableCell>
+                    <TableCell>{renderActions(l)}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -235,6 +381,128 @@ export default function LoadsInbox() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Book Modal with Dispatch Gate */}
+      <Dialog open={bookModal.open} onOpenChange={(open) => setBookModal(prev => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Check className="w-5 h-5" />
+              Book Load
+            </DialogTitle>
+          </DialogHeader>
+          
+          {bookModal.load && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="font-medium">
+                  {bookModal.load.origin_city}, {bookModal.load.origin_state} → {bookModal.load.dest_city}, {bookModal.load.dest_state}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {bookModal.load.miles} miles | ${bookModal.load.rate_total} | {bookModal.load.broker_name}
+                </p>
+              </div>
+
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="bookedRate">Booked Rate ($)</Label>
+                  <Input
+                    id="bookedRate"
+                    type="number"
+                    value={bookModal.bookedRate}
+                    onChange={(e) => setBookModal(prev => ({ ...prev, bookedRate: e.target.value }))}
+                    placeholder="Enter final rate"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="truckId">Assign Truck (optional)</Label>
+                  <Input
+                    id="truckId"
+                    value={bookModal.truckId}
+                    onChange={(e) => setBookModal(prev => ({ ...prev, truckId: e.target.value }))}
+                    placeholder="Truck ID"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="driverId">Assign Driver (optional)</Label>
+                  <Input
+                    id="driverId"
+                    value={bookModal.driverId}
+                    onChange={(e) => setBookModal(prev => ({ ...prev, driverId: e.target.value }))}
+                    placeholder="Driver ID"
+                  />
+                </div>
+
+                {bookModal.requiresOverride && (
+                  <div className="p-3 rounded-lg border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20">
+                    <p className="font-medium text-yellow-700 dark:text-yellow-400 flex items-center gap-2">
+                      <Truck className="w-4 h-4" />
+                      Dispatch Gate: {bookModal.gateStatus}
+                    </p>
+                    <p className="text-sm text-yellow-600 dark:text-yellow-500 mt-1">
+                      This truck requires manager override. Please provide a reason.
+                    </p>
+                    <Textarea
+                      className="mt-2"
+                      value={bookModal.overrideReason}
+                      onChange={(e) => setBookModal(prev => ({ ...prev, overrideReason: e.target.value }))}
+                      placeholder="Enter override reason (required)"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBookModal(prev => ({ ...prev, open: false }))}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleBook}
+              disabled={bookModal.requiresOverride && !bookModal.overrideReason}
+            >
+              <Check className="w-4 h-4 mr-2" />
+              {bookModal.requiresOverride ? "Override & Book" : "Book Load"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Activity Modal */}
+      <Dialog open={activityModal.open} onOpenChange={(open) => setActivityModal(prev => ({ ...prev, open }))}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5" />
+              Activity Log
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {activityModal.activity.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No activity yet</p>
+            ) : (
+              activityModal.activity.map((a) => (
+                <div key={a.id} className="p-2 border rounded text-sm">
+                  <div className="flex justify-between">
+                    <Badge variant="outline">{a.action}</Badge>
+                    <span className="text-muted-foreground text-xs">{a.created_at}</span>
+                  </div>
+                  <p className="text-muted-foreground mt-1">by {a.actor}</p>
+                  {a.details && (
+                    <pre className="text-xs mt-1 p-1 bg-muted rounded overflow-x-auto">
+                      {a.details}
+                    </pre>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
