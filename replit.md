@@ -43,6 +43,12 @@ The design system employs a consistent brand palette (Navy, Slate, Teal, Whitesm
 - **Mobile Driver Dashboard (PWA)**: Installable PWA with dynamic authentication, driver stats, load history, chat, document upload, and profile management. Includes GPS-based intelligent status buttons, an enhanced hamburger menu, and AI-powered messaging for drivers. Features debounced typing protection for message input.
 - **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized links with security measures.
 - **Driver Onboarding**: Multi-step wizard supporting token-optional flows for invited and direct registrations, focusing on mobile driver dashboard access.
+- **GA Loads Inbox**: A dedicated load scoring and management system using SQLite for lightweight load data:
+    - **Load Scoring**: Algorithm-based scoring (0-100) considering RPM (50pts), deadhead penalty (-20pts), urgency bonus (10pts), equipment fit (10pts), and lane fit (10pts).
+    - **Shortlist**: Top 10 highest-scored new loads for quick action.
+    - **Workflow Actions**: Quote (generates email template), Book, Dismiss with status tracking.
+    - **API Endpoints**: `/api/ga/loads/ingest`, `/api/ga/loads`, `/api/ga/loads/shortlist`, `/api/ga/loads/:id/quote`, `/api/ga/loads/:id/book`, `/api/ga/loads/:id/dismiss`.
+    - **Frontend**: Dual-table view with score filter slider, located at `/loads-inbox`.
 
 # External Dependencies
 

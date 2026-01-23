@@ -1,0 +1,106 @@
+// server/modules/ga/db.js
+// Simple DB adapter: uses your existing Prisma if available, otherwise falls back to in-memory.
+// Change-safe: no dependency on your current DB setup.
+
+let memory = {
+  loads: [],
+};
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function normalizeLoad(input) {
+  const id = input.id || input.loadId || input.referenceId || cryptoRandomId();
+  return {
+    id,
+    source: input.source || "manual",
+    lane: input.lane || `${input.originCity || ""}, ${input.originState || ""} → ${input.destCity || ""}, ${input.destState || ""}`.trim(),
+    originCity: input.originCity || null,
+    originState: input.originState || null,
+    destCity: input.destCity || null,
+    destState: input.destState || null,
+    pickupDate: input.pickupDate || null,     // string ok for now
+    deliveryDate: input.deliveryDate || null, // string ok for now
+    miles: numberOrNull(input.miles),
+    rate: numberOrNull(input.rate),
+    rpm: numberOrNull(input.rpm),
+    weight: numberOrNull(input.weight),
+    lengthFt: numberOrNull(input.lengthFt),
+    equipment: input.equipment || "box_truck",
+    brokerName: input.brokerName || null,
+    brokerEmail: input.brokerEmail || null,
+    brokerPhone: input.brokerPhone || null,
+    status: input.status || "NEW", // NEW | REVIEW | OFFERED | BOOKED | SKIPPED
+    score: numberOrNull(input.score) ?? 0,
+    notes: input.notes || null,
+    createdAt: input.createdAt || nowIso(),
+    updatedAt: nowIso(),
+  };
+}
+
+function numberOrNull(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function cryptoRandomId() {
+  // No import required in Node 18+; safe fallback if crypto isn't global
+  try {
+    const c = globalThis.crypto || require("crypto");
+    return c.randomUUID ? c.randomUUID() : `ld_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  } catch {
+    return `ld_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  }
+}
+
+// In-memory implementation (always works)
+const memAdapter = {
+  async upsertLoad(input) {
+    const load = normalizeLoad(input);
+    const idx = memory.loads.findIndex((l) => l.id === load.id);
+    if (idx >= 0) {
+      memory.loads[idx] = { ...memory.loads[idx], ...load, updatedAt: nowIso() };
+      return memory.loads[idx];
+    }
+    memory.loads.unshift(load);
+    return load;
+  },
+
+  async listLoads({ status, q, limit = 50, offset = 0 } = {}) {
+    let rows = [...memory.loads];
+
+    if (status) rows = rows.filter((l) => l.status === status);
+    if (q) {
+      const needle = String(q).toLowerCase();
+      rows = rows.filter((l) =>
+        [
+          l.id, l.source, l.lane, l.originCity, l.originState, l.destCity, l.destState,
+          l.brokerName, l.brokerEmail, l.brokerPhone, l.equipment, l.notes
+        ]
+          .filter(Boolean)
+          .some((x) => String(x).toLowerCase().includes(needle))
+      );
+    }
+
+    const total = rows.length;
+    rows = rows.slice(offset, offset + limit);
+    return { rows, total };
+  },
+
+  async getLoad(id) {
+    return memory.loads.find((l) => l.id === id) || null;
+  },
+
+  async updateLoad(id, patch) {
+    const idx = memory.loads.findIndex((l) => l.id === id);
+    if (idx < 0) return null;
+    memory.loads[idx] = { ...memory.loads[idx], ...patch, updatedAt: nowIso() };
+    return memory.loads[idx];
+  },
+};
+
+module.exports = {
+  db: memAdapter,
+};

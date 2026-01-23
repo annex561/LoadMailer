@@ -19,29 +19,44 @@ function computeRPM(rate_total: any, miles: any): number | null {
 }
 
 function normalizeLoad(input: any): any {
-  const load = { ...input };
+  const load: any = {};
 
-  load.id = load.id || crypto.randomUUID();
+  load.id = input.id || crypto.randomUUID();
+  load.source = input.source || "manual";
 
-  load.miles = toNum(load.miles);
-  load.deadhead_miles = toNum(load.deadhead_miles) ?? 0;
+  load.origin_city = input.origin_city || null;
+  load.origin_state = input.origin_state || null;
+  load.origin_zip = input.origin_zip || null;
 
-  load.rate_total = toNum(load.rate_total);
-  load.rpm = toNum(load.rpm);
+  load.dest_city = input.dest_city || null;
+  load.dest_state = input.dest_state || null;
+  load.dest_zip = input.dest_zip || null;
 
+  load.pickup_dt = input.pickup_dt ? String(input.pickup_dt) : null;
+  load.delivery_dt = input.delivery_dt ? String(input.delivery_dt) : null;
+
+  load.miles = toNum(input.miles);
+  load.deadhead_miles = toNum(input.deadhead_miles) ?? 0;
+
+  load.rate_total = toNum(input.rate_total);
+  load.rpm = toNum(input.rpm);
   if (!load.rpm) {
     const rpm = computeRPM(load.rate_total, load.miles);
     if (rpm) load.rpm = rpm;
   }
 
-  load.weight_lbs = toNum(load.weight_lbs);
-  load.length_ft = toNum(load.length_ft);
+  load.equipment = input.equipment || null;
+  load.weight_lbs = toNum(input.weight_lbs);
+  load.length_ft = toNum(input.length_ft);
 
-  load.source = load.source || "manual";
-  load.status = load.status || "new";
+  load.broker_name = input.broker_name || null;
+  load.broker_email = input.broker_email || null;
+  load.broker_phone = input.broker_phone || null;
 
-  if (load.pickup_dt && typeof load.pickup_dt !== "string") load.pickup_dt = String(load.pickup_dt);
-  if (load.delivery_dt && typeof load.delivery_dt !== "string") load.delivery_dt = String(load.delivery_dt);
+  load.status = input.status || "new";
+  load.score = 0;
+  load.notes = input.notes || null;
+  load.raw_json = null;
 
   return load;
 }
