@@ -1,0 +1,91 @@
+Keep the current working implementation (SQLite + TS/ESM).
+No CommonJS. No folder reshuffle. No refactor risk.
+
+What we do next is the revenue layer: “From Inbox → Offer → Booked → RateCon → Invoice → Pay Driver.” All additive, behind feature flags, and minimal-touch to existing files.
+
+⸻
+
+The Revenue-Critical Upgrades (next 3 moves)
+
+1) Add “Offer / Book” pipeline actions (no automation yet)
+
+Goal: Turn /loads-inbox into a dispatcher workbench with a defined status flow and audit trail.
+
+Add to DB (safe migration):
+	•	status already exists; add:
+	•	offered_at, booked_at
+	•	offered_rate, booked_rate
+	•	assigned_truck_id (nullable)
+	•	assigned_driver_id (nullable)
+	•	broker_contact_json (optional)
+	•	activity_log table (append-only)
+
+Add endpoints (ESM/TS):
+	•	POST /api/ga/loads/:id/offer
+	•	POST /api/ga/loads/:id/book
+	•	POST /api/ga/loads/:id/skip
+	•	GET /api/ga/loads/:id/activity
+
+Frontend:
+	•	Row actions: Offer, Book, Skip
+	•	A right-side drawer or modal for Offer/Book details.
+
+This is the smallest “needle-moving” upgrade because it enforces a booking pipeline and gives you operational clarity.
+
+⸻
+
+2) Add “Dispatch Gate integration” (protects revenue by preventing bad dispatch)
+
+You already have Truck Risk Score + Dispatch Gate. Now we connect it without breaking anything:
+
+When dispatch tries to assign a load to a truck:
+	•	call your existing:
+	•	GET /api/fleet/trucks/:id/dispatch-gate
+	•	enforce:
+	•	GREEN: allow assign
+	•	YELLOW: allow assign only with manager override reason
+	•	RED: block assign
+
+This prevents “booked load + truck can’t legally/safely run = revenue loss.”
+
+⸻
+
+3) Add “RateCon generator trigger” (booking completion)
+
+You already have a RateCon / PaySlip ecosystem. Revenue completion requires the document pipeline:
+
+On Book:
+	•	Store booked_rate, booked_at, assignment fields
+	•	Add a simple action: “Generate RateCon”
+	•	POST /api/ga/loads/:id/ratecon/generate
+	•	Output a PDF and attach it to the load (file path + metadata)
+	•	Later: email it to broker/accounting (Phase 2)
+
+This turns the inbox into cashflow, not just tracking.
+
+⸻
+
+Change-Safe Guardrails (so Replit doesn’t break you)
+	1.	No refactors. Only additive files and additive routes.
+	2.	Put all GA “revenue layer” endpoints in a single router file you already have (server/ga-loads-router.ts) or one new file imported there.
+	3.	Add a feature flag:
+	•	ENABLE_GA_BOOKING=1
+	•	If off, UI hides Offer/Book buttons; backend returns 404 for those endpoints.
+
+⸻
+
+What I need from you (minimal, and it prevents rework)
+
+Paste only these three files (current versions) into the chat so I can give you an exact copy/paste patch that fits your codebase perfectly without breaking anything:
+	1.	server/ga-loads-router.ts
+	2.	server/ga-db.ts
+	3.	server/ga-scoring.ts
+
+Once I have those, I will return:
+	•	A single copy/paste code block with:
+	•	DB migration SQL (SQLite) + safe migration runner snippet
+	•	New endpoints (Offer/Book/Skip/Activity)
+	•	Minimal UI changes for the buttons + modals on /loads-inbox
+	•	Dispatch Gate check wiring (calls your existing fleet endpoint)
+
+No re-architecture, no CommonJS, no “move into server/modules.” Only revenue execution.

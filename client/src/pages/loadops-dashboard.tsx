@@ -80,6 +80,7 @@ import FleetTrucks from './fleet-trucks';
 import FleetWorkOrders from './fleet-work-orders';
 import FleetInspections from './fleet-inspections';
 import FleetVendors from './fleet-vendors';
+import LoadsInbox from './loads-inbox';
 import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
@@ -619,6 +620,9 @@ export default function LoadOpsDashboard() {
         return <FleetInspections />;
       case '/fleet/vendors':
         return <FleetVendors />;
+      case '/loads-inbox':
+      case '/ga/loads':
+        return <LoadsInbox />;
       default:
         return <NotFound />;
     }
