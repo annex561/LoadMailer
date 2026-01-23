@@ -3,6 +3,7 @@ import express, { Router, Request, Response } from "express";
 import crypto from "crypto";
 import db, { logActivity } from "./ga-db";
 import { scoreLoad } from "./ga-scoring";
+import { recommendForLoad } from "./ga-recommend";
 
 const router: Router = express.Router();
 
@@ -233,6 +234,25 @@ router.get("/loads/:id/activity", (req: Request, res: Response) => {
     res.json({ ok: true, activity: rows });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
+});
+
+// =============================================
+// AI TRUCK/DRIVER RECOMMENDATION
+// =============================================
+
+router.get("/loads/:id/recommend", async (req: Request, res: Response) => {
+  const id = req.params.id;
+  const load = db.prepare(`SELECT * FROM ga_loads WHERE id=?`).get(id) as any;
+  if (!load) return res.status(404).json({ ok: false, error: "Load not found" });
+
+  try {
+    const rec = await recommendForLoad(load);
+    logActivity(id, "recommend", "system", { message: "Generated truck/driver recommendations" });
+    return res.json(rec);
+  } catch (e: any) {
+    logActivity(id, "recommend_error", "system", { error: e?.message ?? "Unknown recommend error" });
+    return res.status(500).json({ ok: false, error: e?.message ?? "Recommend failed" });
   }
 });
 

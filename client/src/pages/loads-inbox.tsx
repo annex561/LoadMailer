@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History } from "lucide-react";
+import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb } from "lucide-react";
 
 interface GALoad {
   id: string;
@@ -184,6 +184,36 @@ export default function LoadsInbox() {
     }
   }
 
+  async function getRecommend(load: GALoad) {
+    try {
+      const data = await fetch(`/api/ga/loads/${encodeURIComponent(load.id)}/recommend`).then(x => x.json());
+      if (!data.ok) throw new Error(data.error || "Recommend failed");
+      
+      const topTruck = data?.recommended_trucks?.[0];
+      const topDriver = data?.recommended_drivers?.[0];
+      
+      setBookModal({
+        open: true,
+        load,
+        bookedRate: String(load.offered_rate || load.rate_total || ""),
+        truckId: topTruck?.id || "",
+        driverId: topDriver?.id || "",
+        overrideReason: "",
+        requiresOverride: false,
+        gateStatus: topTruck?.gate?.status || ""
+      });
+      
+      toast({ 
+        title: "AI Recommendation",
+        description: topTruck 
+          ? `Top pick: Truck ${topTruck?.label || topTruck?.id} (${topTruck?.gate?.status || "?"})${topDriver ? ` | Driver: ${topDriver?.name || topDriver?.id}` : ""}`
+          : topDriver ? `Driver: ${topDriver?.name || topDriver?.id}` : "No recommendations available"
+      });
+    } catch (e: any) {
+      toast({ title: "Recommend failed", description: e?.message, variant: "destructive" });
+    }
+  }
+
   const getScoreBadge = (score: number) => {
     if (score >= 80) return <Badge className="bg-green-500 text-white">{score}</Badge>;
     if (score >= 60) return <Badge className="bg-yellow-500 text-black">{score}</Badge>;
@@ -225,6 +255,10 @@ export default function LoadsInbox() {
         )}
         {["new", "offered", "quoted"].includes(l.status) && (
           <>
+            <Button size="sm" variant="secondary" onClick={() => getRecommend(l)}>
+              <Lightbulb className="w-3 h-3 mr-1" />
+              Recommend
+            </Button>
             <Button size="sm" variant="default" onClick={() => openBookModal(l)}>
               <Check className="w-3 h-3 mr-1" />
               Book
