@@ -2434,6 +2434,9 @@ export const fleetDocStatusEnum = pgEnum("fleet_doc_status", ["ACTIVE", "EXPIRED
 export const notificationChannelEnum = pgEnum("notification_channel", ["PUSH_NEXTSTEP", "EMAIL", "SMS", "TELEGRAM", "IN_APP"]);
 export const notificationStatusEnum = pgEnum("notification_status", ["QUEUED", "SENT", "FAILED"]);
 
+// Dispatch Gate Status Enum
+export const dispatchGateStatusEnum = pgEnum("dispatch_gate_status", ["GREEN", "YELLOW", "RED"]);
+
 // TRUCKS table
 export const trucks = pgTable("trucks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2452,11 +2455,32 @@ export const trucks = pgTable("trucks", {
   baseZip: text("base_zip"),
   insurancePolicyId: varchar("insurance_policy_id"),
   assignedDriverId: varchar("assigned_driver_id").references(() => drivers.id),
+  
+  // Risk Score Fields (0-100 scale, lower is better)
+  riskScore: integer("risk_score").notNull().default(0),
+  riskScoreLastCalculatedAt: timestamp("risk_score_last_calculated_at"),
+  
+  // Risk Score Components
+  inspectionRiskPoints: integer("inspection_risk_points").notNull().default(0),
+  maintenanceRiskPoints: integer("maintenance_risk_points").notNull().default(0),
+  breakdownRiskPoints: integer("breakdown_risk_points").notNull().default(0),
+  complianceRiskPoints: integer("compliance_risk_points").notNull().default(0),
+  ageRiskPoints: integer("age_risk_points").notNull().default(0),
+  
+  // Dispatch Gate (GREEN = go, YELLOW = caution/manager approval, RED = no dispatch)
+  dispatchGateStatus: dispatchGateStatusEnum("dispatch_gate_status").notNull().default("GREEN"),
+  dispatchGateReason: text("dispatch_gate_reason"),
+  dispatchGateOverrideBy: varchar("dispatch_gate_override_by").references(() => users.id),
+  dispatchGateOverrideAt: timestamp("dispatch_gate_override_at"),
+  dispatchGateOverrideReason: text("dispatch_gate_override_reason"),
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_trucks_company_id").on(table.companyId),
   index("idx_trucks_status").on(table.status),
+  index("idx_trucks_risk_score").on(table.riskScore),
+  index("idx_trucks_dispatch_gate").on(table.dispatchGateStatus),
 ]);
 
 // VENDORS table (repair network)

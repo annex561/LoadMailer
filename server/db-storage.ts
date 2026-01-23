@@ -2602,6 +2602,267 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount > 0;
   }
 
+  // MVFRS: Truck Risk Score Calculation
+  async calculateTruckRiskScore(truckId: string): Promise<{
+    riskScore: number;
+    inspectionRiskPoints: number;
+    maintenanceRiskPoints: number;
+    breakdownRiskPoints: number;
+    complianceRiskPoints: number;
+    ageRiskPoints: number;
+    dispatchGateStatus: 'GREEN' | 'YELLOW' | 'RED';
+    dispatchGateReason: string | null;
+  }> {
+    const truck = await this.getTruck(truckId);
+    if (!truck) throw new Error('Truck not found');
+
+    let inspectionRiskPoints = 0;
+    let maintenanceRiskPoints = 0;
+    let breakdownRiskPoints = 0;
+    let complianceRiskPoints = 0;
+    let ageRiskPoints = 0;
+    const reasons: string[] = [];
+
+    // 1. Inspection Risk (0-25 points) - Failed inspections in last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const recentInspections = await db.select().from(schema.fleetInspections)
+      .where(and(
+        eq(schema.fleetInspections.truckId, truckId),
+        drizzleSql`${schema.fleetInspections.createdAt} >= ${thirtyDaysAgo}`
+      ));
+    
+    const failedInspections = recentInspections.filter(i => i.status === 'FAILED');
+    if (failedInspections.length > 0) {
+      inspectionRiskPoints = Math.min(25, failedInspections.length * 10);
+      reasons.push(`${failedInspections.length} failed inspection(s) in last 30 days`);
+    }
+
+    // Check for safety-critical defects in inspection items
+    for (const inspection of recentInspections) {
+      const items = await db.select().from(schema.inspectionItems)
+        .where(and(
+          eq(schema.inspectionItems.inspectionId, inspection.id),
+          eq(schema.inspectionItems.isSafetyCritical, true),
+          eq(schema.inspectionItems.status, 'DEFECT')
+        ));
+      if (items.length > 0) {
+        inspectionRiskPoints = Math.min(25, inspectionRiskPoints + items.length * 5);
+        reasons.push(`${items.length} safety-critical defect(s) found`);
+      }
+    }
+
+    // 2. Maintenance Risk (0-25 points) - Open work orders
+    const openWorkOrders = await db.select().from(schema.workOrders)
+      .where(and(
+        eq(schema.workOrders.truckId, truckId),
+        notInArray(schema.workOrders.status, ['COMPLETED', 'CANCELLED'])
+      ));
+    
+    const criticalWOs = openWorkOrders.filter(wo => wo.priority === 'CRITICAL');
+    const urgentWOs = openWorkOrders.filter(wo => wo.priority === 'URGENT');
+    const safetyHoldWOs = openWorkOrders.filter(wo => wo.safetyHold === true);
+
+    if (safetyHoldWOs.length > 0) {
+      maintenanceRiskPoints = 25;
+      reasons.push(`${safetyHoldWOs.length} work order(s) with safety hold`);
+    } else if (criticalWOs.length > 0) {
+      maintenanceRiskPoints = Math.min(25, 15 + criticalWOs.length * 5);
+      reasons.push(`${criticalWOs.length} critical work order(s) open`);
+    } else if (urgentWOs.length > 0) {
+      maintenanceRiskPoints = Math.min(20, urgentWOs.length * 5);
+      reasons.push(`${urgentWOs.length} urgent work order(s) open`);
+    } else if (openWorkOrders.length > 3) {
+      maintenanceRiskPoints = Math.min(10, (openWorkOrders.length - 3) * 2);
+      reasons.push(`${openWorkOrders.length} open work orders`);
+    }
+
+    // 3. Breakdown Risk (0-20 points) - Recent breakdowns
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    
+    const recentBreakdowns = await db.select().from(schema.breakdownReports)
+      .where(and(
+        eq(schema.breakdownReports.truckId, truckId),
+        drizzleSql`${schema.breakdownReports.createdAt} >= ${ninetyDaysAgo}`
+      ));
+    
+    if (recentBreakdowns.length > 0) {
+      breakdownRiskPoints = Math.min(20, recentBreakdowns.length * 7);
+      reasons.push(`${recentBreakdowns.length} breakdown(s) in last 90 days`);
+    }
+
+    // 4. Compliance Risk (0-20 points) - Expired documents
+    const expiredDocs = await db.select().from(schema.fleetDocuments)
+      .where(and(
+        eq(schema.fleetDocuments.subjectId, truckId),
+        eq(schema.fleetDocuments.subjectType, 'TRUCK'),
+        eq(schema.fleetDocuments.status, 'EXPIRED')
+      ));
+    
+    if (expiredDocs.length > 0) {
+      complianceRiskPoints = Math.min(20, expiredDocs.length * 10);
+      reasons.push(`${expiredDocs.length} expired document(s)`);
+    }
+
+    // Check for documents expiring in next 14 days
+    const fourteenDaysFromNow = new Date();
+    fourteenDaysFromNow.setDate(fourteenDaysFromNow.getDate() + 14);
+    
+    const expiringDocs = await db.select().from(schema.fleetDocuments)
+      .where(and(
+        eq(schema.fleetDocuments.subjectId, truckId),
+        eq(schema.fleetDocuments.subjectType, 'TRUCK'),
+        eq(schema.fleetDocuments.status, 'ACTIVE'),
+        drizzleSql`${schema.fleetDocuments.expiresAt} <= ${fourteenDaysFromNow}`
+      ));
+    
+    if (expiringDocs.length > 0) {
+      complianceRiskPoints = Math.min(20, complianceRiskPoints + expiringDocs.length * 3);
+      reasons.push(`${expiringDocs.length} document(s) expiring soon`);
+    }
+
+    // 5. Age Risk (0-10 points) - Based on truck age
+    const currentYear = new Date().getFullYear();
+    const truckAge = currentYear - (truck.year || currentYear);
+    
+    if (truckAge >= 15) {
+      ageRiskPoints = 10;
+      reasons.push(`Truck is ${truckAge} years old`);
+    } else if (truckAge >= 10) {
+      ageRiskPoints = 5;
+    } else if (truckAge >= 7) {
+      ageRiskPoints = 2;
+    }
+
+    // Calculate total risk score (0-100)
+    const riskScore = Math.min(100, 
+      inspectionRiskPoints + 
+      maintenanceRiskPoints + 
+      breakdownRiskPoints + 
+      complianceRiskPoints + 
+      ageRiskPoints
+    );
+
+    // Determine dispatch gate status
+    let dispatchGateStatus: 'GREEN' | 'YELLOW' | 'RED' = 'GREEN';
+    let dispatchGateReason: string | null = null;
+
+    // RED conditions (no dispatch allowed)
+    if (safetyHoldWOs.length > 0 || truck.status === 'OUT_OF_SERVICE' || expiredDocs.length > 0) {
+      dispatchGateStatus = 'RED';
+      dispatchGateReason = reasons.length > 0 ? reasons.slice(0, 3).join('; ') : 'Safety hold or compliance issue';
+    }
+    // YELLOW conditions (requires manager approval)
+    else if (riskScore >= 40 || criticalWOs.length > 0 || failedInspections.length > 0) {
+      dispatchGateStatus = 'YELLOW';
+      dispatchGateReason = reasons.length > 0 ? reasons.slice(0, 3).join('; ') : 'Elevated risk';
+    }
+
+    // Update truck with calculated values
+    await db.update(schema.trucks).set({
+      riskScore,
+      inspectionRiskPoints,
+      maintenanceRiskPoints,
+      breakdownRiskPoints,
+      complianceRiskPoints,
+      ageRiskPoints,
+      dispatchGateStatus,
+      dispatchGateReason,
+      riskScoreLastCalculatedAt: new Date(),
+      updatedAt: new Date()
+    }).where(eq(schema.trucks.id, truckId));
+
+    return {
+      riskScore,
+      inspectionRiskPoints,
+      maintenanceRiskPoints,
+      breakdownRiskPoints,
+      complianceRiskPoints,
+      ageRiskPoints,
+      dispatchGateStatus,
+      dispatchGateReason
+    };
+  }
+
+  // MVFRS: Check if truck can be dispatched
+  async checkDispatchGate(truckId: string): Promise<{
+    canDispatch: boolean;
+    status: 'GREEN' | 'YELLOW' | 'RED';
+    reason: string | null;
+    riskScore: number;
+    requiresApproval: boolean;
+    overrideInfo?: {
+      overrideBy: string | null;
+      overrideAt: Date | null;
+      overrideReason: string | null;
+    };
+  }> {
+    const truck = await this.getTruck(truckId);
+    if (!truck) throw new Error('Truck not found');
+
+    // Recalculate risk score if stale (older than 1 hour)
+    const oneHourAgo = new Date();
+    oneHourAgo.setHours(oneHourAgo.getHours() - 1);
+    
+    if (!truck.riskScoreLastCalculatedAt || truck.riskScoreLastCalculatedAt < oneHourAgo) {
+      await this.calculateTruckRiskScore(truckId);
+      const updatedTruck = await this.getTruck(truckId);
+      if (updatedTruck) {
+        return {
+          canDispatch: updatedTruck.dispatchGateStatus !== 'RED',
+          status: updatedTruck.dispatchGateStatus as 'GREEN' | 'YELLOW' | 'RED',
+          reason: updatedTruck.dispatchGateReason,
+          riskScore: updatedTruck.riskScore || 0,
+          requiresApproval: updatedTruck.dispatchGateStatus === 'YELLOW',
+          overrideInfo: updatedTruck.dispatchGateOverrideBy ? {
+            overrideBy: updatedTruck.dispatchGateOverrideBy,
+            overrideAt: updatedTruck.dispatchGateOverrideAt,
+            overrideReason: updatedTruck.dispatchGateOverrideReason
+          } : undefined
+        };
+      }
+    }
+
+    return {
+      canDispatch: truck.dispatchGateStatus !== 'RED',
+      status: (truck.dispatchGateStatus || 'GREEN') as 'GREEN' | 'YELLOW' | 'RED',
+      reason: truck.dispatchGateReason,
+      riskScore: truck.riskScore || 0,
+      requiresApproval: truck.dispatchGateStatus === 'YELLOW',
+      overrideInfo: truck.dispatchGateOverrideBy ? {
+        overrideBy: truck.dispatchGateOverrideBy,
+        overrideAt: truck.dispatchGateOverrideAt,
+        overrideReason: truck.dispatchGateOverrideReason
+      } : undefined
+    };
+  }
+
+  // MVFRS: Override dispatch gate (manager approval)
+  async overrideDispatchGate(truckId: string, userId: string, reason: string): Promise<schema.Truck | undefined> {
+    await db.update(schema.trucks).set({
+      dispatchGateOverrideBy: userId,
+      dispatchGateOverrideAt: new Date(),
+      dispatchGateOverrideReason: reason,
+      updatedAt: new Date()
+    }).where(eq(schema.trucks.id, truckId));
+    
+    return this.getTruck(truckId);
+  }
+
+  // MVFRS: Clear dispatch gate override
+  async clearDispatchGateOverride(truckId: string): Promise<schema.Truck | undefined> {
+    await db.update(schema.trucks).set({
+      dispatchGateOverrideBy: null,
+      dispatchGateOverrideAt: null,
+      dispatchGateOverrideReason: null,
+      updatedAt: new Date()
+    }).where(eq(schema.trucks.id, truckId));
+    
+    return this.getTruck(truckId);
+  }
+
   // MVFRS: Vendor operations
   async getVendor(id: string): Promise<schema.Vendor | undefined> {
     const result = await db.select().from(schema.vendors).where(eq(schema.vendors.id, id));

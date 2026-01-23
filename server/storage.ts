@@ -372,6 +372,32 @@ export interface IStorage {
   createTruck(truck: InsertTruck): Promise<Truck>;
   updateTruck(id: string, truck: Partial<InsertTruck>): Promise<Truck | undefined>;
   deleteTruck(id: string): Promise<boolean>;
+  
+  // MVFRS: Truck Risk Score & Dispatch Gate
+  calculateTruckRiskScore(truckId: string): Promise<{
+    riskScore: number;
+    inspectionRiskPoints: number;
+    maintenanceRiskPoints: number;
+    breakdownRiskPoints: number;
+    complianceRiskPoints: number;
+    ageRiskPoints: number;
+    dispatchGateStatus: 'GREEN' | 'YELLOW' | 'RED';
+    dispatchGateReason: string | null;
+  }>;
+  checkDispatchGate(truckId: string): Promise<{
+    canDispatch: boolean;
+    status: 'GREEN' | 'YELLOW' | 'RED';
+    reason: string | null;
+    riskScore: number;
+    requiresApproval: boolean;
+    overrideInfo?: {
+      overrideBy: string | null;
+      overrideAt: Date | null;
+      overrideReason: string | null;
+    };
+  }>;
+  overrideDispatchGate(truckId: string, userId: string, reason: string): Promise<Truck | undefined>;
+  clearDispatchGateOverride(truckId: string): Promise<Truck | undefined>;
 
   // MVFRS: Vendor operations
   getVendor(id: string): Promise<Vendor | undefined>;

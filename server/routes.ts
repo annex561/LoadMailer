@@ -4987,6 +4987,94 @@ TRAQ IQ Dispatch Team
     }
   });
 
+  // Truck Risk Score & Dispatch Gate
+  app.get('/api/fleet/trucks/:id/risk-score', isAuthenticated, async (req: any, res) => {
+    try {
+      const riskData = await storage.calculateTruckRiskScore(req.params.id);
+      res.json(riskData);
+    } catch (error) {
+      console.error('Error calculating risk score:', error);
+      res.status(500).json({ error: 'Failed to calculate risk score' });
+    }
+  });
+
+  app.post('/api/fleet/trucks/:id/calculate-risk', isAuthenticated, async (req: any, res) => {
+    try {
+      const riskData = await storage.calculateTruckRiskScore(req.params.id);
+      res.json(riskData);
+    } catch (error) {
+      console.error('Error calculating risk score:', error);
+      res.status(500).json({ error: 'Failed to calculate risk score' });
+    }
+  });
+
+  app.get('/api/fleet/trucks/:id/dispatch-gate', isAuthenticated, async (req: any, res) => {
+    try {
+      const gateStatus = await storage.checkDispatchGate(req.params.id);
+      res.json(gateStatus);
+    } catch (error) {
+      console.error('Error checking dispatch gate:', error);
+      res.status(500).json({ error: 'Failed to check dispatch gate' });
+    }
+  });
+
+  app.post('/api/fleet/trucks/:id/dispatch-gate/override', isAuthenticated, async (req: any, res) => {
+    try {
+      const { reason } = req.body;
+      if (!reason || reason.trim().length < 10) {
+        return res.status(400).json({ error: 'Override reason must be at least 10 characters' });
+      }
+      const userId = req.user?.id || 'unknown';
+      const truck = await storage.overrideDispatchGate(req.params.id, userId, reason);
+      if (!truck) {
+        return res.status(404).json({ error: 'Truck not found' });
+      }
+      res.json(truck);
+    } catch (error) {
+      console.error('Error overriding dispatch gate:', error);
+      res.status(500).json({ error: 'Failed to override dispatch gate' });
+    }
+  });
+
+  app.delete('/api/fleet/trucks/:id/dispatch-gate/override', isAuthenticated, async (req: any, res) => {
+    try {
+      const truck = await storage.clearDispatchGateOverride(req.params.id);
+      if (!truck) {
+        return res.status(404).json({ error: 'Truck not found' });
+      }
+      res.json(truck);
+    } catch (error) {
+      console.error('Error clearing dispatch gate override:', error);
+      res.status(500).json({ error: 'Failed to clear dispatch gate override' });
+    }
+  });
+
+  // Bulk recalculate risk scores for all trucks in a company
+  app.post('/api/fleet/trucks/recalculate-all-risk-scores', isAuthenticated, async (req: any, res) => {
+    try {
+      const companyId = req.body.companyId || 'default-company';
+      const trucks = await storage.getTrucksByCompany(companyId);
+      const results = [];
+      
+      for (const truck of trucks) {
+        try {
+          const riskData = await storage.calculateTruckRiskScore(truck.id);
+          results.push({ truckId: truck.id, unitNumber: truck.unitNumber, ...riskData });
+        } catch (err) {
+          results.push({ truckId: truck.id, unitNumber: truck.unitNumber, error: 'Failed to calculate' });
+        }
+      }
+      
+      res.json({ 
+        trucksProcessed: trucks.length,
+        results 
+      });
+    } catch (error) {
+      console.error('Error recalculating risk scores:', error);
+      res.status(500).json({ error: 'Failed to recalculate risk scores' });
+    }
+  });
+
   // Vendors CRUD
   app.get('/api/fleet/vendors', isAuthenticated, async (req: any, res) => {
     try {
