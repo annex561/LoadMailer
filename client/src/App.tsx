@@ -57,6 +57,7 @@ import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { NewLoadWatcher } from "@/components/watchers/new-load-watcher";
 
 
 
@@ -112,6 +113,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <NewLoadWatcher />
         <Switch>
           {/* Standalone driver pages without sidebar/header - for driver self-service only */}
           <Route path="/driver-onboarding" component={DriverOnboarding} />
