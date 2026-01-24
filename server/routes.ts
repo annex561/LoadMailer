@@ -1209,26 +1209,28 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.post('/api/gmail/scan', async (req, res) => {
     try {
       const { companyId } = req.body;
+      const { gmailIngest } = await import('./services/gmail');
       
-      if (!companyId) {
-        return res.status(400).json({ error: 'companyId is required for tenant isolation' });
+      let results;
+      if (companyId) {
+        results = await gmailIngest.scanAccountsForCompany(companyId);
+      } else {
+        results = await gmailIngest.scanAllAccounts();
       }
       
-      const { gmailIngest } = await import('./services/gmail');
-      const results = await gmailIngest.scanAccountsForCompany(companyId);
-      
-      const totalFiles = results.reduce((sum, r) => sum + (r.filesProcessed || 0), 0);
-      const totalLoads = results.reduce((sum, r) => sum + (r.loadsCreated || 0), 0);
+      const totalFiles = results.reduce((sum: number, r: any) => sum + (r.filesProcessed || 0), 0);
+      const totalLoads = results.reduce((sum: number, r: any) => sum + (r.loadsCreated || 0), 0);
       res.json({
+        ok: true,
         success: true,
-        companyId,
+        companyId: companyId || 'all',
         accountsScanned: results.length,
         totalFilesProcessed: totalFiles,
         totalLoadsCreated: totalLoads,
         results
       });
     } catch (error: any) {
-      console.error('Error scanning company accounts:', error);
+      console.error('Error scanning accounts:', error);
       res.status(500).json({ error: error.message });
     }
   });
