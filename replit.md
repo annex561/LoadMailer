@@ -17,6 +17,29 @@ The backend utilizes Express.js with TypeScript, Drizzle ORM for PostgreSQL (via
 ## Database Design
 Drizzle ORM is used with a PostgreSQL dialect, defining schemas for Drivers, Customers, Loads, Email Templates, and Email Logs. Load numbers use Nanoid for collision-proof generation. The system implements a multi-tenant architecture with `company_id` for data isolation across Companies, Subscriptions (Stripe integrated), Company Users (role-based access), Payment Methods, and Billing History. Indexes are applied on `company_id` for performance, and database-level security prevents cross-tenant data leakage.
 
+### Revenue Loop Schema (PostgreSQL)
+The Revenue Loop unifies the complete Offer → Book → RateCon → Invoice → Payment pipeline:
+
+**Enums:**
+- `load_lifecycle_status`: new, offered, booked, scheduled, in_transit, delivered, cancelled, expired
+- `ar_invoice_status`: draft, sent, paid, void, disputed
+- `collection_stage`: soft, firm, final, escalated
+- `collection_item_status`: open, promise, escalated, closed, dispute
+- `next_action_kind`: EMAIL, CALL, TEXT, SYSTEM
+
+**Core Tables:**
+- `loads` (extended): Added `truck_id`, `lifecycle_status`, origin/dest city/state, `offered_rate`, `rpm`, `score`, pipeline timestamps (`offered_at`, `booked_at`, `delivered_at`), document paths (`ratecon_path`, `pod_path`)
+- `ar_invoices`: AR invoice tracking with `invoice_number`, `status`, `total_amount`, `balance_due`, `due_date`, `sent_at`, `paid_at`, payment info
+- `collections_items`: Collection workbench with `stage`, `status`, `owner`, `last_touch_at`, `promise_date`, `next_action_at`, `next_action_kind`, `escalation_level` (L0-L3)
+- `activity_log`: Audit trail with `entity_type`, `entity_id`, `action`, `actor`, `details` (JSONB)
+- `compliance_documents`: Document compliance tracking with `type`, `expiry_date`, `file_path`, `status`
+
+**Dispatch Gate (Trucks):**
+The `trucks` table includes risk scoring and gate status:
+- `dispatch_gate_status`: GREEN (go), YELLOW (caution/manager approval), RED (no dispatch)
+- `risk_score`: 0-100 scale with component breakdown (inspection, maintenance, breakdown, compliance, age)
+- Override capability with reason and expiry tracking
+
 ## Communication System
 The system features unified messaging with a single conversation stream per driver, including auto-thread creation and field mapping for API consistency. Twilio SMS handles all driver communications, featuring E.164 phone number normalization, simplified dashboard link formats, optional driver-to-dispatcher SMS relay, and a dual-routing architecture for incoming driver SMS to multiple load contexts. Nodemailer is used for automated email notifications. In-app messaging provides real-time bidirectional communication between drivers (mobile dashboard) and dispatchers (SMS Dispatch tab), with notification sounds, clear sender labels, and dedicated API endpoints.
 
