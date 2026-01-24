@@ -18,7 +18,8 @@ import { DATAPIService } from "./dat-api-service";
 import { DATWebsiteScraper } from "./dat-website-scraper";
 import { RealDATScraper } from "./real-dat-scraper";
 import { DATLoadPoster } from "./dat-load-poster";
-import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema, insertTruckSchema, insertVendorSchema, insertFleetInspectionSchema, insertInspectionItemSchema, insertWorkOrderSchema, insertWorkOrderEventSchema, insertBreakdownReportSchema, insertFleetDocumentSchema, insertMaintenancePlanSchema } from "@shared/schema";
+import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema, insertTruckSchema, insertVendorSchema, insertFleetInspectionSchema, insertInspectionItemSchema, insertWorkOrderSchema, insertWorkOrderEventSchema, insertBreakdownReportSchema, insertFleetDocumentSchema, insertMaintenancePlanSchema, gmailAccounts } from "@shared/schema";
+import { db } from "./db";
 import { aiCommunicationService } from "./ai-communication-service";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService, objectStorageClient, parseObjectPath } from "./objectStorage";
@@ -1120,6 +1121,31 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // SIMPLE ADD GMAIL ACCOUNT - paste token from OAuth Playground
+  // Body: { email: "dispatch@newco.com", refreshToken: "1//...", companyId: "123" }
+  app.post("/api/gmail/add-account", async (req, res) => {
+    try {
+      const { email, refreshToken, companyId } = req.body;
+
+      if (!email || !refreshToken) {
+        return res.status(400).json({ error: "Missing email or refreshToken" });
+      }
+
+      const [account] = await db.insert(gmailAccounts).values({
+        email,
+        refreshToken,
+        companyId: companyId || "default",
+        isActive: true
+      }).returning();
+
+      console.log(`📧 Connected Gmail account: ${email}`);
+      res.json({ success: true, message: `Connected ${email}`, accountId: account.id });
+    } catch (error: any) {
+      console.error('Error adding Gmail account:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 
