@@ -1,0 +1,90 @@
+import { db } from "./db";
+import { trucks, documents, workOrders, pmTasks } from "@shared/schema";
+import { eq, and, gt, lte } from "drizzle-orm";
+import { addDays, isAfter } from "date-fns";
+
+export type GateStatus = "GREEN" | "YELLOW" | "RED";
+
+export class DispatchGateService {
+  /**
+   * Evaluates a truck and returns its current gate status based on 
+   * maintenance, compliance, and safety data.
+   */
+  async getTruckGateStatus(truckId: string): Promise<{ 
+    status: GateStatus; 
+    reasons: string[];
+    riskScore: number;
+  }> {
+    const reasons: string[] = [];
+    let riskScore = 0;
+
+    // 1. Check Compliance (Documents)
+    const expiredDocs = await db.select().from(documents).where(
+      and(
+        eq(documents.truckId, truckId),
+        lte(documents.expiryDate, new Date())
+      )
+    );
+
+    if (expiredDocs.length > 0) {
+      reasons.push(`Expired Documents: ${expiredDocs.map(d => d.type).join(", ")}`);
+      return { status: "RED", reasons, riskScore: 100 }; // Instant RED for compliance
+    }
+
+    // 2. Check Critical Maintenance
+    const criticalWorkOrders = await db.select().from(workOrders).where(
+      and(
+        eq(workOrders.truckId, truckId),
+        eq(workOrders.status, "open"),
+        eq(workOrders.severity, "critical")
+      )
+    );
+
+    if (criticalWorkOrders.length > 0) {
+      reasons.push("Open Critical Work Orders");
+      return { status: "RED", reasons, riskScore: 90 };
+    }
+
+    // 3. Check Overdue PM
+    const overduePM = await db.select().from(pmTasks).where(
+      and(
+        eq(pmTasks.truckId, truckId),
+        eq(pmTasks.status, "overdue")
+      )
+    );
+
+    if (overduePM.length > 0) {
+      reasons.push("Overdue Preventive Maintenance");
+      riskScore += 40;
+    }
+
+    // Determine final status
+    const status: GateStatus = riskScore >= 70 ? "RED" : riskScore >= 30 ? "YELLOW" : "GREEN";
+    
+    return { status, reasons, riskScore };
+  }
+
+  /**
+   * Validates if a truck can be booked for a load.
+   * Throws an error if RED and no valid override exists.
+   */
+  async validateBooking(truckId: string, overrideReason?: string): Promise<boolean> {
+    const truck = await db.query.trucks.findFirst({ where: eq(trucks.id, truckId) });
+    if (!truck) throw new Error("Truck not found");
+
+    const gate = await this.getTruckGateStatus(truckId);
+
+    // If RED and no override provided/stored
+    if (gate.status === "RED") {
+      const hasActiveOverride = truck.overrideReason && truck.overrideExpiry && isAfter(truck.overrideExpiry, new Date());
+      
+      if (!overrideReason && !hasActiveOverride) {
+        throw new Error(`Booking Blocked: Truck is in RED status. ${gate.reasons.join(". ")}`);
+      }
+    }
+
+    return true;
+  }
+}
+
+export const dispatchGate = new DispatchGateService();

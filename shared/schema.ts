@@ -18,6 +18,30 @@ export const subscriptionPlanEnum = pgEnum("subscription_plan", ["starter", "pro
 export const paymentMethodTypeEnum = pgEnum("payment_method_type", ["card", "ach", "bank_transfer"]);
 export const invoiceStatusEnum = pgEnum("invoice_status", ["draft", "open", "paid", "void", "uncollectible"]);
 
+// ============================================================================
+// REVENUE LOOP ENUMS - GA Loads, AR, Collections
+// ============================================================================
+
+export const loadLifecycleStatusEnum = pgEnum("load_lifecycle_status", [
+  "new", "offered", "booked", "scheduled", "in_transit", "delivered", "cancelled", "expired"
+]);
+
+export const arInvoiceStatusEnum = pgEnum("ar_invoice_status", [
+  "draft", "sent", "paid", "void", "disputed"
+]);
+
+export const collectionStageEnum = pgEnum("collection_stage", [
+  "soft", "firm", "final", "escalated"
+]);
+
+export const collectionItemStatusEnum = pgEnum("collection_item_status", [
+  "open", "promise", "escalated", "closed", "dispute"
+]);
+
+export const nextActionKindEnum = pgEnum("next_action_kind", [
+  "EMAIL", "CALL", "TEXT", "SYSTEM"
+]);
+
 // Companies table - the organization/trucking company
 export const companies = pgTable("companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -222,10 +246,29 @@ export const loads = pgTable("loads", {
   sourceBoard: text("source_board").default("manual"), // manual, dat, loadboard
   // GPS tracking SMS throttle - prevents spam by tracking last send time
   gpsTrackingSmsLastSentAt: timestamp("gps_tracking_sms_last_sent_at"),
+  
+  // Revenue Loop Pipeline Fields
+  truckId: varchar("truck_id").references(() => trucks.id),
+  lifecycleStatus: loadLifecycleStatusEnum("lifecycle_status").default("new"),
+  originCity: text("origin_city"),
+  originState: text("origin_state"),
+  destCity: text("dest_city"),
+  destState: text("dest_state"),
+  offeredRate: real("offered_rate"),
+  rpm: real("rpm"),
+  score: integer("score"),
+  offeredAt: timestamp("offered_at"),
+  bookedAt: timestamp("booked_at"),
+  deliveredAt: timestamp("delivered_at"),
+  rateconPath: text("ratecon_path"),
+  podPath: text("pod_path"),
+  overrideReason: text("override_reason"),
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_loads_company_id").on(table.companyId),
+  index("idx_loads_lifecycle_status").on(table.lifecycleStatus),
   unique("loads_id_company_id_unique").on(table.id, table.companyId),
   foreignKey({
     columns: [table.customerId, table.companyId],
@@ -237,6 +280,90 @@ export const loads = pgTable("loads", {
     foreignColumns: [drivers.id, drivers.companyId],
     name: "loads_driver_company_fk"
   }),
+]);
+
+// ============================================================================
+// REVENUE LOOP TABLES - AR Invoices, Collections, Activity Log
+// ============================================================================
+
+export const arInvoices = pgTable("ar_invoices", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }).notNull(),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  invoiceNumber: text("invoice_number").notNull(),
+  status: arInvoiceStatusEnum("status").default("draft"),
+  
+  totalAmount: real("total_amount").notNull(),
+  balanceDue: real("balance_due").notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  sentAt: timestamp("sent_at"),
+  dueDate: timestamp("due_date").notNull(),
+  paidAt: timestamp("paid_at"),
+  
+  paymentMethod: text("payment_method"),
+  paymentReference: text("payment_reference"),
+}, (table) => [
+  index("idx_ar_invoices_company_id").on(table.companyId),
+  index("idx_ar_invoices_status").on(table.status),
+  index("idx_ar_invoices_due_date").on(table.dueDate),
+]);
+
+export const collectionsItems = pgTable("collections_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").references(() => arInvoices.id).notNull(),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }).notNull(),
+  
+  status: collectionItemStatusEnum("status").default("open"),
+  stage: collectionStageEnum("stage").default("soft"),
+  owner: text("owner"),
+  
+  lastTouchAt: timestamp("last_touch_at"),
+  promiseDate: timestamp("promise_date"),
+  nextActionAt: timestamp("next_action_at"),
+  nextActionKind: nextActionKindEnum("next_action_kind").default("SYSTEM"),
+  
+  escalationLevel: text("escalation_level").default("L0"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_collections_company_id").on(table.companyId),
+  index("idx_collections_status").on(table.status),
+  index("idx_collections_stage").on(table.stage),
+  index("idx_collections_next_action").on(table.nextActionAt),
+]);
+
+export const activityLog = pgTable("activity_log", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }).notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  action: text("action").notNull(),
+  actor: text("actor").notNull(),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_activity_log_company_id").on(table.companyId),
+  index("idx_activity_log_entity").on(table.entityType, table.entityId),
+  index("idx_activity_log_created_at").on(table.createdAt),
+]);
+
+export const complianceDocuments = pgTable("compliance_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }).notNull(),
+  truckId: varchar("truck_id").references(() => trucks.id),
+  driverId: varchar("driver_id").references(() => drivers.id),
+  type: text("type").notNull(),
+  expiryDate: timestamp("expiry_date").notNull(),
+  filePath: text("file_path"),
+  status: text("status").default("active"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_compliance_docs_company_id").on(table.companyId),
+  index("idx_compliance_docs_expiry").on(table.expiryDate),
+  index("idx_compliance_docs_status").on(table.status),
 ]);
 
 export const emailTemplates = pgTable("email_templates", {
@@ -2833,4 +2960,52 @@ export type FleetInspectionWithRelations = FleetInspection & {
   truck: Truck;
   driver?: Driver;
   items: InspectionItem[];
+};
+
+// ============================================================================
+// REVENUE LOOP Types & Schemas
+// ============================================================================
+
+export const insertArInvoiceSchema = createInsertSchema(arInvoices).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCollectionsItemSchema = createInsertSchema(collectionsItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertActivityLogSchema = createInsertSchema(activityLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertComplianceDocumentSchema = createInsertSchema(complianceDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ArInvoice = typeof arInvoices.$inferSelect;
+export type InsertArInvoice = z.infer<typeof insertArInvoiceSchema>;
+
+export type CollectionsItem = typeof collectionsItems.$inferSelect;
+export type InsertCollectionsItem = z.infer<typeof insertCollectionsItemSchema>;
+
+export type ActivityLogEntry = typeof activityLog.$inferSelect;
+export type InsertActivityLogEntry = z.infer<typeof insertActivityLogSchema>;
+
+export type ComplianceDocument = typeof complianceDocuments.$inferSelect;
+export type InsertComplianceDocument = z.infer<typeof insertComplianceDocumentSchema>;
+
+export type ArInvoiceWithRelations = ArInvoice & {
+  load?: Load;
+  collectionItem?: CollectionsItem;
+};
+
+export type CollectionsItemWithRelations = CollectionsItem & {
+  invoice: ArInvoice;
+  load?: Load;
 };
