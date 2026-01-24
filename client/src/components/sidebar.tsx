@@ -18,13 +18,13 @@ const menuGroups = [
       { name: "Control Tower", href: "/dispatcher" },
       { name: "Load Ops Board", href: "/loadops-dashboard" },
       { name: "Live Map", href: "/map" },
-      { name: "RateCon Inbox", href: "/loads-inbox" },
     ]
   },
   {
     title: "Load Management",
     icon: <FileText className="w-5 h-5" />,
     items: [
+      { name: "RateCon Inbox", href: "/loads-inbox" },
       { name: "Load History", href: "/loads" },
       { name: "Create New Load", href: "/loads/new" },
       { name: "DAT Load Board", href: "/dat-search" },
