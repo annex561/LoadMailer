@@ -22,7 +22,7 @@ router.get("/", (req, res) => {
       miles, rpm, score,
       broker_name, broker_email, broker_phone,
       invoice_number as invoice_id, invoice_status, invoice_amount as invoice_total,
-      invoice_sent_at, invoice_created_at,
+      invoice_sent_at,
       invoice_paid_at as paid_at,
       item_status, item_owner, next_action_at, next_action_type, notes,
       last_touch_at, promise_to_pay_at, escalated_at, escalation_level, escalation_reason
