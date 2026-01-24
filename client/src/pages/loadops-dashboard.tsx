@@ -38,6 +38,7 @@ import {
   LayoutDashboard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SidebarNav } from '@/components/sidebar';
 
 // Import page components
 import Dashboard from './dashboard';
@@ -528,7 +529,6 @@ const CommunicationCard: React.FC<{
 };
 
 export default function LoadOpsDashboard() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [location] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1022,184 +1022,13 @@ export default function LoadOpsDashboard() {
     }
   ];
 
-  // Menu groups with collapsible sections
-  const menuGroups = [
-    {
-      title: "Dispatch Command",
-      icon: LayoutDashboard,
-      items: [
-        { name: "Control Tower", href: "/dispatcher" },
-        { name: "Load Ops Board", href: "/loadops-dashboard" },
-        { name: "Live Map", href: "/gps-tracking" },
-        { name: "RateCon Inbox", href: "/loads-inbox" },
-      ]
-    },
-    {
-      title: "Load Management",
-      icon: FileText,
-      items: [
-        { name: "Load History", href: "/loads" },
-        { name: "Create New Load", href: "/manual-load-entry" },
-        { name: "DAT Load Board", href: "/dat-loads" },
-        { name: "Items (AR)", href: "/items" },
-      ]
-    },
-    {
-      title: "Fleet & Drivers",
-      icon: Truck,
-      items: [
-        { name: "Fleet Dashboard", href: "/fleet" },
-        { name: "Driver Roster", href: "/driver-management" },
-        { name: "Onboarding", href: "/driver-onboarding" },
-        { name: "Trucks", href: "/fleet/trucks" },
-        { name: "Work Orders", href: "/fleet/work-orders" },
-        { name: "Inspections", href: "/fleet/inspections" },
-      ]
-    },
-    {
-      title: "Finance",
-      icon: DollarSign,
-      items: [
-        { name: "Fleet Calculator", href: "/fleet-calculator" },
-        { name: "Payments", href: "/payments" },
-        { name: "Analytics", href: "/analytics" },
-      ]
-    },
-    {
-      title: "Communication",
-      icon: MessageSquare,
-      items: [
-        { name: "Driver Messages", href: "/communication-dashboard" },
-        { name: "AI Insights", href: "/ai-communication-insights" },
-        { name: "Customers", href: "/contacts" },
-        { name: "SMS Status", href: "/sms-status" },
-      ]
-    },
-    {
-      title: "System",
-      icon: Settings,
-      items: [
-        { name: "Admin Overview", href: "/admin-overview" },
-        { name: "Templates", href: "/templates" },
-        { name: "DAT Login", href: "/dat-login" },
-        { name: "Debug", href: "/debug-token" },
-      ]
-    }
-  ];
-
-  const [openGroups, setOpenGroups] = useState<string[]>(["Dispatch Command", "Load Management"]);
-
-  const toggleGroup = (title: string) => {
-    setOpenGroups(prev => 
-      prev.includes(title) ? prev.filter(t => t !== title) : [...prev, title]
-    );
-  };
-
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
-      <aside 
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 bg-[hsl(var(--sidebar))] border-r border-[hsl(var(--sidebar-border))] transition-all duration-300 flex flex-col shadow-xl",
-          sidebarCollapsed ? "w-16" : "w-64"
-        )}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-sidebar-border">
-          {!sidebarCollapsed && (
-            <div className="flex items-center gap-3">
-              <img src="/traq-logo.png" alt="TRAQ IQ" className="w-8 h-8 object-contain" />
-              <h2 className="text-xl font-bold text-sidebar-foreground">TRAQ IQ</h2>
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="p-2 text-sidebar-foreground hover:text-primary hover:bg-sidebar-accent"
-          >
-            {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-          </Button>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
-          {menuGroups.map((group) => {
-            const GroupIcon = group.icon;
-            const isOpen = openGroups.includes(group.title);
-            
-            return (
-              <div key={group.title}>
-                {/* Group Header */}
-                {!sidebarCollapsed ? (
-                  <button 
-                    onClick={() => toggleGroup(group.title)}
-                    className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-sidebar-foreground/50 mb-2 hover:text-sidebar-foreground transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <GroupIcon className="w-4 h-4" />
-                      <span>{group.title}</span>
-                    </div>
-                    <ChevronDown className={cn("w-3 h-3 transition-transform", isOpen && "rotate-180")} />
-                  </button>
-                ) : (
-                  <div className="flex justify-center mb-2">
-                    <GroupIcon className="w-5 h-5 text-sidebar-foreground/50" />
-                  </div>
-                )}
-
-                {/* Group Items (Collapsible) */}
-                {(isOpen || sidebarCollapsed) && (
-                  <div className={cn(
-                    "space-y-1",
-                    !sidebarCollapsed && "ml-2 border-l border-sidebar-border pl-3"
-                  )}>
-                    {group.items.map((item) => {
-                      const isActive = location === item.href;
-                      
-                      return (
-                        <Link
-                          key={item.href}
-                          to={item.href}
-                          className={cn(
-                            "block px-3 py-2 text-sm rounded-md transition-all duration-200",
-                            sidebarCollapsed && "text-center",
-                            isActive 
-                              ? "bg-primary/10 text-primary font-medium border-r-2 border-primary" 
-                              : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                          )}
-                          title={sidebarCollapsed ? item.name : undefined}
-                        >
-                          {sidebarCollapsed ? item.name.charAt(0) : item.name}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </nav>
-
-        {/* User Profile Footer */}
-        {!sidebarCollapsed && (
-          <div className="p-4 border-t border-sidebar-border bg-sidebar/50">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-slate-900 font-bold text-xs">
-                AL
-              </div>
-              <div className="overflow-hidden">
-                <p className="text-sm font-medium text-sidebar-foreground truncate">Annex Luberisse</p>
-                <p className="text-xs text-sidebar-foreground/50 truncate">Executive Admin</p>
-              </div>
-              <Settings className="w-4 h-4 ml-auto text-sidebar-foreground/50 cursor-pointer hover:text-sidebar-foreground" />
-            </div>
-          </div>
-        )}
-      </aside>
+      {/* Sidebar - using shared component */}
+      <SidebarNav />
 
       {/* Main Content */}
-      <div className={cn("flex-1 flex flex-col", sidebarCollapsed ? "ml-16" : "ml-64")}>
+      <div className="flex-1 flex flex-col ml-64">
         {/* Top Header - Only show on dashboard */}
         {(location === '/' || location === '/loadops-dashboard') && (
           <header className="h-16 bg-card border-b border-border px-6 flex items-center justify-between">

@@ -6,6 +6,7 @@ import {
   DollarSign, 
   Settings, 
   ChevronDown,
+  MessageSquare,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -17,7 +18,7 @@ const menuGroups = [
     items: [
       { name: "Control Tower", href: "/dispatcher" },
       { name: "Load Ops Board", href: "/loadops-dashboard" },
-      { name: "Live Map", href: "/map" },
+      { name: "Live Map", href: "/gps-tracking" },
     ]
   },
   {
@@ -26,8 +27,8 @@ const menuGroups = [
     items: [
       { name: "RateCon Inbox", href: "/loads-inbox" },
       { name: "Load History", href: "/loads" },
-      { name: "Create New Load", href: "/loads/new" },
-      { name: "DAT Load Board", href: "/dat-search" },
+      { name: "Create New Load", href: "/manual-load-entry" },
+      { name: "DAT Load Board", href: "/dat-loads" },
       { name: "Items (AR)", href: "/items" },
     ]
   },
@@ -36,7 +37,7 @@ const menuGroups = [
     icon: <Truck className="w-5 h-5" />,
     items: [
       { name: "Fleet Dashboard", href: "/fleet" },
-      { name: "Driver Roster", href: "/drivers" },
+      { name: "Driver Roster", href: "/driver-management" },
       { name: "Onboarding", href: "/driver-onboarding" },
       { name: "Trucks", href: "/fleet/trucks" },
       { name: "Work Orders", href: "/fleet/work-orders" },
@@ -48,8 +49,28 @@ const menuGroups = [
     icon: <DollarSign className="w-5 h-5" />,
     items: [
       { name: "Fleet Calculator", href: "/fleet-calculator" },
-      { name: "Invoices (AR)", href: "/finance" },
       { name: "Payments", href: "/payments" },
+      { name: "Analytics", href: "/analytics" },
+    ]
+  },
+  {
+    title: "Communication",
+    icon: <MessageSquare className="w-5 h-5" />,
+    items: [
+      { name: "Driver Messages", href: "/communication-dashboard" },
+      { name: "AI Insights", href: "/ai-communication-insights" },
+      { name: "Customers", href: "/contacts" },
+      { name: "SMS Status", href: "/sms-status" },
+    ]
+  },
+  {
+    title: "System",
+    icon: <Settings className="w-5 h-5" />,
+    items: [
+      { name: "Admin Overview", href: "/admin-overview" },
+      { name: "Templates", href: "/templates" },
+      { name: "DAT Login", href: "/dat-login" },
+      { name: "Debug", href: "/debug-token" },
     ]
   }
 ];
