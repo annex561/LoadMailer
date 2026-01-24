@@ -1,0 +1,200 @@
+import { pgTable, text, serial, integer, boolean, timestamp, real, pgEnum, jsonb, doublePrecision } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+
+// --- ENUMS ---
+
+export const loadStatusEnum = pgEnum("load_status", [
+  "new", "offered", "booked", "scheduled", "in_transit", "delivered", "cancelled", "expired"
+]);
+
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "draft", "sent", "paid", "void", "disputed"
+]);
+
+export const collectionStageEnum = pgEnum("collection_stage", [
+  "soft", "firm", "final", "escalated"
+]);
+
+export const itemStatusEnum = pgEnum("item_status", [
+  "open", "promise", "escalated", "closed", "dispute"
+]);
+
+export const nextActionKindEnum = pgEnum("next_action_kind", [
+  "EMAIL", "CALL", "TEXT", "SYSTEM"
+]);
+
+// --- TABLES ---
+
+// 1. COMPANIES (Multi-tenant Root)
+export const companies = pgTable("companies", {
+  id: text("id").primaryKey(), // UUID
+  name: text("name").notNull(),
+  slug: text("slug").unique().notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  settings: jsonb("settings").default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// 2. TRUCKS (Fleet & Dispatch Gate)
+export const trucks = pgTable("trucks", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  unitNumber: text("unit_number").notNull(),
+  vin: text("vin"),
+  make: text("make"),
+  model: text("model"),
+  year: integer("year"),
+  length: integer("length"), // ft
+  payloadCapacity: integer("payload_capacity"), // lbs
+  equipmentType: text("equipment_type"), // dry_van, reefer, etc.
+  status: text("status").default("available"), // available, out_of_service, maintenance
+  
+  // Dispatch Gate Status
+  gateStatus: text("gate_status").default("GREEN"), // GREEN, YELLOW, RED
+  riskScore: integer("risk_score").default(0),
+  lastRiskRecalculation: timestamp("last_risk_recalculation"),
+  overrideReason: text("override_reason"),
+  overrideExpiry: timestamp("override_expiry"),
+});
+
+// 3. DRIVERS
+export const drivers = pgTable("drivers", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  name: text("name").notNull(),
+  email: text("email").unique().notNull(),
+  phone: text("phone").notNull(),
+  status: text("status").default("available"),
+  licenseNumber: text("license_number"),
+  licenseExpiry: timestamp("license_expiry"),
+});
+
+// 4. CUSTOMERS (Brokers/Shippers)
+export const customers = pgTable("customers", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+});
+
+// 5. LOADS (GA Workbench + Execution)
+export const loads = pgTable("loads", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  loadNumber: text("load_number").notNull(),
+  customerId: text("customer_id").references(() => customers.id),
+  driverId: text("driver_id").references(() => drivers.id),
+  truckId: text("truck_id").references(() => trucks.id),
+  
+  // Lifecycle Status
+  status: loadStatusEnum("status").default("new"),
+  
+  // Details
+  originCity: text("origin_city"),
+  originState: text("origin_state"),
+  destCity: text("dest_city"),
+  destState: text("dest_state"),
+  pickupDate: timestamp("pickup_date"),
+  deliveryDate: timestamp("delivery_date"),
+  
+  // Financials
+  miles: integer("miles"),
+  weight: integer("weight"),
+  rate: real("rate"), // Booked Rate
+  offeredRate: real("offered_rate"),
+  rpm: real("rpm"), // Rate Per Mile
+  score: integer("score"), // GA Scored Loads
+  
+  // Pipeline Timestamps
+  offeredAt: timestamp("offered_at"),
+  bookedAt: timestamp("booked_at"),
+  deliveredAt: timestamp("delivered_at"),
+  
+  // Documentation
+  rateconPath: text("ratecon_path"),
+  podPath: text("pod_path"),
+  overrideReason: text("override_reason"),
+});
+
+// 6. INVOICES (AR)
+export const invoices = pgTable("invoices", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  loadId: text("load_id").references(() => loads.id).notNull(),
+  invoiceNumber: text("invoice_number").notNull(),
+  status: invoiceStatusEnum("status").default("draft"),
+  
+  // Financial Data
+  totalAmount: real("total_amount").notNull(),
+  balanceDue: real("balance_due").notNull(),
+  
+  // Dates
+  createdAt: timestamp("created_at").defaultNow(),
+  sentAt: timestamp("sent_at"),
+  dueDate: timestamp("due_date").notNull(),
+  paidAt: timestamp("paid_at"),
+  
+  // Payment Info
+  paymentMethod: text("payment_method"),
+  paymentReference: text("payment_reference"),
+});
+
+// 7. COLLECTIONS (Items Queue State)
+// This extends invoice data for the collections workbench
+export const collectionsItems = pgTable("collections_items", {
+  id: text("id").primaryKey(), // Usually same as invoiceId
+  invoiceId: text("invoice_id").references(() => invoices.id).notNull(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  
+  status: itemStatusEnum("status").default("open"),
+  stage: collectionStageEnum("stage").default("soft"),
+  owner: text("owner"), // Dispatcher/Collector name
+  
+  // Follow-up Logic
+  lastTouchAt: timestamp("last_touch_at"),
+  promiseDate: timestamp("promise_date"),
+  nextActionAt: timestamp("next_action_at"),
+  nextActionKind: nextActionKindEnum("next_action_kind").default("SYSTEM"),
+  
+  escalationLevel: text("escalation_level").default("L0"), // L0, L1, L2, L3
+});
+
+// 8. ACTIVITY LOG (Append-only Audit Trail)
+export const activityLog = pgTable("activity_log", {
+  id: serial("id").primaryKey(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  entityType: text("entity_type").notNull(), // 'LOAD', 'INVOICE', 'TRUCK', 'COLLECTION'
+  entityId: text("entity_id").notNull(),
+  action: text("action").notNull(), // 'BOOKED', 'SENT', 'TOUCH', 'OVERRIDE'
+  actor: text("actor").notNull(), // User ID or 'SYSTEM'
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// 9. DOCUMENTS (Compliance)
+export const documents = pgTable("documents", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  truckId: text("truck_id").references(() => trucks.id),
+  driverId: text("driver_id").references(() => drivers.id),
+  type: text("type").notNull(), // Insurance, IRP, Medical Card
+  expiryDate: timestamp("expiry_date").notNull(),
+  filePath: text("file_path"),
+  status: text("status").default("active"), // active, expired, pending
+});
+
+// --- SCHEMAS ---
+
+export const insertLoadSchema = createInsertSchema(loads);
+export const selectLoadSchema = createInsertSchema(loads);
+export const insertInvoiceSchema = createInsertSchema(invoices);
+export const insertActivitySchema = createInsertSchema(activityLog);
+
+export type Load = typeof loads.$inferSelect;
+export type Invoice = typeof invoices.$inferSelect;
+export type CollectionItem = typeof collectionsItems.$inferSelect;
+export type ActivityLog = typeof activityLog.$inferSelect;
+export type Truck = typeof trucks.$inferSelect;
