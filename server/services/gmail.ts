@@ -182,6 +182,7 @@ export const gmailIngest = {
             brokerPhone: extractedData.brokerPhone,
             brokerEmail: extractedData.brokerEmail,
             dispatcherName: extractedData.dispatcherName,
+            assignedDriverName: extractedData.driverName,
             specialInstructions: extractedData.notes,
             notes: `Auto-imported from email: ${subject}\nFrom: ${from}`
           }).returning();
@@ -204,6 +205,7 @@ export const gmailIngest = {
               brokerPhone: extractedData.brokerPhone,
               brokerEmail: extractedData.brokerEmail,
               dispatcherName: extractedData.dispatcherName,
+              driverName: extractedData.driverName,
               emailSubject: subject,
               emailFrom: from,
               specialInstructions: extractedData.notes

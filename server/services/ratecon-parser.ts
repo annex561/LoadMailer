@@ -59,6 +59,7 @@ export interface ParsedRateConData {
   brokerPhone?: string;
   brokerEmail?: string;
   dispatcherName?: string;
+  driverName?: string;
   pickupDate: string;
   pickupTime?: string;
   deliveryDate: string;
@@ -99,17 +100,18 @@ export const rateconParser = {
             3. **brokerPhone**: The phone number for the broker. Include extension if available (e.g., "555-0199 x123").
             4. **brokerEmail**: The email address for the broker/dispatcher.
             5. **dispatcherName**: The specific person/agent name at the brokerage.
-            6. **rate**: The total dollar amount (number only, no "$").
-            7. **miles**: The total trip mileage.
-            8. **rpm**: Rate Per Mile. (If not listed, calculate it: rate / miles).
-            9. **pickupDate**: First pickup date (YYYY-MM-DD).
-            10. **pickupTime**: Pickup time window (e.g., "08:00-12:00" or "FCFS").
-            11. **deliveryDate**: Final delivery date (YYYY-MM-DD).
-            12. **deliveryTime**: Delivery time window (e.g., "14:00-18:00" or "Appointment").
-            13. **origin**: City, State (e.g., "Atlanta, GA").
-            14. **destination**: City, State (e.g., "Miami, FL").
-            15. **weight**: Cargo weight in lbs (number only).
-            16. **notes**: Any special instructions, commodity details, or "comments" listed.
+            6. **driverName**: The driver or carrier name assigned to this load (look for "Driver:", "Carrier:", "Assigned To:", etc).
+            7. **rate**: The total dollar amount (number only, no "$").
+            8. **miles**: The total trip mileage.
+            9. **rpm**: Rate Per Mile. (If not listed, calculate it: rate / miles).
+            10. **pickupDate**: First pickup date (YYYY-MM-DD).
+            11. **pickupTime**: Pickup time window (e.g., "08:00-12:00" or "FCFS").
+            12. **deliveryDate**: Final delivery date (YYYY-MM-DD).
+            13. **deliveryTime**: Delivery time window (e.g., "14:00-18:00" or "Appointment").
+            14. **origin**: City, State (e.g., "Atlanta, GA").
+            15. **destination**: City, State (e.g., "Miami, FL").
+            16. **weight**: Cargo weight in lbs (number only).
+            17. **notes**: Any special instructions, commodity details, or "comments" listed.
             
             RETURN JSON ONLY. Do not use Markdown formatting.`
           },
@@ -135,6 +137,7 @@ export const rateconParser = {
         brokerPhone: extracted.brokerPhone || undefined,
         brokerEmail: extracted.brokerEmail || undefined,
         dispatcherName: extracted.dispatcherName || undefined,
+        driverName: extracted.driverName || undefined,
         pickupDate: extracted.pickupDate || "",
         pickupTime: extracted.pickupTime || undefined,
         deliveryDate: extracted.deliveryDate || "",

@@ -246,6 +246,7 @@ export const loads = pgTable("loads", {
   brokerPhone: text("broker_phone"), // Broker contact phone (may include extension)
   brokerEmail: text("broker_email"), // Broker email address
   dispatcherName: text("dispatcher_name"), // Broker dispatcher name
+  assignedDriverName: text("assigned_driver_name"), // Driver name from rate confirmation
   sourceBoard: text("source_board").default("manual"), // manual, dat, loadboard
   // GPS tracking SMS throttle - prevents spam by tracking last send time
   gpsTrackingSmsLastSentAt: timestamp("gps_tracking_sms_last_sent_at"),
