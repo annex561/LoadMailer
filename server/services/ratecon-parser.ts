@@ -92,30 +92,42 @@ export const rateconParser = {
         messages: [
           {
             role: "system",
-            content: `You are an expert logistics data entry specialist. Your job is to extract specific data points from a Freight Rate Confirmation (RateCon).
+            content: `You are an expert logistics data entry specialist. Extract data from a Freight Rate Confirmation (RateCon).
 
-            EXTRACT THESE EXACT FIELDS:
+            EXTRACT THESE FIELDS:
             1. **loadNumber**: The load/order/reference number from the broker.
             2. **brokerName**: The brokerage company name (e.g., "TQL", "Total Quality Logistics", "CH Robinson", "Coyote").
-            3. **brokerPhone**: IMPORTANT - Look for "TQL CONTACT INFO", "BROKER CONTACT", or similar section. Extract the phone number from that section. Include extension if available.
-            4. **brokerEmail**: IMPORTANT - Look for "TQL CONTACT INFO", "BROKER CONTACT", or similar section. Extract the email address from that section.
-            5. **dispatcherName**: IMPORTANT - Look for "TQL CONTACT INFO", "BROKER CONTACT", "Your Rep", "Account Rep", or similar section. This is the specific person name (not company) who is the broker contact/representative.
-            6. **driverName**: The driver or carrier name assigned to this load (look for "Driver:", "Carrier:", "Assigned To:", "Carrier Name:", etc).
-            7. **rate**: The total dollar amount for the load (number only, no "$").
-            8. **miles**: The total trip mileage.
-            9. **rpm**: Rate Per Mile. (If not listed, calculate it: rate / miles).
+            3. **brokerPhone**: SEE RULES BELOW
+            4. **brokerEmail**: SEE RULES BELOW
+            5. **dispatcherName**: SEE RULES BELOW
+            6. **driverName**: Look for "Driver:", "Carrier:", "Assigned To:", "Carrier Name:".
+            7. **rate**: Total dollar amount for the load (number only).
+            8. **miles**: Total trip mileage.
+            9. **rpm**: Rate Per Mile (calculate rate/miles if not listed).
             10. **pickupDate**: First pickup date (YYYY-MM-DD).
-            11. **pickupTime**: Pickup time window (e.g., "08:00-12:00" or "FCFS").
+            11. **pickupTime**: Pickup time window.
             12. **deliveryDate**: Final delivery date (YYYY-MM-DD).
-            13. **deliveryTime**: Delivery time window (e.g., "14:00-18:00" or "Appointment").
-            14. **origin**: City, State of pickup location (e.g., "Atlanta, GA").
-            15. **destination**: City, State of delivery location (e.g., "Miami, FL").
+            13. **deliveryTime**: Delivery time window.
+            14. **origin**: City, State of pickup.
+            15. **destination**: City, State of delivery.
             16. **weight**: Cargo weight in lbs (number only).
-            17. **notes**: Any special instructions, commodity details, or "comments" listed.
+            17. **notes**: Special instructions or comments.
             
-            CRITICAL: For brokerPhone, brokerEmail, and dispatcherName - look specifically for a "CONTACT INFO" section (often labeled "TQL CONTACT INFO" for TQL loads, or "BROKER CONTACT" for others). This section contains the broker representative's name, phone, and email - NOT the shipper or consignee info.
+            === CRITICAL RULES FOR BROKER CONTACT INFO ===
             
-            RETURN JSON ONLY. Do not use Markdown formatting.`
+            The document has MULTIPLE contact sections. You MUST distinguish between them:
+            
+            1. SHIPPER/PICKUP contact - This is the warehouse/facility contact. IGNORE this for broker fields.
+            2. CONSIGNEE/DELIVERY contact - This is the receiver contact. IGNORE this for broker fields.
+            3. BROKER/TQL CONTACT INFO - This is labeled "TQL CONTACT INFO", "BROKER CONTACT", "YOUR REP", "ACCOUNT REPRESENTATIVE", or similar. ONLY use this section for:
+               - dispatcherName: The person's name (first and last) from the broker contact section
+               - brokerPhone: The phone number from the broker contact section
+               - brokerEmail: The email address from the broker contact section
+            
+            DO NOT extract shipper, consignee, or facility phone/email as broker contact.
+            If you cannot find a dedicated broker contact section, leave brokerPhone, brokerEmail, and dispatcherName as null.
+            
+            RETURN JSON ONLY. No markdown.`
           },
           {
             role: "user",
