@@ -1,0 +1,64 @@
+import { google } from 'googleapis';
+import { db } from "./db";
+import { loads, activityLog } from "@shared/schema";
+import { rateConParser } from "./ratecon-parser"; // Custom AI/OCR logic
+
+export class EmailIngestionService {
+  private gmail = google.gmail({ version: 'v1', auth: process.env.GMAIL_OAUTH_TOKEN });
+
+  async pollForRateCons(companyId: string) {
+    // 1. Search for unread emails with Rate Confirmations
+    const res = await this.gmail.users.messages.list({
+      userId: 'me',
+      q: 'is:unread subject:"Rate Confirmation"',
+    });
+
+    const messages = res.data.messages || [];
+
+    for (const msg of messages) {
+      const email = await this.gmail.users.messages.get({ userId: 'me', id: msg.id! });
+      const attachments = await this.getAttachments(msg.id!, email.data.payload!);
+
+      for (const attachment of attachments) {
+        // 2. Parse the PDF content using AI/OCR
+        const loadDetails = await rateConParser.parse(attachment.data);
+
+        // 3. Create the Load in the system
+        const [newLoad] = await db.insert(loads).values({
+          companyId,
+          loadNumber: loadDetails.loadId,
+          rate: loadDetails.rate,
+          equipmentType: loadDetails.equipment,
+          rateconPath: attachment.savedPath,
+          status: "booked", // Auto-move to booked since we have a RateCon
+          bookedAt: new Date(),
+        }).returning();
+
+        // 4. Mark email as read
+        await this.gmail.users.messages.batchModify({
+          userId: 'me',
+          ids: [msg.id!],
+          removeLabelIds: ['UNREAD'],
+        });
+
+        // 5. Log Activity
+        await db.insert(activityLog).values({
+          companyId,
+          entityType: "LOAD",
+          entityId: newLoad.id,
+          action: "EMAIL_INGESTION_COMPLETE",
+          actor: "SYSTEM_GMAIL",
+          details: { emailId: msg.id, loadNumber: loadDetails.loadId }
+        });
+      }
+    }
+  }
+
+  private async getAttachments(messageId: string, payload: any) {
+    // Logic to extract base64 data from Gmail payload parts
+    // and save to local storage...
+    return []; 
+  }
+}
+
+export const emailIngestion = new EmailIngestionService();
