@@ -1,0 +1,87 @@
+import { google } from 'googleapis';
+import { db } from "../db";
+import { loads, activityLog } from "@shared/schema"; // Import your DB schema
+import { rateconParser } from "./ratecon-parser";   // Import the parser
+
+// ... (Keep your OAuth setup code exactly the same) ...
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GMAIL_CLIENT_ID,
+  process.env.GMAIL_CLIENT_SECRET
+);
+oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+export const gmailIngest = {
+  async scanInbox() {
+    console.log("📧 Starting Gmail Scan...");
+    try {
+      const res = await gmail.users.messages.list({
+        userId: 'me',
+        q: 'is:unread subject:("Rate Confirmation" OR "RateCon") has:attachment',
+        maxResults: 5
+      });
+
+      const messages = res.data.messages || [];
+      console.log(`🔎 Found ${messages.length} new RateCons.`);
+
+      const results = [];
+
+      for (const msg of messages) {
+        const email = await gmail.users.messages.get({ userId: 'me', id: msg.id! });
+        const parts = email.data.payload?.parts || [];
+
+        for (const part of parts) {
+          if (part.filename && part.filename.toLowerCase().endsWith('.pdf') && part.body?.attachmentId) {
+            
+            // 1. Download
+            const attachment = await gmail.users.messages.attachments.get({
+              userId: 'me', messageId: msg.id!, id: part.body!.attachmentId!
+            });
+            
+            // 2. Parse (Send to OpenAI)
+            console.log(`Processing ${part.filename}...`);
+            const extractedData = await rateconParser.parsePdf(attachment.data.data!);
+            
+            // 3. Save to Database
+            // We use a default company ID for now, or fetch from your config
+            const [newLoad] = await db.insert(loads).values({
+              loadNumber: extractedData.loadNumber,
+              rate: extractedData.rate,
+              brokerName: extractedData.brokerName,
+              pickupDate: extractedData.pickupDate,
+              deliveryDate: extractedData.deliveryDate,
+              originCity: extractedData.origin, // You might need to split City/State string
+              destCity: extractedData.destination,
+              weight: extractedData.weight,
+              status: "booked", // Auto-set to booked
+              sopProgress: {},  // Initialize the empty SOP checklist we built earlier
+              companyId: "1",   // Default ID
+            }).returning();
+
+            console.log(`✅ Load #${newLoad.loadNumber} Created in DB!`);
+            
+            // 4. Log Activity
+            await db.insert(activityLog).values({
+              entityType: "LOAD",
+              entityId: newLoad.id,
+              action: "AUTO_INGEST",
+              details: { filename: part.filename, rate: extractedData.rate },
+              actor: "SYSTEM_AI"
+            });
+
+            results.push(newLoad);
+          }
+        }
+
+        // 5. Mark as Read
+        await gmail.users.messages.batchModify({
+          userId: 'me', ids: [msg.id!], removeLabelIds: ['UNREAD']
+        });
+      }
+      return results;
+    } catch (error) {
+      console.error("❌ Gmail/Parser Error:", error);
+      throw error;
+    }
+  }
+};
