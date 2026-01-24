@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb } from "lucide-react";
+import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard } from "lucide-react";
 
 interface GALoad {
   id: string;
@@ -33,6 +33,13 @@ interface GALoad {
   assigned_truck_id?: string;
   assigned_driver_id?: string;
   ratecon_path?: string;
+  invoice_status?: string;
+  invoice_number?: string;
+  invoice_amount?: number;
+  invoice_sent_at?: string;
+  invoice_paid_at?: string;
+  payment_method?: string;
+  payment_ref?: string;
 }
 
 interface ActivityLog {
@@ -214,6 +221,50 @@ export default function LoadsInbox() {
     }
   }
 
+  async function createInvoice(id: string) {
+    try {
+      await fetch(`/api/ga/loads/${encodeURIComponent(id)}/invoice/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).then(x => x.json());
+      toast({ title: "Invoice created" });
+      await refresh();
+    } catch (e: any) {
+      toast({ title: "Failed to create invoice", description: e?.message, variant: "destructive" });
+    }
+  }
+
+  async function sendInvoice(id: string) {
+    try {
+      await fetch(`/api/ga/loads/${encodeURIComponent(id)}/invoice/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).then(x => x.json());
+      toast({ title: "Invoice marked as sent" });
+      await refresh();
+    } catch (e: any) {
+      toast({ title: "Failed to send invoice", description: e?.message, variant: "destructive" });
+    }
+  }
+
+  async function recordPayment(id: string) {
+    const method = window.prompt("Payment method (ACH, Zelle, Check, Card, etc.):")?.trim() || "unknown";
+    const ref = window.prompt("Payment reference (optional):")?.trim() || "";
+    try {
+      await fetch(`/api/ga/loads/${encodeURIComponent(id)}/payment/record`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_method: method, payment_ref: ref || null })
+      }).then(x => x.json());
+      toast({ title: "Payment recorded" });
+      await refresh();
+    } catch (e: any) {
+      toast({ title: "Failed to record payment", description: e?.message, variant: "destructive" });
+    }
+  }
+
   const getScoreBadge = (score: number) => {
     if (score >= 80) return <Badge className="bg-green-500 text-white">{score}</Badge>;
     if (score >= 60) return <Badge className="bg-yellow-500 text-black">{score}</Badge>;
@@ -273,6 +324,27 @@ export default function LoadsInbox() {
             <FileText className="w-3 h-3 mr-1" />
             RateCon
           </Button>
+        )}
+        {isBooked && !l.invoice_number && (
+          <Button size="sm" variant="outline" onClick={() => createInvoice(l.id)}>
+            <Receipt className="w-3 h-3 mr-1" />
+            Invoice
+          </Button>
+        )}
+        {isBooked && l.invoice_status === "draft" && (
+          <Button size="sm" variant="outline" onClick={() => sendInvoice(l.id)}>
+            <Send className="w-3 h-3 mr-1" />
+            Send
+          </Button>
+        )}
+        {isBooked && l.invoice_status === "sent" && !l.invoice_paid_at && (
+          <Button size="sm" variant="outline" onClick={() => recordPayment(l.id)}>
+            <CreditCard className="w-3 h-3 mr-1" />
+            Payment
+          </Button>
+        )}
+        {isBooked && l.invoice_status === "paid" && (
+          <Badge className="bg-green-600 ml-1">Paid</Badge>
         )}
         {isBooked && l.assigned_truck_id && (
           <Badge variant="outline" className="ml-1">

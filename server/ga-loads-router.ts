@@ -4,8 +4,22 @@ import crypto from "crypto";
 import db, { logActivity } from "./ga-db";
 import { scoreLoad } from "./ga-scoring";
 import { recommendForLoad } from "./ga-recommend";
+import { runGaArMigrations } from "./ga-ar-migrations";
+import { buildGaArRouter } from "./ga-ar-router";
 
 const router: Router = express.Router();
+
+// Run A/R migrations (idempotent)
+runGaArMigrations(db, "ga_loads");
+
+// Mount A/R router
+router.use(
+  buildGaArRouter({
+    gaDb: db,
+    loadsTable: "ga_loads",
+    gaLog: logActivity,
+  })
+);
 
 // Feature flag for booking pipeline
 const ENABLE_GA_BOOKING = process.env.ENABLE_GA_BOOKING !== "0";
