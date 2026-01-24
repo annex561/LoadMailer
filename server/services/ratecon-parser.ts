@@ -100,7 +100,7 @@ export const rateconParser = {
             3. **brokerPhone**: SEE RULES BELOW
             4. **brokerEmail**: SEE RULES BELOW
             5. **dispatcherName**: SEE RULES BELOW
-            6. **driverName**: Look for "Driver:", "Carrier:", "Assigned To:", "Carrier Name:".
+            6. **driverName**: SEE RULES BELOW
             7. **rate**: Total dollar amount for the load (number only).
             8. **miles**: Total trip mileage.
             9. **rpm**: Rate Per Mile (calculate rate/miles if not listed).
@@ -126,6 +126,19 @@ export const rateconParser = {
             
             DO NOT extract shipper, consignee, or facility phone/email as broker contact.
             If you cannot find a dedicated broker contact section, leave brokerPhone, brokerEmail, and dispatcherName as null.
+            
+            === RULES FOR DRIVER NAME ===
+            
+            Look for the driver/carrier assigned to this load in these sections:
+            - "CARRIER INFORMATION" or "CARRIER DETAILS" section
+            - "Driver:" or "Driver Name:" field
+            - "Carrier:" or "Carrier Name:" field (if it's a person name, not company)
+            - "Assigned To:" field
+            - "CARRIER CONTACT" section - look for the person's name
+            - Any field showing who is hauling/transporting the load
+            
+            Extract the PERSON'S NAME (first and last name), not the trucking company name.
+            If you only find a company name like "XYZ Trucking LLC", leave driverName as null.
             
             RETURN JSON ONLY. No markdown.`
           },
