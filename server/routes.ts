@@ -901,6 +901,9 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
       
       let message = '';
+      const baseUrl = process.env.REPLIT_DEPLOYMENT_URL || process.env.REPLIT_DEV_DOMAIN || 'https://traq-iq.replit.app';
+      const loadViewUrl = `${baseUrl.startsWith('http') ? baseUrl : 'https://' + baseUrl}/driver/load/${load.id}`;
+      
       if (type === 'INITIAL') {
         message = `📦 LOAD ASSIGNMENT\n\n` +
           `Load #${load.loadNumber}\n` +
@@ -909,6 +912,7 @@ export async function registerRoutes(app: Express): Promise<void> {
           `Rate: $${load.rate || 0}\n` +
           `Weight: ${load.weight ? load.weight.toLocaleString() + ' lbs' : 'TBD'}\n\n` +
           `Pickup: ${load.pickupDate ? new Date(load.pickupDate).toLocaleDateString() : 'TBD'} @ ${load.pickupTime || 'TBD'}\n\n` +
+          `View details: ${loadViewUrl}\n\n` +
           `Reply YES to confirm.`;
       } else if (type === 'TRIP') {
         const dashboardUrl = `${process.env.REPLIT_DEPLOYMENT_URL || 'https://traq-iq.replit.app'}/driver-dashboard?driverId=${driver.id}`;
