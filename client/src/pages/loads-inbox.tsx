@@ -90,6 +90,15 @@ export default function LoadsInbox() {
     activity: []
   });
 
+  async function loadData() {
+    const [a, b] = await Promise.all([
+      fetch(`/api/ga/loads?limit=100`).then((r) => r.json()),
+      fetch(`/api/ga/loads/shortlist?limit=10`).then((r) => r.json()),
+    ]);
+    setLoads(a.loads || []);
+    setShortlist(b.loads || []);
+  }
+
   async function refresh() {
     setLoading(true);
     try {
@@ -104,12 +113,9 @@ export default function LoadsInbox() {
       await fetch(`/api/ga/loads/fix-broker-info`, { method: "POST" });
       
       // Then refresh the load list
-      const [a, b] = await Promise.all([
-        fetch(`/api/ga/loads?limit=100`).then((r) => r.json()),
-        fetch(`/api/ga/loads/shortlist?limit=10`).then((r) => r.json()),
-      ]);
-      setLoads(a.loads || []);
-      setShortlist(b.loads || []);
+      await loadData();
+      
+      toast({ title: "Refresh Complete", description: "Gmail scanned and data updated" });
     } catch (e: any) {
       toast({ title: "Error loading data", description: e?.message, variant: "destructive" });
     } finally {
@@ -199,7 +205,7 @@ export default function LoadsInbox() {
   }
 
   useEffect(() => {
-    refresh();
+    loadData();
   }, []);
 
   const filtered = useMemo(() => {
