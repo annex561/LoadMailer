@@ -1,10 +1,8 @@
 import OpenAI from "openai";
 import PDFParser from "pdf2json";
 
-// Initialize OpenAI
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Safe URI decode that handles malformed URIs
 function safeDecodeURI(str: string): string {
   try {
     return decodeURIComponent(str);
@@ -17,7 +15,6 @@ function safeDecodeURI(str: string): string {
   }
 }
 
-// Extract text from PDF using pdf2json (Node.js compatible)
 async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser();
@@ -59,66 +56,66 @@ export interface ParsedRateConData {
   loadNumber: string;
   rate: number;
   brokerName: string;
+  brokerPhone?: string;
+  brokerEmail?: string;
+  dispatcherName?: string;
   pickupDate: string;
+  pickupTime?: string;
   deliveryDate: string;
+  deliveryTime?: string;
   origin: string;
   destination: string;
   weight: number;
   miles?: number;
+  rpm?: number;
+  notes?: string;
 }
 
 export const rateconParser = {
-  async parsePdf(base64File: string): Promise<ParsedRateConData> {
-    console.log("🧠 Extracting text from PDF...");
-    
-    // Convert base64 to buffer
-    const pdfBuffer = Buffer.from(base64File, 'base64');
+  async parsePdf(fileBuffer: Buffer): Promise<ParsedRateConData> {
+    console.log("📄 Extracting text from RateCon PDF...");
 
     try {
-      // 1. Extract raw text from the PDF
-      const pdfText = await extractPdfText(pdfBuffer);
+      const pdfText = await extractPdfText(fileBuffer);
 
-      // Fail-safe: If PDF is empty or scanned image, return a generic object
       if (!pdfText || pdfText.length < 10) {
-        console.warn("⚠️ PDF appears to be empty or image-only. Creating generic load.");
-        return {
-          loadNumber: "MANUAL-REVIEW",
-          rate: 0,
-          brokerName: "Unknown Broker",
-          pickupDate: new Date().toISOString().split('T')[0],
-          deliveryDate: new Date().toISOString().split('T')[0],
-          origin: "Unknown, USA",
-          destination: "Unknown, USA",
-          weight: 0
-        };
+        console.warn("⚠️ PDF text extraction failed or empty.");
+        throw new Error("PDF text extraction failed");
       }
 
       console.log(`📄 Extracted ${pdfText.length} characters from PDF`);
-      console.log("🧠 Sending extracted text to OpenAI for parsing...");
+      console.log("🧠 Sending text to OpenAI for precision extraction...");
 
-      // 2. Send TEXT to OpenAI (Much more reliable than Image)
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content: `You are a logistics data entry robot. Extract load details from the raw text below.
-            Return JSON ONLY. No markdown.
-            If a field is missing, use "Unknown" or 0.
-            Fields needed: 
-            - loadNumber (string)
-            - rate (number, pure integer, no signs)
-            - brokerName (string)
-            - pickupDate (YYYY-MM-DD)
-            - deliveryDate (YYYY-MM-DD)
-            - origin (City, State)
-            - destination (City, State)
-            - weight (number)
-            - miles (number, if available)`
+            content: `You are an expert logistics data entry specialist. Your job is to extract specific data points from a Freight Rate Confirmation (RateCon).
+
+            EXTRACT THESE EXACT FIELDS:
+            1. **loadNumber**: The load/order/reference number from the broker.
+            2. **brokerName**: The company issuing the load (e.g., TQL, CH Robinson).
+            3. **brokerPhone**: The phone number for the broker. Include extension if available (e.g., "555-0199 x123").
+            4. **brokerEmail**: The email address for the broker/dispatcher.
+            5. **dispatcherName**: The specific person/agent name at the brokerage.
+            6. **rate**: The total dollar amount (number only, no "$").
+            7. **miles**: The total trip mileage.
+            8. **rpm**: Rate Per Mile. (If not listed, calculate it: rate / miles).
+            9. **pickupDate**: First pickup date (YYYY-MM-DD).
+            10. **pickupTime**: Pickup time window (e.g., "08:00-12:00" or "FCFS").
+            11. **deliveryDate**: Final delivery date (YYYY-MM-DD).
+            12. **deliveryTime**: Delivery time window (e.g., "14:00-18:00" or "Appointment").
+            13. **origin**: City, State (e.g., "Atlanta, GA").
+            14. **destination**: City, State (e.g., "Miami, FL").
+            15. **weight**: Cargo weight in lbs (number only).
+            16. **notes**: Any special instructions, commodity details, or "comments" listed.
+            
+            RETURN JSON ONLY. Do not use Markdown formatting.`
           },
           {
             role: "user",
-            content: pdfText.substring(0, 8000)
+            content: pdfText.substring(0, 12000)
           }
         ],
         response_format: { type: "json_object" }
@@ -127,34 +124,41 @@ export const rateconParser = {
       const content = response.choices[0].message.content;
       if (!content) throw new Error("OpenAI returned empty response");
 
-      const parsed = JSON.parse(content);
+      const extracted = JSON.parse(content);
       
-      console.log(`✅ Parsed: Load ${parsed.loadNumber}, Rate $${parsed.rate}, ${parsed.origin} → ${parsed.destination}`);
-      
+      console.log(`✅ Parsed: Load ${extracted.loadNumber}, Rate $${extracted.rate}, ${extracted.origin} → ${extracted.destination}`);
+
       return {
-        loadNumber: parsed.loadNumber || `RC-${Date.now()}`,
-        rate: parseFloat(parsed.rate) || 0,
-        brokerName: parsed.brokerName || "Unknown",
-        pickupDate: parsed.pickupDate || "",
-        deliveryDate: parsed.deliveryDate || "",
-        origin: parsed.origin || "Unknown",
-        destination: parsed.destination || "Unknown",
-        weight: parseInt(parsed.weight) || 0,
-        miles: parseInt(parsed.miles) || undefined
+        loadNumber: extracted.loadNumber || `RC-${Date.now()}`,
+        rate: parseFloat(extracted.rate) || 0,
+        brokerName: extracted.brokerName || "Unknown",
+        brokerPhone: extracted.brokerPhone || undefined,
+        brokerEmail: extracted.brokerEmail || undefined,
+        dispatcherName: extracted.dispatcherName || undefined,
+        pickupDate: extracted.pickupDate || "",
+        pickupTime: extracted.pickupTime || undefined,
+        deliveryDate: extracted.deliveryDate || "",
+        deliveryTime: extracted.deliveryTime || undefined,
+        origin: extracted.origin || "Unknown",
+        destination: extracted.destination || "Unknown",
+        weight: parseInt(extracted.weight) || 0,
+        miles: parseInt(extracted.miles) || undefined,
+        rpm: parseFloat(extracted.rpm) || undefined,
+        notes: extracted.notes || undefined
       };
 
     } catch (error) {
       console.error("❌ Parser Error:", error);
-      // FAIL-SAFE: Return a placeholder so the DB insert doesn't fail
       return {
-        loadNumber: "PARSER-ERROR",
+        loadNumber: "MANUAL-REVIEW",
+        brokerName: "Parse Error - Check PDF",
         rate: 0,
-        brokerName: "Manual Fix Needed",
         pickupDate: "",
         deliveryDate: "",
-        origin: "Error",
-        destination: "Error",
-        weight: 0
+        origin: "Unknown",
+        destination: "Unknown",
+        weight: 0,
+        notes: "System could not read PDF text."
       };
     }
   }

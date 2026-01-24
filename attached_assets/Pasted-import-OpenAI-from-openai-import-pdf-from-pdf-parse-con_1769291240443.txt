@@ -1,0 +1,77 @@
+import OpenAI from "openai";
+import pdf from "pdf-parse";
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+export const rateconParser = {
+  async parsePdf(fileBuffer: Buffer) {
+    console.log("📄 Extracting text from RateCon PDF...");
+
+    try {
+      // 1. Extract raw text from the PDF using pdf-parse (Reliable & Fast)
+      const data = await pdf(fileBuffer);
+      const pdfText = data.text;
+
+      // Fail-safe for empty PDFs
+      if (!pdfText || pdfText.length < 10) {
+        console.warn("⚠️ PDF text extraction failed or empty.");
+        throw new Error("PDF text extraction failed");
+      }
+
+      console.log("🧠 Sending text to OpenAI for precision extraction...");
+
+      // 2. The "Master Prompt" - Instructions for every field you requested
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert logistics data entry specialist. Your job is to extract specific data points from a Freight Rate Confirmation (RateCon).
+
+            EXTRACT THESE EXACT FIELDS:
+            1. **brokerName**: The company issuing the load (e.g., TQL, CH Robinson).
+            2. **brokerPhone**: The phone number for the broker. Include extension if available (e.g., "555-0199 x123").
+            3. **brokerEmail**: The email address for the broker/dispatcher.
+            4. **dispatcherName**: The specific person/agent name at the brokerage.
+            5. **rate**: The total dollar amount (number only, no "$").
+            6. **miles**: The total trip mileage.
+            7. **rpm**: Rate Per Mile. (If not listed, calculate it: rate / miles).
+            8. **pickupDate**: First pickup date (YYYY-MM-DD).
+            9. **deliveryDate**: Final delivery date (YYYY-MM-DD).
+            10. **origin**: City, State (e.g., "Atlanta, GA").
+            11. **destination**: City, State (e.g., "Miami, FL").
+            12. **weight**: Cargo weight in lbs (number only).
+            13. **notes**: Any special instructions, commodity details, or "comments" listed.
+            
+            RETURN JSON ONLY. Do not use Markdown formatting.`
+          },
+          {
+            role: "user",
+            content: pdfText
+          }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0].message.content;
+      if (!content) throw new Error("OpenAI returned empty response");
+
+      const extracted = JSON.parse(content);
+      console.log("✅ Extracted Data:", extracted);
+
+      return extracted;
+
+    } catch (error) {
+      console.error("❌ Parser Error:", error);
+      // Return a "Manual Review" object so the system doesn't crash
+      return {
+        loadNumber: "MANUAL-REVIEW",
+        brokerName: "Parse Error - Check PDF",
+        rate: 0,
+        miles: 0,
+        rpm: 0,
+        notes: "System could not read PDF text."
+      };
+    }
+  }
+};

@@ -125,8 +125,9 @@ export const gmailIngest = {
 
           console.log(`   📄 Processing: ${part.filename}...`);
 
-          // 2. Parse (Send to OpenAI)
-          const extractedData = await rateconParser.parsePdf(attachment.data.data!);
+          // 2. Parse (Send to OpenAI) - Convert base64 to Buffer
+          const pdfBuffer = Buffer.from(attachment.data.data!, 'base64');
+          const extractedData = await rateconParser.parsePdf(pdfBuffer);
           console.log(`   🤖 AI Parsed: Load ${extractedData.loadNumber}, Rate $${extractedData.rate}`);
 
           // 3. Find or create customer based on broker name
@@ -136,14 +137,14 @@ export const gmailIngest = {
           });
           
           if (!customer) {
-            // Create new customer for this broker
+            // Create new customer for this broker with extracted details
             const [newCustomer] = await db.insert(customers).values({
               id: nanoid(),
               companyId,
               name: brokerName,
-              contactPerson: 'Rate Confirmation Import',
-              email: from || 'unknown@broker.com',
-              phone: 'N/A',
+              contactPerson: extractedData.dispatcherName || 'Rate Confirmation Import',
+              email: extractedData.brokerEmail || from || 'unknown@broker.com',
+              phone: extractedData.brokerPhone || 'N/A',
               address: 'Auto-created from email import',
               status: 'active'
             }).returning();
@@ -172,11 +173,12 @@ export const gmailIngest = {
             deliveryDate: extractedData.deliveryDate ? new Date(extractedData.deliveryDate) : undefined,
             rate: String(extractedData.rate),
             offeredRate: String(extractedData.rate),
-            weight: extractedData.weight ? String(extractedData.weight) : undefined,
+            weight: extractedData.weight || 0,
             equipmentType: 'Dry Van',
             rateconPath: part.filename,
             bookedAt: new Date(),
-            notes: `Auto-imported from email: ${subject}\nFrom: ${from}\nBroker: ${extractedData.brokerName}`
+            miles: extractedData.miles ? String(extractedData.miles) : undefined,
+            notes: `Auto-imported from email: ${subject}\nFrom: ${from}\nBroker: ${extractedData.brokerName}${extractedData.miles ? `\nMiles: ${extractedData.miles}` : ''}${extractedData.rpm ? `\nRPM: $${extractedData.rpm.toFixed(2)}` : ''}${extractedData.notes ? `\nSpecial Instructions: ${extractedData.notes}` : ''}`
           }).returning();
 
           console.log(`   ✅ Load #${newLoad.loadNumber} Created in DB!`);
@@ -191,9 +193,15 @@ export const gmailIngest = {
             details: {
               filename: part.filename,
               rate: extractedData.rate,
+              miles: extractedData.miles,
+              rpm: extractedData.rpm,
               brokerName: extractedData.brokerName,
+              brokerPhone: extractedData.brokerPhone,
+              brokerEmail: extractedData.brokerEmail,
+              dispatcherName: extractedData.dispatcherName,
               emailSubject: subject,
-              emailFrom: from
+              emailFrom: from,
+              specialInstructions: extractedData.notes
             }
           });
 
