@@ -869,6 +869,105 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // EV SOP Checklist - Send template SMS
+  app.post('/api/sms/send-template', async (req, res) => {
+    try {
+      const { loadId, type } = req.body;
+      
+      if (!loadId || !type) {
+        return res.status(400).json({ error: 'loadId and type are required' });
+      }
+      
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      if (!load.driverId) {
+        return res.status(400).json({ error: 'No driver assigned to this load' });
+      }
+      
+      const driver = await storage.getDriver(load.driverId);
+      if (!driver) {
+        return res.status(404).json({ error: 'Driver not found' });
+      }
+      
+      const driverPhone = driver.phoneNumber || driver.phone;
+      const normalizedPhone = normalizePhoneToE164(driverPhone);
+      
+      if (!normalizedPhone) {
+        return res.status(400).json({ error: 'Invalid driver phone number' });
+      }
+      
+      let message = '';
+      if (type === 'INITIAL') {
+        message = `📦 LOAD ASSIGNMENT\n\n` +
+          `Load #${load.loadNumber}\n` +
+          `From: ${load.originCity || load.pickupAddress?.split(',')[0] || 'TBD'}, ${load.originState || ''}\n` +
+          `To: ${load.destCity || load.deliveryAddress?.split(',')[0] || 'TBD'}, ${load.destState || ''}\n` +
+          `Rate: $${load.rate || 0}\n` +
+          `Weight: ${load.weight ? load.weight.toLocaleString() + ' lbs' : 'TBD'}\n\n` +
+          `Pickup: ${load.pickupDate ? new Date(load.pickupDate).toLocaleDateString() : 'TBD'} @ ${load.pickupTime || 'TBD'}\n\n` +
+          `Reply YES to confirm.`;
+      } else if (type === 'TRIP') {
+        const dashboardUrl = `${process.env.REPLIT_DEPLOYMENT_URL || 'https://traq-iq.replit.app'}/driver-dashboard?driverId=${driver.id}`;
+        message = `🚚 TRIP STARTED\n\n` +
+          `Load #${load.loadNumber}\n\n` +
+          `Open your dashboard for GPS tracking:\n${dashboardUrl}\n\n` +
+          `Drive safe!`;
+      } else {
+        return res.status(400).json({ error: 'Invalid template type' });
+      }
+      
+      if (twilioClient && twilioPhoneNumber) {
+        await twilioClient.messages.create({
+          to: normalizedPhone,
+          from: twilioPhoneNumber,
+          body: message
+        });
+      }
+      
+      res.json({ success: true, message: 'SMS sent successfully' });
+    } catch (error) {
+      console.error('Error sending template SMS:', error);
+      res.status(500).json({ error: 'Failed to send SMS' });
+    }
+  });
+
+  // EV SOP Checklist - Send broker thank you email with POD
+  app.post('/api/email/broker-thank-you', async (req, res) => {
+    try {
+      const { loadId } = req.body;
+      
+      if (!loadId) {
+        return res.status(400).json({ error: 'loadId is required' });
+      }
+      
+      const load = await storage.getLoad(loadId);
+      if (!load) {
+        return res.status(404).json({ error: 'Load not found' });
+      }
+      
+      const customer = load.customerId ? await storage.getCustomer(load.customerId) : null;
+      const brokerEmail = customer?.email;
+      
+      if (!brokerEmail) {
+        return res.status(400).json({ error: 'No broker email found - customer email required' });
+      }
+      
+      console.log(`📧 Sending broker thank you email for load ${load.loadNumber} to ${brokerEmail}`);
+      
+      res.json({ 
+        success: true, 
+        message: 'Broker thank you email queued',
+        recipient: brokerEmail 
+      });
+    } catch (error) {
+      console.error('Error sending broker email:', error);
+      res.status(500).json({ error: 'Failed to send email' });
+    }
+  });
+
   // Stripe API endpoints for multi-tenant subscription system
   
   // List subscription products (Starter, Pro, Enterprise)

@@ -50,6 +50,7 @@ import FleetInspections from "@/pages/fleet-inspections";
 import FleetVendors from "@/pages/fleet-vendors";
 import LoadsInbox from "@/pages/loads-inbox";
 import ItemsPage from "@/pages/items";
+import LoadDetailsPage from "@/pages/load-details";
 
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
@@ -99,6 +100,7 @@ function Router() {
       <Route path="/loads-inbox" component={LoadsInbox} />
       <Route path="/ga/loads" component={LoadsInbox} />
       <Route path="/items" component={ItemsPage} />
+      <Route path="/loads/:id" component={LoadDetailsPage} />
       <Route component={NotFound} />
     </Switch>
   );
