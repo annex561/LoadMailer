@@ -264,6 +264,10 @@ export const loads = pgTable("loads", {
   podPath: text("pod_path"),
   overrideReason: text("override_reason"),
   
+  // EV SOP Checklist Fields
+  sopProgress: jsonb("sop_progress").default({}),
+  fuelCost: real("fuel_cost"),
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
