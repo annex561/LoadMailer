@@ -2912,10 +2912,40 @@ export async function registerRoutes(app: Express): Promise<void> {
         }
       }
       
-      // GPS tracking SMS removed - now sent when driver starts delivery (status: in_transit)
-      // Driver will receive GPS tracking link when they click "Start Delivery"
+      // Send SMS to driver with load assignment details and link
+      let smsSent = false;
+      if (updatedLoad.driverId && twilioClient && twilioPhoneNumber) {
+        try {
+          const driver = await storage.getDriver(updatedLoad.driverId);
+          if (driver?.phone) {
+            const baseUrl = process.env.REPLIT_DEPLOYMENT_URL || process.env.REPLIT_DEV_DOMAIN || 'https://traq-iq.replit.app';
+            const loadViewUrl = `${baseUrl.startsWith('http') ? baseUrl : 'https://' + baseUrl}/driver/load/${updatedLoad.id}`;
+            
+            const message = `📦 LOAD ASSIGNMENT\n\n` +
+              `Load #${updatedLoad.loadNumber || id.slice(0, 8)}\n` +
+              `From: ${updatedLoad.originCity || updatedLoad.pickupAddress?.split(',')[0] || 'TBD'}, ${updatedLoad.originState || ''}\n` +
+              `To: ${updatedLoad.destCity || updatedLoad.deliveryAddress?.split(',')[0] || 'TBD'}, ${updatedLoad.destState || ''}\n` +
+              `Rate: $${updatedLoad.rate || 0}\n` +
+              `Weight: ${updatedLoad.weight ? updatedLoad.weight.toLocaleString() + ' lbs' : 'TBD'}\n\n` +
+              `Pickup: ${updatedLoad.pickupDate ? new Date(updatedLoad.pickupDate).toLocaleDateString() : 'TBD'} @ ${updatedLoad.pickupTime || 'TBD'}\n\n` +
+              `View details: ${loadViewUrl}\n\n` +
+              `Reply YES to confirm.`;
+            
+            const normalizedPhone = driver.phone.startsWith('+') ? driver.phone : '+1' + driver.phone.replace(/\D/g, '');
+            await twilioClient.messages.create({
+              to: normalizedPhone,
+              from: twilioPhoneNumber,
+              body: message
+            });
+            smsSent = true;
+            console.log(`📱 SMS sent to driver ${driver.name} for load ${updatedLoad.id}`);
+          }
+        } catch (smsErr) {
+          console.warn('Failed to send assignment SMS to driver:', smsErr);
+        }
+      }
       
-      res.json(updatedLoad);
+      res.json({ ...updatedLoad, smsSent });
     } catch (error) {
       console.error('Error assigning driver:', error);
       res.status(500).json({ error: 'Failed to assign driver' });
