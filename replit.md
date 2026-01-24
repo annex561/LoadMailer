@@ -97,3 +97,35 @@ The design system employs a consistent brand palette (Navy, Slate, Teal, Whitesm
 - **Radix UI**: Accessible UI primitives.
 - **Lucide React**: Icon library.
 - **Tailwind CSS**: Utility-first CSS framework.
+
+# Development Patterns
+
+## WebSocket Architecture (IMPORTANT)
+When adding WebSocket services that run alongside Vite's HMR WebSocket:
+
+**NEVER use `{ server, path: '/my/path' }` mode** - This causes the `ws` library to intercept ALL WebSocket upgrade requests before Vite can handle HMR connections, breaking hot module reload and causing continuous page refresh loops.
+
+**ALWAYS use `noServer` mode** with manual upgrade handling:
+```typescript
+// CORRECT: Use noServer mode
+this.wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (request, socket, head) => {
+  if (request.url === '/ws/my-path') {
+    this.wss.handleUpgrade(request, socket, head, (ws) => {
+      this.wss.emit('connection', ws, request);
+    });
+  }
+  // Other paths (like Vite HMR) fall through to their handlers
+});
+```
+
+This pattern allows multiple WebSocket services to coexist:
+- Typing indicators: `/ws/typing`
+- Vite HMR: handled by Vite middleware
+- Future WebSocket services: use same noServer pattern
+
+## Google Sheets Import Pattern
+- Loads from Google Sheets use content-based IDs (hash of origin-destination-pay-miles) for duplicate detection across server restarts
+- Loads are stored in-memory only for API serving, not automatically saved to database
+- Loads are only persisted to database when explicitly booked

@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import { Server } from 'http';
+import { Server, IncomingMessage } from 'http';
+import { Duplex } from 'stream';
 
 interface TypingState {
   threadId: string;
@@ -24,6 +25,7 @@ class TypingIndicatorService {
   private typingStates: Map<string, TypingState> = new Map();
   private cleanupInterval: NodeJS.Timer | null = null;
   private isInitialized = false;
+  private readonly WS_PATH = '/ws/typing';
 
   initialize(server: Server): void {
     if (this.isInitialized) {
@@ -31,12 +33,9 @@ class TypingIndicatorService {
       return;
     }
 
-    console.log('🔌 Initializing WebSocket server for typing indicators...');
+    console.log('🔌 Initializing WebSocket server for typing indicators (noServer mode)...');
     
-    this.wss = new WebSocketServer({ 
-      server, 
-      path: '/ws/typing'
-    });
+    this.wss = new WebSocketServer({ noServer: true });
 
     this.wss.on('connection', (ws: WebSocket) => {
       console.log('👋 New WebSocket connection for typing indicators');
@@ -64,12 +63,22 @@ class TypingIndicatorService {
       });
     });
 
+    server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+      const pathname = request.url;
+      
+      if (pathname === this.WS_PATH) {
+        this.wss!.handleUpgrade(request, socket, head, (ws) => {
+          this.wss!.emit('connection', ws, request);
+        });
+      }
+    });
+
     this.cleanupInterval = setInterval(() => {
       this.cleanupStaleTypingStates();
     }, 5000);
 
     this.isInitialized = true;
-    console.log('✅ WebSocket server for typing indicators initialized on /ws/typing');
+    console.log(`✅ WebSocket server for typing indicators initialized on ${this.WS_PATH} (coexists with Vite HMR)`);
   }
 
   private handleMessage(ws: WebSocket, message: any): void {
