@@ -211,6 +211,50 @@ export class EmailIngestionService {
     
     return await this.createLoadFromParsedData(companyId, loadDetails, storagePath);
   }
+
+  /**
+   * Process incoming Rate Confirmation with AI extraction
+   * This is the main entry point for automated booking from email attachments
+   */
+  async processIncomingRateCon(pdfBuffer: Buffer, companyId: string, emailId?: string) {
+    try {
+      const extracted = await rateConParser.parse(pdfBuffer);
+
+      const [newLoad] = await db.insert(loads).values({
+        companyId,
+        loadNumber: extracted.loadId,
+        lifecycleStatus: "booked",
+        rate: extracted.rate,
+        originCity: extracted.pickupLocation?.split(',')[0]?.trim(),
+        originState: extracted.pickupLocation?.split(',')[1]?.trim(),
+        destinationCity: extracted.deliveryLocation?.split(',')[0]?.trim(),
+        destinationState: extracted.deliveryLocation?.split(',')[1]?.trim(),
+        weight: extracted.weight,
+        equipmentType: extracted.equipment,
+        bookedAt: new Date(),
+      }).returning();
+
+      await db.insert(activityLog).values({
+        companyId,
+        entityType: "LOAD",
+        entityId: newLoad.id,
+        action: "AUTO_BOOKED_FROM_EMAIL",
+        actor: "SYSTEM_AI",
+        details: { 
+          loadNumber: extracted.loadId, 
+          rate: extracted.rate,
+          emailId,
+          extractedFields: Object.keys(extracted).filter(k => (extracted as any)[k])
+        }
+      });
+
+      console.log(`[EmailIngestion] Auto-booked load ${newLoad.loadNumber} via AI extraction`);
+      return { success: true, load: newLoad, extracted };
+    } catch (error: any) {
+      console.error("[EmailIngestion] Ingestion Error:", error.message);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export const emailIngestion = new EmailIngestionService();
