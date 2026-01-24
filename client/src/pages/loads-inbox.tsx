@@ -128,8 +128,8 @@ export default function LoadsInbox() {
       const r = await fetch(`/api/ga/loads/${loadId}/calculate-miles`, { method: "POST" });
       const data = await r.json();
       if (data.ok) {
-        toast({ title: "Miles Calculated", description: `${data.miles} miles ($${data.rpm}/mi)` });
-        await refresh();
+        toast({ title: "Miles Calculated", description: `${data.miles} miles${data.rpm ? ` ($${data.rpm}/mi)` : ''}` });
+        await loadData();
       } else {
         throw new Error(data.error || "Could not calculate miles");
       }
