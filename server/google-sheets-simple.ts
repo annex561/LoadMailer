@@ -225,8 +225,11 @@ class GoogleSheetsSimple {
           continue;
         }
 
+        // Create stable ID from load content to prevent duplicates across runs
+        const stableId = `GS-${origin}-${destination}-${pay}-${miles}`.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 100);
+        
         const load = {
-          id: `GS-${Date.now()}-${i}`,
+          id: stableId,
           origin: origin,
           destination: destination,
           pickup: pickupDate || 'ASAP',
@@ -245,22 +248,11 @@ class GoogleSheetsSimple {
         googleSheetsLoadArray.push(load);
         newLoadsCount++;
 
-        // Check if this is a new load that hasn't been processed for driver notifications
+        // Track load IDs for deduplication (note: in-memory only, resets on restart)
+        // Database load creation is disabled to prevent server overload
+        // Loads are stored in memory for API display only
         if (!processedLoadIds.has(load.id)) {
           processedLoadIds.add(load.id);
-          
-          // Skip header row processing for notifications
-          if (load.origin !== 'Pick Up' && load.destination !== 'Delivery') {
-            // Convert to proper Load format and send to drivers
-            try {
-              const properLoad = await this.convertToLoadFormat(load);
-              if (properLoad) {
-                console.log(`🚛 NEW LOAD FOR DRIVERS: ${properLoad.loadNumber} - ${load.origin} → ${load.destination} ($${load.rate})`);
-              }
-            } catch (error) {
-              console.error(`❌ Error processing load ${load.id} for driver notifications:`, error);
-            }
-          }
         }
       }
 
