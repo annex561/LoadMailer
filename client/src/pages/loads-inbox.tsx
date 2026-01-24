@@ -477,6 +477,8 @@ export default function LoadsInbox() {
               <TableRow>
                 <TableHead>Score</TableHead>
                 <TableHead>Route</TableHead>
+                <TableHead>Driver</TableHead>
+                <TableHead>Broker</TableHead>
                 <TableHead>Miles</TableHead>
                 <TableHead>Rate</TableHead>
                 <TableHead>RPM</TableHead>
@@ -487,7 +489,7 @@ export default function LoadsInbox() {
             <TableBody>
               {shortlist.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No new loads yet. Ingest loads via POST /api/ga/loads/ingest.
                   </TableCell>
                 </TableRow>
@@ -498,13 +500,22 @@ export default function LoadsInbox() {
                     <TableCell>
                       <div className="flex flex-col">
                         <span>{l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}</span>
-                        {(l.dispatcher_name || l.driver_name || l.broker_phone) && (
-                          <div className="flex gap-2 text-xs text-muted-foreground mt-1">
-                            {l.dispatcher_name && <span><User className="w-3 h-3 inline mr-1" />{l.dispatcher_name}</span>}
-                            {l.driver_name && <span className="text-green-600"><Truck className="w-3 h-3 inline mr-1" />{l.driver_name}</span>}
-                            {l.broker_phone && <span><Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}</span>}
-                          </div>
+                        {l.dispatcher_name && (
+                          <span className="text-xs text-muted-foreground"><User className="w-3 h-3 inline mr-1" />{l.dispatcher_name}</span>
                         )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {l.driver_name ? (
+                        <span className="text-green-600 font-medium"><Truck className="w-3 h-3 inline mr-1" />{l.driver_name}</span>
+                      ) : <span className="text-muted-foreground">-</span>}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col text-sm">
+                        {l.broker_name && <span className="font-medium">{l.broker_name}</span>}
+                        {l.broker_email && <span className="text-xs text-blue-500">{l.broker_email}</span>}
+                        {l.broker_phone && <span className="text-xs text-muted-foreground"><Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}</span>}
+                        {!l.broker_name && !l.broker_email && !l.broker_phone && <span className="text-muted-foreground">-</span>}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -539,6 +550,8 @@ export default function LoadsInbox() {
               <TableRow>
                 <TableHead>Score</TableHead>
                 <TableHead>Route</TableHead>
+                <TableHead>Driver</TableHead>
+                <TableHead>Broker</TableHead>
                 <TableHead>Pickup</TableHead>
                 <TableHead>Miles</TableHead>
                 <TableHead>Rate</TableHead>
@@ -550,7 +563,7 @@ export default function LoadsInbox() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     No loads meet min score {minScore}.
                   </TableCell>
                 </TableRow>
@@ -561,13 +574,22 @@ export default function LoadsInbox() {
                     <TableCell>
                       <div className="flex flex-col">
                         <span>{l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}</span>
-                        {(l.dispatcher_name || l.driver_name || l.broker_phone) && (
-                          <div className="flex gap-2 text-xs text-muted-foreground mt-1">
-                            {l.dispatcher_name && <span><User className="w-3 h-3 inline mr-1" />{l.dispatcher_name}</span>}
-                            {l.driver_name && <span className="text-green-600"><Truck className="w-3 h-3 inline mr-1" />{l.driver_name}</span>}
-                            {l.broker_phone && <span><Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}</span>}
-                          </div>
+                        {l.dispatcher_name && (
+                          <span className="text-xs text-muted-foreground"><User className="w-3 h-3 inline mr-1" />{l.dispatcher_name}</span>
                         )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {l.driver_name ? (
+                        <span className="text-green-600 font-medium"><Truck className="w-3 h-3 inline mr-1" />{l.driver_name}</span>
+                      ) : <span className="text-muted-foreground">-</span>}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col text-sm">
+                        {l.broker_name && <span className="font-medium">{l.broker_name}</span>}
+                        {l.broker_email && <span className="text-xs text-blue-500">{l.broker_email}</span>}
+                        {l.broker_phone && <span className="text-xs text-muted-foreground"><Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}</span>}
+                        {!l.broker_name && !l.broker_email && !l.broker_phone && <span className="text-muted-foreground">-</span>}
                       </div>
                     </TableCell>
                     <TableCell>{l.pickup_dt || "-"}</TableCell>
