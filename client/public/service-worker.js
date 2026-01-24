@@ -1,4 +1,4 @@
-const CACHE_NAME = 'traq-iq-v2';
+const CACHE_NAME = 'traq-iq-v3';
 const STATIC_CACHE_URLS = [
   '/',
   '/index.html',
