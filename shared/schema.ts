@@ -243,6 +243,9 @@ export const loads = pgTable("loads", {
   weight: integer("weight"), // Weight in pounds
   company: text("company"), // Shipping company
   contactPhone: text("contact_phone"), // Contact phone number
+  brokerPhone: text("broker_phone"), // Broker contact phone (may include extension)
+  brokerEmail: text("broker_email"), // Broker email address
+  dispatcherName: text("dispatcher_name"), // Broker dispatcher name
   sourceBoard: text("source_board").default("manual"), // manual, dat, loadboard
   // GPS tracking SMS throttle - prevents spam by tracking last send time
   gpsTrackingSmsLastSentAt: timestamp("gps_tracking_sms_last_sent_at"),

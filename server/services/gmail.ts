@@ -177,8 +177,13 @@ export const gmailIngest = {
             equipmentType: 'Dry Van',
             rateconPath: part.filename,
             bookedAt: new Date(),
-            miles: extractedData.miles ? String(extractedData.miles) : undefined,
-            notes: `Auto-imported from email: ${subject}\nFrom: ${from}\nBroker: ${extractedData.brokerName}${extractedData.miles ? `\nMiles: ${extractedData.miles}` : ''}${extractedData.rpm ? `\nRPM: $${extractedData.rpm.toFixed(2)}` : ''}${extractedData.notes ? `\nSpecial Instructions: ${extractedData.notes}` : ''}`
+            miles: extractedData.miles || 0,
+            rpm: extractedData.rpm || 0,
+            brokerPhone: extractedData.brokerPhone,
+            brokerEmail: extractedData.brokerEmail,
+            dispatcherName: extractedData.dispatcherName,
+            specialInstructions: extractedData.notes,
+            notes: `Auto-imported from email: ${subject}\nFrom: ${from}`
           }).returning();
 
           console.log(`   ✅ Load #${newLoad.loadNumber} Created in DB!`);
