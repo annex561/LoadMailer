@@ -127,18 +127,21 @@ export const rateconParser = {
             DO NOT extract shipper, consignee, or facility phone/email as broker contact.
             If you cannot find a dedicated broker contact section, leave brokerPhone, brokerEmail, and dispatcherName as null.
             
-            === RULES FOR DRIVER NAME ===
+            === RULES FOR DRIVER NAME AND DISPATCHER NAME ===
             
-            Look for the driver/carrier assigned to this load in these sections:
-            - "CARRIER INFORMATION" or "CARRIER DETAILS" section
-            - "Driver:" or "Driver Name:" field
-            - "Carrier:" or "Carrier Name:" field (if it's a person name, not company)
-            - "Assigned To:" field
-            - "CARRIER CONTACT" section - look for the person's name
-            - Any field showing who is hauling/transporting the load
+            Look for "CARRIER CONTACT" section in the document. This section typically contains:
+            - **driverName**: The driver's name (person who will haul the load)
+            - **dispatcherName**: The carrier's dispatcher name (person coordinating for the trucking company)
             
-            Extract the PERSON'S NAME (first and last name), not the trucking company name.
-            If you only find a company name like "XYZ Trucking LLC", leave driverName as null.
+            Also look for these labels:
+            - "Driver:", "Driver Name:", "Carrier Driver:"
+            - "Dispatcher:", "Carrier Dispatcher:", "Contact:"
+            
+            IMPORTANT: The CARRIER CONTACT section is DIFFERENT from TQL CONTACT INFO.
+            - TQL CONTACT INFO = broker rep (use for brokerPhone, brokerEmail only)
+            - CARRIER CONTACT = driver and carrier dispatcher (use for driverName, dispatcherName)
+            
+            Extract PERSON NAMES (first and last), not company names.
             
             RETURN JSON ONLY. No markdown.`
           },
