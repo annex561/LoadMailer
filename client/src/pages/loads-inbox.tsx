@@ -500,7 +500,6 @@ export default function LoadsInbox() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Score</TableHead>
                 <TableHead>Route</TableHead>
                 <TableHead>Driver</TableHead>
                 <TableHead>Broker</TableHead>
@@ -514,14 +513,13 @@ export default function LoadsInbox() {
             <TableBody>
               {shortlist.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     No new loads yet. Ingest loads via POST /api/ga/loads/ingest.
                   </TableCell>
                 </TableRow>
               ) : (
                 shortlist.map((l) => (
                   <TableRow key={l.id}>
-                    <TableCell>{getScoreBadge(l.score)}</TableCell>
                     <TableCell>
                       <div className="flex flex-col">
                         <span>{l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}</span>
@@ -573,7 +571,6 @@ export default function LoadsInbox() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Score</TableHead>
                 <TableHead>Route</TableHead>
                 <TableHead>Driver</TableHead>
                 <TableHead>Broker</TableHead>
@@ -588,14 +585,13 @@ export default function LoadsInbox() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     No loads meet min score {minScore}.
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((l) => (
                   <TableRow key={l.id}>
-                    <TableCell>{getScoreBadge(l.score)}</TableCell>
                     <TableCell>
                       <div className="flex flex-col">
                         <span>{l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}</span>
