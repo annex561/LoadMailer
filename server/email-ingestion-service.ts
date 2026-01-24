@@ -1,15 +1,10 @@
+// Email Ingestion Service - Gmail Integration for Rate Confirmation Auto-Booking
+// Uses Replit's Gmail connector for OAuth management
+
 import { db } from "./db";
 import { loads, activityLog } from "@shared/schema";
 import { rateConParser, ParsedRateCon } from "./ratecon-parser";
-
-/**
- * Email Ingestion Service - Automatically imports Rate Confirmations from Gmail
- * 
- * This service polls for unread emails with Rate Confirmation subjects,
- * extracts PDF attachments, parses them using AI/OCR, and creates loads.
- * 
- * Requires Gmail API integration to be configured.
- */
+import { getGmailClient, isGmailConfigured } from "./gmail-client";
 
 interface EmailAttachment {
   filename: string;
@@ -29,26 +24,14 @@ interface IngestedEmail {
 }
 
 export class EmailIngestionService {
-  private isConfigured = false;
-  private gmailClient: any = null;
-
-  constructor() {
-    this.checkConfiguration();
+  
+  async checkConfiguration(): Promise<boolean> {
+    return await isGmailConfigured();
   }
 
-  private checkConfiguration() {
-    // Gmail OAuth would be configured via Replit's Gmail connector
-    this.isConfigured = !!process.env.GMAIL_ACCESS_TOKEN || !!process.env.GOOGLE_ACCESS_TOKEN;
-    if (!this.isConfigured) {
-      console.log("[EmailIngestion] Gmail not configured - ingestion disabled");
-    }
-  }
-
-  /**
-   * Poll Gmail for Rate Confirmation emails and process them
-   */
   async pollForRateCons(companyId: string): Promise<IngestedEmail[]> {
-    if (!this.isConfigured) {
+    const isConfigured = await this.checkConfiguration();
+    if (!isConfigured) {
       console.log("[EmailIngestion] Skipping poll - Gmail not configured");
       return [];
     }
@@ -56,23 +39,24 @@ export class EmailIngestionService {
     const results: IngestedEmail[] = [];
     
     try {
-      // This would use the Gmail API via googleapis
-      // const gmail = google.gmail({ version: 'v1', auth: this.getAuth() });
-      // const res = await gmail.users.messages.list({
-      //   userId: 'me',
-      //   q: 'is:unread subject:"Rate Confirmation"',
-      // });
+      const gmail = await getGmailClient();
       
-      console.log(`[EmailIngestion] Polling for Rate Confirmations for company ${companyId}`);
+      const res = await gmail.users.messages.list({
+        userId: 'me',
+        q: 'is:unread subject:"Rate Confirmation" OR subject:"RateCon" OR subject:"Load Confirmation"',
+        maxResults: 10,
+      });
       
-      // Placeholder for actual Gmail API call
-      const messages: any[] = [];
+      const messages = res.data.messages || [];
+      console.log(`[EmailIngestion] Found ${messages.length} unread Rate Confirmation emails`);
 
       for (const msg of messages) {
+        if (!msg.id) continue;
         try {
           const result = await this.processMessage(msg.id, companyId);
           results.push(result);
         } catch (err: any) {
+          console.error(`[EmailIngestion] Error processing message ${msg.id}:`, err.message);
           results.push({
             messageId: msg.id,
             subject: 'Unknown',
@@ -90,61 +74,76 @@ export class EmailIngestionService {
     return results;
   }
 
-  /**
-   * Process a single email message
-   */
   private async processMessage(messageId: string, companyId: string): Promise<IngestedEmail> {
-    // Fetch full message content
-    // const email = await gmail.users.messages.get({ userId: 'me', id: messageId });
+    const gmail = await getGmailClient();
     
-    // Extract attachments
-    // const attachments = await this.getAttachments(messageId, email.data.payload);
+    const email = await gmail.users.messages.get({ 
+      userId: 'me', 
+      id: messageId,
+      format: 'full'
+    });
+    
+    const headers = email.data.payload?.headers || [];
+    const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || '';
+    const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
+    const dateStr = headers.find(h => h.name?.toLowerCase() === 'date')?.value;
+    const date = dateStr ? new Date(dateStr) : new Date();
     
     const result: IngestedEmail = {
       messageId,
-      subject: '',
-      from: '',
-      date: new Date(),
+      subject,
+      from,
+      date,
       status: 'processed'
     };
 
-    // For each PDF attachment, parse and create load
-    // for (const attachment of attachments) {
-    //   if (attachment.mimeType === 'application/pdf') {
-    //     const loadDetails = await rateConParser.parse(attachment.data);
-    //     result.loadDetails = loadDetails;
-    //     
-    //     await this.createLoadFromParsedData(companyId, loadDetails, attachment.savedPath);
-    //   }
-    // }
+    const attachments = await this.getAttachments(gmail, messageId, email.data.payload);
+    
+    for (const attachment of attachments) {
+      if (attachment.mimeType === 'application/pdf' || attachment.filename?.toLowerCase().endsWith('.pdf')) {
+        console.log(`[EmailIngestion] Processing PDF: ${attachment.filename}`);
+        
+        try {
+          const loadDetails = await rateConParser.parse(attachment.data);
+          result.loadDetails = loadDetails;
+          
+          await this.createLoadFromParsedData(companyId, loadDetails, undefined, messageId);
+        } catch (parseErr: any) {
+          console.error(`[EmailIngestion] Parse error for ${attachment.filename}:`, parseErr.message);
+          result.status = 'failed';
+          result.error = parseErr.message;
+        }
+      }
+    }
 
-    // Mark email as read
-    // await gmail.users.messages.modify({
-    //   userId: 'me',
-    //   id: messageId,
-    //   requestBody: { removeLabelIds: ['UNREAD'] }
-    // });
+    try {
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: { removeLabelIds: ['UNREAD'] }
+      });
+    } catch (markErr: any) {
+      console.warn(`[EmailIngestion] Could not mark email as read:`, markErr.message);
+    }
 
     return result;
   }
 
-  /**
-   * Create a load from parsed Rate Confirmation data
-   */
   async createLoadFromParsedData(
     companyId: string, 
     loadDetails: ParsedRateCon, 
-    rateconPath?: string
+    rateconPath?: string,
+    emailId?: string
   ) {
     const [newLoad] = await db.insert(loads).values({
       companyId,
-      loadNumber: loadDetails.loadId,
+      loadNumber: loadDetails.loadId || `AUTO-${Date.now()}`,
       rate: loadDetails.rate,
-      equipmentType: loadDetails.equipment,
+      equipmentType: loadDetails.equipment || 'dry_van',
       originCity: loadDetails.pickupLocation?.split(',')[0]?.trim(),
       originState: loadDetails.pickupLocation?.split(',')[1]?.trim(),
-      destinationCity: loadDetails.deliveryLocation?.split(',')[0]?.trim(),
-      destinationState: loadDetails.deliveryLocation?.split(',')[1]?.trim(),
+      destCity: loadDetails.deliveryLocation?.split(',')[0]?.trim(),
+      destState: loadDetails.deliveryLocation?.split(',')[1]?.trim(),
       weight: loadDetails.weight,
       miles: loadDetails.miles,
       rateconPath: rateconPath,
@@ -161,7 +160,8 @@ export class EmailIngestionService {
       details: { 
         loadNumber: loadDetails.loadId,
         rate: loadDetails.rate,
-        source: "email_ingestion"
+        source: "email_ingestion",
+        emailId
       }
     });
 
@@ -169,27 +169,30 @@ export class EmailIngestionService {
     return newLoad;
   }
 
-  /**
-   * Extract attachments from Gmail message payload
-   */
-  private async getAttachments(messageId: string, payload: any): Promise<EmailAttachment[]> {
+  private async getAttachments(gmail: any, messageId: string, payload: any): Promise<EmailAttachment[]> {
     const attachments: EmailAttachment[] = [];
     
     const extractFromParts = async (parts: any[]) => {
       for (const part of parts || []) {
         if (part.filename && part.body?.attachmentId) {
-          // Fetch attachment data
-          // const attachment = await gmail.users.messages.attachments.get({
-          //   userId: 'me',
-          //   messageId,
-          //   id: part.body.attachmentId
-          // });
-          
-          // attachments.push({
-          //   filename: part.filename,
-          //   mimeType: part.mimeType,
-          //   data: Buffer.from(attachment.data.data, 'base64'),
-          // });
+          try {
+            const attachment = await gmail.users.messages.attachments.get({
+              userId: 'me',
+              messageId,
+              id: part.body.attachmentId
+            });
+            
+            if (attachment.data.data) {
+              const base64Data = attachment.data.data.replace(/-/g, '+').replace(/_/g, '/');
+              attachments.push({
+                filename: part.filename,
+                mimeType: part.mimeType,
+                data: Buffer.from(base64Data, 'base64'),
+              });
+            }
+          } catch (err: any) {
+            console.error(`[EmailIngestion] Error fetching attachment ${part.filename}:`, err.message);
+          }
         }
         
         if (part.parts) {
@@ -202,9 +205,6 @@ export class EmailIngestionService {
     return attachments;
   }
 
-  /**
-   * Manual import endpoint for testing
-   */
   async manualImport(companyId: string, pdfData: Buffer, filename: string) {
     const loadDetails = await rateConParser.parse(pdfData);
     const storagePath = `/storage/company_${companyId}/ratecons/${filename}`;
@@ -212,25 +212,21 @@ export class EmailIngestionService {
     return await this.createLoadFromParsedData(companyId, loadDetails, storagePath);
   }
 
-  /**
-   * Process incoming Rate Confirmation with AI extraction
-   * This is the main entry point for automated booking from email attachments
-   */
   async processIncomingRateCon(pdfBuffer: Buffer, companyId: string, emailId?: string) {
     try {
       const extracted = await rateConParser.parse(pdfBuffer);
 
       const [newLoad] = await db.insert(loads).values({
         companyId,
-        loadNumber: extracted.loadId,
+        loadNumber: extracted.loadId || `AUTO-${Date.now()}`,
         lifecycleStatus: "booked",
         rate: extracted.rate,
         originCity: extracted.pickupLocation?.split(',')[0]?.trim(),
         originState: extracted.pickupLocation?.split(',')[1]?.trim(),
-        destinationCity: extracted.deliveryLocation?.split(',')[0]?.trim(),
-        destinationState: extracted.deliveryLocation?.split(',')[1]?.trim(),
+        destCity: extracted.deliveryLocation?.split(',')[0]?.trim(),
+        destState: extracted.deliveryLocation?.split(',')[1]?.trim(),
         weight: extracted.weight,
-        equipmentType: extracted.equipment,
+        equipmentType: extracted.equipment || 'dry_van',
         bookedAt: new Date(),
       }).returning();
 
@@ -254,6 +250,11 @@ export class EmailIngestionService {
       console.error("[EmailIngestion] Ingestion Error:", error.message);
       return { success: false, error: error.message };
     }
+  }
+
+  async getStatus(): Promise<{ configured: boolean; lastPoll?: Date }> {
+    const configured = await this.checkConfiguration();
+    return { configured };
   }
 }
 

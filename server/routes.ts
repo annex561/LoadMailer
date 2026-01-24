@@ -935,6 +935,39 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // EV SOP Checklist - Send broker thank you email with POD
+  // Email Ingestion API - Gmail Rate Confirmation Polling
+  app.get('/api/email/ingestion/status', async (req, res) => {
+    try {
+      const { emailIngestion } = await import('./email-ingestion-service');
+      const status = await emailIngestion.getStatus();
+      res.json(status);
+    } catch (error) {
+      console.error('Error checking email ingestion status:', error);
+      res.status(500).json({ error: 'Failed to check status' });
+    }
+  });
+
+  app.post('/api/email/ingestion/poll', async (req, res) => {
+    try {
+      const { companyId } = req.body;
+      if (!companyId) {
+        return res.status(400).json({ error: 'companyId is required' });
+      }
+      
+      const { emailIngestion } = await import('./email-ingestion-service');
+      const results = await emailIngestion.pollForRateCons(companyId);
+      
+      res.json({ 
+        success: true, 
+        processed: results.length,
+        results 
+      });
+    } catch (error) {
+      console.error('Error polling emails:', error);
+      res.status(500).json({ error: 'Failed to poll emails' });
+    }
+  });
+
   app.post('/api/email/broker-thank-you', async (req, res) => {
     try {
       const { loadId } = req.body;
