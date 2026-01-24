@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 import { db } from "../db";
 import { gmailAccounts, loads, activityLog } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { rateConParser } from "../ratecon-parser";
+import { rateconParser } from "./ratecon-parser";
 import { nanoid } from "nanoid";
 
 export const gmailIngest = {
@@ -114,55 +114,59 @@ export const gmailIngest = {
 
       for (const part of parts) {
         if (part.filename && part.filename.toLowerCase().endsWith('.pdf') && part.body?.attachmentId) {
+          // 1. Download
           const attachment = await gmail.users.messages.attachments.get({
             userId: 'me',
             messageId: msgId,
             id: part.body.attachmentId
           });
 
-          const pdfBuffer = Buffer.from(attachment.data.data, 'base64');
-          console.log(`   📄 Downloaded: ${part.filename} (${pdfBuffer.length} bytes)`);
+          console.log(`   📄 Processing: ${part.filename}...`);
 
-          const parsed = await rateConParser.parse(pdfBuffer);
-          console.log(`   🤖 AI Parsed: Load ${parsed.loadId}, Rate $${parsed.rate}`);
+          // 2. Parse (Send to OpenAI)
+          const extractedData = await rateconParser.parsePdf(attachment.data.data!);
+          console.log(`   🤖 AI Parsed: Load ${extractedData.loadNumber}, Rate $${extractedData.rate}`);
 
-          const loadNumber = `LOAD-${Date.now()}-${nanoid(6)}`;
+          // 3. Save to Database
+          const loadNumber = extractedData.loadNumber || `LOAD-${Date.now()}-${nanoid(6)}`;
           
-          await db.insert(loads).values({
+          const [newLoad] = await db.insert(loads).values({
             id: nanoid(),
             loadNumber,
             companyId,
             status: 'booked',
             lifecycleStatus: 'booked',
-            origin: parsed.pickupLocation || 'Unknown',
-            destination: parsed.deliveryLocation || 'Unknown',
-            pickupDate: parsed.pickupDate ? new Date(parsed.pickupDate) : new Date(),
-            deliveryDate: parsed.deliveryDate ? new Date(parsed.deliveryDate) : undefined,
-            rate: String(parsed.rate),
-            offeredRate: String(parsed.rate),
-            weight: parsed.weight ? String(parsed.weight) : undefined,
-            equipmentType: parsed.equipment || 'Dry Van',
+            origin: extractedData.origin || 'Unknown',
+            destination: extractedData.destination || 'Unknown',
+            pickupDate: extractedData.pickupDate ? new Date(extractedData.pickupDate) : new Date(),
+            deliveryDate: extractedData.deliveryDate ? new Date(extractedData.deliveryDate) : undefined,
+            rate: String(extractedData.rate),
+            offeredRate: String(extractedData.rate),
+            weight: extractedData.weight ? String(extractedData.weight) : undefined,
+            equipmentType: 'Dry Van',
             rateconPath: part.filename,
             bookedAt: new Date(),
-            notes: `Auto-imported from email: ${subject}\nFrom: ${from}\nOriginal Load ID: ${parsed.loadId}`
-          });
+            notes: `Auto-imported from email: ${subject}\nFrom: ${from}\nBroker: ${extractedData.brokerName}`
+          }).returning();
 
+          console.log(`   ✅ Load #${newLoad.loadNumber} Created in DB!`);
+
+          // 4. Log Activity
           await db.insert(activityLog).values({
-            entityType: 'load',
-            entityId: loadNumber,
-            action: 'RATECON_INGESTED',
-            actor: 'gmail-ingestion',
+            entityType: 'LOAD',
+            entityId: newLoad.id,
+            action: 'AUTO_INGEST',
+            actor: 'SYSTEM_AI',
             details: {
               companyId,
-              emailSubject: subject,
-              emailFrom: from,
               filename: part.filename,
-              parsedRate: parsed.rate,
-              parsedLoadId: parsed.loadId
+              rate: extractedData.rate,
+              brokerName: extractedData.brokerName,
+              emailSubject: subject,
+              emailFrom: from
             }
           });
 
-          console.log(`   ✅ Created load: ${loadNumber} for company ${companyId}`);
           loadCreated = true;
         }
       }
