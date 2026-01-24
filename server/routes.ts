@@ -986,31 +986,12 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   app.post('/api/ingest/trigger', async (req, res) => {
     try {
+      console.log("Manual Gmail trigger received...");
       const { gmailIngest } = await import('./services/gmail');
-      
-      if (!gmailIngest.isConfigured()) {
-        return res.status(400).json({ 
-          error: 'Gmail credentials not configured',
-          missing: ['GMAIL_CLIENT_ID', 'GMAIL_CLIENT_SECRET', 'GMAIL_REFRESH_TOKEN'].filter(
-            key => !process.env[key]
-          )
-        });
-      }
-      
       const files = await gmailIngest.scanInbox();
-      res.json({ 
-        success: true, 
-        filesFound: files.length,
-        files: files.map(f => ({ 
-          filename: f.filename, 
-          size: f.size, 
-          subject: f.subject,
-          from: f.from 
-        }))
-      });
-    } catch (error) {
-      console.error('Gmail ingest error:', error);
-      res.status(500).json({ error: String(error) });
+      res.json({ success: true, filesProcessed: files });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || String(error) });
     }
   });
 
