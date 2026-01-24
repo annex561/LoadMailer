@@ -1,0 +1,126 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { LoadMap } from "@/components/maps/LoadMap"; 
+import { MapPin, Truck, MessageSquare, AlertCircle } from "lucide-react";
+
+export default function DispatcherWorkbench() {
+  return (
+    <div className="flex flex-col h-full bg-slate-100 p-6 gap-6 overflow-y-auto">
+      
+      {/* HEADER: Operations Focus */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dispatch Operations</h1>
+          <p className="text-slate-500">Active Loads & Fleet Status</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline">
+            <MessageSquare className="mr-2 h-4 w-4" /> 
+            Unread Messages (3)
+          </Button>
+          <Button className="bg-blue-600 hover:bg-blue-700">
+            + Book New Load
+          </Button>
+        </div>
+      </div>
+
+      {/* OPS METRICS (No Dollar Amounts) */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <OpsCard 
+          title="Active Loads" 
+          value="12" 
+          icon={<Truck className="text-blue-600" />} 
+          status="In Transit"
+        />
+        <OpsCard 
+          title="Unassigned Loads" 
+          value="5" 
+          icon={<AlertCircle className="text-amber-600" />} 
+          status="Needs Coverage" 
+          alert
+        />
+        <OpsCard 
+          title="Available Drivers" 
+          value="8" 
+          icon={<MapPin className="text-emerald-600" />} 
+          status="Ready for Dispatch"
+        />
+        <OpsCard 
+          title="At Risk" 
+          value="2" 
+          icon={<AlertCircle className="text-red-600" />} 
+          status="Late / Issues" 
+          alert
+        />
+      </div>
+
+      {/* MAIN WORKSPACE: Split Map and List */}
+      <div className="grid grid-cols-3 gap-6 h-[600px]">
+        
+        {/* LEFT: Active Load List */}
+        <Card className="col-span-1 border-slate-200 shadow-sm flex flex-col">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">Priority List</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto space-y-3 pt-2">
+            {/* Mock List Items */}
+            <LoadItem id="1042" origin="Dallas, TX" dest="Chicago, IL" status="Late" />
+            <LoadItem id="1045" origin="Miami, FL" dest="Atlanta, GA" status="On Time" />
+            <LoadItem id="1048" origin="Laredo, TX" dest="Detroit, MI" status="Loading" />
+            <LoadItem id="1051" origin="Houston, TX" dest="Phoenix, AZ" status="Unassigned" />
+          </CardContent>
+        </Card>
+
+        {/* RIGHT: The Map (Same component, different context) */}
+        <Card className="col-span-2 border-slate-200 shadow-sm overflow-hidden">
+          <CardHeader className="bg-white border-b pb-3">
+             <div className="flex justify-between items-center">
+               <CardTitle>Live Fleet Map</CardTitle>
+               <Badge variant="outline" className="text-emerald-600 bg-emerald-50 border-emerald-200">
+                 Live Updates
+               </Badge>
+             </div>
+          </CardHeader>
+          <div className="h-full bg-slate-50">
+             {/* The Map Component handles the visuals */}
+             <LoadMap loads={[]} /> 
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// Simple sub-components for the Dispatch view
+function OpsCard({ title, value, icon, status, alert }: any) {
+  return (
+    <Card className={`border shadow-sm ${alert ? 'border-red-200 bg-red-50' : 'bg-white'}`}>
+      <div className="p-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <div className="text-2xl font-bold text-slate-900">{value}</div>
+          <p className={`text-xs ${alert ? 'text-red-600 font-bold' : 'text-slate-400'}`}>{status}</p>
+        </div>
+        <div className={`p-2 rounded-full ${alert ? 'bg-white' : 'bg-slate-100'}`}>
+          {icon}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function LoadItem({ id, origin, dest, status }: any) {
+  const isLate = status === 'Late';
+  return (
+    <div className={`p-3 rounded border ${isLate ? 'border-red-200 bg-red-50' : 'border-slate-100 hover:bg-slate-50'} cursor-pointer`}>
+      <div className="flex justify-between mb-1">
+        <span className="font-bold text-sm text-slate-700">#{id}</span>
+        <Badge variant={isLate ? "destructive" : "secondary"} className="text-[10px] h-5">{status}</Badge>
+      </div>
+      <div className="text-xs text-slate-500 flex items-center gap-1">
+        {origin} <span className="text-slate-300">➔</span> {dest}
+      </div>
+    </div>
+  );
+}
