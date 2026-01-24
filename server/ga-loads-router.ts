@@ -446,6 +446,48 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
       }
     }
 
+    // Send SMS to driver if assigned
+    let smsSent = false;
+    if (assigned_driver_id) {
+      try {
+        const { storage } = await import("./storage");
+        const driver = await storage.getDriver(assigned_driver_id);
+        
+        if (driver?.phone) {
+          const baseUrl = process.env.REPLIT_DEPLOYMENT_URL || process.env.REPLIT_DEV_DOMAIN || 'https://traq-iq.replit.app';
+          const loadViewUrl = `${baseUrl.startsWith('http') ? baseUrl : 'https://' + baseUrl}/driver/load/${id}`;
+          
+          const message = `📦 LOAD ASSIGNMENT\n\n` +
+            `Load #${row.load_number || id.slice(0, 8)}\n` +
+            `From: ${row.origin_city || 'TBD'}, ${row.origin_state || ''}\n` +
+            `To: ${row.dest_city || 'TBD'}, ${row.dest_state || ''}\n` +
+            `Rate: $${rate || 0}\n` +
+            `Miles: ${row.miles || 'TBD'}\n\n` +
+            `Pickup: ${row.pickup_date || 'TBD'}\n\n` +
+            `View details: ${loadViewUrl}\n\n` +
+            `Reply YES to confirm.`;
+          
+          const twilioClient = (await import("twilio")).default(
+            process.env.TWILIO_ACCOUNT_SID,
+            process.env.TWILIO_AUTH_TOKEN
+          );
+          const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+          
+          if (twilioClient && twilioPhone) {
+            await twilioClient.messages.create({
+              to: driver.phone.startsWith('+') ? driver.phone : '+1' + driver.phone.replace(/\D/g, ''),
+              from: twilioPhone,
+              body: message
+            });
+            smsSent = true;
+            console.log(`📱 SMS sent to driver ${driver.name} for load ${id}`);
+          }
+        }
+      } catch (smsErr) {
+        console.warn("Failed to send SMS to driver:", smsErr);
+      }
+    }
+
     res.json({ 
       ok: true, 
       id, 
@@ -453,7 +495,8 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
       booked_rate: rate,
       assigned_truck_id,
       assigned_driver_id,
-      dispatch_gate_status: dispatchGateStatus
+      dispatch_gate_status: dispatchGateStatus,
+      sms_sent: smsSent
     });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: String(err?.message || err) });
