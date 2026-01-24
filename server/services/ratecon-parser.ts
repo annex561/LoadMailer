@@ -96,22 +96,24 @@ export const rateconParser = {
 
             EXTRACT THESE EXACT FIELDS:
             1. **loadNumber**: The load/order/reference number from the broker.
-            2. **brokerName**: The company issuing the load (e.g., TQL, CH Robinson).
-            3. **brokerPhone**: The phone number for the broker. Include extension if available (e.g., "555-0199 x123").
-            4. **brokerEmail**: The email address for the broker/dispatcher.
-            5. **dispatcherName**: The specific person/agent name at the brokerage.
-            6. **driverName**: The driver or carrier name assigned to this load (look for "Driver:", "Carrier:", "Assigned To:", etc).
-            7. **rate**: The total dollar amount (number only, no "$").
+            2. **brokerName**: The brokerage company name (e.g., "TQL", "Total Quality Logistics", "CH Robinson", "Coyote").
+            3. **brokerPhone**: IMPORTANT - Look for "TQL CONTACT INFO", "BROKER CONTACT", or similar section. Extract the phone number from that section. Include extension if available.
+            4. **brokerEmail**: IMPORTANT - Look for "TQL CONTACT INFO", "BROKER CONTACT", or similar section. Extract the email address from that section.
+            5. **dispatcherName**: IMPORTANT - Look for "TQL CONTACT INFO", "BROKER CONTACT", "Your Rep", "Account Rep", or similar section. This is the specific person name (not company) who is the broker contact/representative.
+            6. **driverName**: The driver or carrier name assigned to this load (look for "Driver:", "Carrier:", "Assigned To:", "Carrier Name:", etc).
+            7. **rate**: The total dollar amount for the load (number only, no "$").
             8. **miles**: The total trip mileage.
             9. **rpm**: Rate Per Mile. (If not listed, calculate it: rate / miles).
             10. **pickupDate**: First pickup date (YYYY-MM-DD).
             11. **pickupTime**: Pickup time window (e.g., "08:00-12:00" or "FCFS").
             12. **deliveryDate**: Final delivery date (YYYY-MM-DD).
             13. **deliveryTime**: Delivery time window (e.g., "14:00-18:00" or "Appointment").
-            14. **origin**: City, State (e.g., "Atlanta, GA").
-            15. **destination**: City, State (e.g., "Miami, FL").
+            14. **origin**: City, State of pickup location (e.g., "Atlanta, GA").
+            15. **destination**: City, State of delivery location (e.g., "Miami, FL").
             16. **weight**: Cargo weight in lbs (number only).
             17. **notes**: Any special instructions, commodity details, or "comments" listed.
+            
+            CRITICAL: For brokerPhone, brokerEmail, and dispatcherName - look specifically for a "CONTACT INFO" section (often labeled "TQL CONTACT INFO" for TQL loads, or "BROKER CONTACT" for others). This section contains the broker representative's name, phone, and email - NOT the shipper or consignee info.
             
             RETURN JSON ONLY. Do not use Markdown formatting.`
           },
