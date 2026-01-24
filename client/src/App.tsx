@@ -52,6 +52,7 @@ import LoadsInbox from "@/pages/loads-inbox";
 import ItemsPage from "@/pages/items";
 import LoadDetailsPage from "@/pages/load-details";
 import GmailSettings from "@/pages/gmail-settings";
+import DriverLoadView from "@/pages/driver-load-view";
 
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
@@ -129,6 +130,7 @@ function App() {
               <MobileDriverDashboard />
             </ErrorBoundary>
           </Route>
+          <Route path="/driver/load/:id" component={DriverLoadView} />
           
           {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
           <Route>
