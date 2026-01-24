@@ -14,6 +14,7 @@ const navigation = [
   { name: "Finance Dashboard", href: "/loadops-dashboard", icon: DollarSign, section: "core" },
   { name: "Fleet Calculator", href: "/fleet-calculator", icon: Calculator, section: "core" },
   { name: "GA Loads Inbox", href: "/loads-inbox", icon: Inbox, section: "core" },
+  { name: "Items", href: "/items", icon: FileText, section: "core" },
   
   { name: "Fleet Dashboard", href: "/fleet", icon: Truck, section: "fleet" },
   { name: "Trucks", href: "/fleet/trucks", icon: Truck, section: "fleet" },

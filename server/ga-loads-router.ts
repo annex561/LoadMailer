@@ -6,11 +6,16 @@ import { scoreLoad } from "./ga-scoring";
 import { recommendForLoad } from "./ga-recommend";
 import { runGaArMigrations } from "./ga-ar-migrations";
 import { buildGaArRouter } from "./ga-ar-router";
+import { runGaItemsMigrations } from "./ga-items-migrations";
+import { gaItemsRouter } from "./ga-items-router";
 
 const router: Router = express.Router();
 
 // Run A/R migrations (idempotent)
 runGaArMigrations(db, "ga_loads");
+
+// Run Items migrations (idempotent)
+runGaItemsMigrations(db);
 
 // Mount A/R router
 router.use(
@@ -20,6 +25,9 @@ router.use(
     gaLog: logActivity,
   })
 );
+
+// Mount Items router
+router.use("/items", gaItemsRouter);
 
 // Feature flag for booking pipeline
 const ENABLE_GA_BOOKING = process.env.ENABLE_GA_BOOKING !== "0";
