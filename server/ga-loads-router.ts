@@ -13,6 +13,7 @@ import { db as pgDb } from "./db";
 import { activityLog, loads as pgLoads } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { rateConService } from "./ratecon-service";
+import { invoicingService } from "./invoicing-service";
 
 const router: Router = express.Router();
 
@@ -554,6 +555,90 @@ router.post("/loads/:id/ratecon/generate", async (req: Request, res: Response) =
       ratecon_path: rateconPath,
       status: "scheduled",
       message: "RateCon generated successfully. Load moved to scheduled status."
+    });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
+});
+
+// =============================================
+// FACTORING / INVOICING
+// =============================================
+
+router.post("/loads/:id/package-for-factoring", async (req: Request, res: Response) => {
+  if (!ENABLE_GA_BOOKING) {
+    return res.status(404).json({ ok: false, error: "Booking pipeline disabled" });
+  }
+
+  try {
+    const id = String(req.params.id);
+    const { actor, pg_load_id, company_id } = req.body || {};
+    
+    const row: any = db.prepare(`SELECT * FROM ga_loads WHERE id=?`).get(id);
+    if (!row) return res.status(404).json({ ok: false, error: "Load not found" });
+
+    if (row.status !== "scheduled" && row.status !== "delivered") {
+      return res.status(400).json({ 
+        ok: false, 
+        error: "Load must be scheduled or delivered before packaging for factoring" 
+      });
+    }
+
+    if (!row.ratecon_path || !row.pod_path) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: "Missing documents. Both RateCon and POD are required for factoring.",
+        missing: {
+          ratecon: !row.ratecon_path,
+          pod: !row.pod_path
+        }
+      });
+    }
+
+    db.prepare(`
+      UPDATE ga_loads 
+      SET status='invoiced', invoiced_at=?
+      WHERE id=?
+    `).run(nowIso(), id);
+
+    logActivity(id, "packaged_for_factoring", actor || "system", { 
+      ratecon: row.ratecon_path, 
+      pod: row.pod_path 
+    });
+
+    let pgInvoice = null;
+    if (pg_load_id) {
+      try {
+        const result = await invoicingService.packageForFactoring(pg_load_id, actor || "SYSTEM");
+        pgInvoice = result.invoice;
+      } catch (pgErr: any) {
+        console.warn("PostgreSQL invoicing failed:", pgErr.message);
+      }
+    } else if (company_id) {
+      try {
+        await pgDb.insert(activityLog).values({
+          companyId: company_id,
+          entityType: "LOAD",
+          entityId: id,
+          action: "PACKAGED_FOR_FACTORING",
+          actor: actor || "SYSTEM",
+          details: { ratecon: row.ratecon_path, pod: row.pod_path }
+        });
+      } catch (pgErr) {
+        console.warn("PostgreSQL activity log failed:", pgErr);
+      }
+    }
+
+    res.json({ 
+      ok: true, 
+      id, 
+      status: "invoiced",
+      package: {
+        ratecon: row.ratecon_path,
+        pod: row.pod_path
+      },
+      pg_invoice: pgInvoice,
+      message: "Load packaged for factoring successfully."
     });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: String(err?.message || err) });

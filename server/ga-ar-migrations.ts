@@ -19,4 +19,6 @@ export function runGaArMigrations(db: Db, loadsTable: string) {
   ensureColumn(db, loadsTable, "invoice_paid_at", "invoice_paid_at TEXT");
   ensureColumn(db, loadsTable, "payment_method", "payment_method TEXT");
   ensureColumn(db, loadsTable, "payment_ref", "payment_ref TEXT");
+  ensureColumn(db, loadsTable, "invoiced_at", "invoiced_at TEXT");
+  ensureColumn(db, loadsTable, "pod_path", "pod_path TEXT");
 }
