@@ -1,0 +1,80 @@
+import { db } from "./db";
+import { invoices, collectionsItems } from "@shared/schema";
+import { eq, and, ne, lte, gte } from "drizzle-orm";
+import { differenceInDays, isBefore, isSameDay, addDays } from "date-fns";
+
+export class CollectionsService {
+  /**
+   * Calculates aging buckets for the Executive Dashboard and Collections view.
+   */
+  async getAgingSummary(companyId: string) {
+    const today = new Date();
+    const unpaidInvoices = await db.select().from(invoices).where(
+      and(
+        eq(invoices.companyId, companyId),
+        ne(invoices.status, "paid"),
+        ne(invoices.status, "void")
+      )
+    );
+
+    const buckets = {
+      current: 0,
+      days_1_7: 0,
+      days_8_14: 0,
+      days_15_30: 0,
+      days_31_60: 0,
+      days_61_plus: 0,
+    };
+
+    unpaidInvoices.forEach(inv => {
+      const dpd = differenceInDays(today, inv.dueDate);
+      if (dpd <= 0) buckets.current += inv.balanceDue;
+      else if (dpd <= 7) buckets.days_1_7 += inv.balanceDue;
+      else if (dpd <= 14) buckets.days_8_14 += inv.balanceDue;
+      else if (dpd <= 30) buckets.days_15_30 += inv.balanceDue;
+      else if (dpd <= 60) buckets.days_31_60 += inv.balanceDue;
+      else buckets.days_61_plus += inv.balanceDue;
+    });
+
+    return buckets;
+  }
+
+  /**
+   * Assigns the "Traffic Light" status for the UI.
+   */
+  async getItemsQueue(companyId: string) {
+    const today = new Date();
+    const items = await db.select().from(collectionsItems).where(eq(collectionsItems.companyId, companyId));
+
+    return items.map(item => {
+      let trafficLight = "neutral";
+      if (item.nextActionAt) {
+        if (isBefore(item.nextActionAt, today) && !isSameDay(item.nextActionAt, today)) {
+          trafficLight = "RED"; // Overdue
+        } else if (isSameDay(item.nextActionAt, today)) {
+          trafficLight = "YELLOW"; // Due Today
+        }
+      }
+      return { ...item, trafficLight };
+    });
+  }
+
+  /**
+   * Logic for "Touching" an item and scheduling the next follow-up.
+   */
+  async logTouch(itemId: string, stage: "soft" | "firm" | "final") {
+    const intervals = { soft: 2, firm: 1, final: 0 };
+    const nextActionDate = addDays(new Date(), intervals[stage]);
+
+    return await db.update(collectionsItems)
+      .set({
+        lastTouchAt: new Date(),
+        nextActionAt: nextActionDate,
+        stage: stage,
+      })
+      .where(eq(collectionsItems.id, itemId))
+      .returning();
+  }
+}
+
+export const collectionsService = new CollectionsService();

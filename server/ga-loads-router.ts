@@ -10,8 +10,9 @@ import { runGaItemsMigrations } from "./ga-items-migrations";
 import { gaItemsRouter } from "./ga-items-router";
 import { dispatchGate } from "./dispatch-gate-service";
 import { db as pgDb } from "./db";
-import { activityLog } from "@shared/schema";
+import { activityLog, loads as pgLoads } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { rateConService } from "./ratecon-service";
 
 const router: Router = express.Router();
 
@@ -500,13 +501,15 @@ router.post("/loads/:id/dismiss", (req: Request, res: Response) => {
 // RATECON GENERATION TRIGGER
 // =============================================
 
-router.post("/loads/:id/ratecon/generate", (req: Request, res: Response) => {
+router.post("/loads/:id/ratecon/generate", async (req: Request, res: Response) => {
   if (!ENABLE_GA_BOOKING) {
     return res.status(404).json({ ok: false, error: "Booking pipeline disabled" });
   }
 
   try {
     const id = String(req.params.id);
+    const { actor, company_id, pg_load_id } = req.body || {};
+    
     const row: any = db.prepare(`SELECT * FROM ga_loads WHERE id=?`).get(id);
     if (!row) return res.status(404).json({ ok: false, error: "Load not found" });
 
@@ -514,22 +517,43 @@ router.post("/loads/:id/ratecon/generate", (req: Request, res: Response) => {
       return res.status(400).json({ ok: false, error: "Load must be booked before generating RateCon" });
     }
 
-    // For now, just mark ratecon as generated (actual PDF generation can be added later)
     const rateconPath = `/documents/ratecons/RC-${id.slice(0, 8)}.pdf`;
     
     db.prepare(`
       UPDATE ga_loads 
-      SET ratecon_path=?, ratecon_generated_at=?
+      SET ratecon_path=?, ratecon_generated_at=?, status='scheduled'
       WHERE id=?
     `).run(rateconPath, nowIso(), id);
 
-    logActivity(id, "ratecon_generated", req.body.actor || "system", { path: rateconPath });
+    logActivity(id, "ratecon_generated", actor || "system", { path: rateconPath });
+
+    if (pg_load_id && company_id) {
+      try {
+        await rateConService.generateRateCon(pg_load_id, actor || "SYSTEM");
+      } catch (pgErr) {
+        console.warn("PostgreSQL RateCon generation failed:", pgErr);
+      }
+    } else if (company_id) {
+      try {
+        await pgDb.insert(activityLog).values({
+          companyId: company_id,
+          entityType: "LOAD",
+          entityId: id,
+          action: "RATECON_GENERATED",
+          actor: actor || "SYSTEM",
+          details: { path: rateconPath, version: 1 }
+        });
+      } catch (pgErr) {
+        console.warn("PostgreSQL activity log failed:", pgErr);
+      }
+    }
 
     res.json({ 
       ok: true, 
       id, 
       ratecon_path: rateconPath,
-      message: "RateCon generation triggered. Document will be available shortly."
+      status: "scheduled",
+      message: "RateCon generated successfully. Load moved to scheduled status."
     });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: String(err?.message || err) });

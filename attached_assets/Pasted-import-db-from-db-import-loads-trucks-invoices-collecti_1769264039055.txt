@@ -1,0 +1,72 @@
+import { db } from "./db";
+import { loads, trucks, invoices, collectionsItems, activityLog } from "@shared/schema";
+import { eq, and, sql, count, sum } from "drizzle-orm";
+import { collectionsService } from "./collections-service";
+import { startOfWeek, startOfMonth } from "date-fns";
+
+export class DashboardService {
+  async getExecutiveSummary(companyId: string) {
+    const today = new Date();
+    const monthStart = startOfMonth(today);
+    const weekStart = startOfWeek(today);
+
+    // 1. Revenue Pipeline KPIs
+    const loadStats = await db.select({
+      status: loads.status,
+      count: count(loads.id),
+      totalValue: sum(loads.rate)
+    }).from(loads)
+      .where(eq(loads.companyId, companyId))
+      .groupBy(loads.status);
+
+    // 2. Financial & Aging Totals
+    const agingBuckets = await collectionsService.getAgingSummary(companyId);
+    
+    const [arTotals] = await db.select({
+      totalOutstanding: sum(invoices.balanceDue)
+    }).from(invoices)
+      .where(and(eq(invoices.companyId, companyId), eq(invoices.status, "sent")));
+
+    // 3. Fleet Readiness (Dispatch Gate)
+    const fleetStats = await db.select({
+      gateStatus: trucks.gateStatus,
+      count: count(trucks.id)
+    }).from(trucks)
+      .where(eq(trucks.companyId, companyId))
+      .groupBy(trucks.gateStatus);
+
+    // 4. Critical Operational Alerts
+    const overdueCollections = await db.select({ count: count() })
+      .from(collectionsItems)
+      .where(and(
+        eq(collectionsItems.companyId, companyId),
+        sql`next_action_at < CURRENT_TIMESTAMP`
+      ));
+
+    return {
+      pipeline: {
+        stats: loadStats,
+        bookedMTD: loadStats.find(s => s.status === 'booked')?.totalValue || 0,
+      },
+      finance: {
+        outstandingAR: arTotals?.totalOutstanding || 0,
+        agingBuckets,
+        overdueActions: overdueCollections[0].count
+      },
+      fleet: {
+        gateDistribution: fleetStats,
+        avgRiskScore: await this.getAverageFleetRisk(companyId)
+      },
+      timestamp: new Date()
+    };
+  }
+
+  private async getAverageFleetRisk(companyId: string) {
+    const [result] = await db.select({
+      avg: sql<number>`AVG(risk_score)`
+    }).from(trucks).where(eq(trucks.companyId, companyId));
+    return result?.avg || 0;
+  }
+}
+
+export const dashboardService = new DashboardService();
