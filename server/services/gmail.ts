@@ -283,6 +283,19 @@ export const gmailIngest = {
             console.error(`   ⚠️ Failed to add to GA Loads:`, gaError.message);
           }
 
+          // 6. Send SMS notification to assigned driver if found
+          if (extractedData.driverName) {
+            try {
+              await this.notifyAssignedDriver(
+                extractedData.driverName,
+                newLoad,
+                extractedData
+              );
+            } catch (notifyError: any) {
+              console.error(`   ⚠️ Driver notification failed:`, notifyError.message);
+            }
+          }
+
           loadCreated = true;
         }
       }
@@ -386,5 +399,152 @@ export const gmailIngest = {
     }
 
     return results;
+  },
+
+  /**
+   * Send SMS notification to assigned driver when load is imported
+   * Attempts to match driver by name (scoped by company) and sends load details
+   */
+  async notifyAssignedDriver(
+    driverName: string,
+    load: any,
+    extractedData: any
+  ): Promise<boolean> {
+    try {
+      console.log(`   📱 Attempting to notify driver: ${driverName}`);
+      
+      // Check Twilio configuration early
+      const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+      const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+      
+      if (!twilioSid || !twilioToken || !twilioPhone) {
+        console.log(`   ⚠️ Twilio not configured - cannot send SMS`);
+        await db.insert(activityLog).values({
+          companyId: load.companyId,
+          entityType: 'LOAD',
+          entityId: load.id,
+          action: 'DRIVER_NOTIFICATION_SKIPPED',
+          actor: 'SYSTEM',
+          details: { driverName, reason: 'Twilio not configured' }
+        });
+        return false;
+      }
+      
+      // Get storage to find driver by name
+      const { storage } = await import("../storage");
+      const allDrivers = await storage.getDrivers();
+      
+      // Normalize search name
+      const normalizedSearchName = driverName.toLowerCase().trim();
+      
+      // Filter drivers by company first (multi-tenant safety)
+      const companyDrivers = allDrivers.filter(d => d.companyId === load.companyId);
+      
+      // Find driver - prefer exact match, fallback to close match
+      let matchedDriver = companyDrivers.find(d => 
+        d.name?.toLowerCase().trim() === normalizedSearchName
+      );
+      
+      // If no exact match, try matching first+last name combination
+      if (!matchedDriver) {
+        const searchWords = normalizedSearchName.split(/\s+/).filter(w => w.length > 1);
+        if (searchWords.length >= 2) {
+          matchedDriver = companyDrivers.find(d => {
+            const driverWords = (d.name?.toLowerCase().trim() || '').split(/\s+/);
+            // Check if all search words appear in driver name
+            return searchWords.every(word => 
+              driverWords.some(dw => dw.includes(word) || word.includes(dw))
+            );
+          });
+        }
+      }
+      
+      if (!matchedDriver) {
+        console.log(`   ⚠️ No driver found matching name: ${driverName} (checked ${companyDrivers.length} company drivers)`);
+        await db.insert(activityLog).values({
+          companyId: load.companyId,
+          entityType: 'LOAD',
+          entityId: load.id,
+          action: 'DRIVER_NOTIFICATION_SKIPPED',
+          actor: 'SYSTEM',
+          details: { driverName, reason: 'Driver not found' }
+        });
+        return false;
+      }
+      
+      const driverPhone = matchedDriver.phoneNumber || matchedDriver.phone;
+      if (!driverPhone) {
+        console.log(`   ⚠️ Driver ${matchedDriver.name} has no phone number`);
+        await db.insert(activityLog).values({
+          companyId: load.companyId,
+          entityType: 'LOAD',
+          entityId: load.id,
+          action: 'DRIVER_NOTIFICATION_SKIPPED',
+          actor: 'SYSTEM',
+          details: { driverName: matchedDriver.name, driverId: matchedDriver.id, reason: 'No phone number' }
+        });
+        return false;
+      }
+      
+      // Build driver dashboard URL (consistent with send-dashboard-link endpoint)
+      const baseUrl = process.env.REPLIT_DEPLOYMENT_URL || process.env.REPLIT_DEV_DOMAIN || 'https://traq-iq.replit.app';
+      const dashboardUrl = `${baseUrl.startsWith('http') ? baseUrl : 'https://' + baseUrl}/mobile-driver-dashboard?driverId=${matchedDriver.id}`;
+      
+      const message = `📦 NEW LOAD ASSIGNED\n\n` +
+        `Load #${load.loadNumber}\n` +
+        `From: ${extractedData.origin || 'TBD'}\n` +
+        `To: ${extractedData.destination || 'TBD'}\n` +
+        `Rate: $${extractedData.rate || 0}\n` +
+        `Miles: ${extractedData.miles || 'TBD'}\n\n` +
+        `Pickup: ${extractedData.pickupDate || extractedData.pickupTime || 'TBD'}\n\n` +
+        `Your Dashboard: ${dashboardUrl}\n\n` +
+        `Reply YES to confirm.`;
+      
+      // Send via Twilio
+      const twilioClient = (await import("twilio")).default(twilioSid, twilioToken);
+      
+      const phoneNumber = driverPhone.startsWith('+') 
+        ? driverPhone 
+        : '+1' + driverPhone.replace(/\D/g, '');
+      
+      await twilioClient.messages.create({
+        to: phoneNumber,
+        from: twilioPhone,
+        body: message
+      });
+      
+      console.log(`   📱 SMS notification sent to driver ${matchedDriver.name} for load ${load.loadNumber}`);
+      
+      // Log activity
+      await db.insert(activityLog).values({
+        companyId: load.companyId,
+        entityType: 'LOAD',
+        entityId: load.id,
+        action: 'DRIVER_NOTIFIED',
+        actor: 'SYSTEM',
+        details: {
+          driverId: matchedDriver.id,
+          driverName: matchedDriver.name,
+          driverPhone: phoneNumber,
+          method: 'SMS',
+          loadNumber: load.loadNumber,
+          matchType: matchedDriver.name?.toLowerCase().trim() === normalizedSearchName ? 'exact' : 'fuzzy'
+        }
+      });
+      
+      return true;
+    } catch (error: any) {
+      console.error(`   ❌ Failed to notify driver ${driverName}:`, error.message);
+      await db.insert(activityLog).values({
+        companyId: load.companyId,
+        entityType: 'LOAD',
+        entityId: load.id,
+        action: 'DRIVER_NOTIFICATION_FAILED',
+        actor: 'SYSTEM',
+        details: { driverName, error: error.message }
+      }).catch(() => {}); // Best-effort logging
+      return false;
+    }
   }
 };

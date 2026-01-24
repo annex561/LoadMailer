@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard } from "lucide-react";
+import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard, MapPin, User, Phone } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface GALoad {
   id: string;
@@ -26,6 +27,9 @@ interface GALoad {
   equipment: string;
   broker_name: string;
   broker_email: string;
+  broker_phone?: string;
+  dispatcher_name?: string;
+  driver_name?: string;
   offered_rate?: number;
   booked_rate?: number;
   offered_at?: string;
@@ -97,6 +101,39 @@ export default function LoadsInbox() {
       setShortlist(b.loads || []);
     } catch (e: any) {
       toast({ title: "Error loading data", description: e?.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function calculateMilesForLoad(loadId: string) {
+    try {
+      const r = await fetch(`/api/ga/loads/${loadId}/calculate-miles`, { method: "POST" });
+      const data = await r.json();
+      if (data.ok) {
+        toast({ title: "Miles Calculated", description: `${data.miles} miles ($${data.rpm}/mi)` });
+        await refresh();
+      } else {
+        throw new Error(data.error || "Could not calculate miles");
+      }
+    } catch (e: any) {
+      toast({ title: "Error", description: e?.message, variant: "destructive" });
+    }
+  }
+
+  async function calculateAllMiles() {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/ga/loads/calculate-all-miles`, { method: "POST" });
+      const data = await r.json();
+      if (data.ok) {
+        toast({ title: "Miles Calculated", description: `Updated ${data.updated} loads` });
+        await refresh();
+      } else {
+        throw new Error(data.error || "Failed to calculate miles");
+      }
+    } catch (e: any) {
+      toast({ title: "Error", description: e?.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -373,10 +410,16 @@ export default function LoadsInbox() {
             Revenue pipeline: Offer → Book → RateCon → Invoice
           </p>
         </div>
-        <Button onClick={refresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={calculateAllMiles} disabled={loading} variant="outline">
+            <MapPin className="w-4 h-4 mr-2" />
+            Fill Missing Miles
+          </Button>
+          <Button onClick={refresh} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-4">
@@ -424,11 +467,26 @@ export default function LoadsInbox() {
                   <TableRow key={l.id}>
                     <TableCell>{getScoreBadge(l.score)}</TableCell>
                     <TableCell>
-                      {l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}
+                      <div className="flex flex-col">
+                        <span>{l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}</span>
+                        {(l.dispatcher_name || l.driver_name || l.broker_phone) && (
+                          <div className="flex gap-2 text-xs text-muted-foreground mt-1">
+                            {l.dispatcher_name && <span><User className="w-3 h-3 inline mr-1" />{l.dispatcher_name}</span>}
+                            {l.driver_name && <span className="text-green-600"><Truck className="w-3 h-3 inline mr-1" />{l.driver_name}</span>}
+                            {l.broker_phone && <span><Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}</span>}
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell>{l.miles ?? "-"}</TableCell>
+                    <TableCell>
+                      {l.miles ? l.miles : (
+                        <Button size="sm" variant="ghost" onClick={() => calculateMilesForLoad(l.id)} title="Calculate miles">
+                          <MapPin className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </TableCell>
                     <TableCell>${l.rate_total ?? "-"}</TableCell>
-                    <TableCell>${l.rpm ?? "-"}/mi</TableCell>
+                    <TableCell>{l.rpm ? `$${l.rpm}/mi` : "-"}</TableCell>
                     <TableCell>{getStatusBadge(l.status)}</TableCell>
                     <TableCell>{renderActions(l)}</TableCell>
                   </TableRow>
@@ -472,12 +530,27 @@ export default function LoadsInbox() {
                   <TableRow key={l.id}>
                     <TableCell>{getScoreBadge(l.score)}</TableCell>
                     <TableCell>
-                      {l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}
+                      <div className="flex flex-col">
+                        <span>{l.origin_city}, {l.origin_state} → {l.dest_city}, {l.dest_state}</span>
+                        {(l.dispatcher_name || l.driver_name || l.broker_phone) && (
+                          <div className="flex gap-2 text-xs text-muted-foreground mt-1">
+                            {l.dispatcher_name && <span><User className="w-3 h-3 inline mr-1" />{l.dispatcher_name}</span>}
+                            {l.driver_name && <span className="text-green-600"><Truck className="w-3 h-3 inline mr-1" />{l.driver_name}</span>}
+                            {l.broker_phone && <span><Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}</span>}
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{l.pickup_dt || "-"}</TableCell>
-                    <TableCell>{l.miles ?? "-"}</TableCell>
+                    <TableCell>
+                      {l.miles ? l.miles : (
+                        <Button size="sm" variant="ghost" onClick={() => calculateMilesForLoad(l.id)} title="Calculate miles">
+                          <MapPin className="w-3 h-3" />
+                        </Button>
+                      )}
+                    </TableCell>
                     <TableCell>${l.rate_total ?? "-"}</TableCell>
-                    <TableCell>${l.rpm ?? "-"}/mi</TableCell>
+                    <TableCell>{l.rpm ? `$${l.rpm}/mi` : "-"}</TableCell>
                     <TableCell>{getStatusBadge(l.status)}</TableCell>
                     <TableCell>{renderActions(l)}</TableCell>
                   </TableRow>

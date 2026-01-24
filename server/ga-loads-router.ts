@@ -718,8 +718,48 @@ router.get("/stats", (req: Request, res: Response) => {
   }
 });
 
+// POST /api/ga/loads/calculate-all-miles - Calculate miles for all loads missing miles (MUST be before /:id routes)
+router.post("/loads/calculate-all-miles", async (req: Request, res: Response) => {
+  try {
+    const loadsWithoutMiles = db.prepare(`
+      SELECT id, origin_city, origin_state, dest_city, dest_state, rate_total 
+      FROM ga_loads 
+      WHERE (miles IS NULL OR miles = 0) 
+      AND origin_city IS NOT NULL AND dest_city IS NOT NULL
+    `).all() as any[];
+    
+    console.log(`📍 Calculating miles for ${loadsWithoutMiles.length} loads without miles...`);
+    
+    const results: Array<{id: string, miles: number, rpm: number | null}> = [];
+    
+    for (const load of loadsWithoutMiles) {
+      const origin = [load.origin_city, load.origin_state].filter(Boolean).join(', ');
+      const dest = [load.dest_city, load.dest_state].filter(Boolean).join(', ');
+      
+      const miles = await calculateMiles(origin, dest);
+      if (miles) {
+        const rpm = load.rate_total && miles > 0 ? Math.round((load.rate_total / miles) * 100) / 100 : null;
+        
+        db.prepare(`UPDATE ga_loads SET miles = ?, rpm = ?, score = ? WHERE id = ?`)
+          .run(miles, rpm, scoreLoad({ ...load, miles, rpm }), load.id);
+        
+        logActivity(load.id, "MILES_CALCULATED", "system", { miles, rpm, origin, dest });
+        results.push({ id: load.id, miles, rpm });
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 1100));
+    }
+    
+    console.log(`✅ Calculated miles for ${results.length} loads`);
+    res.json({ ok: true, updated: results.length, results });
+  } catch (err: any) {
+    console.error('❌ Error calculating miles:', err);
+    res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
+});
+
 // POST /api/ga/loads/:id/calculate-miles - Calculate missing miles for a load
-router.post("/:id/calculate-miles", async (req: Request, res: Response) => {
+router.post("/loads/:id/calculate-miles", async (req: Request, res: Response) => {
   const { id } = req.params;
   
   try {
@@ -752,42 +792,6 @@ router.post("/:id/calculate-miles", async (req: Request, res: Response) => {
     logActivity(id, "MILES_CALCULATED", "system", { miles, rpm, origin, dest });
     
     res.json({ ok: true, miles, rpm });
-  } catch (err: any) {
-    res.status(500).json({ ok: false, error: String(err?.message || err) });
-  }
-});
-
-// POST /api/ga/loads/calculate-all-miles - Calculate miles for all loads missing miles
-router.post("/calculate-all-miles", async (req: Request, res: Response) => {
-  try {
-    const loadsWithoutMiles = db.prepare(`
-      SELECT id, origin_city, origin_state, dest_city, dest_state, rate_total 
-      FROM ga_loads 
-      WHERE (miles IS NULL OR miles = 0) 
-      AND origin_city IS NOT NULL AND dest_city IS NOT NULL
-    `).all() as any[];
-    
-    const results: Array<{id: string, miles: number, rpm: number | null}> = [];
-    
-    for (const load of loadsWithoutMiles) {
-      const origin = [load.origin_city, load.origin_state].filter(Boolean).join(', ');
-      const dest = [load.dest_city, load.dest_state].filter(Boolean).join(', ');
-      
-      const miles = await calculateMiles(origin, dest);
-      if (miles) {
-        const rpm = load.rate_total && miles > 0 ? Math.round((load.rate_total / miles) * 100) / 100 : null;
-        
-        db.prepare(`UPDATE ga_loads SET miles = ?, rpm = ?, score = ? WHERE id = ?`)
-          .run(miles, rpm, scoreLoad({ ...load, miles, rpm }), load.id);
-        
-        logActivity(load.id, "MILES_CALCULATED", "system", { miles, rpm, origin, dest });
-        results.push({ id: load.id, miles, rpm });
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 1100));
-    }
-    
-    res.json({ ok: true, updated: results.length, results });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: String(err?.message || err) });
   }

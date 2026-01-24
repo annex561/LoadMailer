@@ -69,17 +69,20 @@ The design system employs a consistent brand palette (Navy, Slate, Teal, Whitesm
 - **RateCon Inbox (Gmail Integration)**: Automatic rate confirmation email processing:
     - **Gmail Scanning**: Connects to company Gmail accounts to scan for rate confirmation emails.
     - **PDF Parsing**: Uses pdf2json to extract text from PDF attachments.
-    - **AI Extraction**: OpenAI GPT-4o parses extracted text to identify load number, rate, origin, destination, broker name, and pickup/delivery times.
+    - **AI Extraction**: OpenAI GPT-4o parses extracted text to identify 17 data fields: load number, rate, origin, destination, broker name/phone/email, dispatcher name, driver name, miles, RPM, pickup/delivery times, weight, and special instructions.
     - **Auto-Customer Creation**: Creates new customers automatically based on broker name from rate confirmations.
     - **Database Integration**: Loads are saved to PostgreSQL with lifecycle status 'booked', creating audit trail in activity_log.
     - **Duplicate Detection**: Prevents re-importing loads with the same load number.
+    - **Driver Notification**: When a load is imported with a driver name, the system attempts to match the driver by name and sends an SMS notification with load details and a mobile dashboard link.
     - **API Endpoints**: `POST /api/gmail/scan` (triggers scan), `GET /api/gmail/accounts` (list connected accounts).
     - **Auto-Polling**: Background job polls Gmail every 5 minutes for new rate confirmations.
 - **GA Loads Inbox**: A dedicated load scoring and management system using SQLite for lightweight load data:
     - **Load Scoring**: Algorithm-based scoring (0-100) considering RPM (50pts), deadhead penalty (-20pts), urgency bonus (10pts), equipment fit (10pts), and lane fit (10pts).
     - **Shortlist**: Top 10 highest-scored new loads for quick action.
     - **Workflow Actions**: Quote (generates email template), Book, Dismiss with status tracking.
-    - **API Endpoints**: `/api/ga/loads/ingest`, `/api/ga/loads`, `/api/ga/loads/shortlist`, `/api/ga/loads/:id/quote`, `/api/ga/loads/:id/book`, `/api/ga/loads/:id/dismiss`.
+    - **Distance Calculation**: Uses OpenStreetMap APIs (Nominatim for geocoding, OSRM for routing) with haversine fallback to calculate miles and RPM for loads missing distance data.
+    - **Driver Notification on Booking**: When a load is booked with an assigned driver, sends SMS with load details and mobile dashboard link.
+    - **API Endpoints**: `/api/ga/loads/ingest`, `/api/ga/loads`, `/api/ga/loads/shortlist`, `/api/ga/loads/:id/quote`, `/api/ga/loads/:id/book`, `/api/ga/loads/:id/dismiss`, `/api/ga/loads/calculate-all-miles`, `/api/ga/loads/:id/calculate-miles`.
     - **Frontend**: Dual-table view with score filter slider, located at `/loads-inbox`.
 - **Items (Collections) System**: Accounts receivable management for outstanding invoices with automated follow-up scheduling:
     - **Aging Buckets**: 0-7, 8-14, 15-30, 31-60, 61-90, 90+ day buckets with totals.
