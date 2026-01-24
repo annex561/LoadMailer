@@ -139,21 +139,23 @@ export default function LoadsInbox() {
     }
   }
 
-  async function scanGmail() {
+  async function scanGmail(forceRescan: boolean = false) {
     setLoading(true);
     try {
-      const r = await fetch(`/api/gmail/scan`, { method: "POST" });
+      const r = await fetch(`/api/gmail/scan`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forceRescan })
+      });
       const data = await r.json();
       if (data.ok || data.success) {
         const totalLoads = data.results?.reduce((sum: number, a: any) => sum + (a.loadsCreated || 0), 0) || 0;
         const totalFiles = data.results?.reduce((sum: number, a: any) => sum + (a.filesProcessed || 0), 0) || 0;
         toast({ 
-          title: "Gmail Scan Complete", 
-          description: `Processed ${totalFiles} files, created ${totalLoads} loads` 
+          title: forceRescan ? "Force Rescan Complete" : "Gmail Scan Complete", 
+          description: `Processed ${totalFiles} files, created/updated ${totalLoads} loads` 
         });
-        if (totalLoads > 0) {
-          await refresh();
-        }
+        await refresh();
       } else {
         throw new Error(data.error || "Gmail scan failed");
       }
@@ -457,13 +459,13 @@ export default function LoadsInbox() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={scanGmail} disabled={loading} variant="outline">
+          <Button onClick={() => scanGmail(false)} disabled={loading} variant="outline">
             <Mail className="w-4 h-4 mr-2" />
             Scan Gmail
           </Button>
-          <Button onClick={fixBrokerInfo} disabled={loading} variant="outline">
-            <User className="w-4 h-4 mr-2" />
-            Fix Broker Info
+          <Button onClick={() => scanGmail(true)} disabled={loading} variant="outline" title="Re-scan all emails including already read ones">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Force Rescan
           </Button>
           <Button onClick={calculateAllMiles} disabled={loading} variant="outline">
             <MapPin className="w-4 h-4 mr-2" />

@@ -1208,14 +1208,14 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   app.post('/api/gmail/scan', async (req, res) => {
     try {
-      const { companyId } = req.body;
+      const { companyId, forceRescan } = req.body;
       const { gmailIngest } = await import('./services/gmail');
       
       let results;
       if (companyId) {
         results = await gmailIngest.scanAccountsForCompany(companyId);
       } else {
-        results = await gmailIngest.scanAllAccounts();
+        results = await gmailIngest.scanAllAccounts(forceRescan === true);
       }
       
       const totalFiles = results.reduce((sum: number, r: any) => sum + (r.filesProcessed || 0), 0);

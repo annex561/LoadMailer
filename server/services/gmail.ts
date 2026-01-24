@@ -22,8 +22,8 @@ export const gmailIngest = {
    * 1. Loops through ALL connected Gmail accounts in the DB.
    * 2. Scans each inbox for RateCons.
    */
-  async scanAllAccounts() {
-    console.log("🔄 Starting Multi-Account Scan...");
+  async scanAllAccounts(forceRescan: boolean = false) {
+    console.log(`🔄 Starting Multi-Account Scan... ${forceRescan ? '(FORCE RESCAN - includes read emails)' : ''}`);
 
     if (!this.isConfigured()) {
       console.log("⚠️ Gmail OAuth credentials not configured in environment.");
@@ -40,7 +40,8 @@ export const gmailIngest = {
     const results = [];
     for (const account of accounts) {
       console.log(`📧 Scanning account: ${account.email}...`);
-      const accountResult = await this.scanSingleAccount(account);
+      const accountWithFlag = { ...account, forceRescan };
+      const accountResult = await this.scanSingleAccount(accountWithFlag);
       results.push(accountResult);
     }
 
@@ -70,10 +71,18 @@ export const gmailIngest = {
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
+      // If forceRescan is true, include read emails too
+      const forceRescan = (account as any).forceRescan === true;
+      const query = forceRescan 
+        ? 'subject:("Rate Confirmation" OR "RateCon" OR "Load Confirmation" OR "Booking Confirmation") has:attachment'
+        : 'is:unread subject:("Rate Confirmation" OR "RateCon" OR "Load Confirmation" OR "Booking Confirmation") has:attachment';
+      
+      console.log(`   📧 Scanning with query: ${forceRescan ? 'ALL emails (force rescan)' : 'UNREAD emails only'}`);
+      
       const res = await gmail.users.messages.list({
         userId: 'me',
-        q: 'is:unread subject:("Rate Confirmation" OR "RateCon" OR "Load Confirmation" OR "Booking Confirmation") has:attachment',
-        maxResults: 10
+        q: query,
+        maxResults: forceRescan ? 50 : 10
       });
 
       const messages = res.data.messages || [];
