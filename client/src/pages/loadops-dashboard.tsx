@@ -33,7 +33,9 @@ import {
   Webhook,
   ChevronLeft,
   ChevronRight,
-  Radio
+  ChevronDown,
+  Radio,
+  LayoutDashboard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -1020,52 +1022,78 @@ export default function LoadOpsDashboard() {
     }
   ];
 
-  // Navigation items organized by sections
-  const navigation = [
-    // Core Operations
-    { name: 'Main Dashboard', href: '/loadops-dashboard', icon: Home, section: 'core' },
-    { name: 'Loads', href: '/loads', icon: FileText, section: 'core' },
-    { name: 'Loads Inbox', href: '/loads-inbox', icon: FileText, section: 'core' },
-    { name: 'Items (AR)', href: '/items', icon: DollarSign, section: 'core' },
-    { name: 'DAT Loads', href: '/dat-loads', icon: Truck, section: 'core' },
-    { name: 'Manual Load Entry', href: '/manual-load-entry', icon: FileText, section: 'core' },
-    
-    // Driver Management
-    { name: 'Driver Management', href: '/driver-management', icon: Users, section: 'drivers' },
-    { name: 'Driver Onboarding', href: '/driver-onboarding', icon: UserPlus, section: 'drivers' },
-    { name: 'Simple Registration', href: '/simple-registration', icon: User, section: 'drivers' },
-    { name: 'Driver Dashboard', href: '/driver-dashboard', icon: User, section: 'drivers' },
-    { name: 'GPS Tracking', href: '/gps-tracking', icon: MapPin, section: 'drivers' },
-    
-    // Customer & Communication
-    { name: 'Customers', href: '/contacts', icon: Users, section: 'comm' },
-    { name: 'Driver Messages', href: '/communication-dashboard', icon: MessageSquare, section: 'comm' },
-    { name: 'AI Communication Insights', href: '/ai-communication-insights', icon: Brain, section: 'comm' },
-    { name: 'LoadMailer Control', href: '/loadmailer-control', icon: Mail, section: 'comm' },
-    { name: 'Telegram Dispatching', href: '/telegram-dispatching', icon: MessageSquare, section: 'comm' },
-    { name: 'SMS Status', href: '/sms-status', icon: MessageSquare, section: 'comm' },
-    
-    // AI & Smart Features
-    { name: 'Smart Load Matching', href: '/smart-load-matching', icon: Brain, section: 'smart' },
-    { name: 'Analytics Dashboard', href: '/analytics', icon: BarChart3, section: 'smart' },
-    { name: 'Fleet Profit Calculator', href: '/fleet-calculator', icon: DollarSign, section: 'smart' },
-    { name: 'Predictive Maintenance', href: '/predictive-maintenance', icon: Wrench, section: 'smart' },
-    { name: 'Prediction Confidence', href: '/prediction-confidence', icon: Brain, section: 'smart' },
-    
-    // System & Reports
-    { name: 'Admin Overview', href: '/admin-overview', icon: Settings, section: 'system' },
-    { name: 'Payment Workflow', href: '/payments', icon: DollarSign, section: 'system' },
-    { name: 'Templates', href: '/templates', icon: FileText, section: 'system' },
-    { name: 'Scraper Management', href: '/scrapers', icon: Bot, section: 'system' },
-    { name: 'Debug Token', href: '/debug-token', icon: Wrench, section: 'system' },
-    { name: 'Dispatcher Dashboard', href: '/dispatcher', icon: Headphones, section: 'system' },
-    { name: 'Dispatcher Vehicle Dashboard', href: '/dispatcher-vehicle-dashboard', icon: Truck, section: 'system' },
-    { name: 'Document Management', href: '/document-management', icon: FileText, section: 'system' },
-    { name: 'DAT Scraper', href: '/dat-scraper', icon: Bot, section: 'system' },
-    { name: 'DAT Login', href: '/dat-login', icon: Webhook, section: 'system' },
-    { name: 'SMS Dispatching', href: '/sms-dispatching', icon: MessageSquare, section: 'system' },
-    { name: 'TaskMagic Status', href: '/taskmagic-status', icon: Webhook, section: 'system' }
+  // Menu groups with collapsible sections
+  const menuGroups = [
+    {
+      title: "Dispatch Command",
+      icon: LayoutDashboard,
+      items: [
+        { name: "Control Tower", href: "/dispatcher" },
+        { name: "Load Ops Board", href: "/loadops-dashboard" },
+        { name: "Live Map", href: "/gps-tracking" },
+        { name: "RateCon Inbox", href: "/loads-inbox" },
+      ]
+    },
+    {
+      title: "Load Management",
+      icon: FileText,
+      items: [
+        { name: "Load History", href: "/loads" },
+        { name: "Create New Load", href: "/manual-load-entry" },
+        { name: "DAT Load Board", href: "/dat-loads" },
+        { name: "Items (AR)", href: "/items" },
+      ]
+    },
+    {
+      title: "Fleet & Drivers",
+      icon: Truck,
+      items: [
+        { name: "Fleet Dashboard", href: "/fleet" },
+        { name: "Driver Roster", href: "/driver-management" },
+        { name: "Onboarding", href: "/driver-onboarding" },
+        { name: "Trucks", href: "/fleet/trucks" },
+        { name: "Work Orders", href: "/fleet/work-orders" },
+        { name: "Inspections", href: "/fleet/inspections" },
+      ]
+    },
+    {
+      title: "Finance",
+      icon: DollarSign,
+      items: [
+        { name: "Fleet Calculator", href: "/fleet-calculator" },
+        { name: "Payments", href: "/payments" },
+        { name: "Analytics", href: "/analytics" },
+      ]
+    },
+    {
+      title: "Communication",
+      icon: MessageSquare,
+      items: [
+        { name: "Driver Messages", href: "/communication-dashboard" },
+        { name: "AI Insights", href: "/ai-communication-insights" },
+        { name: "Customers", href: "/contacts" },
+        { name: "SMS Status", href: "/sms-status" },
+      ]
+    },
+    {
+      title: "System",
+      icon: Settings,
+      items: [
+        { name: "Admin Overview", href: "/admin-overview" },
+        { name: "Templates", href: "/templates" },
+        { name: "DAT Login", href: "/dat-login" },
+        { name: "Debug", href: "/debug-token" },
+      ]
+    }
   ];
+
+  const [openGroups, setOpenGroups] = useState<string[]>(["Dispatch Command", "Load Management"]);
+
+  const toggleGroup = (title: string) => {
+    setOpenGroups(prev => 
+      prev.includes(title) ? prev.filter(t => t !== title) : [...prev, title]
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -1095,197 +1123,79 @@ export default function LoadOpsDashboard() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 min-h-0 overflow-y-auto py-4">
-          {/* Core Operations Section */}
-          {!sidebarCollapsed && (
-            <div className="px-6 py-2">
-              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">Core Operations</p>
-            </div>
-          )}
-          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
-            {navigation.filter(item => item.section === "core").map((item) => {
-              const Icon = item.icon;
-              const isActive = location === item.href;
-              
-              return (
-                <li key={item.name}>
-                  <Link
-                    to={item.href}
-                    className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
-                      sidebarCollapsed 
-                        ? "px-2 justify-center mx-2" 
-                        : "px-4 mx-2",
-                      isActive
-                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
-                    )}
-                    title={sidebarCollapsed ? item.name : undefined}
+        <nav className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
+          {menuGroups.map((group) => {
+            const GroupIcon = group.icon;
+            const isOpen = openGroups.includes(group.title);
+            
+            return (
+              <div key={group.title}>
+                {/* Group Header */}
+                {!sidebarCollapsed ? (
+                  <button 
+                    onClick={() => toggleGroup(group.title)}
+                    className="flex items-center justify-between w-full text-xs font-bold uppercase tracking-wider text-sidebar-foreground/50 mb-2 hover:text-sidebar-foreground transition-colors"
                   >
-                    <Icon className={cn(
-                      "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3",
-                      isActive && "text-primary"
-                    )} />
-                    {!sidebarCollapsed && <span>{item.name}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                    <div className="flex items-center gap-2">
+                      <GroupIcon className="w-4 h-4" />
+                      <span>{group.title}</span>
+                    </div>
+                    <ChevronDown className={cn("w-3 h-3 transition-transform", isOpen && "rotate-180")} />
+                  </button>
+                ) : (
+                  <div className="flex justify-center mb-2">
+                    <GroupIcon className="w-5 h-5 text-sidebar-foreground/50" />
+                  </div>
+                )}
 
-          {/* Driver Management Section */}
-          {!sidebarCollapsed && (
-            <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">Driver Management</p>
-            </div>
-          )}
-          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
-            {navigation.filter(item => item.section === "drivers").map((item) => {
-              const Icon = item.icon;
-              const isActive = location === item.href;
-              
-              return (
-                <li key={item.name}>
-                  <Link
-                    to={item.href}
-                    className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
-                      sidebarCollapsed 
-                        ? "px-2 justify-center mx-2" 
-                        : "px-4 mx-2",
-                      isActive
-                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
-                    )}
-                    title={sidebarCollapsed ? item.name : undefined}
-                  >
-                    <Icon className={cn(
-                      "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3",
-                      isActive && "text-primary"
-                    )} />
-                    {!sidebarCollapsed && <span>{item.name}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* Customer & Communication Section */}
-          {!sidebarCollapsed && (
-            <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">Communication</p>
-            </div>
-          )}
-          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
-            {navigation.filter(item => item.section === "comm").map((item) => {
-              const Icon = item.icon;
-              const isActive = location === item.href;
-              
-              return (
-                <li key={item.name}>
-                  <Link
-                    to={item.href}
-                    className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
-                      sidebarCollapsed 
-                        ? "px-2 justify-center mx-2" 
-                        : "px-4 mx-2",
-                      isActive
-                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
-                    )}
-                    title={sidebarCollapsed ? item.name : undefined}
-                  >
-                    <Icon className={cn(
-                      "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3",
-                      isActive && "text-primary"
-                    )} />
-                    {!sidebarCollapsed && <span>{item.name}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* AI & Smart Features Section */}
-          {!sidebarCollapsed && (
-            <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">AI & Smart Features</p>
-            </div>
-          )}
-          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
-            {navigation.filter(item => item.section === "smart").map((item) => {
-              const Icon = item.icon;
-              const isActive = location === item.href;
-              
-              return (
-                <li key={item.name}>
-                  <Link
-                    to={item.href}
-                    className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
-                      sidebarCollapsed 
-                        ? "px-2 justify-center mx-2" 
-                        : "px-4 mx-2",
-                      isActive
-                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
-                    )}
-                    title={sidebarCollapsed ? item.name : undefined}
-                  >
-                    <Icon className={cn(
-                      "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3",
-                      isActive && "text-primary"
-                    )} />
-                    {!sidebarCollapsed && <span>{item.name}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* System & Reports Section */}
-          {!sidebarCollapsed && (
-            <div className="px-6 py-2 mt-6">
-              <p className="text-xs font-semibold text-sidebar-foreground/70 uppercase tracking-wide">System & Reports</p>
-            </div>
-          )}
-          <ul className={cn("mt-2 space-y-1", sidebarCollapsed && "px-2")}>
-            {navigation.filter(item => item.section === "system").map((item) => {
-              const Icon = item.icon;
-              const isActive = location === item.href;
-              
-              return (
-                <li key={item.name}>
-                  <Link
-                    to={item.href}
-                    className={cn(
-                      "flex items-center py-3 text-sm font-medium transition-all duration-200 relative group rounded-lg",
-                      sidebarCollapsed 
-                        ? "px-2 justify-center mx-2" 
-                        : "px-4 mx-2",
-                      isActive
-                        ? "text-primary bg-sidebar-accent border-r-3 border-primary shadow-md"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
-                    )}
-                    title={sidebarCollapsed ? item.name : undefined}
-                  >
-                    <Icon className={cn(
-                      "w-5 h-5", 
-                      !sidebarCollapsed && "mr-3",
-                      isActive && "text-primary"
-                    )} />
-                    {!sidebarCollapsed && <span>{item.name}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                {/* Group Items (Collapsible) */}
+                {(isOpen || sidebarCollapsed) && (
+                  <div className={cn(
+                    "space-y-1",
+                    !sidebarCollapsed && "ml-2 border-l border-sidebar-border pl-3"
+                  )}>
+                    {group.items.map((item) => {
+                      const isActive = location === item.href;
+                      
+                      return (
+                        <Link
+                          key={item.href}
+                          to={item.href}
+                          className={cn(
+                            "block px-3 py-2 text-sm rounded-md transition-all duration-200",
+                            sidebarCollapsed && "text-center",
+                            isActive 
+                              ? "bg-primary/10 text-primary font-medium border-r-2 border-primary" 
+                              : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                          )}
+                          title={sidebarCollapsed ? item.name : undefined}
+                        >
+                          {sidebarCollapsed ? item.name.charAt(0) : item.name}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
+
+        {/* User Profile Footer */}
+        {!sidebarCollapsed && (
+          <div className="p-4 border-t border-sidebar-border bg-sidebar/50">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-slate-900 font-bold text-xs">
+                AL
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">Annex Luberisse</p>
+                <p className="text-xs text-sidebar-foreground/50 truncate">Executive Admin</p>
+              </div>
+              <Settings className="w-4 h-4 ml-auto text-sidebar-foreground/50 cursor-pointer hover:text-sidebar-foreground" />
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}
