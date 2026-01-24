@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+/* =========================
+   FILE: client/src/pages/items.tsx
+   Drop-in replacement: Aging buckets + Next Action display
+   ========================= */
+
+import React, { useEffect, useMemo, useState } from "react";
 
 type AgingBucket = { label: string; count: number; total: number };
 
@@ -45,7 +50,7 @@ type Item = {
 
   item_status?: string;
   item_owner?: string;
-  collection_stage?: string;
+  collection_stage?: string; // soft/firm/final/escalated
 };
 
 function fmtMoney(n: number | undefined | null) {
@@ -103,6 +108,7 @@ export default function ItemsPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
+  // Optional: simple client-side filter
   const [filter, setFilter] = useState<"all" | "due" | "overdue" | "escalated">("all");
 
   const refresh = async () => {
@@ -181,6 +187,7 @@ export default function ItemsPage() {
         </div>
       )}
 
+      {/* Aging Summary */}
       <div className="rounded-xl border bg-white shadow-sm p-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
@@ -248,11 +255,13 @@ export default function ItemsPage() {
         </div>
       </div>
 
+      {/* Roll-up for filtered view */}
       <div className="text-sm text-slate-700">
         Showing <span className="font-semibold">{totals.count}</span> items totaling{" "}
         <span className="font-semibold">{fmtMoney(totals.amount)}</span>.
       </div>
 
+      {/* Items Grid */}
       {loading ? (
         <div className="text-sm text-slate-600">Loading…</div>
       ) : filtered.length === 0 ? (
@@ -320,6 +329,11 @@ export default function ItemsPage() {
                     ) : null}
                   </div>
                 </div>
+
+                {/* NOTE: Your action buttons already exist elsewhere in your prior Items UI.
+                   This file focuses on aging + next-action display. If you want me to merge
+                   your existing action buttons into this layout, paste your current items.tsx
+                   and I’ll return a change-safe merged version. */}
               </div>
             );
           })}
