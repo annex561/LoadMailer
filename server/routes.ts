@@ -1217,12 +1217,14 @@ export async function registerRoutes(app: Express): Promise<void> {
       const { gmailIngest } = await import('./services/gmail');
       const results = await gmailIngest.scanAccountsForCompany(companyId);
       
-      const totalFiles = results.reduce((sum, r) => sum + r.files.length, 0);
+      const totalFiles = results.reduce((sum, r) => sum + (r.filesProcessed || 0), 0);
+      const totalLoads = results.reduce((sum, r) => sum + (r.loadsCreated || 0), 0);
       res.json({
         success: true,
         companyId,
         accountsScanned: results.length,
-        totalFilesFound: totalFiles,
+        totalFilesProcessed: totalFiles,
+        totalLoadsCreated: totalLoads,
         results
       });
     } catch (error: any) {

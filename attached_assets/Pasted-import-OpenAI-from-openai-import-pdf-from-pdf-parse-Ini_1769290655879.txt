@@ -1,0 +1,80 @@
+import OpenAI from "openai";
+import pdf from "pdf-parse";
+
+// Initialize OpenAI
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+export const rateconParser = {
+  async parsePdf(fileBuffer: Buffer) {
+    console.log("📄 Extracting text from PDF...");
+
+    try {
+      // 1. Extract raw text from the PDF
+      const data = await pdf(fileBuffer);
+      const pdfText = data.text;
+
+      // Fail-safe: If PDF is empty or scanned image, return a generic object
+      if (!pdfText || pdfText.length < 10) {
+        console.warn("⚠️ PDF appears to be empty or image-only. Creating generic load.");
+        return {
+          loadNumber: "MANUAL-REVIEW",
+          rate: 0,
+          brokerName: "Unknown Broker",
+          pickupDate: new Date().toISOString().split('T')[0],
+          deliveryDate: new Date().toISOString().split('T')[0],
+          origin: "Unknown, USA",
+          destination: "Unknown, USA",
+          weight: 0
+        };
+      }
+
+      console.log("🧠 Sending extracted text to OpenAI for structuring...");
+
+      // 2. Send TEXT to OpenAI (Much more reliable than Image)
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: `You are a logistics data entry robot. Extract load details from the raw text below.
+            Return JSON ONLY. No markdown.
+            If a field is missing, use "Unknown" or 0.
+            Fields needed: 
+            - loadNumber (string)
+            - rate (number, pure integer, no signs)
+            - brokerName (string)
+            - pickupDate (YYYY-MM-DD)
+            - deliveryDate (YYYY-MM-DD)
+            - origin (City, State)
+            - destination (City, State)
+            - weight (number)`
+          },
+          {
+            role: "user",
+            content: pdfText
+          }
+        ],
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0].message.content;
+      if (!content) throw new Error("OpenAI returned empty response");
+
+      return JSON.parse(content);
+
+    } catch (error) {
+      console.error("❌ Parser Error:", error);
+      // FAIL-SAFE: Return a placeholder so the DB insert doesn't fail
+      return {
+        loadNumber: "PARSER-ERROR",
+        rate: 0,
+        brokerName: "Manual Fix Needed",
+        pickupDate: "",
+        deliveryDate: "",
+        origin: "Error",
+        destination: "Error",
+        weight: 0
+      };
+    }
+  }
+};
