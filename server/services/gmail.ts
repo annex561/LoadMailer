@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { db } from "../db";
-import { gmailAccounts, loads, activityLog } from "@shared/schema";
+import { gmailAccounts, loads, activityLog, customers } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { rateconParser } from "./ratecon-parser";
 import { nanoid } from "nanoid";
@@ -129,17 +129,45 @@ export const gmailIngest = {
           const extractedData = await rateconParser.parsePdf(attachment.data.data!);
           console.log(`   🤖 AI Parsed: Load ${extractedData.loadNumber}, Rate $${extractedData.rate}`);
 
-          // 3. Save to Database
+          // 3. Find or create customer based on broker name
+          const brokerName = extractedData.brokerName || 'Unknown Broker';
+          let customer = await db.query.customers.findFirst({
+            where: and(eq(customers.name, brokerName), eq(customers.companyId, companyId))
+          });
+          
+          if (!customer) {
+            // Create new customer for this broker
+            const [newCustomer] = await db.insert(customers).values({
+              id: nanoid(),
+              companyId,
+              name: brokerName,
+              contactPerson: 'Rate Confirmation Import',
+              email: from || 'unknown@broker.com',
+              phone: 'N/A',
+              address: 'Auto-created from email import',
+              status: 'active'
+            }).returning();
+            customer = newCustomer;
+            console.log(`   📇 Created new customer: ${brokerName}`);
+          }
+          
+          // 4. Save to Database
           const loadNumber = extractedData.loadNumber || `LOAD-${Date.now()}-${nanoid(6)}`;
           
           const [newLoad] = await db.insert(loads).values({
             id: nanoid(),
             loadNumber,
             companyId,
+            customerId: customer.id,
+            description: `${extractedData.origin} → ${extractedData.destination}`,
             status: 'booked',
             lifecycleStatus: 'booked',
             origin: extractedData.origin || 'Unknown',
             destination: extractedData.destination || 'Unknown',
+            pickupAddress: extractedData.origin || 'See Rate Confirmation',
+            deliveryAddress: extractedData.destination || 'See Rate Confirmation',
+            pickupTime: extractedData.pickupTime || 'TBD',
+            deliveryTime: extractedData.deliveryTime || 'TBD',
             pickupDate: extractedData.pickupDate ? new Date(extractedData.pickupDate) : new Date(),
             deliveryDate: extractedData.deliveryDate ? new Date(extractedData.deliveryDate) : undefined,
             rate: String(extractedData.rate),
@@ -155,12 +183,12 @@ export const gmailIngest = {
 
           // 4. Log Activity
           await db.insert(activityLog).values({
+            companyId,
             entityType: 'LOAD',
             entityId: newLoad.id,
             action: 'AUTO_INGEST',
             actor: 'SYSTEM_AI',
             details: {
-              companyId,
               filename: part.filename,
               rate: extractedData.rate,
               brokerName: extractedData.brokerName,

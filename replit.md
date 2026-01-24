@@ -66,6 +66,15 @@ The design system employs a consistent brand palette (Navy, Slate, Teal, Whitesm
 - **Mobile Driver Dashboard (PWA)**: Installable PWA with dynamic authentication, driver stats, load history, chat, document upload, and profile management. Includes GPS-based intelligent status buttons, an enhanced hamburger menu, and AI-powered messaging for drivers. Features debounced typing protection for message input.
 - **Driver Dashboard Link Distribution System**: Automated and manual SMS delivery of personalized links with security measures.
 - **Driver Onboarding**: Multi-step wizard supporting token-optional flows for invited and direct registrations, focusing on mobile driver dashboard access.
+- **RateCon Inbox (Gmail Integration)**: Automatic rate confirmation email processing:
+    - **Gmail Scanning**: Connects to company Gmail accounts to scan for rate confirmation emails.
+    - **PDF Parsing**: Uses pdf2json to extract text from PDF attachments.
+    - **AI Extraction**: OpenAI GPT-4o parses extracted text to identify load number, rate, origin, destination, broker name, and pickup/delivery times.
+    - **Auto-Customer Creation**: Creates new customers automatically based on broker name from rate confirmations.
+    - **Database Integration**: Loads are saved to PostgreSQL with lifecycle status 'booked', creating audit trail in activity_log.
+    - **Duplicate Detection**: Prevents re-importing loads with the same load number.
+    - **API Endpoints**: `POST /api/gmail/scan` (triggers scan), `GET /api/gmail/accounts` (list connected accounts).
+    - **Auto-Polling**: Background job polls Gmail every 5 minutes for new rate confirmations.
 - **GA Loads Inbox**: A dedicated load scoring and management system using SQLite for lightweight load data:
     - **Load Scoring**: Algorithm-based scoring (0-100) considering RPM (50pts), deadhead penalty (-20pts), urgency bonus (10pts), equipment fit (10pts), and lane fit (10pts).
     - **Shortlist**: Top 10 highest-scored new loads for quick action.
