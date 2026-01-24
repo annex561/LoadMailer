@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard, MapPin, User, Phone } from "lucide-react";
+import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard, MapPin, User, Phone, Mail } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface GALoad {
@@ -134,6 +134,31 @@ export default function LoadsInbox() {
       }
     } catch (e: any) {
       toast({ title: "Error", description: e?.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function scanGmail() {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/gmail/scan`, { method: "POST" });
+      const data = await r.json();
+      if (data.ok || data.success) {
+        const totalLoads = data.results?.reduce((sum: number, a: any) => sum + (a.loadsCreated || 0), 0) || 0;
+        const totalFiles = data.results?.reduce((sum: number, a: any) => sum + (a.filesProcessed || 0), 0) || 0;
+        toast({ 
+          title: "Gmail Scan Complete", 
+          description: `Processed ${totalFiles} files, created ${totalLoads} loads` 
+        });
+        if (totalLoads > 0) {
+          await refresh();
+        }
+      } else {
+        throw new Error(data.error || "Gmail scan failed");
+      }
+    } catch (e: any) {
+      toast({ title: "Gmail Scan Error", description: e?.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -411,6 +436,10 @@ export default function LoadsInbox() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={scanGmail} disabled={loading} variant="outline">
+            <Mail className="w-4 h-4 mr-2" />
+            Scan Gmail
+          </Button>
           <Button onClick={calculateAllMiles} disabled={loading} variant="outline">
             <MapPin className="w-4 h-4 mr-2" />
             Fill Missing Miles
