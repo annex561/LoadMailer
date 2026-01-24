@@ -995,6 +995,51 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Gmail Auto-Polling Scheduler
+  app.get('/api/ingest/scheduler/status', async (req, res) => {
+    try {
+      const { gmailScheduler } = await import('./services/gmail-scheduler');
+      const { gmailIngest } = await import('./services/gmail');
+      res.json({ 
+        configured: gmailIngest.isConfigured(),
+        schedulerActive: gmailScheduler.isActive()
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
+  app.post('/api/ingest/scheduler/start', async (req, res) => {
+    try {
+      const { intervalMinutes = 5 } = req.body;
+      const { gmailScheduler } = await import('./services/gmail-scheduler');
+      gmailScheduler.start(intervalMinutes);
+      res.json({ success: true, message: `Gmail polling started - checking every ${intervalMinutes} minutes` });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
+  app.post('/api/ingest/scheduler/stop', async (req, res) => {
+    try {
+      const { gmailScheduler } = await import('./services/gmail-scheduler');
+      gmailScheduler.stop();
+      res.json({ success: true, message: 'Gmail polling stopped' });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
+  // Auto-start Gmail scheduler on server startup
+  (async () => {
+    try {
+      const { gmailScheduler } = await import('./services/gmail-scheduler');
+      gmailScheduler.start(5); // Poll every 5 minutes
+    } catch (error) {
+      console.error('Failed to start Gmail scheduler:', error);
+    }
+  })();
+
   app.post('/api/email/broker-thank-you', async (req, res) => {
     try {
       const { loadId } = req.body;
