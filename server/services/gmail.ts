@@ -4,6 +4,8 @@ import { gmailAccounts, loads, activityLog } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { rateconParser } from "./ratecon-parser";
 import { nanoid } from "nanoid";
+import gaDb, { logActivity as gaLogActivity } from "../ga-db";
+import { scoreLoad } from "../ga-scoring";
 
 export const gmailIngest = {
   /**
@@ -166,6 +168,73 @@ export const gmailIngest = {
               emailFrom: from
             }
           });
+
+          // 5. Also insert into GA Loads (RateCon Inbox) SQLite table
+          try {
+            const originParts = (extractedData.origin || '').split(',').map((s: string) => s.trim());
+            const destParts = (extractedData.destination || '').split(',').map((s: string) => s.trim());
+            
+            const gaLoadData = {
+              id: newLoad.id,
+              source: 'email',
+              origin_city: originParts[0] || null,
+              origin_state: originParts[1] || null,
+              origin_zip: null,
+              dest_city: destParts[0] || null,
+              dest_state: destParts[1] || null,
+              dest_zip: null,
+              pickup_dt: extractedData.pickupDate || null,
+              delivery_dt: extractedData.deliveryDate || null,
+              miles: extractedData.miles || null,
+              deadhead_miles: 0,
+              rate_total: extractedData.rate || null,
+              rpm: extractedData.miles && extractedData.rate ? Math.round((extractedData.rate / extractedData.miles) * 100) / 100 : null,
+              equipment: 'Dry Van',
+              weight_lbs: extractedData.weight || null,
+              length_ft: null,
+              broker_name: extractedData.brokerName || null,
+              broker_email: from || null,
+              broker_phone: null,
+              status: 'new',
+              score: 0,
+              notes: `Auto-imported from email: ${subject}`,
+              raw_json: JSON.stringify(extractedData)
+            };
+            
+            // Calculate score
+            gaLoadData.score = scoreLoad(gaLoadData, { minRPM: 1.8, idealRPM: 2.3, maxRPM: 3.25 });
+            
+            const insertStmt = gaDb.prepare(`
+              INSERT INTO ga_loads (
+                id, source,
+                origin_city, origin_state, origin_zip,
+                dest_city, dest_state, dest_zip,
+                pickup_dt, delivery_dt,
+                miles, deadhead_miles,
+                rate_total, rpm,
+                equipment, weight_lbs, length_ft,
+                broker_name, broker_email, broker_phone,
+                status, score, notes, raw_json
+              ) VALUES (
+                @id, @source,
+                @origin_city, @origin_state, @origin_zip,
+                @dest_city, @dest_state, @dest_zip,
+                @pickup_dt, @delivery_dt,
+                @miles, @deadhead_miles,
+                @rate_total, @rpm,
+                @equipment, @weight_lbs, @length_ft,
+                @broker_name, @broker_email, @broker_phone,
+                @status, @score, @notes, @raw_json
+              )
+              ON CONFLICT(id) DO NOTHING
+            `);
+            
+            insertStmt.run(gaLoadData);
+            gaLogActivity(newLoad.id, 'email_ingested', 'system', { source: 'gmail', subject, from });
+            console.log(`   📥 Load also added to RateCon Inbox (GA Loads)`);
+          } catch (gaError: any) {
+            console.error(`   ⚠️ Failed to add to GA Loads:`, gaError.message);
+          }
 
           loadCreated = true;
         }
