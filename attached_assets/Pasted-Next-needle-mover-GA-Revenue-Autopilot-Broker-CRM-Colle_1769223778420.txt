@@ -1,0 +1,66 @@
+Next needle-mover: GA “Revenue Autopilot” (Broker CRM + Collections Queue)
+
+Goal: turn your current pipeline (Offer → Book → RateCon → Invoice → Payment) into a repeatable cash machine by:
+	1.	remembering brokers + lanes that pay well,
+	2.	surfacing the next best broker/load faster,
+	3.	preventing receivables from aging silently.
+
+Feature Set (minimal, high-impact, low-risk)
+
+A) Broker Directory (auto-created from loads)
+	•	Store broker identity from ingested loads:
+	•	broker_name, broker_email, broker_phone
+	•	source (DAT/Relay/etc), notes
+	•	Track performance KPIs:
+	•	loads_booked_count
+	•	avg_rpm, avg_margin (if you track margin)
+	•	avg_days_to_pay
+	•	“do-not-work” flag
+
+B) Collections Queue
+	•	List invoices with invoice_status='sent' AND unpaid
+	•	Group by aging buckets (you already have /ar)
+	•	Add action buttons:
+	•	“Log collection touch” (call/email/text attempt)
+	•	“Set promise-to-pay date”
+	•	“Escalate” (manager note)
+
+C) Follow-up Templates (1-click)
+	•	Prebuilt messages that copy to clipboard:
+	•	“Invoice #___ sent on ___, please confirm ETA”
+	•	“Past due reminder – request remittance advice”
+	•	Each click writes to ga_activity_log:
+	•	COLLECTION_TOUCH, PROMISE_TO_PAY, ESCALATED
+
+D) Broker Score (feeds booking decisions)
+	•	Add a broker component into the GA load score:
+	•	+X points for high-paying/fast-paying brokers
+	•	-X points for slow pay / disputed / do-not-work
+
+This is revenue leverage: better brokers + tighter collections = more cash, faster, with fewer surprises.
+
+⸻
+
+What I recommend you do right now (simple, copy/paste workflow in Replit)
+	1.	Create a new route group (no changes to existing routes):
+	•	/api/ga/brokers/*
+	•	/api/ga/collections/*
+	2.	Create two new pages:
+	•	/brokers (directory + broker performance)
+	•	/collections (unpaid invoices queue + actions)
+	3.	Only read from existing loads table at first:
+	•	Start with a “derived broker view” from booked loads.
+	•	Later (phase 2) you persist broker table if needed.
+
+This avoids migrations initially and reduces break risk.
+
+⸻
+
+Decision I’m making for you (to keep momentum)
+
+We move on to Collections Queue first (fastest cash impact)
+	•	Backend: GET /api/ga/collections (wraps your existing AR logic but returns load rows + computed days outstanding)
+	•	Frontend: /collections page with:
+	•	buckets
+	•	rows
+	•	buttons: “Log touch”, “Promise-to-pay”, “Escalate”, “Mark paid” (calls your existing payment endpoint)

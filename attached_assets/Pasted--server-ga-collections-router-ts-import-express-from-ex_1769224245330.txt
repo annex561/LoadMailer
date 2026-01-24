@@ -1,0 +1,293 @@
+// server/ga-collections-router.ts
+import express from "express";
+import type Database from "better-sqlite3";
+
+// You already have a db module. Adjust import if your path differs.
+import { db } from "./ga-db";
+
+// You already have activity logging in your codebase.
+// If your function name differs, change ONLY this import + calls below.
+import { logActivity } from "./ga-loads-router"; // <-- If this is wrong in your repo, see notes below.
+
+type Actor = "system" | "dispatcher" | "manager" | "accounting";
+
+function isoNow() {
+  return new Date().toISOString();
+}
+
+function safeJson(obj: any) {
+  try {
+    return JSON.stringify(obj ?? {});
+  } catch {
+    return "{}";
+  }
+}
+
+function daysBetween(fromISO: string, toISO: string) {
+  const from = new Date(fromISO).getTime();
+  const to = new Date(toISO).getTime();
+  if (!isFinite(from) || !isFinite(to)) return 0;
+  const ms = to - from;
+  return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}
+
+// Aging buckets used across endpoints
+function bucketForDays(days: number) {
+  if (days <= 7) return "0-7";
+  if (days <= 14) return "8-14";
+  if (days <= 30) return "15-30";
+  return "31+";
+}
+
+function computeOutstandingDays(row: any): number {
+  // Prefer invoice_sent_at; fallback to booked_at; fallback to offered_at
+  const startISO =
+    row.invoice_sent_at ||
+    row.booked_at ||
+    row.offered_at ||
+    row.created_at ||
+    isoNow();
+  return daysBetween(startISO, isoNow());
+}
+
+function computeOutstandingAmount(row: any): number {
+  // Prefer invoice_total, fallback booked_rate, fallback offered_rate
+  const v = row.invoice_total ?? row.booked_rate ?? row.offered_rate ?? 0;
+  const n = Number(v);
+  return isFinite(n) ? n : 0;
+}
+
+export const gaCollectionsRouter = express.Router();
+
+/**
+ * GET /api/ga/collections
+ * Returns unpaid/sent invoices as card-ready data.
+ */
+gaCollectionsRouter.get("/", (req, res) => {
+  const dbi = db as Database;
+
+  const rows = dbi
+    .prepare(
+      `
+      SELECT
+        id,
+        status,
+        origin_city, origin_state,
+        dest_city, dest_state,
+        miles,
+        rpm,
+        score,
+        offered_at, booked_at,
+        offered_rate, booked_rate,
+        invoice_id,
+        invoice_status,
+        invoice_total,
+        invoice_created_at,
+        invoice_sent_at,
+        paid_at,
+        payment_method,
+        payment_reference,
+        payment_received_at,
+        last_touch_at,
+        promise_to_pay_at,
+        escalated_at,
+        escalation_level,
+        escalation_reason,
+        broker_name,
+        broker_email,
+        broker_phone
+      FROM ga_loads
+      WHERE invoice_status IN ('sent')
+        AND (paid_at IS NULL OR paid_at = '')
+      ORDER BY COALESCE(invoice_sent_at, invoice_created_at, booked_at, offered_at) ASC
+      `
+    )
+    .all();
+
+  const cards = rows.map((r: any) => {
+    const days = computeOutstandingDays(r);
+    const bucket = bucketForDays(days);
+    const amount = computeOutstandingAmount(r);
+
+    return {
+      id: r.id,
+      invoice_id: r.invoice_id,
+      invoice_status: r.invoice_status,
+      amount,
+      days_outstanding: days,
+      aging_bucket: bucket,
+      lane: `${r.origin_city ?? "?"}, ${r.origin_state ?? "?"} → ${r.dest_city ?? "?"}, ${r.dest_state ?? "?"}`,
+      miles: r.miles ?? null,
+      rpm: r.rpm ?? null,
+      score: r.score ?? null,
+
+      broker: {
+        name: r.broker_name ?? null,
+        email: r.broker_email ?? null,
+        phone: r.broker_phone ?? null,
+      },
+
+      dates: {
+        invoice_created_at: r.invoice_created_at ?? null,
+        invoice_sent_at: r.invoice_sent_at ?? null,
+        last_touch_at: r.last_touch_at ?? null,
+        promise_to_pay_at: r.promise_to_pay_at ?? null,
+        escalated_at: r.escalated_at ?? null,
+        payment_received_at: r.payment_received_at ?? null,
+        paid_at: r.paid_at ?? null,
+      },
+
+      escalation: {
+        level: r.escalation_level ?? null,
+        reason: r.escalation_reason ?? null,
+      },
+    };
+  });
+
+  res.json({ ok: true, count: cards.length, cards });
+});
+
+/**
+ * GET /api/ga/collections/aging
+ * Returns totals by aging bucket.
+ */
+gaCollectionsRouter.get("/aging", (req, res) => {
+  const dbi = db as Database;
+
+  const rows = dbi
+    .prepare(
+      `
+      SELECT
+        id,
+        invoice_sent_at,
+        invoice_created_at,
+        booked_at,
+        offered_at,
+        invoice_total,
+        booked_rate,
+        offered_rate,
+        invoice_status,
+        paid_at
+      FROM ga_loads
+      WHERE invoice_status IN ('sent')
+        AND (paid_at IS NULL OR paid_at = '')
+      `
+    )
+    .all();
+
+  const buckets: Record<string, { count: number; total: number }> = {
+    "0-7": { count: 0, total: 0 },
+    "8-14": { count: 0, total: 0 },
+    "15-30": { count: 0, total: 0 },
+    "31+": { count: 0, total: 0 },
+  };
+
+  for (const r of rows as any[]) {
+    const days = computeOutstandingDays(r);
+    const b = bucketForDays(days);
+    const amt = computeOutstandingAmount(r);
+    buckets[b].count += 1;
+    buckets[b].total += amt;
+  }
+
+  const grand = Object.values(buckets).reduce(
+    (acc, v) => ({ count: acc.count + v.count, total: acc.total + v.total }),
+    { count: 0, total: 0 }
+  );
+
+  res.json({ ok: true, buckets, grand });
+});
+
+/**
+ * POST /api/ga/collections/:id/touch
+ * Body: { actor?: "dispatcher"|"manager"|"accounting", channel?: "call"|"email"|"text", note?: string }
+ */
+gaCollectionsRouter.post("/:id/touch", (req, res) => {
+  const dbi = db as Database;
+  const id = req.params.id;
+
+  const actor = (req.body?.actor as Actor) || "dispatcher";
+  const channel = (req.body?.channel as string) || "call";
+  const note = (req.body?.note as string) || "";
+
+  const now = isoNow();
+
+  const upd = dbi
+    .prepare(
+      `UPDATE ga_loads SET last_touch_at = ? WHERE id = ?`
+    )
+    .run(now, id);
+
+  // Activity log
+  try {
+    logActivity(id, "COLLECTION_TOUCH", actor, { channel, note, at: now });
+  } catch {
+    // If your logActivity import differs, this should not break the request
+    // but you should align the import (see notes below).
+  }
+
+  res.json({ ok: true, id, updated: upd.changes, last_touch_at: now });
+});
+
+/**
+ * POST /api/ga/collections/:id/promise
+ * Body: { actor?: "dispatcher"|"manager"|"accounting", promise_to_pay_at: ISO string, note?: string }
+ */
+gaCollectionsRouter.post("/:id/promise", (req, res) => {
+  const dbi = db as Database;
+  const id = req.params.id;
+
+  const actor = (req.body?.actor as Actor) || "dispatcher";
+  const promise = String(req.body?.promise_to_pay_at || "").trim();
+  const note = (req.body?.note as string) || "";
+  if (!promise) return res.status(400).json({ ok: false, error: "promise_to_pay_at is required (ISO string)" });
+
+  const upd = dbi
+    .prepare(`UPDATE ga_loads SET promise_to_pay_at = ? WHERE id = ?`)
+    .run(promise, id);
+
+  try {
+    logActivity(id, "PROMISE_TO_PAY", actor, { promise_to_pay_at: promise, note });
+  } catch {}
+
+  res.json({ ok: true, id, updated: upd.changes, promise_to_pay_at: promise });
+});
+
+/**
+ * POST /api/ga/collections/:id/escalate
+ * Body: { actor?: "manager"|"accounting", level: "L1"|"L2"|"L3", reason: string, note?: string }
+ */
+gaCollectionsRouter.post("/:id/escalate", (req, res) => {
+  const dbi = db as Database;
+  const id = req.params.id;
+
+  const actor = (req.body?.actor as Actor) || "manager";
+  const level = String(req.body?.level || "L1").trim();
+  const reason = String(req.body?.reason || "").trim();
+  const note = (req.body?.note as string) || "";
+
+  if (!reason) return res.status(400).json({ ok: false, error: "reason is required" });
+
+  const now = isoNow();
+
+  const upd = dbi
+    .prepare(
+      `UPDATE ga_loads
+       SET escalated_at = ?, escalation_level = ?, escalation_reason = ?
+       WHERE id = ?`
+    )
+    .run(now, level, reason, id);
+
+  try {
+    logActivity(id, "ESCALATED", actor, { level, reason, note, at: now });
+  } catch {}
+
+  res.json({
+    ok: true,
+    id,
+    updated: upd.changes,
+    escalated_at: now,
+    escalation_level: level,
+    escalation_reason: reason,
+  });
+});

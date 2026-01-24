@@ -1,0 +1,70 @@
+// server/ga-collections-migrations.ts
+import type Database from "better-sqlite3";
+
+/**
+ * Idempotent migrations:
+ * - Adds payment/escalation columns to ga_loads if missing
+ * - Ensures ga_activity_log exists (if not already)
+ */
+export function runGaCollectionsMigrations(db: Database) {
+  // Helper: check if column exists
+  function hasColumn(table: string, col: string): boolean {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    return cols.some((c) => c.name === col);
+  }
+
+  // ga_loads must exist from your existing GA Loads Inbox implementation
+  // Add columns (safe if already present)
+  const alters: Array<{ col: string; sql: string }> = [
+    {
+      col: "last_touch_at",
+      sql: `ALTER TABLE ga_loads ADD COLUMN last_touch_at TEXT`,
+    },
+    {
+      col: "promise_to_pay_at",
+      sql: `ALTER TABLE ga_loads ADD COLUMN promise_to_pay_at TEXT`,
+    },
+    {
+      col: "escalated_at",
+      sql: `ALTER TABLE ga_loads ADD COLUMN escalated_at TEXT`,
+    },
+    {
+      col: "escalation_level",
+      sql: `ALTER TABLE ga_loads ADD COLUMN escalation_level TEXT`,
+    },
+    {
+      col: "escalation_reason",
+      sql: `ALTER TABLE ga_loads ADD COLUMN escalation_reason TEXT`,
+    },
+    {
+      col: "payment_received_at",
+      sql: `ALTER TABLE ga_loads ADD COLUMN payment_received_at TEXT`,
+    },
+  ];
+
+  for (const a of alters) {
+    try {
+      if (!hasColumn("ga_loads", a.col)) db.exec(a.sql);
+    } catch {
+      // If table doesn't exist or another issue, surface the real error
+      // by rethrowing with context
+      throw new Error(`GA Collections migration failed adding column: ${a.col}`);
+    }
+  }
+
+  // Ensure activity log exists (some builds already have it)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ga_activity_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      load_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      details TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+
+  // Helpful indices (safe, idempotent)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_ga_activity_load_id ON ga_activity_log(load_id);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_ga_loads_invoice_status ON ga_loads(invoice_status);`);
+}

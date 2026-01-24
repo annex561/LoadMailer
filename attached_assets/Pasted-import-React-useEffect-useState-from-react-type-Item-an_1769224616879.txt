@@ -1,0 +1,171 @@
+import React, { useEffect, useState } from "react";
+
+type Item = any;
+
+async function api<T>(path: string, opts?: RequestInit): Promise<T> {
+  const r = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error || "Request failed");
+  return j as T;
+}
+
+function fmtMoney(n: any) {
+  const v = Number(n || 0);
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(isFinite(v) ? v : 0);
+}
+
+function fmtDate(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? String(iso) : d.toLocaleString();
+}
+
+export default function ItemsPage() {
+  const [items, setItems] = useState<Item[]>([]);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function refresh() {
+    setErr(null);
+    const r = await api<{ ok: boolean; items: Item[] }>("/api/ga/items");
+    setItems(r.items || []);
+  }
+
+  useEffect(() => {
+    refresh().catch((e) => setErr(e.message));
+  }, []);
+
+  async function touch(id: string, channel: "call" | "email" | "text", note: string) {
+    setBusyId(id);
+    setErr(null);
+    try {
+      await api(`/api/ga/items/${id}/actions/touch`, {
+        method: "POST",
+        body: JSON.stringify({ actor: "dispatcher", channel, note }),
+      });
+      await refresh();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function promise(id: string, iso: string) {
+    setBusyId(id);
+    setErr(null);
+    try {
+      await api(`/api/ga/items/${id}/actions/promise`, {
+        method: "POST",
+        body: JSON.stringify({ actor: "dispatcher", promise_to_pay_at: iso, note: "Promise recorded" }),
+      });
+      await refresh();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function escalate(id: string, level: "L1" | "L2" | "L3", reason: string) {
+    setBusyId(id);
+    setErr(null);
+    try {
+      await api(`/api/ga/items/${id}/actions/escalate`, {
+        method: "POST",
+        body: JSON.stringify({ actor: "manager", level, reason, note: "Escalated from Items screen" }),
+      });
+      await refresh();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function copy(text: string) {
+    await navigator.clipboard.writeText(text);
+  }
+
+  return (
+    <div style={{ padding: 16, maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>Items</h2>
+        <button onClick={() => refresh().catch((e) => setErr(e.message))}>Refresh</button>
+        {err ? <span style={{ color: "crimson" }}>{err}</span> : null}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
+        {items.map((it) => {
+          const id = it.id as string;
+          const lane = `${it.origin_city ?? "?"}, ${it.origin_state ?? "?"} → ${it.dest_city ?? "?"}, ${it.dest_state ?? "?"}`;
+          const broker = it.broker_name ?? "Broker";
+          const inv = it.invoice_id ?? "Invoice";
+          const amt = fmtMoney(it.invoice_total ?? 0);
+
+          const softMsg = `${broker}, quick follow-up on ${inv} for ${amt}. Can you confirm payment ETA?`;
+          const pastDueMsg = `${broker}, ${inv} for ${amt} is still outstanding. Please confirm payment ETA today and send remittance advice.`;
+
+          return (
+            <div key={id} style={{ border: "1px solid #ddd", borderRadius: 12, padding: 12, background: "white" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ fontWeight: 700 }}>{inv}</div>
+                <div style={{ fontWeight: 700 }}>{amt}</div>
+              </div>
+
+              <div style={{ fontSize: 12, marginTop: 6 }}>
+                <div><b>Lane:</b> {lane}</div>
+                <div><b>Status:</b> {it.item_status ?? "—"} | <b>Owner:</b> {it.item_owner ?? "—"}</div>
+                <div><b>Sent:</b> {fmtDate(it.invoice_sent_at ?? it.invoice_created_at)}</div>
+                <div><b>Last touch:</b> {fmtDate(it.last_touch_at)}</div>
+                <div><b>Promise:</b> {fmtDate(it.promise_to_pay_at)}</div>
+                <div><b>Escalated:</b> {it.escalated_at ? `${fmtDate(it.escalated_at)} (${it.escalation_level ?? "—"})` : "—"}</div>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                <button disabled={busyId === id} onClick={() => touch(id, "call", "Called broker")}>Log Call</button>
+                <button
+                  disabled={busyId === id}
+                  onClick={async () => { await copy(softMsg); await touch(id, "email", "Copied soft follow-up"); }}
+                >
+                  Copy Soft Msg
+                </button>
+                <button
+                  disabled={busyId === id}
+                  onClick={async () => { await copy(pastDueMsg); await touch(id, "email", "Copied past-due follow-up"); }}
+                >
+                  Copy Past-Due Msg
+                </button>
+
+                <button
+                  disabled={busyId === id}
+                  onClick={() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 3);
+                    d.setHours(12, 0, 0, 0);
+                    promise(id, d.toISOString());
+                  }}
+                >
+                  Promise +3 Days
+                </button>
+
+                <button disabled={busyId === id} onClick={() => escalate(id, "L1", "No response to follow-ups")}>
+                  Escalate L1
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {items.length === 0 ? (
+        <div style={{ marginTop: 12, fontSize: 12, color: "#666" }}>
+          No items found. This screen shows invoice_status='sent' and unpaid loads.
+        </div>
+      ) : null}
+    </div>
+  );
+}

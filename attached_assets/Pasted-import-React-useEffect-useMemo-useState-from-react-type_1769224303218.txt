@@ -1,0 +1,290 @@
+import React, { useEffect, useMemo, useState } from "react";
+
+type Card = {
+  id: string;
+  invoice_id: string | null;
+  invoice_status: string | null;
+  amount: number;
+  days_outstanding: number;
+  aging_bucket: "0-7" | "8-14" | "15-30" | "31+";
+  lane: string;
+  miles: number | null;
+  rpm: number | null;
+  score: number | null;
+  broker: { name: string | null; email: string | null; phone: string | null };
+  dates: {
+    invoice_created_at: string | null;
+    invoice_sent_at: string | null;
+    last_touch_at: string | null;
+    promise_to_pay_at: string | null;
+    escalated_at: string | null;
+    payment_received_at: string | null;
+    paid_at: string | null;
+  };
+  escalation: { level: string | null; reason: string | null };
+};
+
+function fmtMoney(n: number) {
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(n || 0);
+}
+
+function fmtDate(iso: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString();
+}
+
+async function api<T>(path: string, opts?: RequestInit): Promise<T> {
+  const r = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error || "Request failed");
+  return j as T;
+}
+
+export default function CollectionsPage() {
+  const [cards, setCards] = useState<Card[]>([]);
+  const [aging, setAging] = useState<any>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const grouped = useMemo(() => {
+    const g: Record<string, Card[]> = { "0-7": [], "8-14": [], "15-30": [], "31+": [] };
+    for (const c of cards) g[c.aging_bucket]?.push(c);
+    return g;
+  }, [cards]);
+
+  async function refresh() {
+    setError(null);
+    const [c, a] = await Promise.all([
+      api<{ ok: boolean; cards: Card[] }>("/api/ga/collections"),
+      api("/api/ga/collections/aging"),
+    ]);
+    setCards(c.cards || []);
+    setAging(a);
+  }
+
+  useEffect(() => {
+    refresh().catch((e) => setError(e.message));
+  }, []);
+
+  function buildFollowupMessage(card: Card, kind: "soft" | "pastdue" | "confirm") {
+    const broker = card.broker?.name || "Broker";
+    const inv = card.invoice_id || "invoice";
+    const amt = fmtMoney(card.amount);
+    const days = card.days_outstanding;
+
+    if (kind === "confirm") {
+      return `${broker}, confirming receipt of ${inv} for ${amt}. Please reply with your payment ETA and remittance advice when available.`;
+    }
+    if (kind === "pastdue") {
+      return `${broker}, ${inv} for ${amt} is now ${days} days outstanding. Please advise payment ETA today and send remittance advice.`;
+    }
+    return `${broker}, quick follow-up on ${inv} for ${amt}. Can you confirm payment ETA?`;
+  }
+
+  async function copy(text: string) {
+    await navigator.clipboard.writeText(text);
+  }
+
+  async function touch(card: Card, channel: "call" | "email" | "text", note?: string) {
+    setBusy(card.id);
+    setError(null);
+    try {
+      await api(`/api/ga/collections/${card.id}/touch`, {
+        method: "POST",
+        body: JSON.stringify({ actor: "dispatcher", channel, note: note || "" }),
+      });
+      await refresh();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function promise(card: Card, promiseISO: string, note?: string) {
+    setBusy(card.id);
+    setError(null);
+    try {
+      await api(`/api/ga/collections/${card.id}/promise`, {
+        method: "POST",
+        body: JSON.stringify({ actor: "dispatcher", promise_to_pay_at: promiseISO, note: note || "" }),
+      });
+      await refresh();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function escalate(card: Card, level: "L1" | "L2" | "L3", reason: string, note?: string) {
+    setBusy(card.id);
+    setError(null);
+    try {
+      await api(`/api/ga/collections/${card.id}/escalate`, {
+        method: "POST",
+        body: JSON.stringify({ actor: "manager", level, reason, note: note || "" }),
+      });
+      await refresh();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div style={{ padding: 16, maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>Collections</h2>
+        <button onClick={() => refresh().catch((e) => setError(e.message))}>Refresh</button>
+        {error ? <span style={{ color: "crimson" }}>{error}</span> : null}
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 10, minWidth: 220 }}>
+          <div style={{ fontWeight: 600 }}>Aging Totals</div>
+          <div style={{ fontSize: 12, marginTop: 6 }}>
+            {aging?.buckets ? (
+              <>
+                <div>0–7: {aging.buckets["0-7"].count} / {fmtMoney(aging.buckets["0-7"].total)}</div>
+                <div>8–14: {aging.buckets["8-14"].count} / {fmtMoney(aging.buckets["8-14"].total)}</div>
+                <div>15–30: {aging.buckets["15-30"].count} / {fmtMoney(aging.buckets["15-30"].total)}</div>
+                <div>31+: {aging.buckets["31+"].count} / {fmtMoney(aging.buckets["31+"].total)}</div>
+                <div style={{ marginTop: 8, fontWeight: 600 }}>
+                  Total: {aging.grand.count} / {fmtMoney(aging.grand.total)}
+                </div>
+              </>
+            ) : (
+              <div>—</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {(["0-7", "8-14", "15-30", "31+"] as const).map((bucket) => (
+        <div key={bucket} style={{ marginBottom: 18 }}>
+          <h3 style={{ margin: "10px 0" }}>Bucket {bucket} ({grouped[bucket].length})</h3>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
+            {grouped[bucket].map((c) => (
+              <div
+                key={c.id}
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: 12,
+                  padding: 12,
+                  background: "white",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <div style={{ fontWeight: 700 }}>
+                    {c.invoice_id || "Invoice"}
+                  </div>
+                  <div style={{ fontWeight: 700 }}>
+                    {fmtMoney(c.amount)}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 12, marginTop: 6 }}>
+                  <div><b>Days:</b> {c.days_outstanding}</div>
+                  <div><b>Lane:</b> {c.lane}</div>
+                  <div><b>Broker:</b> {c.broker?.name || "—"}</div>
+                  <div><b>Email:</b> {c.broker?.email || "—"}</div>
+                  <div><b>Phone:</b> {c.broker?.phone || "—"}</div>
+                </div>
+
+                <div style={{ fontSize: 12, marginTop: 8 }}>
+                  <div><b>Sent:</b> {fmtDate(c.dates.invoice_sent_at)}</div>
+                  <div><b>Last touch:</b> {fmtDate(c.dates.last_touch_at)}</div>
+                  <div><b>Promise:</b> {fmtDate(c.dates.promise_to_pay_at)}</div>
+                  <div><b>Escalated:</b> {c.dates.escalated_at ? `${fmtDate(c.dates.escalated_at)} (${c.escalation.level || "—"})` : "—"}</div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                  <button
+                    disabled={busy === c.id}
+                    onClick={async () => {
+                      const msg = buildFollowupMessage(c, "soft");
+                      await copy(msg);
+                      await touch(c, "email", "Copied soft follow-up template");
+                    }}
+                  >
+                    Copy Soft Follow-up
+                  </button>
+
+                  <button
+                    disabled={busy === c.id}
+                    onClick={async () => {
+                      const msg = buildFollowupMessage(c, "confirm");
+                      await copy(msg);
+                      await touch(c, "email", "Copied confirm receipt template");
+                    }}
+                  >
+                    Copy Confirm Receipt
+                  </button>
+
+                  <button
+                    disabled={busy === c.id}
+                    onClick={async () => {
+                      const msg = buildFollowupMessage(c, "pastdue");
+                      await copy(msg);
+                      await touch(c, "email", "Copied past-due template");
+                    }}
+                  >
+                    Copy Past-Due
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                  <button
+                    disabled={busy === c.id}
+                    onClick={() => touch(c, "call", "Called broker re: invoice")}
+                  >
+                    Log Call Touch
+                  </button>
+
+                  <button
+                    disabled={busy === c.id}
+                    onClick={() => {
+                      // Simple: promise 3 days from now at 12:00 local
+                      const d = new Date();
+                      d.setDate(d.getDate() + 3);
+                      d.setHours(12, 0, 0, 0);
+                      promise(c, d.toISOString(), "Promise-to-pay set (default +3 days)");
+                    }}
+                  >
+                    Promise +3 Days
+                  </button>
+
+                  <button
+                    disabled={busy === c.id}
+                    onClick={() => escalate(c, "L1", "No response to follow-ups", "Escalated to manager review")}
+                  >
+                    Escalate L1
+                  </button>
+
+                  <button
+                    disabled={busy === c.id}
+                    onClick={() => escalate(c, "L2", "Past due — requires remittance advice", "Second escalation")}
+                  >
+                    Escalate L2
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {grouped[bucket].length === 0 ? (
+            <div style={{ fontSize: 12, color: "#666" }}>No invoices in this bucket.</div>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
