@@ -35,7 +35,7 @@ export const collectionStageEnum = pgEnum("collection_stage", [
 ]);
 
 export const collectionItemStatusEnum = pgEnum("collection_item_status", [
-  "open", "promise", "escalated", "closed", "dispute"
+  "open", "in_progress", "promise", "escalated", "closed", "dispute"
 ]);
 
 export const nextActionKindEnum = pgEnum("next_action_kind", [
@@ -293,8 +293,8 @@ export const arInvoices = pgTable("ar_invoices", {
   invoiceNumber: text("invoice_number").notNull(),
   status: arInvoiceStatusEnum("status").default("draft"),
   
-  totalAmount: real("total_amount").notNull(),
-  balanceDue: real("balance_due").notNull(),
+  totalAmountCents: integer("total_amount_cents").notNull(),
+  balanceDueCents: integer("balance_due_cents").notNull(),
   
   createdAt: timestamp("created_at").defaultNow(),
   sentAt: timestamp("sent_at"),
