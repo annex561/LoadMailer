@@ -11,9 +11,9 @@ export const gmailScheduler = {
       return;
     }
 
-    if (!gmailIngest.isConfigured()) {
-      console.log('⚠️ Gmail credentials not configured - scheduler not started');
-      return;
+    const hasDefaultAccount = gmailIngest.isConfigured();
+    if (!hasDefaultAccount) {
+      console.log('⚠️ No default Gmail credentials - scheduler will only poll database accounts');
     }
 
     const cronExpression = `*/${intervalMinutes} * * * *`;
@@ -26,14 +26,30 @@ export const gmailScheduler = {
 
       try {
         isRunning = true;
-        console.log('📧 [Scheduled] Starting Gmail scan for Rate Confirmations...');
-        const files = await gmailIngest.scanInbox();
+        console.log('📧 [Scheduled] Starting multi-account Gmail scan...');
+        const results = await gmailIngest.scanAllAccounts();
         
-        if (files.length > 0) {
-          console.log(`📧 [Scheduled] Found ${files.length} Rate Confirmation PDFs`);
-          files.forEach(f => console.log(`  ✅ ${f.filename} (${f.size} bytes)`));
+        const totalFiles = results.reduce((sum, r) => sum + r.files.length, 0);
+        const successfulAccounts = results.filter(r => !r.error).length;
+        const errorAccounts = results.filter(r => r.error).length;
+
+        if (totalFiles > 0) {
+          console.log(`📧 [Scheduled] Found ${totalFiles} Rate Confirmation PDFs across ${successfulAccounts} accounts`);
+          results.forEach(r => {
+            if (r.files.length > 0) {
+              console.log(`  📬 ${r.accountName}: ${r.files.length} files`);
+              r.files.forEach(f => console.log(`    ✅ ${f.filename} (${f.size} bytes)`));
+            }
+          });
         } else {
-          console.log('📧 [Scheduled] No new Rate Confirmations found');
+          console.log(`📧 [Scheduled] No new Rate Confirmations found (${successfulAccounts} accounts scanned)`);
+        }
+
+        if (errorAccounts > 0) {
+          console.log(`⚠️ [Scheduled] ${errorAccounts} account(s) had errors`);
+          results.filter(r => r.error).forEach(r => {
+            console.log(`  ❌ ${r.accountName}: ${r.error}`);
+          });
         }
       } catch (error) {
         console.error('❌ [Scheduled] Gmail scan error:', error);
@@ -58,9 +74,6 @@ export const gmailScheduler = {
   },
 
   async runNow() {
-    if (!gmailIngest.isConfigured()) {
-      throw new Error('Gmail credentials not configured');
-    }
-    return gmailIngest.scanInbox();
+    return gmailIngest.scanAllAccounts();
   }
 };

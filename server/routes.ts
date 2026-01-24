@@ -1040,6 +1040,169 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   })();
 
+  // ============================================================================
+  // GMAIL MULTI-ACCOUNT MANAGEMENT ENDPOINTS
+  // ============================================================================
+
+  app.get('/api/gmail/accounts', async (req, res) => {
+    try {
+      const companyId = req.query.companyId as string;
+      
+      if (!companyId) {
+        return res.status(400).json({ error: 'companyId is required for tenant isolation' });
+      }
+      
+      const { gmailIngest } = await import('./services/gmail');
+      const accounts = await gmailIngest.getAccountsForCompany(companyId);
+      
+      const safeAccounts = accounts.map(a => ({
+        id: a.id,
+        companyId: a.companyId,
+        accountName: a.accountName,
+        emailAddress: a.emailAddress,
+        isActive: a.isActive,
+        lastPolledAt: a.lastPolledAt,
+        lastError: a.lastError,
+        createdAt: a.createdAt
+      }));
+      
+      res.json(safeAccounts);
+    } catch (error: any) {
+      console.error('Error fetching Gmail accounts:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/gmail/accounts', async (req, res) => {
+    try {
+      const { companyId, accountName, emailAddress, clientId, clientSecret, refreshToken } = req.body;
+      
+      if (!companyId || !accountName || !emailAddress || !clientId || !clientSecret || !refreshToken) {
+        return res.status(400).json({ error: 'All fields are required: companyId, accountName, emailAddress, clientId, clientSecret, refreshToken' });
+      }
+      
+      const { gmailIngest } = await import('./services/gmail');
+      
+      const testResult = await gmailIngest.testAccount(clientId, clientSecret, refreshToken);
+      if (!testResult.success) {
+        return res.status(400).json({ error: `OAuth test failed: ${testResult.error}` });
+      }
+      
+      const account = await gmailIngest.addAccount({
+        companyId, accountName, emailAddress, clientId, clientSecret, refreshToken
+      });
+      
+      res.json({ 
+        success: true, 
+        account: {
+          id: account.id,
+          accountName: account.accountName,
+          emailAddress: account.emailAddress,
+          verifiedEmail: testResult.email
+        }
+      });
+    } catch (error: any) {
+      console.error('Error adding Gmail account:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/gmail/accounts/test', async (req, res) => {
+    try {
+      const { clientId, clientSecret, refreshToken } = req.body;
+      
+      if (!clientId || !clientSecret || !refreshToken) {
+        return res.status(400).json({ error: 'clientId, clientSecret, and refreshToken are required' });
+      }
+      
+      const { gmailIngest } = await import('./services/gmail');
+      const result = await gmailIngest.testAccount(clientId, clientSecret, refreshToken);
+      
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.patch('/api/gmail/accounts/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { companyId, ...updates } = req.body;
+      
+      if (!companyId) {
+        return res.status(400).json({ error: 'companyId is required for tenant isolation' });
+      }
+      
+      const { gmailIngest } = await import('./services/gmail');
+      const updated = await gmailIngest.updateAccountForCompany(id, companyId, updates);
+      
+      if (!updated) {
+        return res.status(404).json({ error: 'Account not found or access denied' });
+      }
+      
+      res.json({ 
+        success: true,
+        account: {
+          id: updated.id,
+          accountName: updated.accountName,
+          emailAddress: updated.emailAddress,
+          isActive: updated.isActive
+        }
+      });
+    } catch (error: any) {
+      console.error('Error updating Gmail account:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete('/api/gmail/accounts/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const companyId = req.query.companyId as string;
+      
+      if (!companyId) {
+        return res.status(400).json({ error: 'companyId is required for tenant isolation' });
+      }
+      
+      const { gmailIngest } = await import('./services/gmail');
+      const deleted = await gmailIngest.deleteAccountForCompany(id, companyId);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: 'Account not found or access denied' });
+      }
+      
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Error deleting Gmail account:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/gmail/scan', async (req, res) => {
+    try {
+      const { companyId } = req.body;
+      
+      if (!companyId) {
+        return res.status(400).json({ error: 'companyId is required for tenant isolation' });
+      }
+      
+      const { gmailIngest } = await import('./services/gmail');
+      const results = await gmailIngest.scanAccountsForCompany(companyId);
+      
+      const totalFiles = results.reduce((sum, r) => sum + r.files.length, 0);
+      res.json({
+        success: true,
+        companyId,
+        accountsScanned: results.length,
+        totalFilesFound: totalFiles,
+        results
+      });
+    } catch (error: any) {
+      console.error('Error scanning company accounts:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post('/api/email/broker-thank-you', async (req, res) => {
     try {
       const { loadId } = req.body;
