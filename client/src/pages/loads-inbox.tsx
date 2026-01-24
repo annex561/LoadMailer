@@ -164,6 +164,27 @@ export default function LoadsInbox() {
     }
   }
 
+  async function fixBrokerInfo() {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/ga/loads/fix-broker-info`, { method: "POST" });
+      const data = await r.json();
+      if (data.ok) {
+        toast({ 
+          title: "Broker Info Fixed", 
+          description: `Updated ${data.updated} of ${data.total} loads` 
+        });
+        await refresh();
+      } else {
+        throw new Error(data.error || "Failed to fix broker info");
+      }
+    } catch (e: any) {
+      toast({ title: "Error", description: e?.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     refresh();
   }, []);
@@ -439,6 +460,10 @@ export default function LoadsInbox() {
           <Button onClick={scanGmail} disabled={loading} variant="outline">
             <Mail className="w-4 h-4 mr-2" />
             Scan Gmail
+          </Button>
+          <Button onClick={fixBrokerInfo} disabled={loading} variant="outline">
+            <User className="w-4 h-4 mr-2" />
+            Fix Broker Info
           </Button>
           <Button onClick={calculateAllMiles} disabled={loading} variant="outline">
             <MapPin className="w-4 h-4 mr-2" />

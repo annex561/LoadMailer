@@ -718,6 +718,57 @@ router.get("/stats", (req: Request, res: Response) => {
   }
 });
 
+// POST /api/ga/loads/fix-broker-info - Fix broker info from raw_json for existing loads
+router.post("/loads/fix-broker-info", async (req: Request, res: Response) => {
+  try {
+    const loadsWithRawJson = db.prepare(`
+      SELECT id, raw_json, broker_name, broker_email, broker_phone, dispatcher_name, driver_name
+      FROM ga_loads 
+      WHERE raw_json IS NOT NULL
+    `).all() as any[];
+    
+    console.log(`🔧 Fixing broker info for ${loadsWithRawJson.length} loads from raw_json...`);
+    
+    let updated = 0;
+    for (const load of loadsWithRawJson) {
+      try {
+        const parsed = JSON.parse(load.raw_json);
+        if (parsed.brokerEmail || parsed.brokerPhone || parsed.dispatcherName || parsed.driverName) {
+          db.prepare(`
+            UPDATE ga_loads SET 
+              broker_email = COALESCE(?, broker_email),
+              broker_phone = COALESCE(?, broker_phone),
+              dispatcher_name = COALESCE(?, dispatcher_name),
+              driver_name = COALESCE(?, driver_name)
+            WHERE id = ?
+          `).run(
+            parsed.brokerEmail || null,
+            parsed.brokerPhone || null,
+            parsed.dispatcherName || null,
+            parsed.driverName || null,
+            load.id
+          );
+          updated++;
+          logActivity(load.id, "BROKER_INFO_FIXED", "system", { 
+            brokerEmail: parsed.brokerEmail,
+            brokerPhone: parsed.brokerPhone,
+            dispatcherName: parsed.dispatcherName,
+            driverName: parsed.driverName
+          });
+        }
+      } catch (parseErr) {
+        console.warn(`⚠️ Could not parse raw_json for load ${load.id}`);
+      }
+    }
+    
+    console.log(`✅ Fixed broker info for ${updated} loads`);
+    res.json({ ok: true, updated, total: loadsWithRawJson.length });
+  } catch (err: any) {
+    console.error('❌ Error fixing broker info:', err);
+    res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
+});
+
 // POST /api/ga/loads/calculate-all-miles - Calculate miles for all loads missing miles (MUST be before /:id routes)
 router.post("/loads/calculate-all-miles", async (req: Request, res: Response) => {
   try {

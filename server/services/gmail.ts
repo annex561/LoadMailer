@@ -236,7 +236,7 @@ export const gmailIngest = {
               weight_lbs: extractedData.weight || null,
               length_ft: null,
               broker_name: extractedData.brokerName || null,
-              broker_email: extractedData.brokerEmail || from || null,
+              broker_email: extractedData.brokerEmail || null,
               broker_phone: extractedData.brokerPhone || null,
               dispatcher_name: extractedData.dispatcherName || null,
               driver_name: extractedData.driverName || null,
