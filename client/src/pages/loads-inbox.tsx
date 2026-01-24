@@ -93,6 +93,17 @@ export default function LoadsInbox() {
   async function refresh() {
     setLoading(true);
     try {
+      // Force rescan Gmail to get latest data with updated AI
+      await fetch(`/api/gmail/scan`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forceRescan: true })
+      });
+      
+      // Fix broker info from raw_json
+      await fetch(`/api/ga/loads/fix-broker-info`, { method: "POST" });
+      
+      // Then refresh the load list
       const [a, b] = await Promise.all([
         fetch(`/api/ga/loads?limit=100`).then((r) => r.json()),
         fetch(`/api/ga/loads/shortlist?limit=10`).then((r) => r.json()),
@@ -459,14 +470,6 @@ export default function LoadsInbox() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => scanGmail(false)} disabled={loading} variant="outline">
-            <Mail className="w-4 h-4 mr-2" />
-            Scan Gmail
-          </Button>
-          <Button onClick={() => scanGmail(true)} disabled={loading} variant="outline" title="Re-scan all emails including already read ones">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Force Rescan
-          </Button>
           <Button onClick={calculateAllMiles} disabled={loading} variant="outline">
             <MapPin className="w-4 h-4 mr-2" />
             Fill Missing Miles
