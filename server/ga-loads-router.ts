@@ -8,6 +8,10 @@ import { runGaArMigrations } from "./ga-ar-migrations";
 import { buildGaArRouter } from "./ga-ar-router";
 import { runGaItemsMigrations } from "./ga-items-migrations";
 import { gaItemsRouter } from "./ga-items-router";
+import { dispatchGate } from "./dispatch-gate-service";
+import { db as pgDb } from "./db";
+import { activityLog } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 const router: Router = express.Router();
 
@@ -349,7 +353,7 @@ router.post("/loads/:id/offer", (req: Request, res: Response) => {
 });
 
 // BOOK - Mark load as booked with truck/driver assignment
-router.post("/loads/:id/book", (req: Request, res: Response) => {
+router.post("/loads/:id/book", async (req: Request, res: Response) => {
   if (!ENABLE_GA_BOOKING) {
     return res.status(404).json({ ok: false, error: "Booking pipeline disabled" });
   }
@@ -363,50 +367,30 @@ router.post("/loads/:id/book", (req: Request, res: Response) => {
       override_reason,
       notes, 
       actor,
-      skip_dispatch_gate
+      skip_dispatch_gate,
+      company_id
     } = req.body || {};
 
     const row: any = db.prepare(`SELECT * FROM ga_loads WHERE id=?`).get(id);
     if (!row) return res.status(404).json({ ok: false, error: "Load not found" });
 
-    // Dispatch Gate check if truck is assigned
     let dispatchGateStatus = "N/A";
-    let gateBlocked = false;
 
     if (assigned_truck_id && !skip_dispatch_gate) {
       try {
-        // Check dispatch gate for the truck (internal API call)
-        const gateCheck = db.prepare(`
-          SELECT risk_score, dispatch_status 
-          FROM fleet_trucks 
-          WHERE id = ?
-        `).get(assigned_truck_id) as any;
-
-        if (gateCheck) {
-          dispatchGateStatus = gateCheck.dispatch_status || "UNKNOWN";
-          
-          if (dispatchGateStatus === "RED") {
-            gateBlocked = true;
-            if (!override_reason) {
-              return res.status(400).json({ 
-                ok: false, 
-                error: "Truck is RED-flagged. Assignment blocked without override reason.",
-                dispatch_status: dispatchGateStatus,
-                requires_override: true
-              });
-            }
-          } else if (dispatchGateStatus === "YELLOW" && !override_reason) {
-            return res.status(400).json({ 
-              ok: false, 
-              error: "Truck is YELLOW-flagged. Manager override reason required.",
-              dispatch_status: dispatchGateStatus,
-              requires_override: true
-            });
-          }
+        await dispatchGate.validateBooking(assigned_truck_id, override_reason);
+        const gateResult = await dispatchGate.getTruckGateStatus(assigned_truck_id);
+        dispatchGateStatus = gateResult.status;
+      } catch (gateErr: any) {
+        if (gateErr.message?.includes("Booking Blocked")) {
+          return res.status(400).json({ 
+            ok: false, 
+            error: gateErr.message,
+            dispatch_status: "RED",
+            requires_override: true
+          });
         }
-      } catch (gateErr) {
-        // Fleet trucks table might not exist yet, continue without gate check
-        console.warn("Dispatch gate check skipped:", gateErr);
+        console.warn("Dispatch gate check failed:", gateErr);
       }
     }
 
@@ -439,6 +423,26 @@ router.post("/loads/:id/book", (req: Request, res: Response) => {
       dispatch_gate_status: dispatchGateStatus,
       override_reason: override_reason || null
     });
+
+    if (company_id) {
+      try {
+        await pgDb.insert(activityLog).values({
+          companyId: company_id,
+          entityType: "LOAD",
+          entityId: id,
+          action: "LOAD_BOOKED",
+          actor: actor || "SYSTEM",
+          details: { 
+            truckId: assigned_truck_id, 
+            bookedRate: rate, 
+            overrideUsed: !!override_reason,
+            dispatchGateStatus
+          }
+        });
+      } catch (pgErr) {
+        console.warn("PostgreSQL activity log failed:", pgErr);
+      }
+    }
 
     res.json({ 
       ok: true, 

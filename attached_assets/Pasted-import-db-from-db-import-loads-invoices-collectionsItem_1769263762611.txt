@@ -1,0 +1,68 @@
+import { db } from "./db";
+import { loads, invoices, collectionsItems, activityLog } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { addDays } from "date-fns";
+
+export class InvoicingService {
+  /**
+   * Packages a load for factoring by creating an invoice and 
+   * preparing the document bundle (RateCon + BOL).
+   */
+  async packageForFactoring(loadId: string, actorId: string) {
+    // 1. Fetch Load and Document Paths
+    const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
+    
+    if (!load || !load.rateconPath || !load.podPath) {
+      throw new Error("Missing documents. Both RateCon and POD are required for factoring.");
+    }
+
+    // 2. Create the Invoice (AR Record)
+    const invoiceId = `INV-${load.loadNumber}`;
+    const [newInvoice] = await db.insert(invoices).values({
+      id: invoiceId,
+      companyId: load.companyId,
+      loadId: load.id,
+      invoiceNumber: invoiceId,
+      status: "sent", // Marked as sent once packaged for factoring
+      totalAmount: load.rate || 0,
+      balanceDue: load.rate || 0,
+      sentAt: new Date(),
+      dueDate: addDays(new Date(), 30), // Default Net 30 for aging
+    }).returning();
+
+    // 3. Auto-Create Collections Item (The "No Leakage" Rule)
+    await db.insert(collectionsItems).values({
+      id: invoiceId,
+      invoiceId: newInvoice.id,
+      companyId: load.companyId,
+      status: "open",
+      nextActionAt: addDays(new Date(), 31), // Set follow-up for day after due date
+    });
+
+    // 4. Log the Packaging Activity
+    await db.insert(activityLog).values({
+      companyId: load.companyId,
+      entityType: "INVOICE",
+      entityId: invoiceId,
+      action: "INVOICE_PACKAGED_FOR_FACTORING",
+      actor: actorId,
+      details: { 
+        rate: load.rate, 
+        docs: ["RateCon", "BOL/POD"],
+        recipient: "Factoring Company" 
+      }
+    });
+
+    return {
+      message: "Load packaged and invoiced successfully",
+      invoice: newInvoice,
+      package: {
+        invoice: invoiceId,
+        ratecon: load.rateconPath,
+        pod: load.podPath
+      }
+    };
+  }
+}
+
+export const invoicingService = new InvoicingService();
