@@ -236,8 +236,10 @@ export const gmailIngest = {
               weight_lbs: extractedData.weight || null,
               length_ft: null,
               broker_name: extractedData.brokerName || null,
-              broker_email: from || null,
-              broker_phone: null,
+              broker_email: extractedData.brokerEmail || from || null,
+              broker_phone: extractedData.brokerPhone || null,
+              dispatcher_name: extractedData.dispatcherName || null,
+              driver_name: extractedData.driverName || null,
               status: 'new',
               score: 0,
               notes: `Auto-imported from email: ${subject}`,
@@ -257,6 +259,7 @@ export const gmailIngest = {
                 rate_total, rpm,
                 equipment, weight_lbs, length_ft,
                 broker_name, broker_email, broker_phone,
+                dispatcher_name, driver_name,
                 status, score, notes, raw_json
               ) VALUES (
                 @id, @source,
@@ -267,6 +270,7 @@ export const gmailIngest = {
                 @rate_total, @rpm,
                 @equipment, @weight_lbs, @length_ft,
                 @broker_name, @broker_email, @broker_phone,
+                @dispatcher_name, @driver_name,
                 @status, @score, @notes, @raw_json
               )
               ON CONFLICT(id) DO NOTHING

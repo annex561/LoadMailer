@@ -91,6 +91,8 @@ safeAddColumn("ga_loads", "broker_contact_json", "TEXT");
 safeAddColumn("ga_loads", "override_reason", "TEXT");
 safeAddColumn("ga_loads", "ratecon_path", "TEXT");
 safeAddColumn("ga_loads", "ratecon_generated_at", "TEXT");
+safeAddColumn("ga_loads", "dispatcher_name", "TEXT");
+safeAddColumn("ga_loads", "driver_name", "TEXT");
 
 // Activity log table (append-only audit trail)
 db.exec(`
