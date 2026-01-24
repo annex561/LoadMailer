@@ -1,0 +1,392 @@
+/* 
+DROP-IN FILES (TypeScript / ESM) 
+Aging + next_action automation
+
+Paste these files into your Replit project using the exact paths below.
+These are designed to be CHANGE-SAFE:
+- Migrations are idempotent (safe to run on every startup)
+- Router changes only ADD new endpoint + small updates to existing action handlers
+*/
+
+/* =========================
+   FILE: server/ga-next-action.ts
+   ========================= */
+export type NextActionType = "CALL" | "EMAIL" | "TEXT" | "NONE";
+export type TouchKind = "SOFT" | "PAST_DUE" | "FINAL";
+
+export function computeNextActionAfterTouch(kind: TouchKind): {
+  nextActionAtISO: string | null;
+  nextActionType: NextActionType;
+} {
+  const now = new Date();
+  const d = new Date(now);
+
+  // Default cadence
+  // SOFT: follow up in 2 days
+  // PAST_DUE: follow up next day
+  // FINAL: follow up same day (or next day if after-hours; keep simple: same-day)
+  if (kind === "SOFT") d.setDate(d.getDate() + 2);
+  if (kind === "PAST_DUE") d.setDate(d.getDate() + 1);
+  if (kind === "FINAL") d.setDate(d.getDate() + 0);
+
+  return { nextActionAtISO: d.toISOString(), nextActionType: "EMAIL" };
+}
+
+export function computeNextActionAfterPromise(promiseToPayISO: string): {
+  nextActionAtISO: string | null;
+  nextActionType: NextActionType;
+} {
+  // On promise-to-pay date, follow up by default (CALL is reasonable; keep consistent as EMAIL if you prefer)
+  return { nextActionAtISO: new Date(promiseToPayISO).toISOString(), nextActionType: "CALL" };
+}
+
+export function computeNextActionAfterEscalate(): {
+  nextActionAtISO: string | null;
+  nextActionType: NextActionType;
+} {
+  const d = new Date();
+  // Accounting follow-up next business day; keep simple: +1 day
+  d.setDate(d.getDate() + 1);
+  return { nextActionAtISO: d.toISOString(), nextActionType: "CALL" };
+}
+
+/* =========================
+   FILE: server/ga-collections-migrations.ts
+   (Adds next_action + collections columns to ga_loads if missing)
+   ========================= */
+// NOTE: This assumes your main GA storage table is "ga_loads" (as used by your Loads Inbox / AR pipeline).
+// If your items query uses a different table name, change TABLE_NAME to match.
+import { db } from "./ga-db";
+
+const TABLE_NAME = "ga_loads";
+
+type ColDef = { name: string; type: string; dflt?: string; nullable?: boolean };
+
+function hasColumn(table: string, col: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  return rows.some((r) => r.name === col);
+}
+
+function addColumnIfMissing(table: string, col: ColDef) {
+  if (hasColumn(table, col.name)) return;
+  const nullable = col.nullable === false ? "NOT NULL" : "";
+  const dflt = col.dflt ? `DEFAULT ${col.dflt}` : "";
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${col.name} ${col.type} ${nullable} ${dflt};`);
+}
+
+export function runCollectionsMigrations() {
+  // Guard: table must exist
+  const tableExists = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`)
+    .get(TABLE_NAME);
+  if (!tableExists) return;
+
+  // Collections tracking fields (idempotent)
+  addColumnIfMissing(TABLE_NAME, { name: "item_status", type: "TEXT", dflt: "'open'" });
+  addColumnIfMissing(TABLE_NAME, { name: "item_owner", type: "TEXT", dflt: "'dispatch'" });
+
+  // Next action automation fields
+  addColumnIfMissing(TABLE_NAME, { name: "last_touch_at", type: "TEXT" }); // ISO timestamp
+  addColumnIfMissing(TABLE_NAME, { name: "next_action_at", type: "TEXT" }); // ISO timestamp
+  addColumnIfMissing(TABLE_NAME, { name: "next_action_type", type: "TEXT", dflt: "'NONE'" }); // CALL/EMAIL/TEXT/NONE
+
+  // Promise + escalation fields (if not already present in your AR migrations)
+  addColumnIfMissing(TABLE_NAME, { name: "promise_to_pay_at", type: "TEXT" }); // ISO date/time
+  addColumnIfMissing(TABLE_NAME, { name: "escalation_level", type: "TEXT" }); // L1/L2/L3
+  addColumnIfMissing(TABLE_NAME, { name: "escalated_at", type: "TEXT" }); // ISO timestamp
+  addColumnIfMissing(TABLE_NAME, { name: "collection_stage", type: "TEXT" }); // soft/firm/final/escalated (optional)
+}
+
+/* =========================
+   FILE: server/ga-items-router.ts
+   (Adds GET /aging + next_action automation inside touch/promise/escalate)
+   ========================= */
+import express from "express";
+import { db } from "./ga-db";
+import {
+  computeNextActionAfterEscalate,
+  computeNextActionAfterPromise,
+  computeNextActionAfterTouch,
+  type TouchKind,
+} from "./ga-next-action";
+
+// IMPORTANT:
+// - This router assumes your "items" are GA loads with invoices that are SENT and NOT PAID.
+// - Adjust WHERE clause fields to match your AR schema if needed.
+// Common patterns:
+//   invoice_status in ('sent') AND payment_status != 'paid'
+// or
+//   invoice_sent_at IS NOT NULL AND payment_status != 'paid'
+
+export const gaItemsRouter = express.Router();
+
+/** Utility: log activity (align with your existing ga activity logger if you have one) */
+function logItemActivity(loadId: string, action: string, actor: string, details: any) {
+  // If you already have a dedicated ga activity logger, swap this call to match it.
+  db.prepare(
+    `INSERT INTO ga_activity_log (load_id, action, actor, details_json, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(loadId, action, actor, JSON.stringify(details ?? {}), new Date().toISOString());
+}
+
+/** GET /api/ga/items
+    List unpaid sent invoices as collection items */
+gaItemsRouter.get("/", (req, res) => {
+  const items = db
+    .prepare(
+      `
+      SELECT
+        id,
+        broker_name,
+        origin_city, origin_state,
+        dest_city, dest_state,
+        miles,
+        booked_rate,
+        offered_rate,
+        invoice_id,
+        invoice_status,
+        invoice_created_at,
+        invoice_sent_at,
+        payment_status,
+        payment_method,
+        payment_received_at,
+        last_touch_at,
+        next_action_at,
+        next_action_type,
+        promise_to_pay_at,
+        escalation_level,
+        item_status,
+        item_owner,
+        collection_stage
+      FROM ga_loads
+      WHERE
+        (invoice_status = 'sent' OR invoice_sent_at IS NOT NULL)
+        AND (payment_status IS NULL OR payment_status != 'paid')
+      ORDER BY
+        COALESCE(next_action_at, invoice_sent_at, invoice_created_at, booked_at) ASC
+      LIMIT 500
+      `
+    )
+    .all();
+
+  res.json({ ok: true, items });
+});
+
+/** GET /api/ga/items/aging
+    Buckets based on invoice_sent_at (fallback to invoice_created_at) */
+gaItemsRouter.get("/aging", (req, res) => {
+  // Bucket by days since sent
+  const rows = db
+    .prepare(
+      `
+      WITH base AS (
+        SELECT
+          id,
+          COALESCE(invoice_sent_at, invoice_created_at, booked_at) AS sent_at,
+          COALESCE(booked_rate, offered_rate, 0) AS amount
+        FROM ga_loads
+        WHERE
+          (invoice_status = 'sent' OR invoice_sent_at IS NOT NULL)
+          AND (payment_status IS NULL OR payment_status != 'paid')
+          AND COALESCE(invoice_sent_at, invoice_created_at, booked_at) IS NOT NULL
+      ),
+      aged AS (
+        SELECT
+          id,
+          amount,
+          CAST((julianday('now') - julianday(sent_at)) AS INTEGER) AS days_old
+        FROM base
+      )
+      SELECT
+        CASE
+          WHEN days_old BETWEEN 0 AND 7 THEN '0-7'
+          WHEN days_old BETWEEN 8 AND 14 THEN '8-14'
+          WHEN days_old BETWEEN 15 AND 30 THEN '15-30'
+          WHEN days_old BETWEEN 31 AND 60 THEN '31-60'
+          WHEN days_old BETWEEN 61 AND 90 THEN '61-90'
+          ELSE '90+'
+        END AS bucket,
+        COUNT(*) AS count,
+        SUM(amount) AS total
+      FROM aged
+      GROUP BY bucket
+      `
+    )
+    .all() as Array<{ bucket: string; count: number; total: number }>;
+
+  const order = ["0-7", "8-14", "15-30", "31-60", "61-90", "90+"];
+
+  const normalized = order.map((b) => {
+    const hit = rows.find((r) => r.bucket === b);
+    return { label: b, count: hit?.count ?? 0, total: Number(hit?.total ?? 0) };
+  });
+
+  const total_unpaid = normalized.reduce((acc, x) => acc + x.total, 0);
+  const total_count = normalized.reduce((acc, x) => acc + x.count, 0);
+
+  res.json({
+    ok: true,
+    as_of: new Date().toISOString(),
+    buckets: normalized,
+    total_unpaid,
+    total_count,
+  });
+});
+
+/** POST /api/ga/items/:id/actions/touch
+    body: { kind: "SOFT"|"PAST_DUE"|"FINAL", channel?: "CALL"|"EMAIL"|"TEXT", note?: string, actor?: string }
+    - logs activity
+    - sets last_touch_at
+    - sets next_action_at/type per rules
+*/
+gaItemsRouter.post("/:id/actions/touch", (req, res) => {
+  const id = req.params.id;
+  const kind = String(req.body?.kind ?? "SOFT").toUpperCase() as TouchKind;
+  const actor = String(req.body?.actor ?? "dispatch");
+  const channel = String(req.body?.channel ?? "EMAIL").toUpperCase();
+  const note = String(req.body?.note ?? "");
+
+  const { nextActionAtISO, nextActionType } = computeNextActionAfterTouch(kind);
+
+  // Update record
+  db.prepare(
+    `
+    UPDATE ga_loads
+    SET
+      last_touch_at = ?,
+      next_action_at = ?,
+      next_action_type = ?,
+      item_status = CASE WHEN item_status IS NULL OR item_status = 'open' THEN 'in_progress' ELSE item_status END,
+      collection_stage = CASE
+        WHEN ? = 'SOFT' THEN COALESCE(collection_stage, 'soft')
+        WHEN ? = 'PAST_DUE' THEN 'firm'
+        WHEN ? = 'FINAL' THEN 'final'
+        ELSE collection_stage
+      END
+    WHERE id = ?
+    `
+  ).run(new Date().toISOString(), nextActionAtISO, nextActionType, kind, kind, kind, id);
+
+  logItemActivity(id, "ITEM_TOUCH", actor, { kind, channel, note, next_action_at: nextActionAtISO });
+
+  res.json({ ok: true, id, kind, next_action_at: nextActionAtISO, next_action_type: nextActionType });
+});
+
+/** POST /api/ga/items/:id/actions/promise
+    body: { promise_to_pay_at: string(ISO), actor?: string, note?: string }
+    - logs activity
+    - sets promise_to_pay_at
+    - sets next_action_at to promise date
+*/
+gaItemsRouter.post("/:id/actions/promise", (req, res) => {
+  const id = req.params.id;
+  const actor = String(req.body?.actor ?? "dispatch");
+  const note = String(req.body?.note ?? "");
+  const promiseISO = String(req.body?.promise_to_pay_at ?? "");
+
+  if (!promiseISO || Number.isNaN(Date.parse(promiseISO))) {
+    return res.status(400).json({ ok: false, error: "promise_to_pay_at must be a valid ISO date/time" });
+  }
+
+  const { nextActionAtISO, nextActionType } = computeNextActionAfterPromise(promiseISO);
+
+  db.prepare(
+    `
+    UPDATE ga_loads
+    SET
+      promise_to_pay_at = ?,
+      next_action_at = ?,
+      next_action_type = ?,
+      item_status = 'promised'
+    WHERE id = ?
+    `
+  ).run(new Date(promiseISO).toISOString(), nextActionAtISO, nextActionType, id);
+
+  logItemActivity(id, "ITEM_PROMISE", actor, { promise_to_pay_at: promiseISO, note, next_action_at: nextActionAtISO });
+
+  res.json({ ok: true, id, promise_to_pay_at: promiseISO, next_action_at: nextActionAtISO, next_action_type: nextActionType });
+});
+
+/** POST /api/ga/items/:id/actions/escalate
+    body: { level: "L1"|"L2"|"L3", actor?: string, reason?: string }
+    - logs activity
+    - sets escalation_level + escalated_at + item_owner=accounting + item_status=escalated
+    - sets next_action_at per rules
+*/
+gaItemsRouter.post("/:id/actions/escalate", (req, res) => {
+  const id = req.params.id;
+  const actor = String(req.body?.actor ?? "dispatch");
+  const reason = String(req.body?.reason ?? "");
+  const level = String(req.body?.level ?? "L1").toUpperCase();
+
+  if (!["L1", "L2", "L3"].includes(level)) {
+    return res.status(400).json({ ok: false, error: "level must be one of L1, L2, L3" });
+  }
+
+  const { nextActionAtISO, nextActionType } = computeNextActionAfterEscalate();
+
+  db.prepare(
+    `
+    UPDATE ga_loads
+    SET
+      escalation_level = ?,
+      escalated_at = ?,
+      item_owner = 'accounting',
+      item_status = 'escalated',
+      collection_stage = 'escalated',
+      next_action_at = ?,
+      next_action_type = ?
+    WHERE id = ?
+    `
+  ).run(level, new Date().toISOString(), nextActionAtISO, nextActionType, id);
+
+  logItemActivity(id, "ITEM_ESCALATE", actor, { level, reason, next_action_at: nextActionAtISO });
+
+  res.json({ ok: true, id, level, next_action_at: nextActionAtISO, next_action_type: nextActionType });
+});
+
+/* =========================
+   FILE: server/index.ts
+   (ONLY add the 2 imports + 2 lines shown below if not already present)
+   ========================= */
+// 1) Ensure migrations run on startup (idempotent)
+// Add near your other GA migrations:
+import { runCollectionsMigrations } from "./ga-collections-migrations";
+
+// 2) Ensure router is mounted (if you already mounted gaItemsRouter, skip this)
+// Add near your other GA routers:
+import { gaItemsRouter } from "./ga-items-router";
+
+// Then, inside your startup init (before app.listen), add:
+runCollectionsMigrations();
+
+// Then mount (adjust base path if you already have a central GA router mount):
+// If your GA base router is already mounted at /api/ga, you can mount as:
+app.use("/api/ga/items", gaItemsRouter);
+
+/* =========================
+   QUICK TEST COMMANDS (copy/paste into Replit Shell)
+   =========================
+
+# 1) Aging buckets
+curl -s http://localhost:5000/api/ga/items/aging | jq
+
+# 2) List items
+curl -s http://localhost:5000/api/ga/items | jq '.items | length'
+
+# 3) Touch (SOFT)
+curl -s -X POST http://localhost:5000/api/ga/items/LOAD_ID/actions/touch \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"SOFT","channel":"EMAIL","note":"Soft follow-up sent","actor":"dispatch"}' | jq
+
+# 4) Promise (+3 days)
+node -e "console.log(new Date(Date.now()+3*24*60*60*1000).toISOString())"
+curl -s -X POST http://localhost:5000/api/ga/items/LOAD_ID/actions/promise \
+  -H "Content-Type: application/json" \
+  -d '{"promise_to_pay_at":"PASTE_ISO_HERE","note":"Broker promised payment","actor":"dispatch"}' | jq
+
+# 5) Escalate L1
+curl -s -X POST http://localhost:5000/api/ga/items/LOAD_ID/actions/escalate \
+  -H "Content-Type: application/json" \
+  -d '{"level":"L1","reason":"Past due > 14 days, no response","actor":"dispatch"}' | jq
+*/

@@ -3,9 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Phone, Mail, Copy, Clock, AlertTriangle, RefreshCw, FileText } from "lucide-react";
+import { Phone, Mail, Copy, Clock, AlertTriangle, RefreshCw, FileText, Calendar, DollarSign } from "lucide-react";
 
 type Item = any;
+type AgingBucket = { label: string; count: number; total: number };
+type AgingData = { buckets: AgingBucket[]; total_unpaid: number; total_count: number; as_of: string };
 
 async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   const r = await fetch(path, {
@@ -30,6 +32,7 @@ function fmtDate(iso?: string | null) {
 
 export default function ItemsPage() {
   const [items, setItems] = useState<Item[]>([]);
+  const [aging, setAging] = useState<AgingData | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -37,8 +40,12 @@ export default function ItemsPage() {
   async function refresh() {
     setLoading(true);
     try {
-      const r = await api<{ ok: boolean; items: Item[] }>("/api/ga/items");
-      setItems(r.items || []);
+      const [itemsRes, agingRes] = await Promise.all([
+        api<{ ok: boolean; items: Item[] }>("/api/ga/items"),
+        api<AgingData & { ok: boolean }>("/api/ga/items/aging"),
+      ]);
+      setItems(itemsRes.items || []);
+      setAging(agingRes);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
@@ -50,14 +57,14 @@ export default function ItemsPage() {
     refresh();
   }, []);
 
-  async function touch(id: string, channel: "call" | "email" | "text", note: string) {
+  async function touch(id: string, kind: "SOFT" | "PAST_DUE" | "FINAL", channel: "CALL" | "EMAIL" | "TEXT", note: string) {
     setBusyId(id);
     try {
       await api(`/api/ga/items/${id}/actions/touch`, {
         method: "POST",
-        body: JSON.stringify({ actor: "dispatcher", channel, note }),
+        body: JSON.stringify({ actor: "dispatcher", kind, channel, note }),
       });
-      toast({ title: "Touch logged" });
+      toast({ title: `Touch logged (${kind})` });
       await refresh();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -131,6 +138,39 @@ export default function ItemsPage() {
         </Button>
       </div>
 
+      {aging && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5" />
+                Aging Summary
+              </CardTitle>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-green-600">{fmtMoney(aging.total_unpaid)}</div>
+                <div className="text-sm text-gray-500">{aging.total_count} unpaid invoices</div>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-6 gap-2">
+              {aging.buckets.map((b) => (
+                <div
+                  key={b.label}
+                  className={`p-3 rounded-lg text-center ${
+                    b.count > 0 ? "bg-blue-50 dark:bg-blue-900/20" : "bg-gray-50 dark:bg-gray-800"
+                  }`}
+                >
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{b.label} days</div>
+                  <div className="text-lg font-bold">{b.count}</div>
+                  <div className="text-xs text-gray-600 dark:text-gray-400">{fmtMoney(b.total)}</div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {items.length === 0 && !loading && (
         <Card>
           <CardContent className="pt-6">
@@ -173,9 +213,19 @@ export default function ItemsPage() {
                   <div><strong>Sent:</strong> {fmtDate(it.invoice_sent_at)}</div>
                   <div><strong>Last touch:</strong> {fmtDate(it.last_touch_at)}</div>
                   <div><strong>Promise:</strong> {fmtDate(it.promise_to_pay_at)}</div>
+                  {it.next_action_at && (
+                    <div className="text-blue-600 dark:text-blue-400">
+                      <strong>Next Action:</strong> {fmtDate(it.next_action_at)} ({it.next_action_type || "—"})
+                    </div>
+                  )}
                   {it.escalated_at && (
                     <div className="text-red-600">
                       <strong>Escalated:</strong> {fmtDate(it.escalated_at)} ({it.escalation_level})
+                    </div>
+                  )}
+                  {it.collection_stage && (
+                    <div className="text-sm">
+                      <strong>Stage:</strong> <Badge variant="outline" className="text-xs">{it.collection_stage}</Badge>
                     </div>
                   )}
                 </div>
@@ -185,7 +235,7 @@ export default function ItemsPage() {
                     size="sm"
                     variant="outline"
                     disabled={busyId === id}
-                    onClick={() => touch(id, "call", "Called broker")}
+                    onClick={() => touch(id, "SOFT", "CALL", "Called broker")}
                   >
                     <Phone className="w-3 h-3 mr-1" />
                     Log Call
@@ -196,7 +246,7 @@ export default function ItemsPage() {
                     disabled={busyId === id}
                     onClick={async () => {
                       await copyText(softMsg);
-                      await touch(id, "email", "Copied soft follow-up");
+                      await touch(id, "SOFT", "EMAIL", "Copied soft follow-up");
                     }}
                   >
                     <Copy className="w-3 h-3 mr-1" />
@@ -208,7 +258,7 @@ export default function ItemsPage() {
                     disabled={busyId === id}
                     onClick={async () => {
                       await copyText(pastDueMsg);
-                      await touch(id, "email", "Copied past-due");
+                      await touch(id, "PAST_DUE", "EMAIL", "Copied past-due");
                     }}
                   >
                     <Mail className="w-3 h-3 mr-1" />

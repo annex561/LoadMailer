@@ -24,6 +24,7 @@ export function runGaItemsMigrations(db: Database.Database) {
     { col: "escalation_level", sql: `ALTER TABLE ga_loads ADD COLUMN escalation_level TEXT` },
     { col: "escalation_reason", sql: `ALTER TABLE ga_loads ADD COLUMN escalation_reason TEXT` },
     { col: "payment_received_at", sql: `ALTER TABLE ga_loads ADD COLUMN payment_received_at TEXT` },
+    { col: "collection_stage", sql: `ALTER TABLE ga_loads ADD COLUMN collection_stage TEXT` }, // soft|firm|final|escalated
   ];
 
   for (const a of adds) {

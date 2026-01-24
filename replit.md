@@ -49,6 +49,13 @@ The design system employs a consistent brand palette (Navy, Slate, Teal, Whitesm
     - **Workflow Actions**: Quote (generates email template), Book, Dismiss with status tracking.
     - **API Endpoints**: `/api/ga/loads/ingest`, `/api/ga/loads`, `/api/ga/loads/shortlist`, `/api/ga/loads/:id/quote`, `/api/ga/loads/:id/book`, `/api/ga/loads/:id/dismiss`.
     - **Frontend**: Dual-table view with score filter slider, located at `/loads-inbox`.
+- **Items (Collections) System**: Accounts receivable management for outstanding invoices with automated follow-up scheduling:
+    - **Aging Buckets**: 0-7, 8-14, 15-30, 31-60, 61-90, 90+ day buckets with totals.
+    - **Next Action Automation**: SOFT touch (+2 days), PAST_DUE touch (+1 day), FINAL touch (same day), Promise (promise date), Escalate (+1 day).
+    - **Collection Stages**: soft → firm → final → escalated progression.
+    - **Workflow States**: open, in_progress, promised, escalated, closed with dispatcher/manager/accounting ownership.
+    - **API Endpoints**: `GET /api/ga/items`, `GET /api/ga/items/aging`, `POST /api/ga/items/:id/actions/touch`, `POST /api/ga/items/:id/actions/promise`, `POST /api/ga/items/:id/actions/escalate`.
+    - **Frontend**: `/items` page with aging summary, action cards, touch templates, promise scheduling, escalation levels (L1/L2/L3).
 
 # External Dependencies
 
