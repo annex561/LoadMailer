@@ -1,0 +1,70 @@
+import { useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
+import { Bell, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+// A lightweight fetcher just to get the generic latest load
+async function fetchLatestLoad() {
+  const res = await fetch("/api/loads?limit=1"); // We assume your API supports limit/sort
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data[0] || null; // Return the first (newest) load
+}
+
+export function NewLoadWatcher() {
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  
+  // Store the ID of the last load we saw so we don't notify twice
+  const lastKnownLoadId = useRef<number | null>(null);
+
+  // Poll every 5 seconds (5000ms)
+  const { data: latestLoad } = useQuery({
+    queryKey: ["latest-load-check"],
+    queryFn: fetchLatestLoad,
+    refetchInterval: 5000, 
+    refetchIntervalInBackground: true, // Keep checking even if tab is hidden
+  });
+
+  useEffect(() => {
+    if (!latestLoad) return;
+
+    // 1. Initial Load (First run): Just save the ID, don't notify.
+    if (lastKnownLoadId.current === null) {
+      lastKnownLoadId.current = latestLoad.id;
+      return;
+    }
+
+    // 2. Change Detected: If the new ID is different from what we had...
+    if (latestLoad.id !== lastKnownLoadId.current) {
+      
+      // Update our ref so we don't notify again for this specific load
+      lastKnownLoadId.current = latestLoad.id;
+
+      // Play Sound (Optional - strictly purely frontend)
+      const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+      audio.volume = 0.5;
+      audio.play().catch(e => console.log("Audio blocked by browser", e));
+
+      // 3. Trigger the Pop-Up
+      toast({
+        title: "🚀 New Load Detected!",
+        description: `Load #${latestLoad.loadNumber} from ${latestLoad.brokerName}`,
+        duration: 8000, // Stay on screen for 8 seconds
+        action: (
+          <Button 
+            size="sm" 
+            className="bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+            onClick={() => setLocation(`/loads/${latestLoad.id}`)}
+          >
+            View <ArrowRight className="w-4 h-4 ml-1" />
+          </Button>
+        ),
+      });
+    }
+  }, [latestLoad, toast, setLocation]);
+
+  return null; // This component is invisible
+}
