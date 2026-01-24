@@ -2822,6 +2822,39 @@ export const fleetNotifications = pgTable("fleet_notifications", {
 });
 
 // ============================================================================
+// GMAIL ACCOUNTS for Multi-Account Email Ingestion
+// ============================================================================
+
+export const gmailAccounts = pgTable("gmail_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "cascade" }).notNull(),
+  accountName: text("account_name").notNull(), // Friendly name like "Dispatch Team" or "Sales Inbox"
+  emailAddress: text("email_address").notNull(), // The Gmail address
+  clientId: text("client_id").notNull(), // OAuth Client ID
+  clientSecret: text("client_secret").notNull(), // OAuth Client Secret (encrypted at rest)
+  refreshToken: text("refresh_token").notNull(), // OAuth Refresh Token (encrypted at rest)
+  isActive: boolean("is_active").notNull().default(true),
+  lastPolledAt: timestamp("last_polled_at"),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_gmail_accounts_company").on(table.companyId),
+  index("idx_gmail_accounts_active").on(table.isActive),
+]);
+
+export const insertGmailAccountSchema = createInsertSchema(gmailAccounts).omit({
+  id: true,
+  lastPolledAt: true,
+  lastError: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type GmailAccount = typeof gmailAccounts.$inferSelect;
+export type InsertGmailAccount = z.infer<typeof insertGmailAccountSchema>;
+
+// ============================================================================
 // MVFRS Insert Schemas
 // ============================================================================
 

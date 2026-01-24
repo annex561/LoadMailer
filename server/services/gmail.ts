@@ -31,11 +31,11 @@ export const gmailIngest = {
     console.log("📧 Starting Gmail Scan...");
     
     try {
-      // 1. Search for UNREAD emails with "Rate Confirmation" in the subject
+      // 1. Search for UNREAD emails with Rate Confirmation keywords in the subject
       const res = await gmail.users.messages.list({
         userId: 'me',
-        q: 'is:unread subject:("Rate Confirmation" OR "RateCon") has:attachment',
-        maxResults: 5
+        q: 'is:unread subject:("Rate Confirmation" OR "RateCon" OR "Load Confirmation" OR "Booking Confirmation") has:attachment',
+        maxResults: 10
       });
 
       const messages = res.data.messages || [];
