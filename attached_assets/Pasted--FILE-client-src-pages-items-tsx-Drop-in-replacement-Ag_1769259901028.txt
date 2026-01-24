@@ -1,0 +1,344 @@
+/* =========================
+   FILE: client/src/pages/items.tsx
+   Drop-in replacement: Aging buckets + Next Action display
+   ========================= */
+
+import React, { useEffect, useMemo, useState } from "react";
+
+type AgingBucket = { label: string; count: number; total: number };
+
+type AgingResponse = {
+  ok: boolean;
+  as_of: string;
+  buckets: AgingBucket[];
+  total_unpaid: number;
+  total_count: number;
+};
+
+type Item = {
+  id: string;
+
+  broker_name?: string;
+
+  origin_city?: string;
+  origin_state?: string;
+  dest_city?: string;
+  dest_state?: string;
+
+  miles?: number;
+
+  booked_rate?: number;
+  offered_rate?: number;
+
+  invoice_id?: string;
+  invoice_status?: string;
+  invoice_created_at?: string;
+  invoice_sent_at?: string;
+
+  payment_status?: string;
+  payment_method?: string;
+  payment_received_at?: string;
+
+  last_touch_at?: string;
+  next_action_at?: string;
+  next_action_type?: string;
+
+  promise_to_pay_at?: string;
+
+  escalation_level?: string;
+  escalated_at?: string;
+
+  item_status?: string;
+  item_owner?: string;
+  collection_stage?: string; // soft/firm/final/escalated
+};
+
+function fmtMoney(n: number | undefined | null) {
+  const val = Number(n ?? 0);
+  return val.toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
+function fmtDate(iso?: string | null) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function daysUntil(iso?: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const ms = d.getTime() - Date.now();
+  return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
+function stageColor(stage?: string) {
+  const s = (stage ?? "").toLowerCase();
+  if (s === "soft") return "bg-blue-100 text-blue-800";
+  if (s === "firm") return "bg-yellow-100 text-yellow-800";
+  if (s === "final") return "bg-orange-100 text-orange-800";
+  if (s === "escalated") return "bg-red-100 text-red-800";
+  return "bg-slate-100 text-slate-800";
+}
+
+function dueColor(days: number | null) {
+  if (days === null) return "text-slate-600";
+  if (days <= 0) return "text-red-700";
+  if (days <= 1) return "text-orange-700";
+  if (days <= 3) return "text-yellow-700";
+  return "text-slate-700";
+}
+
+async function apiGet<T>(path: string): Promise<T> {
+  const res = await fetch(path, { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return (await res.json()) as T;
+}
+
+export default function ItemsPage() {
+  const [items, setItems] = useState<Item[]>([]);
+  const [aging, setAging] = useState<AgingResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Optional: simple client-side filter
+  const [filter, setFilter] = useState<"all" | "due" | "overdue" | "escalated">("all");
+
+  const refresh = async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const [itemsRes, agingRes] = await Promise.all([
+        apiGet<{ ok: boolean; items: Item[] }>("/api/ga/items"),
+        apiGet<AgingResponse>("/api/ga/items/aging"),
+      ]);
+      setItems(itemsRes.items ?? []);
+      setAging(agingRes);
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to load items");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const base = items.slice();
+    if (filter === "all") return base;
+
+    if (filter === "escalated") {
+      return base.filter((x) => (x.collection_stage ?? "").toLowerCase() === "escalated");
+    }
+
+    if (filter === "due") {
+      return base.filter((x) => {
+        const d = daysUntil(x.next_action_at);
+        return d !== null && d <= 1;
+      });
+    }
+
+    if (filter === "overdue") {
+      return base.filter((x) => {
+        const d = daysUntil(x.next_action_at);
+        return d !== null && d <= 0;
+      });
+    }
+
+    return base;
+  }, [items, filter]);
+
+  const totals = useMemo(() => {
+    const totalAmount = filtered.reduce((acc, x) => acc + Number(x.booked_rate ?? x.offered_rate ?? 0), 0);
+    return { count: filtered.length, amount: totalAmount };
+  }, [filtered]);
+
+  return (
+    <div className="p-4 md:p-6 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Collections</h1>
+          <p className="text-sm text-slate-600">Unpaid, sent invoices with next-action scheduling.</p>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            className="px-3 py-2 rounded-md bg-slate-900 text-white text-sm"
+            onClick={refresh}
+            disabled={loading}
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {err && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-800 text-sm">
+          {err}
+        </div>
+      )}
+
+      {/* Aging Summary */}
+      <div className="rounded-xl border bg-white shadow-sm p-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <div className="text-sm text-slate-600">Aging Summary</div>
+            <div className="text-xl font-semibold">
+              {aging ? fmtMoney(aging.total_unpaid) : "—"}{" "}
+              <span className="text-sm font-normal text-slate-600">
+                ({aging ? aging.total_count : "—"} open invoices)
+              </span>
+            </div>
+            <div className="text-xs text-slate-500">As of {aging ? fmtDate(aging.as_of) : "—"}</div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={`px-3 py-2 rounded-md text-sm border ${
+                filter === "all" ? "bg-slate-900 text-white border-slate-900" : "bg-white"
+              }`}
+              onClick={() => setFilter("all")}
+            >
+              All
+            </button>
+            <button
+              className={`px-3 py-2 rounded-md text-sm border ${
+                filter === "due" ? "bg-slate-900 text-white border-slate-900" : "bg-white"
+              }`}
+              onClick={() => setFilter("due")}
+            >
+              Due ≤ 1 day
+            </button>
+            <button
+              className={`px-3 py-2 rounded-md text-sm border ${
+                filter === "overdue" ? "bg-slate-900 text-white border-slate-900" : "bg-white"
+              }`}
+              onClick={() => setFilter("overdue")}
+            >
+              Overdue
+            </button>
+            <button
+              className={`px-3 py-2 rounded-md text-sm border ${
+                filter === "escalated" ? "bg-slate-900 text-white border-slate-900" : "bg-white"
+              }`}
+              onClick={() => setFilter("escalated")}
+            >
+              Escalated
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-6 gap-2">
+          {(aging?.buckets ?? [
+            { label: "0-7", count: 0, total: 0 },
+            { label: "8-14", count: 0, total: 0 },
+            { label: "15-30", count: 0, total: 0 },
+            { label: "31-60", count: 0, total: 0 },
+            { label: "61-90", count: 0, total: 0 },
+            { label: "90+", count: 0, total: 0 },
+          ]).map((b) => (
+            <div key={b.label} className="rounded-lg border p-3 bg-slate-50">
+              <div className="text-xs text-slate-600">{b.label} days</div>
+              <div className="text-sm font-semibold">{b.count} items</div>
+              <div className="text-xs text-slate-600">{fmtMoney(b.total)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Roll-up for filtered view */}
+      <div className="text-sm text-slate-700">
+        Showing <span className="font-semibold">{totals.count}</span> items totaling{" "}
+        <span className="font-semibold">{fmtMoney(totals.amount)}</span>.
+      </div>
+
+      {/* Items Grid */}
+      {loading ? (
+        <div className="text-sm text-slate-600">Loading…</div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border bg-white shadow-sm p-6 text-sm text-slate-600">
+          No items match this filter.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {filtered.map((x) => {
+            const amount = Number(x.booked_rate ?? x.offered_rate ?? 0);
+            const lane = `${x.origin_city ?? "—"}, ${x.origin_state ?? ""} → ${x.dest_city ?? "—"}, ${x.dest_state ?? ""}`;
+            const dueIn = daysUntil(x.next_action_at);
+            const dueText =
+              dueIn === null
+                ? "No next action scheduled"
+                : dueIn <= 0
+                ? `Due now (${fmtDate(x.next_action_at)})`
+                : `Due in ${dueIn} day${dueIn === 1 ? "" : "s"} (${fmtDate(x.next_action_at)})`;
+
+            return (
+              <div key={x.id} className="rounded-xl border bg-white shadow-sm p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{x.broker_name ?? "Broker"}</div>
+                    <div className="text-xs text-slate-600 truncate">{lane}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Invoice: <span className="font-medium">{x.invoice_id ?? "—"}</span>{" "}
+                      {x.invoice_sent_at ? <>• Sent {fmtDate(x.invoice_sent_at)}</> : null}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-sm font-semibold">{fmtMoney(amount)}</div>
+                    <div className="text-xs text-slate-600">{x.miles ? `${x.miles} mi` : ""}</div>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className={`px-2 py-1 rounded-full text-xs ${stageColor(x.collection_stage)}`}>
+                    Stage: {(x.collection_stage ?? "—").toUpperCase()}
+                  </span>
+
+                  <span className="px-2 py-1 rounded-full text-xs bg-slate-100 text-slate-800">
+                    Owner: {(x.item_owner ?? "—").toUpperCase()}
+                  </span>
+
+                  {x.escalation_level ? (
+                    <span className="px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
+                      Esc: {x.escalation_level}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 text-sm">
+                  <div className={`font-medium ${dueColor(dueIn)}`}>
+                    Next Action: {x.next_action_type ?? "—"} • {dueText}
+                  </div>
+
+                  <div className="text-xs text-slate-600 mt-1">
+                    Last touch: {fmtDate(x.last_touch_at)}{" "}
+                    {x.promise_to_pay_at ? (
+                      <>
+                        • Promise: <span className="font-medium">{fmtDate(x.promise_to_pay_at)}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* NOTE: Your action buttons already exist elsewhere in your prior Items UI.
+                   This file focuses on aging + next-action display. If you want me to merge
+                   your existing action buttons into this layout, paste your current items.tsx
+                   and I’ll return a change-safe merged version. */}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

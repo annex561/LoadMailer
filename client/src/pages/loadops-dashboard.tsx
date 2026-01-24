@@ -81,6 +81,7 @@ import FleetWorkOrders from './fleet-work-orders';
 import FleetInspections from './fleet-inspections';
 import FleetVendors from './fleet-vendors';
 import LoadsInbox from './loads-inbox';
+import ItemsPage from './items';
 import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
@@ -623,6 +624,8 @@ export default function LoadOpsDashboard() {
       case '/loads-inbox':
       case '/ga/loads':
         return <LoadsInbox />;
+      case '/items':
+        return <ItemsPage />;
       default:
         return <NotFound />;
     }
@@ -1022,6 +1025,8 @@ export default function LoadOpsDashboard() {
     // Core Operations
     { name: 'Main Dashboard', href: '/loadops-dashboard', icon: Home, section: 'core' },
     { name: 'Loads', href: '/loads', icon: FileText, section: 'core' },
+    { name: 'Loads Inbox', href: '/loads-inbox', icon: FileText, section: 'core' },
+    { name: 'Items (AR)', href: '/items', icon: DollarSign, section: 'core' },
     { name: 'DAT Loads', href: '/dat-loads', icon: Truck, section: 'core' },
     { name: 'Manual Load Entry', href: '/manual-load-entry', icon: FileText, section: 'core' },
     
