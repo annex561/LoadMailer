@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Phone, Mail, Copy, Clock, AlertTriangle, RefreshCw, FileText, Calendar, DollarSign } from "lucide-react";
+import { Phone, Mail, Copy, Clock, AlertTriangle, RefreshCw, FileText, DollarSign } from "lucide-react";
 
 type Item = any;
 type AgingBucket = { label: string; count: number; total: number };
