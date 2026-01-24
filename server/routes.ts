@@ -1058,11 +1058,9 @@ export async function registerRoutes(app: Express): Promise<void> {
       const safeAccounts = accounts.map(a => ({
         id: a.id,
         companyId: a.companyId,
-        accountName: a.accountName,
-        emailAddress: a.emailAddress,
+        email: a.email,
         isActive: a.isActive,
-        lastPolledAt: a.lastPolledAt,
-        lastError: a.lastError,
+        lastSyncedAt: a.lastSyncedAt,
         createdAt: a.createdAt
       }));
       
@@ -1075,29 +1073,30 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   app.post('/api/gmail/accounts', async (req, res) => {
     try {
-      const { companyId, accountName, emailAddress, clientId, clientSecret, refreshToken } = req.body;
+      const { companyId, email, refreshToken } = req.body;
       
-      if (!companyId || !accountName || !emailAddress || !clientId || !clientSecret || !refreshToken) {
-        return res.status(400).json({ error: 'All fields are required: companyId, accountName, emailAddress, clientId, clientSecret, refreshToken' });
+      if (!companyId || !refreshToken) {
+        return res.status(400).json({ error: 'companyId and refreshToken are required' });
       }
       
       const { gmailIngest } = await import('./services/gmail');
       
-      const testResult = await gmailIngest.testAccount(clientId, clientSecret, refreshToken);
+      const testResult = await gmailIngest.testAccount(refreshToken);
       if (!testResult.success) {
         return res.status(400).json({ error: `OAuth test failed: ${testResult.error}` });
       }
       
       const account = await gmailIngest.addAccount({
-        companyId, accountName, emailAddress, clientId, clientSecret, refreshToken
+        companyId,
+        email: email || testResult.email || 'unknown',
+        refreshToken
       });
       
       res.json({ 
         success: true, 
         account: {
           id: account.id,
-          accountName: account.accountName,
-          emailAddress: account.emailAddress,
+          email: account.email,
           verifiedEmail: testResult.email
         }
       });
@@ -1109,14 +1108,14 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   app.post('/api/gmail/accounts/test', async (req, res) => {
     try {
-      const { clientId, clientSecret, refreshToken } = req.body;
+      const { refreshToken } = req.body;
       
-      if (!clientId || !clientSecret || !refreshToken) {
-        return res.status(400).json({ error: 'clientId, clientSecret, and refreshToken are required' });
+      if (!refreshToken) {
+        return res.status(400).json({ error: 'refreshToken is required' });
       }
       
       const { gmailIngest } = await import('./services/gmail');
-      const result = await gmailIngest.testAccount(clientId, clientSecret, refreshToken);
+      const result = await gmailIngest.testAccount(refreshToken);
       
       res.json(result);
     } catch (error: any) {
@@ -1144,8 +1143,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         success: true,
         account: {
           id: updated.id,
-          accountName: updated.accountName,
-          emailAddress: updated.emailAddress,
+          email: updated.email,
           isActive: updated.isActive
         }
       });

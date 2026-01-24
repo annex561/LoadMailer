@@ -12,19 +12,25 @@ interface ScanResult {
 
 interface AccountScanResult {
   accountId: string;
-  accountName: string;
-  emailAddress: string;
+  email: string;
   files: ScanResult[];
   error?: string;
 }
 
-function createGmailClient(clientId: string, clientSecret: string, refreshToken: string): gmail_v1.Gmail {
+function createGmailClient(refreshToken: string): gmail_v1.Gmail {
+  const clientId = process.env.GMAIL_CLIENT_ID;
+  const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+  
+  if (!clientId || !clientSecret) {
+    throw new Error('GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET must be configured in environment');
+  }
+  
   const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
   oauth2Client.setCredentials({ refresh_token: refreshToken });
   return google.gmail({ version: 'v1', auth: oauth2Client });
 }
 
-async function scanSingleAccount(gmail: gmail_v1.Gmail, accountName: string): Promise<ScanResult[]> {
+async function scanSingleAccount(gmail: gmail_v1.Gmail, accountEmail: string): Promise<ScanResult[]> {
   const res = await gmail.users.messages.list({
     userId: 'me',
     q: 'is:unread subject:("Rate Confirmation" OR "RateCon" OR "Load Confirmation" OR "Booking Confirmation") has:attachment',
@@ -50,7 +56,7 @@ async function scanSingleAccount(gmail: gmail_v1.Gmail, accountName: string): Pr
         });
 
         const buffer = Buffer.from(attachment.data.data!, 'base64');
-        console.log(`✅ [${accountName}] Downloaded: ${part.filename} (${buffer.length} bytes)`);
+        console.log(`✅ [${accountEmail}] Downloaded: ${part.filename} (${buffer.length} bytes)`);
         results.push({ 
           filename: part.filename, 
           size: buffer.length,
@@ -87,11 +93,7 @@ export const gmailIngest = {
     }
 
     try {
-      const gmail = createGmailClient(
-        process.env.GMAIL_CLIENT_ID!,
-        process.env.GMAIL_CLIENT_SECRET!,
-        process.env.GMAIL_REFRESH_TOKEN!
-      );
+      const gmail = createGmailClient(process.env.GMAIL_REFRESH_TOKEN!);
       return await scanSingleAccount(gmail, 'Default');
     } catch (error) {
       console.error("❌ Gmail Connection Error:", error);
@@ -114,10 +116,7 @@ export const gmailIngest = {
 
   async addAccount(data: {
     companyId: string;
-    accountName: string;
-    emailAddress: string;
-    clientId: string;
-    clientSecret: string;
+    email: string;
     refreshToken: string;
   }): Promise<GmailAccount> {
     const [account] = await db.insert(gmailAccounts).values(data).returning();
@@ -125,14 +124,12 @@ export const gmailIngest = {
   },
 
   async updateAccountForCompany(id: string, companyId: string, updates: Partial<{
-    accountName: string;
-    clientId: string;
-    clientSecret: string;
+    email: string;
     refreshToken: string;
     isActive: boolean;
   }>): Promise<GmailAccount | null> {
     const [updated] = await db.update(gmailAccounts)
-      .set({ ...updates, updatedAt: new Date() })
+      .set(updates)
       .where(and(eq(gmailAccounts.id, id), eq(gmailAccounts.companyId, companyId)))
       .returning();
     return updated || null;
@@ -154,30 +151,23 @@ export const gmailIngest = {
 
     for (const account of dbAccounts) {
       try {
-        const gmail = createGmailClient(account.clientId, account.clientSecret, account.refreshToken);
-        const files = await scanSingleAccount(gmail, account.accountName);
+        const gmail = createGmailClient(account.refreshToken);
+        const files = await scanSingleAccount(gmail, account.email);
 
         await db.update(gmailAccounts)
-          .set({ lastPolledAt: new Date(), lastError: null })
+          .set({ lastSyncedAt: new Date() })
           .where(eq(gmailAccounts.id, account.id));
 
         results.push({
           accountId: account.id,
-          accountName: account.accountName,
-          emailAddress: account.emailAddress,
+          email: account.email,
           files
         });
       } catch (error: any) {
-        console.error(`❌ [${account.accountName}] Error:`, error.message);
-
-        await db.update(gmailAccounts)
-          .set({ lastPolledAt: new Date(), lastError: error.message })
-          .where(eq(gmailAccounts.id, account.id));
-
+        console.error(`❌ [${account.email}] Error:`, error.message);
         results.push({
           accountId: account.id,
-          accountName: account.accountName,
-          emailAddress: account.emailAddress,
+          email: account.email,
           files: [],
           error: error.message
         });
@@ -196,24 +186,18 @@ export const gmailIngest = {
 
     if (this.isConfigured()) {
       try {
-        const gmail = createGmailClient(
-          process.env.GMAIL_CLIENT_ID!,
-          process.env.GMAIL_CLIENT_SECRET!,
-          process.env.GMAIL_REFRESH_TOKEN!
-        );
+        const gmail = createGmailClient(process.env.GMAIL_REFRESH_TOKEN!);
         const files = await scanSingleAccount(gmail, 'Default (Environment)');
         results.push({
           accountId: 'default',
-          accountName: 'Default (Environment)',
-          emailAddress: 'configured-via-secrets',
+          email: 'configured-via-secrets',
           files
         });
       } catch (error: any) {
         console.error("❌ Default account error:", error.message);
         results.push({
           accountId: 'default',
-          accountName: 'Default (Environment)',
-          emailAddress: 'configured-via-secrets',
+          email: 'configured-via-secrets',
           files: [],
           error: error.message
         });
@@ -225,30 +209,23 @@ export const gmailIngest = {
 
     for (const account of dbAccounts) {
       try {
-        const gmail = createGmailClient(account.clientId, account.clientSecret, account.refreshToken);
-        const files = await scanSingleAccount(gmail, account.accountName);
+        const gmail = createGmailClient(account.refreshToken);
+        const files = await scanSingleAccount(gmail, account.email);
 
         await db.update(gmailAccounts)
-          .set({ lastPolledAt: new Date(), lastError: null })
+          .set({ lastSyncedAt: new Date() })
           .where(eq(gmailAccounts.id, account.id));
 
         results.push({
           accountId: account.id,
-          accountName: account.accountName,
-          emailAddress: account.emailAddress,
+          email: account.email,
           files
         });
       } catch (error: any) {
-        console.error(`❌ [${account.accountName}] Error:`, error.message);
-
-        await db.update(gmailAccounts)
-          .set({ lastPolledAt: new Date(), lastError: error.message })
-          .where(eq(gmailAccounts.id, account.id));
-
+        console.error(`❌ [${account.email}] Error:`, error.message);
         results.push({
           accountId: account.id,
-          accountName: account.accountName,
-          emailAddress: account.emailAddress,
+          email: account.email,
           files: [],
           error: error.message
         });
@@ -261,9 +238,9 @@ export const gmailIngest = {
     return results;
   },
 
-  async testAccount(clientId: string, clientSecret: string, refreshToken: string): Promise<{ success: boolean; email?: string; error?: string }> {
+  async testAccount(refreshToken: string): Promise<{ success: boolean; email?: string; error?: string }> {
     try {
-      const gmail = createGmailClient(clientId, clientSecret, refreshToken);
+      const gmail = createGmailClient(refreshToken);
       const profile = await gmail.users.getProfile({ userId: 'me' });
       return { success: true, email: profile.data.emailAddress || undefined };
     } catch (error: any) {

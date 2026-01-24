@@ -1,0 +1,77 @@
+import { google } from 'googleapis';
+import { db } from "../db";
+import { gmailAccounts, loads, activityLog } from "@shared/schema"; 
+import { eq } from "drizzle-orm";
+import { rateconParser } from "./ratecon-parser"; 
+
+export const gmailIngest = {
+  /**
+   * 1. Loops through ALL connected Gmail accounts in the DB.
+   * 2. Scans each inbox for RateCons.
+   */
+  async scanAllAccounts() {
+    console.log("🔄 Starting Multi-Account Scan...");
+    
+    // Fetch all active accounts from DB
+    const accounts = await db.select().from(gmailAccounts).where(eq(gmailAccounts.isActive, true));
+
+    if (accounts.length === 0) {
+      console.log("⚠️ No Gmail accounts connected.");
+      return;
+    }
+
+    for (const account of accounts) {
+      console.log(`📧 Scanning account: ${account.email}...`);
+      await this.scanSingleAccount(account);
+    }
+  },
+
+  /**
+   * Process a single account using its unique stored Refresh Token
+   */
+  async scanSingleAccount(account: typeof gmailAccounts.$inferSelect) {
+    try {
+      // Setup Auth for THIS specific user
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GMAIL_CLIENT_ID,
+        process.env.GMAIL_CLIENT_SECRET
+      );
+
+      oauth2Client.setCredentials({ refresh_token: account.refreshToken });
+
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+      // Search for Unread RateCons
+      const res = await gmail.users.messages.list({
+        userId: 'me',
+        q: 'is:unread subject:("Rate Confirmation" OR "RateCon") has:attachment',
+        maxResults: 5
+      });
+
+      const messages = res.data.messages || [];
+      console.log(`   🔎 Found ${messages.length} emails for ${account.email}`);
+
+      for (const msg of messages) {
+        await this.processMessage(gmail, msg.id!, account.companyId);
+      }
+
+      // Update timestamp
+      await db.update(gmailAccounts)
+        .set({ lastSyncedAt: new Date() })
+        .where(eq(gmailAccounts.id, account.id));
+
+    } catch (error) {
+      console.error(`❌ Error scanning ${account.email}:`, error);
+      // Don't throw; we want to continue to the next account even if one fails
+    }
+  },
+
+  /**
+   * Helper to download, parse, and save
+   */
+  async processMessage(gmail: any, msgId: string, companyId: string) {
+    // ... (This logic remains the same as your previous code) ...
+    // ... (Download PDF -> rateconParser.parse -> db.insert(loads)) ...
+    // Make sure to pass 'companyId' to the INSERT statement so the load goes to the right dashboard!
+  }
+};
