@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard, MapPin, User, Phone, Mail } from "lucide-react";
+import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard, MapPin, User, Phone, Mail, ChevronsUpDown } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface GALoad {
   id: string;
@@ -55,12 +57,20 @@ interface ActivityLog {
   created_at: string;
 }
 
+interface Driver {
+  id: number;
+  name: string;
+  phone: string;
+  status: string;
+}
+
 interface BookModalState {
   open: boolean;
   load: GALoad | null;
   bookedRate: string;
   truckId: string;
   driverId: string;
+  driverName: string;
   overrideReason: string;
   requiresOverride: boolean;
   gateStatus: string;
@@ -79,10 +89,14 @@ export default function LoadsInbox() {
     bookedRate: "",
     truckId: "",
     driverId: "",
+    driverName: "",
     overrideReason: "",
     requiresOverride: false,
     gateStatus: ""
   });
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [driverSearch, setDriverSearch] = useState("");
+  const [driverPopoverOpen, setDriverPopoverOpen] = useState(false);
   
   const [activityModal, setActivityModal] = useState<{ open: boolean; loadId: string; activity: ActivityLog[] }>({
     open: false,
@@ -233,13 +247,29 @@ export default function LoadsInbox() {
     }
   }
 
+  async function fetchDrivers() {
+    try {
+      const res = await fetch("/api/drivers");
+      if (res.ok) {
+        const data = await res.json();
+        setDrivers(data || []);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch drivers:", err);
+    }
+  }
+
   async function openBookModal(load: GALoad) {
+    fetchDrivers();
+    setDriverSearch("");
+    setDriverPopoverOpen(false);
     setBookModal({
       open: true,
       load,
       bookedRate: String(load.offered_rate || load.rate_total || ""),
       truckId: load.assigned_truck_id || "",
       driverId: load.assigned_driver_id || "",
+      driverName: load.driver_name || "",
       overrideReason: "",
       requiresOverride: false,
       gateStatus: ""
@@ -678,13 +708,68 @@ export default function LoadsInbox() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="driverId">Assign Driver (optional)</Label>
-                  <Input
-                    id="driverId"
-                    value={bookModal.driverId}
-                    onChange={(e) => setBookModal(prev => ({ ...prev, driverId: e.target.value }))}
-                    placeholder="Driver ID"
-                  />
+                  <Label>Assign Driver (optional)</Label>
+                  <Popover open={driverPopoverOpen} onOpenChange={setDriverPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={driverPopoverOpen}
+                        className="w-full justify-between font-normal"
+                      >
+                        {bookModal.driverName || "Select driver..."}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command>
+                        <CommandInput 
+                          placeholder="Search drivers..." 
+                          value={driverSearch}
+                          onValueChange={setDriverSearch}
+                        />
+                        <CommandList>
+                          <CommandEmpty>No drivers found.</CommandEmpty>
+                          <CommandGroup>
+                            {drivers
+                              .filter(d => 
+                                d.name.toLowerCase().includes(driverSearch.toLowerCase()) ||
+                                d.phone?.includes(driverSearch)
+                              )
+                              .slice(0, 10)
+                              .map((driver) => (
+                                <CommandItem
+                                  key={driver.id}
+                                  value={driver.name}
+                                  onSelect={() => {
+                                    setBookModal(prev => ({
+                                      ...prev,
+                                      driverId: String(driver.id),
+                                      driverName: driver.name
+                                    }));
+                                    setDriverPopoverOpen(false);
+                                  }}
+                                >
+                                  <User className="mr-2 h-4 w-4" />
+                                  <span className="flex-1">{driver.name}</span>
+                                  {driver.phone && (
+                                    <span className="text-xs text-muted-foreground ml-2">{driver.phone}</span>
+                                  )}
+                                  {bookModal.driverId === String(driver.id) && (
+                                    <Check className="ml-2 h-4 w-4 text-emerald-500" />
+                                  )}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {bookModal.driverName && (
+                    <p className="text-xs text-muted-foreground">
+                      Driver will receive SMS confirmation when load is booked.
+                    </p>
+                  )}
                 </div>
 
                 {bookModal.requiresOverride && (
