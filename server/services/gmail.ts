@@ -249,7 +249,7 @@ export const gmailIngest = {
               broker_phone: extractedData.brokerPhone || null,
               dispatcher_name: extractedData.dispatcherName || null,
               driver_name: extractedData.driverName || null,
-              status: 'new',
+              status: 'booked',
               score: 0,
               notes: `Auto-imported from email: ${subject}`,
               raw_json: JSON.stringify(extractedData)

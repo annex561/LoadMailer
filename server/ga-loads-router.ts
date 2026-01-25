@@ -761,8 +761,15 @@ router.post("/loads/fix-broker-info", async (req: Request, res: Response) => {
       }
     }
     
-    console.log(`✅ Fixed broker info for ${updated} loads`);
-    res.json({ ok: true, updated, total: loadsWithRawJson.length });
+    // Also update Gmail-sourced loads to 'booked' status (rate confirmations are already booked)
+    const statusResult = db.prepare(`
+      UPDATE ga_loads SET status = 'booked' 
+      WHERE source = 'gmail' AND status = 'new'
+    `).run();
+    const statusUpdated = statusResult.changes;
+    
+    console.log(`✅ Fixed broker info for ${updated} loads, updated ${statusUpdated} to booked status`);
+    res.json({ ok: true, updated, statusUpdated, total: loadsWithRawJson.length });
   } catch (err: any) {
     console.error('❌ Error fixing broker info:', err);
     res.status(500).json({ ok: false, error: String(err?.message || err) });
