@@ -33,8 +33,8 @@ async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
                     }
                   }
                 }
+                fullText += '\n';
               }
-              fullText += '\n';
             }
           }
         }
@@ -74,81 +74,50 @@ export interface ParsedRateConData {
 
 export const rateconParser = {
   async parsePdf(fileBuffer: Buffer): Promise<ParsedRateConData> {
-    console.log("📄 Extracting text from RateCon PDF...");
+    console.log("📄 Extracting text from RateCon...");
 
     try {
       const pdfText = await extractPdfText(fileBuffer);
 
       if (!pdfText || pdfText.length < 10) {
-        console.warn("⚠️ PDF text extraction failed or empty.");
-        throw new Error("PDF text extraction failed");
+        throw new Error("PDF text extraction failed or empty.");
       }
 
-      console.log(`📄 Extracted ${pdfText.length} characters from PDF`);
-      console.log("🧠 Sending text to OpenAI for precision extraction...");
+      console.log(`📄 Extracted ${pdfText.length} characters`);
+      console.log("🧠 Analyzing RateCon text...");
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           {
             role: "system",
-            content: `You are an expert logistics data entry specialist. Extract data from a Freight Rate Confirmation (RateCon).
-
-            EXTRACT THESE FIELDS:
-            1. **loadNumber**: The load/order/reference number from the broker.
-            2. **brokerName**: The brokerage company name (e.g., "TQL", "Total Quality Logistics", "CH Robinson", "Coyote").
-            3. **brokerPhone**: SEE RULES BELOW
-            4. **brokerEmail**: SEE RULES BELOW
-            5. **dispatcherName**: SEE RULES BELOW
-            6. **driverName**: SEE RULES BELOW
-            7. **rate**: Total dollar amount for the load (number only).
-            8. **miles**: Total trip mileage.
-            9. **rpm**: Rate Per Mile (calculate rate/miles if not listed).
-            10. **pickupDate**: First pickup date (YYYY-MM-DD).
-            11. **pickupTime**: Pickup time window.
-            12. **deliveryDate**: Final delivery date (YYYY-MM-DD).
-            13. **deliveryTime**: Delivery time window.
-            14. **origin**: City, State of pickup.
-            15. **destination**: City, State of delivery.
-            16. **weight**: Cargo weight in lbs (number only).
-            17. **notes**: Special instructions or comments.
+            content: `Extract these exact fields from the Freight RateCon. Return JSON ONLY.
             
-            === CRITICAL RULES FOR BROKER CONTACT INFO ===
+            Fields:
+            - loadNumber (string)
+            - brokerName (string, the brokerage company like "TQL", "CH Robinson")
+            - brokerPhone (string, include ext, from TQL CONTACT INFO or BROKER section only)
+            - brokerEmail (string, from TQL CONTACT INFO or BROKER section only)
+            - dispatcherName (string, broker rep name from TQL CONTACT INFO section)
+            - driverName (string, from CARRIER CONTACT section if present)
+            - rate (number, no currency symbols)
+            - miles (number)
+            - rpm (number, calculate rate/miles if missing)
+            - pickupDate (YYYY-MM-DD)
+            - pickupTime (string, time window)
+            - deliveryDate (YYYY-MM-DD)
+            - deliveryTime (string, time window)
+            - origin (City, State)
+            - destination (City, State)
+            - weight (number in lbs)
+            - notes (string, capture special instructions)
             
-            The document has MULTIPLE contact sections. You MUST distinguish between them:
-            
-            1. SHIPPER/PICKUP contact - This is the warehouse/facility contact. IGNORE this for broker fields.
-            2. CONSIGNEE/DELIVERY contact - This is the receiver contact. IGNORE this for broker fields.
-            3. BROKER/TQL CONTACT INFO - This is labeled "TQL CONTACT INFO", "BROKER CONTACT", "YOUR REP", "ACCOUNT REPRESENTATIVE", or similar. ONLY use this section for:
-               - dispatcherName: The person's name (first and last) from the broker contact section
-               - brokerPhone: The phone number from the broker contact section
-               - brokerEmail: The email address from the broker contact section
-            
-            DO NOT extract shipper, consignee, or facility phone/email as broker contact.
-            If you cannot find a dedicated broker contact section, leave brokerPhone, brokerEmail, and dispatcherName as null.
-            
-            === RULES FOR DRIVER NAME AND DISPATCHER NAME ===
-            
-            Look for "CARRIER CONTACT" section in the document. This section typically contains:
-            - **driverName**: The driver's name (person who will haul the load)
-            - **dispatcherName**: The carrier's dispatcher name (person coordinating for the trucking company)
-            
-            Also look for these labels:
-            - "Driver:", "Driver Name:", "Carrier Driver:"
-            - "Dispatcher:", "Carrier Dispatcher:", "Contact:"
-            
-            IMPORTANT: The CARRIER CONTACT section is DIFFERENT from TQL CONTACT INFO.
-            - TQL CONTACT INFO = broker rep (use for brokerPhone, brokerEmail only)
-            - CARRIER CONTACT = driver and carrier dispatcher (use for driverName, dispatcherName)
-            
-            Extract PERSON NAMES (first and last), not company names.
-            
-            RETURN JSON ONLY. No markdown.`
+            IMPORTANT: 
+            - brokerPhone/brokerEmail come from TQL CONTACT INFO or BROKER section, NOT from shipper/consignee
+            - driverName comes from CARRIER CONTACT section if present
+            - Calculate rpm = rate/miles if not explicitly listed`
           },
-          {
-            role: "user",
-            content: pdfText.substring(0, 12000)
-          }
+          { role: "user", content: pdfText.substring(0, 12000) }
         ],
         response_format: { type: "json_object" }
       });
@@ -158,6 +127,9 @@ export const rateconParser = {
 
       const extracted = JSON.parse(content);
       
+      const rpm = extracted.rpm || (extracted.rate && extracted.miles ? 
+        Math.round((extracted.rate / extracted.miles) * 100) / 100 : undefined);
+
       console.log(`✅ Parsed: Load ${extracted.loadNumber}, Rate $${extracted.rate}, ${extracted.origin} → ${extracted.destination}`);
 
       return {
@@ -176,7 +148,7 @@ export const rateconParser = {
         destination: extracted.destination || "Unknown",
         weight: parseInt(extracted.weight) || 0,
         miles: parseInt(extracted.miles) || undefined,
-        rpm: parseFloat(extracted.rpm) || undefined,
+        rpm: rpm,
         notes: extracted.notes || undefined
       };
 
@@ -184,14 +156,16 @@ export const rateconParser = {
       console.error("❌ Parser Error:", error);
       return {
         loadNumber: "MANUAL-REVIEW",
-        brokerName: "Parse Error - Check PDF",
+        brokerName: "Unknown",
         rate: 0,
         pickupDate: "",
         deliveryDate: "",
         origin: "Unknown",
         destination: "Unknown",
         weight: 0,
-        notes: "System could not read PDF text."
+        miles: 0,
+        rpm: 0,
+        notes: "Error parsing PDF"
       };
     }
   }
