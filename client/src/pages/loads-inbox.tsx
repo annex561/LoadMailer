@@ -102,20 +102,7 @@ export default function LoadsInbox() {
   async function refresh() {
     setLoading(true);
     try {
-      // Force rescan Gmail to get latest data with updated AI
-      await fetch(`/api/gmail/scan`, { 
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ forceRescan: true })
-      });
-      
-      // Fix broker info from raw_json
-      await fetch(`/api/ga/loads/fix-broker-info`, { method: "POST" });
-      
-      // Then refresh the load list
       await loadData();
-      
-      toast({ title: "Refresh Complete", description: "Gmail scanned and data updated" });
     } catch (e: any) {
       toast({ title: "Error loading data", description: e?.message, variant: "destructive" });
     } finally {
@@ -145,7 +132,7 @@ export default function LoadsInbox() {
       const data = await r.json();
       if (data.ok) {
         toast({ title: "Miles Calculated", description: `Updated ${data.updated} loads` });
-        await refresh();
+        await loadData();
       } else {
         throw new Error(data.error || "Failed to calculate miles");
       }
@@ -172,7 +159,7 @@ export default function LoadsInbox() {
           title: forceRescan ? "Force Rescan Complete" : "Gmail Scan Complete", 
           description: `Processed ${totalFiles} files, created/updated ${totalLoads} loads` 
         });
-        await refresh();
+        await loadData();
       } else {
         throw new Error(data.error || "Gmail scan failed");
       }
@@ -191,9 +178,9 @@ export default function LoadsInbox() {
       if (data.ok) {
         toast({ 
           title: "Broker Info Fixed", 
-          description: `Updated ${data.updated} of ${data.total} loads` 
+          description: `Updated ${data.updated} of ${data.total} loads, ${data.statusUpdated || 0} set to booked` 
         });
-        await refresh();
+        await loadData();
       } else {
         throw new Error(data.error || "Failed to fix broker info");
       }
@@ -476,9 +463,17 @@ export default function LoadsInbox() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button onClick={() => scanGmail(false)} disabled={loading} variant="outline">
+            <Mail className="w-4 h-4 mr-2" />
+            Scan Gmail
+          </Button>
+          <Button onClick={fixBrokerInfo} disabled={loading} variant="outline">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Fix Data
+          </Button>
           <Button onClick={calculateAllMiles} disabled={loading} variant="outline">
             <MapPin className="w-4 h-4 mr-2" />
-            Fill Missing Miles
+            Fill Miles
           </Button>
           <Button onClick={refresh} disabled={loading}>
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
