@@ -381,32 +381,11 @@ export default function LoadsInbox() {
 
     return (
       <div className="flex gap-1 flex-wrap">
-        {l.status === "new" && (
-          <>
-            <Button size="sm" variant="outline" onClick={() => act(l.id, "offer", { offered_rate: l.rate_total })}>
-              <DollarSign className="w-3 h-3 mr-1" />
-              Offer
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => act(l.id, "quote")}>
-              <Send className="w-3 h-3 mr-1" />
-              Quote
-            </Button>
-          </>
-        )}
         {["new", "offered", "quoted"].includes(l.status) && (
-          <>
-            <Button size="sm" variant="secondary" onClick={() => getRecommend(l)}>
-              <Lightbulb className="w-3 h-3 mr-1" />
-              Recommend
-            </Button>
-            <Button size="sm" variant="default" onClick={() => openBookModal(l)}>
-              <Check className="w-3 h-3 mr-1" />
-              Book
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => act(l.id, "skip", { reason: "Not a fit" })}>
-              <X className="w-3 h-3" />
-            </Button>
-          </>
+          <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => openBookModal(l)}>
+            <Check className="w-3 h-3 mr-1" />
+            Book
+          </Button>
         )}
         {isBooked && !l.ratecon_path && (
           <Button size="sm" variant="outline" onClick={() => act(l.id, "ratecon/generate")}>
@@ -441,7 +420,7 @@ export default function LoadsInbox() {
             {l.assigned_truck_id.slice(0, 6)}
           </Badge>
         )}
-        {!compact && (
+        {!compact && isBooked && (
           <Button size="sm" variant="ghost" onClick={() => showActivity(l.id)}>
             <History className="w-3 h-3" />
           </Button>
@@ -540,11 +519,19 @@ export default function LoadsInbox() {
                       ) : <span className="text-muted-foreground">-</span>}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col text-sm">
-                        {l.broker_name && <span className="font-medium">{l.broker_name}</span>}
-                        {l.broker_email && <span className="text-xs text-blue-500">{l.broker_email}</span>}
-                        {l.broker_phone && <span className="text-xs text-muted-foreground"><Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}</span>}
-                        {!l.broker_name && !l.broker_email && !l.broker_phone && <span className="text-muted-foreground">-</span>}
+                      <div className="flex flex-col gap-0.5">
+                        {l.broker_name && <span className="font-semibold text-sm">{l.broker_name}</span>}
+                        {l.broker_email && (
+                          <a href={`mailto:${l.broker_email}`} className="text-xs text-blue-400 hover:text-blue-300 hover:underline">
+                            {l.broker_email}
+                          </a>
+                        )}
+                        {l.broker_phone && (
+                          <span className="text-xs text-slate-400">
+                            <Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}
+                          </span>
+                        )}
+                        {!l.broker_name && !l.broker_email && !l.broker_phone && <span className="text-muted-foreground">Unknown</span>}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -612,11 +599,19 @@ export default function LoadsInbox() {
                       ) : <span className="text-muted-foreground">-</span>}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col text-sm">
-                        {l.broker_name && <span className="font-medium">{l.broker_name}</span>}
-                        {l.broker_email && <span className="text-xs text-blue-500">{l.broker_email}</span>}
-                        {l.broker_phone && <span className="text-xs text-muted-foreground"><Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}</span>}
-                        {!l.broker_name && !l.broker_email && !l.broker_phone && <span className="text-muted-foreground">-</span>}
+                      <div className="flex flex-col gap-0.5">
+                        {l.broker_name && <span className="font-semibold text-sm">{l.broker_name}</span>}
+                        {l.broker_email && (
+                          <a href={`mailto:${l.broker_email}`} className="text-xs text-blue-400 hover:text-blue-300 hover:underline">
+                            {l.broker_email}
+                          </a>
+                        )}
+                        {l.broker_phone && (
+                          <span className="text-xs text-slate-400">
+                            <Phone className="w-3 h-3 inline mr-1" />{l.broker_phone}
+                          </span>
+                        )}
+                        {!l.broker_name && !l.broker_email && !l.broker_phone && <span className="text-muted-foreground">Unknown</span>}
                       </div>
                     </TableCell>
                     <TableCell>{l.pickup_dt || "-"}</TableCell>
