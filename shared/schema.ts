@@ -243,6 +243,7 @@ export const loads = pgTable("loads", {
   weight: integer("weight"), // Weight in pounds
   company: text("company"), // Shipping company
   contactPhone: text("contact_phone"), // Contact phone number
+  brokerName: text("broker_name"), // Broker company name
   brokerPhone: text("broker_phone"), // Broker contact phone (may include extension)
   brokerEmail: text("broker_email"), // Broker email address
   dispatcherName: text("dispatcher_name"), // Broker dispatcher name
