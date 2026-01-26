@@ -567,7 +567,7 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
             deliveryAddress: `${row.dest_city || 'TBD'}, ${row.dest_state || ''}`,
             deliveryDate: parseDate(row.delivery_dt),
             deliveryTime: "TBD",
-            status: "assigned",
+            status: "dispatched",
             rate: rate || row.rate_total || 0,
             miles: row.miles || null,
             equipmentType: row.equipment?.toLowerCase()?.replace(/\s+/g, '_') || "dry_van",
@@ -581,7 +581,7 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
           await pgDb.update(pgLoads)
             .set({ 
               driverId: String(assigned_driver_id),
-              status: "assigned"
+              status: "dispatched"
             })
             .where(eq(pgLoads.loadNumber, row.load_number || id.slice(0, 8)));
           
