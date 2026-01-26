@@ -1,0 +1,96 @@
+// client/src/pages/loads-inbox.tsx
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+
+// ... (keep your existing imports and the main Inbox component) ...
+
+function BookingDialog({ load }: { load: any }) {
+  const [driverId, setDriverId] = useState<string>("");
+  const [isOpen, setIsOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  // THE "MOVE" LOGIC:
+  // When we assign a driver, we also flip status to 'dispatched'.
+  // This removes it from Inbox (which shows 'booked') and sends it to Tracking (which shows 'dispatched').
+  const bookLoad = useMutation({
+    mutationFn: async () => {
+      await apiRequest("PATCH", `/api/loads/${load.id}`, { 
+        assignedDriverId: parseInt(driverId),
+        status: "dispatched", // <--- THIS MOVES THE LOAD
+        sopProgress: { ...load.sopProgress, initialSms: false } // Reset SOP for new driver
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/loads"] }); // Refreshes both lists
+      toast({ title: "Load Booked", description: `Moved Load #${load.loadNumber} to Active Dispatch.` });
+      setIsOpen(false);
+    }
+  });
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
+          Book Driver
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Assign Driver to Load #{load.loadNumber}</DialogTitle>
+        </DialogHeader>
+        
+        <div className="grid gap-4 py-4">
+          
+          {/* 1. RATE FIELD (LOCKED) */}
+          <div className="grid gap-2">
+            <Label>Confirmed Rate (From RateCon)</Label>
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-slate-500">$</span>
+              <Input 
+                value={load.rate} 
+                disabled={true} // <--- THIS LOCKS THE RATE
+                className="pl-7 bg-slate-100 font-bold text-slate-700 border-slate-300" 
+              />
+            </div>
+            <p className="text-xs text-slate-500">
+              *Rate is locked to match the uploaded Rate Confirmation.
+            </p>
+          </div>
+
+          {/* 2. DRIVER SELECTION */}
+          <div className="grid gap-2">
+            <Label>Select Driver</Label>
+            <Select onValueChange={setDriverId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a driver..." />
+              </SelectTrigger>
+              <SelectContent>
+                {/* You normally map your drivers here. Using hardcoded examples for safety if list is empty */}
+                <SelectItem value="1">Annex Luberisse (Owner)</SelectItem>
+                <SelectItem value="2">John Doe (Unit 101)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+        </div>
+
+        <Button 
+          onClick={() => bookLoad.mutate()} 
+          disabled={!driverId || bookLoad.isPending} 
+          className="w-full bg-blue-600"
+        >
+          {bookLoad.isPending ? "Assigning & Moving..." : "Confirm Assignment"}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}

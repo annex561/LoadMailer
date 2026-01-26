@@ -687,14 +687,14 @@ export default function LoadsInbox() {
 
               <div className="grid gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="bookedRate">Booked Rate ($)</Label>
-                  <Input
-                    id="bookedRate"
-                    type="number"
-                    value={bookModal.bookedRate}
-                    onChange={(e) => setBookModal(prev => ({ ...prev, bookedRate: e.target.value }))}
-                    placeholder="Enter final rate"
-                  />
+                  <Label>Rate from RateCon</Label>
+                  <div className="flex items-center gap-2 p-3 bg-slate-100 dark:bg-slate-700 rounded-md">
+                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                    <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                      ${bookModal.bookedRate || "0"}
+                    </span>
+                    <span className="text-xs text-muted-foreground ml-auto">(from rate confirmation)</span>
+                  </div>
                 </div>
 
                 <div className="grid gap-2">

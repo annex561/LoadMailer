@@ -204,9 +204,15 @@ router.get("/loads", (req: Request, res: Response) => {
     const status = req.query.status ? String(req.query.status) : null;
     const minScore = req.query.minScore ? Number(req.query.minScore) : null;
     const limit = req.query.limit ? Math.min(Number(req.query.limit), 200) : 100;
+    const includeAssigned = req.query.includeAssigned === "true";
 
+    // By default, exclude booked loads with assigned drivers (they've been moved to tracking)
     let sql = `SELECT * FROM ga_loads WHERE 1=1`;
     const params: any[] = [];
+
+    if (!includeAssigned) {
+      sql += ` AND NOT (status = 'booked' AND assigned_driver_id IS NOT NULL)`;
+    }
 
     if (status) {
       sql += ` AND status = ?`;
@@ -230,8 +236,9 @@ router.get("/loads", (req: Request, res: Response) => {
 router.get("/loads/shortlist", (req: Request, res: Response) => {
   try {
     const limit = req.query.limit ? Math.min(Number(req.query.limit), 50) : 10;
+    // Only show new loads without assigned drivers (actionable items)
     const rows = db
-      .prepare(`SELECT * FROM ga_loads WHERE status='new' ORDER BY score DESC, created_at DESC LIMIT ?`)
+      .prepare(`SELECT * FROM ga_loads WHERE status='new' AND assigned_driver_id IS NULL ORDER BY score DESC, created_at DESC LIMIT ?`)
       .all(limit);
     res.json({ ok: true, loads: rows });
   } catch (err: any) {
@@ -492,6 +499,93 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
       }
     }
 
+    // Copy load to PostgreSQL for tracking when driver is assigned
+    let pgLoadId: string | null = null;
+    if (assigned_driver_id) {
+      try {
+        const { storage } = await import("./storage");
+        const { customers } = await import("@shared/schema");
+        
+        // Parse dates from GA load fields (pickup_dt, delivery_dt format: "2025-12-01" or "12/1/2025")
+        const parseDate = (dateStr: string | null | undefined): Date => {
+          if (!dateStr) return new Date();
+          try {
+            const d = new Date(dateStr);
+            return isNaN(d.getTime()) ? new Date() : d;
+          } catch {
+            return new Date();
+          }
+        };
+        
+        // Get or create a default customer for tracking
+        let defaultCustomerId: string;
+        try {
+          const existingCustomers = await pgDb.select({ id: customers.id }).from(customers).limit(1);
+          if (existingCustomers.length > 0) {
+            defaultCustomerId = existingCustomers[0].id;
+          } else {
+            // Create a default customer if none exists
+            const [newCustomer] = await pgDb.insert(customers).values({
+              name: row.broker_name || "Default Broker",
+              email: row.broker_email || "broker@example.com",
+              phone: row.broker_phone || "",
+              companyName: row.broker_name || "Default Company",
+              address: ""
+            }).returning({ id: customers.id });
+            defaultCustomerId = newCustomer.id;
+            console.log(`✅ Created default customer for load tracking (ID: ${defaultCustomerId})`);
+          }
+        } catch (custErr) {
+          console.warn("Could not get/create customer:", custErr);
+          throw new Error("No valid customer for load tracking");
+        }
+        
+        // Check if load already exists in PostgreSQL (by load number)
+        const existingLoad = await pgDb
+          .select()
+          .from(pgLoads)
+          .where(eq(pgLoads.loadNumber, row.load_number || id.slice(0, 8)))
+          .limit(1);
+
+        if (existingLoad.length === 0) {
+          // Create load in PostgreSQL for tracking
+          const [newLoad] = await pgDb.insert(pgLoads).values({
+            loadNumber: row.load_number || id.slice(0, 8),
+            customerId: defaultCustomerId,
+            driverId: String(assigned_driver_id),
+            description: `${row.origin_city || 'TBD'}, ${row.origin_state || ''} to ${row.dest_city || 'TBD'}, ${row.dest_state || ''}`,
+            pickupAddress: `${row.origin_city || 'TBD'}, ${row.origin_state || ''}`,
+            pickupDate: parseDate(row.pickup_dt),
+            pickupTime: "TBD",
+            deliveryAddress: `${row.dest_city || 'TBD'}, ${row.dest_state || ''}`,
+            deliveryDate: parseDate(row.delivery_dt),
+            deliveryTime: "TBD",
+            status: "assigned",
+            rate: rate || row.rate_total || 0,
+            miles: row.miles || null,
+            equipmentType: row.equipment?.toLowerCase()?.replace(/\s+/g, '_') || "dry_van",
+            companyId: company_id || null
+          }).returning({ id: pgLoads.id });
+          
+          pgLoadId = newLoad?.id || null;
+          console.log(`✅ Load ${row.load_number || id.slice(0, 8)} copied to PostgreSQL for tracking (ID: ${pgLoadId})`);
+        } else {
+          // Update existing load with driver assignment
+          await pgDb.update(pgLoads)
+            .set({ 
+              driverId: String(assigned_driver_id),
+              status: "assigned"
+            })
+            .where(eq(pgLoads.loadNumber, row.load_number || id.slice(0, 8)));
+          
+          pgLoadId = existingLoad[0].id;
+          console.log(`✅ Load ${row.load_number || id.slice(0, 8)} updated in PostgreSQL with driver assignment`);
+        }
+      } catch (pgErr) {
+        console.warn("Failed to copy load to PostgreSQL:", pgErr);
+      }
+    }
+
     res.json({ 
       ok: true, 
       id, 
@@ -500,7 +594,8 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
       assigned_truck_id,
       assigned_driver_id,
       dispatch_gate_status: dispatchGateStatus,
-      sms_sent: smsSent
+      sms_sent: smsSent,
+      pg_load_id: pgLoadId
     });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: String(err?.message || err) });
