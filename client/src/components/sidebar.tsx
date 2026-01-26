@@ -28,6 +28,7 @@ const menuGroups = [
       { name: "RateCon Inbox", href: "/loads-inbox" },
       { name: "Active Loads", href: "/active-loads" },
       { name: "Load History", href: "/loads" },
+      { name: "Driver Messages", href: "/communication-dashboard" },
       { name: "Create New Load", href: "/manual-load-entry" },
       { name: "DAT Load Board", href: "/dat-loads" },
       { name: "Items (AR)", href: "/items" },
@@ -58,7 +59,6 @@ const menuGroups = [
     title: "Communication",
     icon: <MessageSquare className="w-5 h-5" />,
     items: [
-      { name: "Driver Messages", href: "/communication-dashboard" },
       { name: "AI Insights", href: "/ai-communication-insights" },
       { name: "Customers", href: "/contacts" },
       { name: "SMS Status", href: "/sms-status" },

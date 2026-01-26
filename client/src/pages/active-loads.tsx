@@ -4,18 +4,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   MapPin, Truck, Phone, MessageSquare, Send, 
-  FileText, Navigation, Clock, CheckCircle2, AlertCircle, ArrowRight 
+  FileText, Navigation, Clock, CheckCircle2, AlertCircle, ArrowRight,
+  MoreVertical, Brain, MessageCircle, CheckCircle, Circle
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 export default function ActiveLoads() {
   const { data: loads, isLoading } = useQuery({
@@ -181,7 +184,8 @@ function StatusBadge({ status }: { status: string }) {
 function DriverMessagesPanel({ load }: { load: any }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [message, setMessage] = useState("");
+  const [newMessage, setNewMessage] = useState("");
+  const [aiEnabled, setAiEnabled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const driverId = load.driverId || load.assignedDriverId;
 
@@ -190,10 +194,10 @@ function DriverMessagesPanel({ load }: { load: any }) {
     enabled: !!driverId,
   });
 
-  const { data: messages = [], refetch } = useQuery({
+  const { data: rawMessages = [], refetch } = useQuery({
     queryKey: ["/api/driver-communications", driverId],
     enabled: !!driverId,
-    refetchInterval: 10000,
+    refetchInterval: 2000,
   });
 
   const sendMutation = useMutation({
@@ -201,19 +205,58 @@ function DriverMessagesPanel({ load }: { load: any }) {
       return apiRequest("POST", `/api/drivers/${driverId}/sms`, { message: msg });
     },
     onSuccess: () => {
-      setMessage("");
+      setNewMessage("");
       refetch();
-      toast({ title: "Message sent" });
+      toast({ title: "Message sent successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to send message", variant: "destructive" });
+    },
+  });
+
+  const sendPortalLinkMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/drivers/${driverId}/send-dashboard-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) throw new Error('Failed to send portal link');
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Portal link sent" });
+    },
+    onError: () => {
+      toast({ title: "Failed to send portal link", variant: "destructive" });
     },
   });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [rawMessages]);
+
+  const handleQuickMessage = (text: string) => {
+    sendMutation.mutate(text);
+  };
+
+  const handleSendMessage = () => {
+    if (newMessage.trim()) {
+      sendMutation.mutate(newMessage);
+    }
+  };
+
+  const formatMessageTime = (dateStr: string) => {
+    try {
+      return format(new Date(dateStr), 'MMM dd, HH:mm');
+    } catch {
+      return '';
+    }
+  };
 
   if (!driverId) {
     return (
       <div className="h-full flex items-center justify-center text-slate-500">
+        <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-50" />
         <p>No driver assigned to this load</p>
       </div>
     );
@@ -221,92 +264,215 @@ function DriverMessagesPanel({ load }: { load: any }) {
 
   return (
     <div className="h-full flex flex-col bg-slate-950">
-      {/* Driver Header */}
-      <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Avatar className="w-10 h-10">
-            <AvatarFallback className="bg-emerald-900 text-emerald-400">
-              {driver?.name?.slice(0, 2).toUpperCase() || "DR"}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <p className="font-semibold text-white">{driver?.name || "Driver"}</p>
-            <p className="text-xs text-slate-400">{driver?.phone || "No phone"}</p>
+      {/* Chat Header - Matching Communication Dashboard */}
+      <div className="p-4 border-b border-slate-800 bg-slate-900/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar className="w-10 h-10">
+              <AvatarFallback className="bg-teal-900/50 text-teal-400">
+                {driver?.name?.charAt(0) || "D"}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h3 className="font-medium text-white">{driver?.name || "Driver"}</h3>
+              <p className="text-sm text-slate-400">{driver?.phone || "No phone"}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {driver?.phone && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`tel:${driver.phone}`, '_self')}
+                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              >
+                <Phone className="w-4 h-4" />
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </Button>
           </div>
         </div>
-        {driver?.phone && (
-          <a href={`tel:${driver.phone}`}>
-            <Button size="sm" variant="outline" className="border-slate-700 text-slate-300">
-              <Phone className="w-4 h-4" />
+        
+        {/* Load Info & AI Controls - Matching Communication Dashboard */}
+        <div className="mt-3 p-3 bg-slate-800/50 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 text-sm text-slate-400">
+              <div className="flex items-center gap-1">
+                <MessageSquare className="w-4 h-4" />
+                <span>General Discussion</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <MessageCircle className="w-4 h-4" />
+                <span>{rawMessages.length} messages</span>
+              </div>
+            </div>
+            
+            {/* AI Assistant Toggle */}
+            <Button
+              variant={aiEnabled ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setAiEnabled(!aiEnabled);
+                toast({ title: "AI Assistant", description: aiEnabled ? "Disabled" : "Enabled" });
+              }}
+              className={aiEnabled ? "bg-teal-600 hover:bg-teal-700" : "border-slate-700 text-slate-300"}
+            >
+              <Brain className="w-4 h-4 mr-1" />
+              AI {aiEnabled ? 'On' : 'Off'}
             </Button>
-          </a>
-        )}
+          </div>
+        </div>
       </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-3">
-          {messages.length === 0 ? (
+      {/* Messages - Matching Communication Dashboard Style */}
+      <ScrollArea className="flex-1 p-4 bg-slate-950">
+        <div className="space-y-4">
+          {rawMessages.length === 0 ? (
             <p className="text-center text-slate-500 text-sm py-8">No messages yet</p>
           ) : (
-            messages.map((msg: any, i: number) => (
-              <div key={i} className={cn("flex", msg.direction === "outbound" ? "justify-end" : "justify-start")}>
-                <div className={cn(
-                  "max-w-[75%] rounded-lg px-4 py-2",
-                  msg.direction === "outbound" 
-                    ? "bg-blue-600 text-white" 
-                    : "bg-slate-800 text-slate-100"
-                )}>
-                  <p className="text-sm">{msg.message || msg.body}</p>
-                  <p className="text-[10px] mt-1 opacity-60">
-                    {new Date(msg.createdAt || msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
+            rawMessages.map((msg: any, i: number) => {
+              const isOutbound = msg.direction === "outbound";
+              return (
+                <div
+                  key={i}
+                  className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                      isOutbound
+                        ? 'bg-teal-900/30 text-slate-100 border border-teal-700/50'
+                        : 'bg-slate-800 text-slate-100'
+                    }`}
+                  >
+                    <p className="text-sm">{msg.message || msg.body}</p>
+                    <div className={`flex items-center justify-between mt-1 text-xs ${
+                      isOutbound ? 'text-teal-400/70' : 'text-slate-500'
+                    }`}>
+                      <span>{formatMessageTime(msg.createdAt || msg.timestamp)}</span>
+                      {isOutbound && (
+                        <div className="flex items-center gap-1 ml-2">
+                          {msg.isRead ? (
+                            <CheckCircle className="w-3 h-3" />
+                          ) : (
+                            <Circle className="w-3 h-3" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
-      {/* Quick Replies */}
-      <div className="px-4 py-2 border-t border-slate-800 bg-slate-900/30 flex gap-2 flex-wrap">
-        {[
-          { label: "ETA Check", text: "What's your current ETA?" },
-          { label: "Status Update", text: "Please send a status update when you can." },
-          { label: "At Pickup?", text: "Have you arrived at the pickup location?" },
-          { label: "Loaded?", text: "Are you loaded and ready to roll?" },
-          { label: "At Delivery?", text: "Have you arrived at the delivery location?" },
-        ].map((template) => (
+      {/* Quick Messages - Matching Communication Dashboard Exactly */}
+      <div className="p-3 border-t border-slate-800 bg-slate-900/30">
+        <h4 className="text-xs font-medium text-slate-300 mb-2">Quick Messages</h4>
+        <div className="grid grid-cols-2 gap-2">
           <Button
-            key={template.label}
-            size="sm"
             variant="outline"
-            className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs h-7"
-            onClick={() => setMessage(template.text)}
+            size="sm"
+            onClick={() => handleQuickMessage('Hi! Just a friendly reminder about your pickup today. Please confirm when you arrive at the pickup location. Thanks!')}
+            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
           >
-            {template.label}
+            📍 Pickup Reminder
           </Button>
-        ))}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickMessage('Please provide an ETA for delivery. Customer is asking for updates. Thank you!')}
+            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            🚚 Delivery ETA
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickMessage('Hi! Can you please provide a quick status update on this load? Thanks!')}
+            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            ❓ Status Check
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickMessage('Great! Load confirmed. Please proceed to pickup location and keep me updated. Safe travels!')}
+            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            ✅ Load Confirmed
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickMessage('Please remember to get all required paperwork signed and send photos when pickup/delivery is complete.')}
+            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            📋 Paperwork
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickMessage('Please contact the customer before arrival. Their contact info is in the load details. Thanks!')}
+            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            📞 Call Customer
+          </Button>
+        </div>
       </div>
 
-      {/* Input */}
-      <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-        <div className="flex gap-2">
-          <Input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && message.trim() && sendMutation.mutate(message)}
-          />
-          <Button 
-            onClick={() => message.trim() && sendMutation.mutate(message)}
-            disabled={!message.trim() || sendMutation.isPending}
-            className="bg-emerald-600 hover:bg-emerald-700"
-          >
-            <Send className="w-4 h-4" />
-          </Button>
+      {/* Message Input - Matching Communication Dashboard */}
+      <div className="border-t border-slate-800 bg-slate-900/50">
+        <div className="p-4">
+          <div className="flex items-end gap-2">
+            <div className="flex-1 relative">
+              <Textarea
+                placeholder="Type your message..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                rows={1}
+                className="min-h-[40px] resize-none bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => sendPortalLinkMutation.mutate()}
+                disabled={sendPortalLinkMutation.isPending}
+                title="Send driver portal link via SMS"
+                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              >
+                <Truck className="w-4 h-4" />
+              </Button>
+              <Button
+                onClick={handleSendMessage}
+                disabled={!newMessage.trim() || sendMutation.isPending}
+                className="bg-teal-600 hover:bg-teal-700"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
