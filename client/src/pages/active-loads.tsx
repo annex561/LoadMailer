@@ -88,7 +88,7 @@ export default function ActiveLoads() {
                     {load.originCity} <span className="text-slate-600">→</span> {load.destCity}
                   </div>
                   <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                    <Truck className="w-3 h-3" /> Driver #{load.assignedDriverId || "?"}
+                    <Truck className="w-3 h-3" /> {load.driver?.name || "Unassigned"}
                   </div>
                 </button>
               ))
@@ -109,7 +109,7 @@ export default function ActiveLoads() {
                 </h1>
                 <p className="text-xs text-slate-400">
                   <span className="text-emerald-400 font-mono mr-3">${selectedLoad.rate}</span>
-                  Driver #{selectedLoad.assignedDriverId}
+                  {selectedLoad.driver?.name || "Unassigned"} • #{selectedLoad.loadNumber}
                 </p>
               </div>
               <div className="flex gap-2">
