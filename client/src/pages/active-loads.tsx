@@ -123,13 +123,13 @@ export default function ActiveLoads() {
               <Tabs defaultValue="sop" className="h-full flex flex-col">
                 <TabsList className="w-full justify-start rounded-none border-b border-slate-800 bg-slate-900/50 p-0 h-12">
                   <TabsTrigger value="sop" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
-                    <FileText className="w-4 h-4 mr-2" /> SOP Steps
-                  </TabsTrigger>
-                  <TabsTrigger value="messages" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
-                    <MessageSquare className="w-4 h-4 mr-2" /> Driver Messages
+                    <FileText className="w-4 h-4 mr-2" /> Load Management
                   </TabsTrigger>
                   <TabsTrigger value="map" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
                     <Navigation className="w-4 h-4 mr-2" /> Live Map
+                  </TabsTrigger>
+                  <TabsTrigger value="messages" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
+                    <MessageSquare className="w-4 h-4 mr-2" /> Driver Messages
                   </TabsTrigger>
                 </TabsList>
 
