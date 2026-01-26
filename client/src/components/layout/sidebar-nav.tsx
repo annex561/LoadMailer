@@ -23,8 +23,6 @@ const menuGroups = [
       { name: "Control Tower", href: "/" },
       { name: "Load Ops Board", href: "/dispatch" },
       { name: "Live Map", href: "/map" },
-      { name: "RateCon Inbox", href: "/loads-inbox" },
-      { name: "Active Loads", href: "/active-loads" },
     ]
   },
   {
@@ -32,8 +30,9 @@ const menuGroups = [
     allowedRoles: [ROLES.ADMIN, ROLES.DISPATCHER, ROLES.FINANCE],
     icon: <FileText className="w-5 h-5" />,
     items: [
+      { name: "RateCon Inbox", href: "/loads-inbox" },
+      { name: "Active Loads", href: "/active-loads" },
       { name: "Load History", href: "/loads" },
-      { name: "Create New Load", href: "/loads/new" },
       { name: "DAT Load Board", href: "/dat-search" },
     ]
   },
