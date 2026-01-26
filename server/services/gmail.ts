@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { db } from "../db";
-import { gmailAccounts, loads, activityLog } from "@shared/schema"; 
+import { gmailAccounts, loads, activityLog, customers } from "@shared/schema"; 
 import { eq, and } from "drizzle-orm";
 import { rateconParser } from "./ratecon-parser"; 
 
@@ -275,12 +275,34 @@ export const gmailIngest = {
         }
       };
 
+      // Find or create customer based on broker name
+      const brokerName = data.brokerName || "Unknown Broker";
+      let customer = await db.query.customers.findFirst({
+        where: and(eq(customers.name, brokerName), eq(customers.companyId, companyId))
+      });
+      
+      if (!customer) {
+        // Create a new customer for this broker
+        const [newCustomer] = await db.insert(customers).values({
+          name: brokerName,
+          contactPerson: data.dispatcherName || "Unknown",
+          email: data.brokerEmail || "unknown@broker.com",
+          phone: data.brokerPhone || "",
+          address: "Address TBD",
+          status: "active",
+          companyId: companyId
+        }).returning();
+        customer = newCustomer;
+        console.log(`      📇 Created new customer: ${brokerName}`);
+      }
+
       const [newLoad] = await db.insert(loads).values({
         loadNumber: loadNum,
+        customerId: customer.id,
         rate: data.rate || 0,
         miles: data.miles || 0,
         rpm: data.rpm ? String(data.rpm) : "0",
-        brokerName: data.brokerName || "Unknown",
+        brokerName: brokerName,
         brokerPhone: data.brokerPhone || "",
         brokerEmail: data.brokerEmail || "",
         dispatcherName: data.dispatcherName || "",
