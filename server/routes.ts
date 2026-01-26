@@ -34,7 +34,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';
-import { generateMessageSuggestions, improveMessage } from './openai-helper';
+import { generateMessageSuggestions, improveMessage, extractLoadFromScreenshot } from './openai-helper';
 import { stripeService } from './stripe-service';
 import { calculateMiles } from './services/distance-calculator';
 
@@ -1911,6 +1911,35 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error('Error calculating distance:', error);
       res.status(500).json({ ok: false, error: 'Failed to calculate distance' });
+    }
+  });
+
+  // POST endpoint to extract load info from Amazon Relay screenshot using AI vision
+  app.post('/api/extract-load-screenshot', async (req, res) => {
+    try {
+      const { image } = req.body;
+      
+      if (!image || typeof image !== 'string') {
+        return res.status(400).json({ 
+          ok: false, 
+          error: 'Image data is required. Send base64 encoded image.' 
+        });
+      }
+
+      console.log('📸 Extracting load info from screenshot...');
+      const loadData = await extractLoadFromScreenshot(image);
+      
+      console.log('✅ Extracted load data:', loadData);
+      res.json({
+        ok: true,
+        ...loadData
+      });
+    } catch (error: any) {
+      console.error('Error extracting load from screenshot:', error);
+      res.status(500).json({ 
+        ok: false, 
+        error: error?.message || 'Failed to extract load information from screenshot' 
+      });
     }
   });
 

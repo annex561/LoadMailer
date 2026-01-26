@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard, MapPin, User, Phone, Mail, ChevronsUpDown, Loader2 } from "lucide-react";
+import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard, MapPin, User, Phone, Mail, ChevronsUpDown, Loader2, Calculator } from "lucide-react";
+import { useLocation } from "wouter";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -79,6 +80,7 @@ interface BookModalState {
 
 export default function LoadsInbox() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [loads, setLoads] = useState<GALoad[]>([]);
   const [shortlist, setShortlist] = useState<GALoad[]>([]);
   const [minScore, setMinScore] = useState(60);
@@ -466,6 +468,18 @@ export default function LoadsInbox() {
     }
   };
 
+  const checkTrueRPM = (load: GALoad) => {
+    const origin = `${load.origin_city}, ${load.origin_state}`;
+    const dest = `${load.dest_city}, ${load.dest_state}`;
+    const params = new URLSearchParams({
+      pay: String(load.rate_total || 0),
+      miles: String(load.miles || 0),
+      origin: origin,
+      dropoff: dest
+    });
+    setLocation(`/true-rpm-calculator?${params.toString()}`);
+  };
+
   const renderActions = (l: GALoad, compact = false) => {
     const isActionable = ["new", "offered", "quoted"].includes(l.status);
     const isBooked = l.status === "booked";
@@ -475,10 +489,18 @@ export default function LoadsInbox() {
     return (
       <div className="flex gap-1 flex-wrap">
         {["new", "offered", "quoted"].includes(l.status) && (
-          <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => openBookModal(l)}>
-            <Check className="w-3 h-3 mr-1" />
-            Book
-          </Button>
+          <>
+            <Button size="sm" variant="default" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => openBookModal(l)}>
+              <Check className="w-3 h-3 mr-1" />
+              Book
+            </Button>
+            {l.rate_total > 0 && l.miles > 0 && (
+              <Button size="sm" variant="outline" className="bg-teal-600/20 hover:bg-teal-600/40 border-teal-500" onClick={() => checkTrueRPM(l)}>
+                <Calculator className="w-3 h-3 mr-1" />
+                RPM
+              </Button>
+            )}
+          </>
         )}
         {isBooked && !l.ratecon_path && (
           <Button size="sm" variant="outline" onClick={() => act(l.id, "ratecon/generate")}>
