@@ -506,9 +506,10 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
       }
     }
 
-    // Copy load to PostgreSQL for tracking when driver is assigned
+    // Copy load to PostgreSQL for tracking when booked (with or without driver)
     let pgLoadId: string | null = null;
-    if (assigned_driver_id) {
+    // Always copy to PostgreSQL when booking a load so it appears in Active Loads
+    {
       try {
         const { storage } = await import("./storage");
         const { customers } = await import("@shared/schema");
@@ -559,7 +560,7 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
           const [newLoad] = await pgDb.insert(pgLoads).values({
             loadNumber: row.load_number || id.slice(0, 8),
             customerId: defaultCustomerId,
-            driverId: String(assigned_driver_id),
+            driverId: assigned_driver_id ? String(assigned_driver_id) : null,
             description: `${row.origin_city || 'TBD'}, ${row.origin_state || ''} to ${row.dest_city || 'TBD'}, ${row.dest_state || ''}`,
             pickupAddress: `${row.origin_city || 'TBD'}, ${row.origin_state || ''}`,
             pickupDate: parseDate(row.pickup_dt),
@@ -578,10 +579,10 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
           pgLoadId = newLoad?.id || null;
           console.log(`✅ Load ${row.load_number || id.slice(0, 8)} copied to PostgreSQL for tracking (ID: ${pgLoadId})`);
         } else {
-          // Update existing load with driver assignment
+          // Update existing load with driver assignment (if any)
           await pgDb.update(pgLoads)
             .set({ 
-              driverId: String(assigned_driver_id),
+              driverId: assigned_driver_id ? String(assigned_driver_id) : undefined,
               status: "dispatched"
             })
             .where(eq(pgLoads.loadNumber, row.load_number || id.slice(0, 8)));
