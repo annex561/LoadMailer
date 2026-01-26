@@ -62,17 +62,28 @@ export class SMSCommunicationService {
       if (isConfirmationResponse) {
         try {
           // Find driver's most recent dispatched load that hasn't been confirmed
+          // Sort by createdAt descending to get the most recent one
           const allLoads = await storage.getAllLoads();
-          const unconfirmedLoad = allLoads.find(load => 
-            load.driverId === driver.id && 
-            load.status === 'dispatched' && 
-            !load.driverConfirmedAt
-          );
+          const unconfirmedLoads = allLoads
+            .filter(load => 
+              load.driverId === driver.id && 
+              load.status === 'dispatched' && 
+              !load.driverConfirmedAt
+            )
+            .sort((a, b) => {
+              const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+              const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+              return dateB - dateA; // Most recent first
+            });
+          
+          const unconfirmedLoad = unconfirmedLoads[0]; // Get the most recent unconfirmed load
           
           if (unconfirmedLoad) {
-            // Mark load as confirmed by driver
+            // Mark load as confirmed by driver and update SOP progress
+            const currentSopProgress = unconfirmedLoad.sopProgress || {};
             await storage.updateLoad(unconfirmedLoad.id, {
-              driverConfirmedAt: new Date()
+              driverConfirmedAt: new Date(),
+              sopProgress: { ...currentSopProgress, initialSms: true }
             });
             
             console.log(`✅ Driver ${driver.name} confirmed load #${unconfirmedLoad.loadNumber}`);
@@ -84,6 +95,12 @@ export class SMSCommunicationService {
               `Drive safe! Contact dispatch if you need anything.`
             );
             return; // Exit early - confirmation handled
+          } else {
+            // No pending load to confirm - let the driver know
+            await this.sendSMS(fromPhone,
+              `No pending load found to confirm. If you have a load number, please include it in your reply.`
+            );
+            return;
           }
         } catch (confirmErr) {
           console.error('Error processing load confirmation:', confirmErr);

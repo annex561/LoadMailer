@@ -16,14 +16,14 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 export default function ActiveLoads() {
-  const { data: loads, isLoading } = useQuery({ 
+  const { data: loads, isLoading } = useQuery<any[]>({ 
     queryKey: ["/api/loads"],
     refetchInterval: 2000 // Poll every 2s to ensure it catches the move immediately
   });
 
   // --- THE FIX: BROADENED FILTER ---
   // We want anything that is NOT 'booked' (Inbox) and NOT 'archived' (History)
-  const activeLoads = loads?.filter((load: any) => {
+  const activeLoads = (loads || []).filter((load: any) => {
     const status = load.status?.toLowerCase() || "";
     // Show strictly these active states
     return ["dispatched", "in_transit", "delivered", "assigned", "active"].includes(status);
