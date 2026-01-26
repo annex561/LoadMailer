@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MapPin, ArrowRight, Truck, Phone, MessageSquare, Send, FileText, Navigation, Clock } from "lucide-react";
 import { useState } from "react";
+import { EVChecklist } from "@/components/load-lifecycle/EVChecklist"; // Importing your existing Checklist
 import { useToast } from "@/hooks/use-toast";
 
 export default function ActiveLoads() {
@@ -16,6 +17,7 @@ export default function ActiveLoads() {
     queryKey: ["/api/loads"],
   });
 
+  // Filter for Active Loads Only (Dispatched, In Transit, Delivered)
   const activeLoads = loads?.filter((load: any) => 
     ["dispatched", "in_transit", "delivered"].includes(load.status)
   ) || [];
@@ -24,6 +26,7 @@ export default function ActiveLoads() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 bg-slate-50 min-h-screen">
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Active Load Command</h1>
@@ -36,10 +39,11 @@ export default function ActiveLoads() {
         </div>
       </div>
 
+      {/* Grid of Command Cards */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {activeLoads.length === 0 ? (
           <div className="col-span-full text-center py-20 bg-white rounded-xl border border-dashed">
-            <p className="text-slate-400">No active loads. Go to <a href="/loads-inbox" className="text-blue-600 underline">RateCon Inbox</a> to dispatch one.</p>
+            <p className="text-slate-400">No active loads. Go to <a href="/inbox" className="text-blue-600 underline">RateCon Inbox</a> to dispatch one.</p>
           </div>
         ) : (
           activeLoads.map((load: any) => (
@@ -51,6 +55,7 @@ export default function ActiveLoads() {
   );
 }
 
+// --- THE MASTER COMMAND CARD ---
 function LoadCommandCard({ load }: { load: any }) {
   return (
     <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-all">
@@ -90,6 +95,7 @@ function LoadCommandCard({ load }: { load: any }) {
             </TabsTrigger>
           </TabsList>
 
+          {/* TAB 1: SOP CHECKLIST (Interactive) */}
           <TabsContent value="sop" className="p-0 m-0 h-[400px] overflow-hidden">
              <ScrollArea className="h-full">
                <div className="p-4">
@@ -98,10 +104,12 @@ function LoadCommandCard({ load }: { load: any }) {
              </ScrollArea>
           </TabsContent>
 
+          {/* TAB 2: DRIVER MESSAGING (Integrated) */}
           <TabsContent value="chat" className="p-0 m-0 h-[400px]">
             <DriverChatWindow load={load} />
           </TabsContent>
 
+          {/* TAB 3: MAP / DETAILS */}
           <TabsContent value="map" className="p-0 m-0 h-[400px] bg-slate-100 flex flex-col items-center justify-center text-slate-400">
             <MapPin className="w-12 h-12 mb-2 opacity-20" />
             <p className="text-sm">Live GPS Map Integration</p>
@@ -116,56 +124,16 @@ function LoadCommandCard({ load }: { load: any }) {
   );
 }
 
-function EVChecklist({ load }: { load: any }) {
-  const steps = [
-    { key: "initialSms", label: "Send Load Details SMS" },
-    { key: "tripMessage", label: "Driver Trip Message" },
-    { key: "puArrived", label: "Arrived at Pickup" },
-    { key: "puDocs", label: "Upload Pickup Docs" },
-    { key: "brokerConfirmed", label: "Broker Confirmation" },
-    { key: "driverReleased", label: "Driver Released" },
-    { key: "inTransit", label: "In Transit" },
-    { key: "delArrived", label: "Arrived at Delivery" },
-    { key: "delDocs", label: "Upload Delivery Docs" },
-    { key: "podUploaded", label: "POD Uploaded" },
-    { key: "invoiceSent", label: "Invoice Sent" },
-    { key: "docsToEinstein", label: "Docs to Factoring" },
-    { key: "complete", label: "Load Complete" },
-  ];
-
-  const progress = load.sopProgress || {};
-  const completedCount = Object.values(progress).filter(Boolean).length;
-
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between items-center mb-4">
-        <span className="text-sm font-medium text-slate-700">SOP Progress</span>
-        <Badge variant="outline">{completedCount} / {steps.length}</Badge>
-      </div>
-      {steps.map((step, idx) => (
-        <div 
-          key={step.key} 
-          className={`flex items-center gap-3 p-2 rounded-lg ${progress[step.key] ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}
-        >
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${progress[step.key] ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>
-            {progress[step.key] ? '✓' : idx + 1}
-          </div>
-          <span className={`text-sm ${progress[step.key] ? 'text-emerald-700 font-medium' : 'text-slate-600'}`}>
-            {step.label}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
+// --- SUB-COMPONENT: DRIVER CHAT WINDOW ---
 function DriverChatWindow({ load }: { load: any }) {
   const [message, setMessage] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Fetch Message History (Mocked endpoint for now, or use real one)
   const { data: messages } = useQuery({
     queryKey: [`/api/messages/load/${load.id}`],
+    // If endpoint doesn't exist yet, it returns empty array safely
     queryFn: async () => {
       try {
         const res = await fetch(`/api/messages/load/${load.id}`);
@@ -177,15 +145,17 @@ function DriverChatWindow({ load }: { load: any }) {
 
   const sendMessage = useMutation({
     mutationFn: async () => {
+      // Use your existing SMS endpoint
       await apiRequest("POST", "/api/sms/send-template", { 
         loadId: load.id, 
-        type: "CUSTOM",
+        type: "CUSTOM", // We might need to handle custom text in backend
         customBody: message 
       });
     },
     onSuccess: () => {
       setMessage("");
       toast({ title: "Sent", description: "Message sent to driver." });
+      // Invalidate query if you have real message history
     },
     onError: () => {
       toast({ title: "Error", variant: "destructive", description: "Failed to send SMS." });
@@ -194,15 +164,31 @@ function DriverChatWindow({ load }: { load: any }) {
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
+      {/* Message History Area */}
       <div className="flex-1 p-4 overflow-y-auto space-y-4">
+        {/* Placeholder for 'No messages' */}
         <div className="flex justify-center mt-10 opacity-50">
            <div className="text-center">
              <Clock className="w-8 h-8 mx-auto mb-2 text-slate-300" />
              <p className="text-xs text-slate-400">Chat History with Driver #{load.assignedDriverId}</p>
            </div>
         </div>
+
+        {/* Example of how messages would look */}
+        {/* <div className="flex justify-end">
+          <div className="bg-blue-600 text-white text-sm px-3 py-2 rounded-lg rounded-tr-none max-w-[80%]">
+            Are you unloaded yet?
+          </div>
+        </div>
+        <div className="flex justify-start">
+          <div className="bg-white border text-slate-800 text-sm px-3 py-2 rounded-lg rounded-tl-none max-w-[80%]">
+            Yes, waiting on paperwork.
+          </div>
+        </div> 
+        */}
       </div>
 
+      {/* Input Area */}
       <div className="p-3 bg-white border-t flex gap-2">
         <Input 
           placeholder="Type message to driver..." 
