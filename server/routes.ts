@@ -2792,6 +2792,34 @@ export async function registerRoutes(app: Express): Promise<void> {
       const updates = req.body;
       const { forceComplete, overrideReason } = req.query;
       
+      // SAFETY CHECK: Clean the Driver ID
+      // If assignedDriverId is sent as a string "5", make sure it becomes a number 5
+      // If it's empty/invalid, don't try to update it to avoid DB crash
+      if (updates.assignedDriverId !== undefined) {
+        if (updates.assignedDriverId === null || updates.assignedDriverId === '') {
+          delete updates.assignedDriverId; // Remove empty values
+        } else {
+          updates.assignedDriverId = parseInt(updates.assignedDriverId);
+          if (isNaN(updates.assignedDriverId)) {
+            delete updates.assignedDriverId; // Remove bad data
+          }
+        }
+      }
+      
+      // Also handle driverId for backwards compatibility
+      if (updates.driverId !== undefined) {
+        if (updates.driverId === null || updates.driverId === '') {
+          delete updates.driverId;
+        } else {
+          updates.driverId = parseInt(updates.driverId);
+          if (isNaN(updates.driverId)) {
+            delete updates.driverId;
+          }
+        }
+      }
+      
+      console.log(`📝 Updating Load #${id}:`, updates);
+      
       // Get current load before updating to check for status changes
       const currentLoad = await storage.getLoad(id);
       if (!currentLoad) {

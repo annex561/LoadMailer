@@ -1,0 +1,77 @@
+// Inside BookingDialog component...
+
+  const [driverId, setDriverId] = useState<string>(""); 
+
+  const bookLoad = useMutation({
+    mutationFn: async () => {
+      // 1. VALIDATION: Ensure a driver is actually selected
+      if (!driverId) throw new Error("Please select a driver first.");
+
+      console.log("🚀 Booking Load:", load.id, "for Driver:", driverId);
+
+      // 2. SEND UPDATE
+      const res = await apiRequest("PATCH", `/api/loads/${load.id}`, { 
+        assignedDriverId: parseInt(driverId), // Ensure this is a number
+        status: "dispatched",                // THIS FLIPS THE SWITCH
+        sopProgress: { ...load.sopProgress, initialSms: true }
+      });
+      
+      // 3. SEND SMS (Non-blocking)
+      await apiRequest("POST", "/api/sms/send-template", {
+        loadId: load.id,
+        type: "BOOKING_REQUEST"
+      });
+
+      return res;
+    },
+    onSuccess: () => {
+      // 4. REFRESH EVERYTHING
+      queryClient.invalidateQueries({ queryKey: ["/api/loads"] }); // Reloads Inbox & Active list
+      
+      toast({ 
+        title: "Load Moved! 🚚", 
+        description: `Load #${load.loadNumber} is now in Active Loads.` 
+      });
+      setIsOpen(false);
+    },
+    onError: (error) => {
+      toast({ 
+        title: "Booking Failed", 
+        description: "Could not move load. Check console for details.", 
+        variant: "destructive" 
+      });
+      console.error(error);
+    }
+  });
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {/* ... your trigger button ... */}
+      <DialogContent>
+         {/* ... (Rate & Driver Select inputs) ... */}
+         
+         <div className="grid gap-2">
+            <Label>Select Driver</Label>
+            <Select onValueChange={(val) => setDriverId(val)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose a driver..." />
+              </SelectTrigger>
+              <SelectContent>
+                {/* Ensure the value is the ID (number) */}
+                <SelectItem value="1">Annex Luberisse</SelectItem>
+                <SelectItem value="2">Test Driver</SelectItem>
+              </SelectContent>
+            </Select>
+         </div>
+
+         <Button 
+           onClick={() => bookLoad.mutate()} 
+           disabled={!driverId || bookLoad.isPending} 
+           className="w-full bg-blue-600 hover:bg-blue-500 font-bold mt-4"
+         >
+           {bookLoad.isPending ? "Moving to Active..." : "Confirm & Move Load"}
+         </Button>
+
+      </DialogContent>
+    </Dialog>
+  );
