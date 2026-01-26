@@ -570,6 +570,7 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
             status: "dispatched",
             rate: rate || row.rate_total || 0,
             miles: row.miles || null,
+            weight: row.weight || 0,
             equipmentType: row.equipment?.toLowerCase()?.replace(/\s+/g, '_') || "dry_van",
             companyId: company_id || null
           }).returning({ id: pgLoads.id });
