@@ -2,12 +2,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MapPin, ArrowRight, Truck, Phone, MessageSquare, Send, FileText, Navigation, Clock } from "lucide-react";
+import { MapPin, ArrowRight, Truck, MessageSquare, Send, FileText, Navigation, Clock } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,14 +19,14 @@ export default function ActiveLoads() {
     ["dispatched", "in_transit", "delivered"].includes(load.status)
   ) || [];
 
-  if (isLoading) return <div className="p-8 text-slate-500">Loading Fleet Status...</div>;
+  if (isLoading) return <div className="p-8 text-muted-foreground">Loading Fleet Status...</div>;
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-slate-50 min-h-screen">
+    <div className="p-4 md:p-6 space-y-6 bg-background min-h-screen">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Active Load Command</h1>
-          <p className="text-slate-500">Live tracking, SOP enforcement, and driver communication.</p>
+          <h1 className="text-3xl font-black text-foreground tracking-tight">Active Load Command</h1>
+          <p className="text-muted-foreground">Live tracking, SOP enforcement, and driver communication.</p>
         </div>
         <div className="flex gap-2">
           <Badge variant="secondary" className="text-lg px-4 py-1">
@@ -38,8 +37,8 @@ export default function ActiveLoads() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {activeLoads.length === 0 ? (
-          <div className="col-span-full text-center py-20 bg-white rounded-xl border border-dashed">
-            <p className="text-slate-400">No active loads. Go to <a href="/loads-inbox" className="text-blue-600 underline">RateCon Inbox</a> to dispatch one.</p>
+          <div className="col-span-full text-center py-20 bg-card rounded-xl border border-dashed border-border">
+            <p className="text-muted-foreground">No active loads. Go to <a href="/loads-inbox" className="text-blue-500 underline">RateCon Inbox</a> to dispatch one.</p>
           </div>
         ) : (
           activeLoads.map((load: any) => (
@@ -53,39 +52,39 @@ export default function ActiveLoads() {
 
 function LoadCommandCard({ load }: { load: any }) {
   return (
-    <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-all">
-      <CardHeader className="bg-white border-b pb-3">
+    <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-all bg-card">
+      <CardHeader className="bg-card border-b border-border pb-3">
         <div className="flex justify-between items-start">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Badge className="bg-blue-600 hover:bg-blue-700">#{load.loadNumber}</Badge>
-              <Badge variant="outline" className="text-slate-500 uppercase">{load.status.replace("_", " ")}</Badge>
+              <Badge className="bg-blue-600 hover:bg-blue-700 text-white">#{load.loadNumber}</Badge>
+              <Badge variant="outline" className="text-muted-foreground uppercase">{load.status?.replace("_", " ") || "Unknown"}</Badge>
             </div>
-            <div className="flex items-center gap-2 text-lg font-bold text-slate-900">
-              <span className="truncate max-w-[120px]">{load.originCity}</span>
-              <ArrowRight className="w-4 h-4 text-slate-400" />
-              <span className="truncate max-w-[120px]">{load.destCity}</span>
+            <div className="flex items-center gap-2 text-lg font-bold text-foreground">
+              <span className="truncate max-w-[120px]">{load.originCity || load.pickupAddress || "Origin"}</span>
+              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+              <span className="truncate max-w-[120px]">{load.destCity || load.deliveryAddress || "Destination"}</span>
             </div>
           </div>
           <div className="text-right">
-             <div className="flex items-center justify-end gap-1 text-sm font-medium text-slate-700">
-               <Truck className="w-4 h-4 text-slate-400" /> Driver #{load.assignedDriverId}
+             <div className="flex items-center justify-end gap-1 text-sm font-medium text-foreground">
+               <Truck className="w-4 h-4 text-muted-foreground" /> Driver #{load.assignedDriverId || load.driverId || "N/A"}
              </div>
-             <p className="text-xs text-slate-400">Rate: ${load.rate}</p>
+             <p className="text-xs text-muted-foreground">Rate: ${load.rate || 0}</p>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="p-0">
         <Tabs defaultValue="sop" className="w-full">
-          <TabsList className="w-full justify-start rounded-none border-b bg-slate-50/50 p-0 h-10">
-            <TabsTrigger value="sop" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-white h-10 px-4">
+          <TabsList className="w-full justify-start rounded-none border-b border-border bg-muted/50 p-0 h-10">
+            <TabsTrigger value="sop" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-card h-10 px-4 text-foreground">
               <FileText className="w-4 h-4 mr-2" /> SOP Steps
             </TabsTrigger>
-            <TabsTrigger value="chat" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-white h-10 px-4">
+            <TabsTrigger value="chat" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-card h-10 px-4 text-foreground">
               <MessageSquare className="w-4 h-4 mr-2" /> Driver Chat
             </TabsTrigger>
-            <TabsTrigger value="map" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-white h-10 px-4">
+            <TabsTrigger value="map" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-600 data-[state=active]:bg-card h-10 px-4 text-foreground">
               <Navigation className="w-4 h-4 mr-2" /> Live Map
             </TabsTrigger>
           </TabsList>
@@ -102,12 +101,12 @@ function LoadCommandCard({ load }: { load: any }) {
             <DriverChatWindow load={load} />
           </TabsContent>
 
-          <TabsContent value="map" className="p-0 m-0 h-[400px] bg-slate-100 flex flex-col items-center justify-center text-slate-400">
+          <TabsContent value="map" className="p-0 m-0 h-[400px] bg-muted flex flex-col items-center justify-center text-muted-foreground">
             <MapPin className="w-12 h-12 mb-2 opacity-20" />
             <p className="text-sm">Live GPS Map Integration</p>
             <p className="text-xs max-w-[200px] text-center mt-2">
-              Pickup: {load.pickupDate}<br/>
-              Delivery: {load.deliveryDate}
+              Pickup: {load.pickupDate || "TBD"}<br/>
+              Delivery: {load.deliveryDate || "TBD"}
             </p>
           </TabsContent>
         </Tabs>
@@ -139,18 +138,18 @@ function EVChecklist({ load }: { load: any }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center mb-4">
-        <span className="text-sm font-medium text-slate-700">SOP Progress</span>
+        <span className="text-sm font-medium text-foreground">SOP Progress</span>
         <Badge variant="outline">{completedCount} / {steps.length}</Badge>
       </div>
       {steps.map((step, idx) => (
         <div 
           key={step.key} 
-          className={`flex items-center gap-3 p-2 rounded-lg ${progress[step.key] ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}
+          className={`flex items-center gap-3 p-2 rounded-lg ${progress[step.key] ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-muted border border-border'}`}
         >
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${progress[step.key] ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${progress[step.key] ? 'bg-emerald-500 text-white' : 'bg-muted-foreground/30 text-foreground'}`}>
             {progress[step.key] ? '✓' : idx + 1}
           </div>
-          <span className={`text-sm ${progress[step.key] ? 'text-emerald-700 font-medium' : 'text-slate-600'}`}>
+          <span className={`text-sm ${progress[step.key] ? 'text-emerald-400 font-medium' : 'text-foreground'}`}>
             {step.label}
           </span>
         </div>
@@ -193,17 +192,17 @@ function DriverChatWindow({ load }: { load: any }) {
   });
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-muted/50">
       <div className="flex-1 p-4 overflow-y-auto space-y-4">
         <div className="flex justify-center mt-10 opacity-50">
            <div className="text-center">
-             <Clock className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-             <p className="text-xs text-slate-400">Chat History with Driver #{load.assignedDriverId}</p>
+             <Clock className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+             <p className="text-xs text-muted-foreground">Chat History with Driver #{load.assignedDriverId || load.driverId || "N/A"}</p>
            </div>
         </div>
       </div>
 
-      <div className="p-3 bg-white border-t flex gap-2">
+      <div className="p-3 bg-card border-t border-border flex gap-2">
         <Input 
           placeholder="Type message to driver..." 
           className="flex-1"
