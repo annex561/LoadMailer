@@ -40,9 +40,9 @@ export default function ActiveLoads() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="space-y-6">
         {activeLoads.length === 0 ? (
-          <div className="col-span-full text-center py-20 bg-card rounded-xl border border-dashed border-border">
+          <div className="text-center py-20 bg-card rounded-xl border border-dashed border-border">
             <Truck className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-30" />
             <p className="text-muted-foreground mb-4">No active loads. Go to RateCon Inbox to dispatch one.</p>
             <a href="/loads-inbox">
@@ -99,7 +99,7 @@ function LoadCommandCard({ load }: { load: any }) {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="sop" className="p-0 m-0 h-[400px] overflow-hidden">
+          <TabsContent value="sop" className="p-0 m-0 h-[500px] overflow-hidden">
              <ScrollArea className="h-full">
                <div className="p-4">
                   <EVChecklist load={load} /> 
@@ -107,11 +107,11 @@ function LoadCommandCard({ load }: { load: any }) {
              </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="chat" className="p-0 m-0 h-[400px]">
+          <TabsContent value="chat" className="p-0 m-0 h-[500px]">
             <DriverChatWindow load={load} />
           </TabsContent>
 
-          <TabsContent value="map" className="p-0 m-0 h-[400px]">
+          <TabsContent value="map" className="p-0 m-0 h-[500px]">
             <LiveMapPanel load={load} />
           </TabsContent>
         </Tabs>
