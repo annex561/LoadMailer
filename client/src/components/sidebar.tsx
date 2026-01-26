@@ -52,6 +52,7 @@ const menuGroups = [
     title: "Finance",
     icon: <DollarSign className="w-5 h-5" />,
     items: [
+      { name: "True RPM Calc", href: "/true-rpm-calculator" },
       { name: "Fleet Calculator", href: "/fleet-calculator" },
       { name: "Payments", href: "/payments" },
       { name: "Analytics", href: "/analytics" },

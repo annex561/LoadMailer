@@ -1,0 +1,96 @@
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+import time
+
+# Initialize the geocoder (requires a unique user_agent)
+geolocator = Nominatim(user_agent="amazon_relay_calculator_v1")
+
+def get_coordinates(location_name):
+    """Converts a city/address into GPS coordinates."""
+    try:
+        location = geolocator.geocode(location_name)
+        if location:
+            return (location.latitude, location.longitude)
+        else:
+            return None
+    except Exception as e:
+        print(f"Error finding location: {e}")
+        return None
+
+def calculate_true_rpm():
+    print("--- 🚛 AMAZON RELAY TRUE RPM CALCULATOR 🚛 ---\n")
+    
+    # 1. Get Load Details
+    try:
+        load_pay = float(input("Enter Load Pay ($): "))
+        load_miles = float(input("Enter Load Miles: "))
+        origin = input("Enter Pickup City (e.g. Maryville, TN): ")
+        drop_off = input("Enter Drop-off City (e.g. Cookeville, TN): ")
+        
+        # 2. Get Strategy (Where are you going next?)
+        print("\n--- NEXT MOVE STRATEGY ---")
+        print("1. Return to Base (Ooltewah, TN)")
+        print("2. Chase Hub (Nashville, TN)")
+        print("3. Custom Destination")
+        choice = input("Select Strategy (1/2/3): ")
+
+        if choice == '1':
+            next_dest = "Ooltewah, TN"
+        elif choice == '2':
+            next_dest = "Nashville, TN"
+        else:
+            next_dest = input("Enter Next Destination: ")
+
+        print(f"\nCalculating deadhead from {drop_off} to {next_dest}...")
+
+        # 3. Calculate Geodesic Distance (As the crow flies approximation)
+        # Note: We add 15% to geodesic distance to estimate real driving miles
+        coords_drop = get_coordinates(drop_off)
+        coords_next = get_coordinates(next_dest)
+
+        if coords_drop and coords_next:
+            straight_line_dist = geodesic(coords_drop, coords_next).miles
+            deadhead_miles = straight_line_dist * 1.15 # 1.15 buffer for road curves
+            
+            total_trip_miles = load_miles + deadhead_miles
+            true_rpm = load_pay / total_trip_miles
+            posted_rpm = load_pay / load_miles
+
+            # 4. The Results
+            print("\n" + "="*30)
+            print(f"💰 LOAD ANALYSIS: {origin} -> {drop_off}")
+            print("="*30)
+            print(f"💵 Posted Pay:      ${load_pay:.2f}")
+            print(f"📉 Posted RPM:      ${posted_rpm:.2f}/mi")
+            print("-" * 30)
+            print(f"🚚 Deadhead Move:   {drop_off} -> {next_dest}")
+            print(f"⛽ Deadhead Miles:  ~{deadhead_miles:.1f} mi")
+            print(f"🛣️ Total Miles:     {total_trip_miles:.1f} mi")
+            print("=" * 30)
+            
+            # Color coding logic for text output
+            if true_rpm >= 2.00:
+                grade = "✅ GREEN (Profitable)"
+            elif true_rpm >= 1.60:
+                grade = "⚠️ YELLOW (Marginal)"
+            else:
+                grade = "❌ RED (Money Loser)"
+
+            print(f"💎 TRUE RPM:        ${true_rpm:.2f}/mi")
+            print(f"📊 VERDICT:         {grade}")
+            print("=" * 30)
+
+        else:
+            print("❌ Error: Could not find one of the cities. Check spelling.")
+
+    except ValueError:
+        print("❌ Error: Please enter valid numbers for Pay and Miles.")
+
+# Run the tool
+if __name__ == "__main__":
+    while True:
+        calculate_true_rpm()
+        again = input("\nCalculate another load? (y/n): ")
+        if again.lower() != 'y':
+            break
+        print("\n")

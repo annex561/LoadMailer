@@ -76,6 +76,7 @@ import AdminOverview from './admin-overview';
 import CommunicationDashboard from './communication-dashboard';
 import AICommunicationInsights from './ai-communication-insights';
 import FleetCalculator from './fleet-calculator';
+import TrueRPMCalculator from './true-rpm-calculator';
 import UnifiedMessaging from './unified-messaging';
 import NotFound from './not-found';
 import FleetDashboard from './fleet-dashboard';
@@ -586,6 +587,8 @@ export default function LoadOpsDashboard() {
         return <AnalyticsDashboard />;
       case '/fleet-calculator':
         return <FleetCalculator />;
+      case '/true-rpm-calculator':
+        return <TrueRPMCalculator />;
       case '/scrapers':
         return <ScraperManagement />;
       case '/sms-status':

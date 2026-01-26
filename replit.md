@@ -91,6 +91,13 @@ The design system employs a consistent brand palette (Navy, Slate, Teal, Whitesm
     - **Workflow States**: open, in_progress, promised, escalated, closed with dispatcher/manager/accounting ownership.
     - **API Endpoints**: `GET /api/ga/items`, `GET /api/ga/items/aging`, `POST /api/ga/items/:id/actions/touch`, `POST /api/ga/items/:id/actions/promise`, `POST /api/ga/items/:id/actions/escalate`.
     - **Frontend**: `/items` page with aging summary, action cards, touch templates, promise scheduling, escalation levels (L1/L2/L3).
+- **True RPM Calculator**: A profitability analysis tool for evaluating loads including deadhead miles:
+    - **Inputs**: Load Pay ($), Load Miles, Pickup City, Drop-off City
+    - **Strategy Options**: Return to Base (Ooltewah, TN), Chase Hub (Nashville, TN), or Custom Destination
+    - **Calculation**: True RPM = Load Pay / (Load Miles + Deadhead Miles)
+    - **Distance API**: Uses `POST /api/calculate-distance` with {origin, destination} to get deadhead miles via OpenStreetMap/OSRM
+    - **Verdicts**: GREEN (≥$2.00/mi - Profitable), YELLOW (≥$1.60/mi - Marginal), RED (<$1.60/mi - Money Loser)
+    - **Frontend**: `/true-rpm-calculator` page under Finance section in sidebar
 
 # External Dependencies
 

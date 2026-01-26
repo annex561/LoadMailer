@@ -55,6 +55,7 @@ import ItemsPage from "@/pages/items";
 import LoadDetailsPage from "@/pages/load-details";
 import GmailSettings from "@/pages/gmail-settings";
 import DriverLoadView from "@/pages/driver-load-view";
+import TrueRPMCalculator from "@/pages/true-rpm-calculator";
 
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
@@ -107,6 +108,7 @@ function Router() {
       <Route path="/active-loads" component={ActiveLoads} />
       <Route path="/items" component={ItemsPage} />
       <Route path="/gmail-settings" component={GmailSettings} />
+      <Route path="/true-rpm-calculator" component={TrueRPMCalculator} />
       <Route path="/loads/:id" component={LoadDetailsPage} />
       <Route component={NotFound} />
     </Switch>

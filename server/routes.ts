@@ -36,6 +36,7 @@ import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';
 import { generateMessageSuggestions, improveMessage } from './openai-helper';
 import { stripeService } from './stripe-service';
+import { calculateMiles } from './services/distance-calculator';
 
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
@@ -1831,14 +1832,38 @@ export async function registerRoutes(app: Express): Promise<void> {
     return R * c;
   }
 
-  // POST endpoint to calculate distance from lat/lon to target address
+  // POST endpoint to calculate distance (supports city-to-city OR lat/lon to targetAddress)
   app.post('/api/calculate-distance', async (req, res) => {
     try {
-      const { lat, lon, targetAddress } = req.body;
+      const { origin, destination } = req.body;
 
+      // Support city-to-city calculation
+      if (typeof origin === 'string' && typeof destination === 'string') {
+        const miles = await calculateMiles(origin, destination);
+        
+        if (miles === null) {
+          return res.status(404).json({ 
+            ok: false,
+            error: 'Unable to calculate distance between cities',
+            origin,
+            destination
+          });
+        }
+
+        return res.json({
+          ok: true,
+          miles,
+          origin,
+          destination
+        });
+      }
+
+      // Legacy support: lat/lon to targetAddress
+      const { lat, lon, targetAddress } = req.body;
       if (typeof lat !== 'number' || typeof lon !== 'number' || !targetAddress) {
         return res.status(400).json({ 
-          error: 'Invalid request. Required: lat (number), lon (number), targetAddress (string)' 
+          ok: false,
+          error: 'Invalid request. Required: origin (string) and destination (string), OR lat (number), lon (number), targetAddress (string)' 
         });
       }
 
@@ -1847,7 +1872,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(targetAddress)}&limit=1`,
         {
           headers: {
-            'User-Agent': 'LoadSignal-Fleet-Management/1.0'
+            'User-Agent': 'TRAQ-IQ-Fleet-Management/1.0'
           }
         }
       );
@@ -1856,6 +1881,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       if (!geocodeData || geocodeData.length === 0) {
         return res.status(404).json({ 
+          ok: false,
           error: 'Unable to geocode target address',
           address: targetAddress
         });
@@ -1864,10 +1890,19 @@ export async function registerRoutes(app: Express): Promise<void> {
       const targetLat = parseFloat(geocodeData[0].lat);
       const targetLon = parseFloat(geocodeData[0].lon);
 
-      // Calculate distance using Haversine formula
-      const distanceInMiles = calculateDistanceInMiles(lat, lon, targetLat, targetLon);
+      // Calculate distance using Haversine formula (local version)
+      const R = 3959;
+      const dLat = (targetLat - lat) * Math.PI / 180;
+      const dLon = (targetLon - lon) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat * Math.PI / 180) * Math.cos(targetLat * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distanceInMiles = Math.round(R * c);
 
       res.json({
+        ok: true,
+        miles: distanceInMiles,
         distance: distanceInMiles,
         unit: 'miles',
         from: { lat, lon },
@@ -1875,7 +1910,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       });
     } catch (error) {
       console.error('Error calculating distance:', error);
-      res.status(500).json({ error: 'Failed to calculate distance' });
+      res.status(500).json({ ok: false, error: 'Failed to calculate distance' });
     }
   });
 
