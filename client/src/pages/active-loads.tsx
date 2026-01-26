@@ -1,24 +1,16 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { 
-  MapPin, Truck, Phone, MessageSquare, Send, 
-  FileText, Navigation, Clock, CheckCircle2, AlertCircle, ArrowRight,
-  MoreVertical, Brain, MessageCircle, CheckCircle, Circle
+  MapPin, Truck, Phone,
+  FileText, Navigation, Clock, CheckCircle2, AlertCircle, ArrowRight
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
 
 export default function ActiveLoads() {
   const { data: loads, isLoading } = useQuery({
@@ -127,9 +119,6 @@ export default function ActiveLoads() {
                   <TabsTrigger value="sop" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
                     <FileText className="w-4 h-4 mr-2" /> SOP Steps
                   </TabsTrigger>
-                  <TabsTrigger value="messages" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
-                    <MessageSquare className="w-4 h-4 mr-2" /> Driver Messages
-                  </TabsTrigger>
                   <TabsTrigger value="map" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
                     <Navigation className="w-4 h-4 mr-2" /> Live Map
                   </TabsTrigger>
@@ -141,10 +130,6 @@ export default function ActiveLoads() {
                       <EVChecklist load={selectedLoad} />
                     </div>
                   </ScrollArea>
-                </TabsContent>
-
-                <TabsContent value="messages" className="flex-1 overflow-hidden m-0 p-0">
-                  <DriverMessagesPanel load={selectedLoad} />
                 </TabsContent>
 
                 <TabsContent value="map" className="flex-1 overflow-hidden m-0 p-0">
@@ -179,312 +164,6 @@ function StatusBadge({ status }: { status: string }) {
   };
   const c = config[status] || { bg: "bg-slate-500/20", text: "text-slate-400", label: status };
   return <span className={`text-[10px] px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>{c.label}</span>;
-}
-
-function DriverMessagesPanel({ load }: { load: any }) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [newMessage, setNewMessage] = useState("");
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const driverId = load.driverId || load.assignedDriverId;
-
-  const { data: driver } = useQuery({
-    queryKey: ["/api/drivers", driverId],
-    enabled: !!driverId,
-  });
-
-  const { data: rawMessages = [], refetch } = useQuery({
-    queryKey: ["/api/driver-communications", driverId],
-    enabled: !!driverId,
-    refetchInterval: 2000,
-  });
-
-  const sendMutation = useMutation({
-    mutationFn: async (msg: string) => {
-      return apiRequest("POST", `/api/drivers/${driverId}/sms`, { message: msg });
-    },
-    onSuccess: () => {
-      setNewMessage("");
-      refetch();
-      toast({ title: "Message sent successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to send message", variant: "destructive" });
-    },
-  });
-
-  const sendPortalLinkMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch(`/api/drivers/${driverId}/send-dashboard-link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (!response.ok) throw new Error('Failed to send portal link');
-      return response.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Portal link sent" });
-    },
-    onError: () => {
-      toast({ title: "Failed to send portal link", variant: "destructive" });
-    },
-  });
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [rawMessages]);
-
-  const handleQuickMessage = (text: string) => {
-    sendMutation.mutate(text);
-  };
-
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      sendMutation.mutate(newMessage);
-    }
-  };
-
-  const formatMessageTime = (dateStr: string) => {
-    try {
-      return format(new Date(dateStr), 'MMM dd, HH:mm');
-    } catch {
-      return '';
-    }
-  };
-
-  if (!driverId) {
-    return (
-      <div className="h-full flex items-center justify-center text-slate-500">
-        <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-50" />
-        <p>No driver assigned to this load</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full flex flex-col">
-      {/* Chat Header - Matching Communication Dashboard */}
-      <div className="p-4 border-b border-border bg-card shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar className="w-10 h-10">
-              <AvatarFallback className="bg-primary/10 text-primary">
-                {driver?.name?.charAt(0) || "D"}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h3 className="font-medium text-foreground">{driver?.name || "Driver"}</h3>
-              <p className="text-sm text-muted-foreground">{driver?.phone || "No phone"}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {driver?.phone && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(`tel:${driver.phone}`, '_self')}
-                className="hover:shadow-sm hover:border-primary/50 transition-all duration-200"
-              >
-                <Phone className="w-4 h-4" />
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="hover:shadow-sm hover:border-primary/50 transition-all duration-200"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-        
-        {/* Load Info & AI Controls - Matching Communication Dashboard */}
-        <div className="mt-3 p-3 bg-muted/30 rounded-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <MessageSquare className="w-4 h-4" />
-                <span>General Discussion</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <MessageCircle className="w-4 h-4" />
-                <span>{rawMessages.length} messages</span>
-              </div>
-            </div>
-            
-            {/* AI Assistant Toggle */}
-            <Button
-              variant={aiEnabled ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setAiEnabled(!aiEnabled);
-                toast({ title: "AI Assistant", description: aiEnabled ? "Disabled" : "Enabled" });
-              }}
-              className="hover:shadow-sm transition-all duration-200"
-            >
-              <Brain className="w-4 h-4 mr-1" />
-              AI {aiEnabled ? 'On' : 'Off'}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Messages - Matching Communication Dashboard Style */}
-      <ScrollArea className="flex-1 p-4 bg-background">
-        <div className="space-y-4">
-          {rawMessages.length === 0 ? (
-            <p className="text-center text-muted-foreground text-sm py-8">No messages yet</p>
-          ) : (
-            rawMessages.map((msg: any, i: number) => {
-              const isOutbound = msg.direction === "outbound";
-              return (
-                <div
-                  key={i}
-                  className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                      isOutbound
-                        ? 'bg-primary/10 text-foreground border border-primary/30'
-                        : 'bg-muted text-foreground'
-                    }`}
-                  >
-                    {msg.mediaUrl && msg.mediaType?.startsWith('image/') && (
-                      <div className="mb-2">
-                        <img 
-                          src={`/api/communication/media-proxy?url=${encodeURIComponent(msg.mediaUrl)}`}
-                          alt="MMS attachment"
-                          className="rounded-lg max-w-full h-auto max-h-64 object-contain"
-                        />
-                      </div>
-                    )}
-                    {(msg.message || msg.body) && <p className="text-sm">{msg.message || msg.body}</p>}
-                    <div className={`flex items-center justify-between mt-1 text-xs ${
-                      isOutbound ? 'text-primary/70' : 'text-muted-foreground'
-                    }`}>
-                      <span>{formatMessageTime(msg.createdAt || msg.timestamp)}</span>
-                      {isOutbound && (
-                        <div className="flex items-center gap-1 ml-2">
-                          {msg.isRead ? (
-                            <CheckCircle className="w-3 h-3" />
-                          ) : (
-                            <Circle className="w-3 h-3" />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
-
-      {/* Quick Messages - Matching Communication Dashboard Exactly */}
-      <div className="p-3 border-t border-border bg-muted/30">
-        <h4 className="text-xs font-medium text-foreground mb-2">Quick Messages</h4>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Hi! Just a friendly reminder about your pickup today. Please confirm when you arrive at the pickup location. Thanks!')}
-            className="whitespace-nowrap text-xs"
-          >
-            📍 Pickup Reminder
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Please provide an ETA for delivery. Customer is asking for updates. Thank you!')}
-            className="whitespace-nowrap text-xs"
-          >
-            🚚 Delivery ETA
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Hi! Can you please provide a quick status update on this load? Thanks!')}
-            className="whitespace-nowrap text-xs"
-          >
-            ❓ Status Check
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Great! Load confirmed. Please proceed to pickup location and keep me updated. Safe travels!')}
-            className="whitespace-nowrap text-xs"
-          >
-            ✅ Load Confirmed
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Please remember to get all required paperwork signed and send photos when pickup/delivery is complete.')}
-            className="whitespace-nowrap text-xs"
-          >
-            📋 Paperwork
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Please contact the customer before arrival. Their contact info is in the load details. Thanks!')}
-            className="whitespace-nowrap text-xs"
-          >
-            📞 Call Customer
-          </Button>
-        </div>
-      </div>
-
-      {/* Message Input - Matching Communication Dashboard */}
-      <div className="border-t border-border bg-card">
-        <div className="p-4">
-          <div className="flex items-end gap-2">
-            <div className="flex-1 relative">
-              <Textarea
-                placeholder="Type your message..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                rows={1}
-                className="min-h-[40px] resize-none pr-8 bg-input border-border text-foreground"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => sendPortalLinkMutation.mutate()}
-                disabled={sendPortalLinkMutation.isPending}
-                title="Send driver portal link via SMS"
-              >
-                <Truck className="w-4 h-4" />
-              </Button>
-              <Button
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim() || sendMutation.isPending}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function LiveMapPanel({ load }: { load: any }) {
