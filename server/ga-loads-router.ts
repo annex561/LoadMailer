@@ -206,12 +206,13 @@ router.get("/loads", (req: Request, res: Response) => {
     const limit = req.query.limit ? Math.min(Number(req.query.limit), 200) : 100;
     const includeAssigned = req.query.includeAssigned === "true";
 
-    // By default, exclude booked loads with assigned drivers (they've been moved to tracking)
+    // By default, exclude dispatched loads (they've been moved to Active Dispatch tracking)
     let sql = `SELECT * FROM ga_loads WHERE 1=1`;
     const params: any[] = [];
 
     if (!includeAssigned) {
-      sql += ` AND NOT (status = 'booked' AND assigned_driver_id IS NOT NULL)`;
+      // Hide loads that have been dispatched (assigned and ready for tracking)
+      sql += ` AND status NOT IN ('dispatched', 'in_transit', 'delivered')`;
     }
 
     if (status) {
@@ -236,9 +237,9 @@ router.get("/loads", (req: Request, res: Response) => {
 router.get("/loads/shortlist", (req: Request, res: Response) => {
   try {
     const limit = req.query.limit ? Math.min(Number(req.query.limit), 50) : 10;
-    // Only show new loads without assigned drivers (actionable items)
+    // Only show actionable loads (not yet dispatched/in-transit/delivered)
     const rows = db
-      .prepare(`SELECT * FROM ga_loads WHERE status='new' AND assigned_driver_id IS NULL ORDER BY score DESC, created_at DESC LIMIT ?`)
+      .prepare(`SELECT * FROM ga_loads WHERE status NOT IN ('dispatched', 'in_transit', 'delivered') ORDER BY score DESC, created_at DESC LIMIT ?`)
       .all(limit);
     res.json({ ok: true, loads: rows });
   } catch (err: any) {
@@ -378,7 +379,8 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
       notes, 
       actor,
       skip_dispatch_gate,
-      company_id
+      company_id,
+      status: requestedStatus
     } = req.body || {};
 
     const row: any = db.prepare(`SELECT * FROM ga_loads WHERE id=?`).get(id);
@@ -405,10 +407,14 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
     }
 
     const rate = toNum(booked_rate) ?? row.offered_rate ?? row.rate_total;
+    
+    // If driver is assigned, use 'dispatched' status to move to Active Dispatch
+    // Otherwise default to 'booked'
+    const finalStatus = requestedStatus || (assigned_driver_id ? 'dispatched' : 'booked');
 
     db.prepare(`
       UPDATE ga_loads 
-      SET status='booked', 
+      SET status=?, 
           booked_at=?, 
           booked_rate=?,
           assigned_truck_id=?,
@@ -417,6 +423,7 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
           notes=COALESCE(?, notes)
       WHERE id=?
     `).run(
+      finalStatus,
       nowIso(), 
       rate, 
       assigned_truck_id || null, 

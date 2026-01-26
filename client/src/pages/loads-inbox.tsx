@@ -279,11 +279,13 @@ export default function LoadsInbox() {
   async function handleBook() {
     if (!bookModal.load) return;
 
+    // When driver is assigned, set status to "dispatched" to move from Inbox to Active Dispatch
     const result = await act(bookModal.load.id, "book", {
       booked_rate: parseFloat(bookModal.bookedRate) || undefined,
       assigned_truck_id: bookModal.truckId || undefined,
       assigned_driver_id: bookModal.driverId || undefined,
-      override_reason: bookModal.overrideReason || undefined
+      override_reason: bookModal.overrideReason || undefined,
+      status: bookModal.driverId ? "dispatched" : undefined // Move to Active Dispatch when driver assigned
     });
 
     if (result.requiresOverride) {
@@ -293,6 +295,10 @@ export default function LoadsInbox() {
         gateStatus: result.gateStatus || "YELLOW"
       }));
     } else if (result.ok) {
+      toast({ 
+        title: "Load Dispatched", 
+        description: `Load moved to Active Dispatch${bookModal.driverName ? ` with ${bookModal.driverName}` : ""}`
+      });
       setBookModal(prev => ({ ...prev, open: false }));
     }
   }
