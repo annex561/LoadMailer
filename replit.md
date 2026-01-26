@@ -97,6 +97,13 @@ The design system employs a consistent brand palette (Navy, Slate, Teal, Whitesm
     - **Calculation**: True RPM = Load Pay / (Load Miles + Deadhead Miles)
     - **Distance API**: Uses `POST /api/calculate-distance` with {origin, destination} to get deadhead miles via OpenStreetMap/OSRM
     - **Verdicts**: GREEN (≥$2.00/mi - Profitable), YELLOW (≥$1.60/mi - Marginal), RED (<$1.60/mi - Money Loser)
+    - **AI Screenshot Extraction**: Uses `POST /api/extract-load-screenshot` with GPT-4o vision to extract load details from Amazon Relay screenshots (pay, miles, origin, destination)
+    - **GPS Auto-Location**: "Use My Location" button uses browser geolocation + Nominatim reverse geocoding to detect current city for drop-off field
+    - **Saved Destinations**: Quick-pick buttons for favorite destinations stored in localStorage (Home Base, Nashville Hub, custom)
+    - **Recent Calculations**: Last 10 calculations stored in localStorage with one-tap reload
+    - **Smart Mode**: Time-based recommendations - Money Mode (before 3PM), Go Home Mode (3-5PM), Overtime Mode (after 5PM) with homebound load detection
+    - **Loads Inbox Integration**: "RPM" button in Loads Inbox navigates to calculator with pre-filled load details (only shows for loads with valid pay/miles)
+    - **Mobile-Optimized UI**: Larger touch targets (h-12, h-14 buttons), bigger text, responsive layout
     - **Frontend**: `/true-rpm-calculator` page under Finance section in sidebar
 
 # External Dependencies
