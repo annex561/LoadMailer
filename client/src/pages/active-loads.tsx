@@ -10,8 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
   MapPin, Truck, Phone, MessageSquare, Send, 
-  FileText, Navigation, Clock, CheckCircle2, AlertCircle, ArrowRight,
-  Brain, ThumbsUp, MoreVertical, Circle, RefreshCw
+  FileText, Navigation, Clock, CheckCircle2, AlertCircle, ArrowRight 
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
@@ -123,7 +122,10 @@ export default function ActiveLoads() {
               <Tabs defaultValue="sop" className="h-full flex flex-col">
                 <TabsList className="w-full justify-start rounded-none border-b border-slate-800 bg-slate-900/50 p-0 h-12">
                   <TabsTrigger value="sop" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
-                    <FileText className="w-4 h-4 mr-2" /> Load Management
+                    <FileText className="w-4 h-4 mr-2" /> SOP Steps
+                  </TabsTrigger>
+                  <TabsTrigger value="messages" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
+                    <MessageSquare className="w-4 h-4 mr-2" /> Driver Messages
                   </TabsTrigger>
                   <TabsTrigger value="map" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
                     <Navigation className="w-4 h-4 mr-2" /> Live Map
@@ -131,20 +133,15 @@ export default function ActiveLoads() {
                 </TabsList>
 
                 <TabsContent value="sop" className="flex-1 overflow-hidden m-0 p-0">
-                  <div className="h-full flex">
-                    {/* Left side: EVChecklist */}
-                    <div className="flex-1 overflow-hidden">
-                      <ScrollArea className="h-full">
-                        <div className="p-6">
-                          <EVChecklist load={selectedLoad} />
-                        </div>
-                      </ScrollArea>
+                  <ScrollArea className="h-full">
+                    <div className="p-6">
+                      <EVChecklist load={selectedLoad} />
                     </div>
-                    {/* Right side: Driver Messages */}
-                    <div className="w-[400px] border-l border-slate-800 flex flex-col">
-                      <DriverMessagesPanel load={selectedLoad} />
-                    </div>
-                  </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                <TabsContent value="messages" className="flex-1 overflow-hidden m-0 p-0">
+                  <DriverMessagesPanel load={selectedLoad} />
                 </TabsContent>
 
                 <TabsContent value="map" className="flex-1 overflow-hidden m-0 p-0">
@@ -185,7 +182,6 @@ function DriverMessagesPanel({ load }: { load: any }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState("");
-  const [aiEnabled, setAiEnabled] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const driverId = load.driverId || load.assignedDriverId;
 
@@ -194,23 +190,14 @@ function DriverMessagesPanel({ load }: { load: any }) {
     enabled: !!driverId,
   });
 
-  const { data: thread } = useQuery({
-    queryKey: ["/api/communication/threads"],
-    select: (threads: any[]) => threads?.find((t: any) => t.driverId === driverId),
+  const { data: messages = [], refetch } = useQuery({
+    queryKey: ["/api/driver-communications", driverId],
     enabled: !!driverId,
-  });
-
-  const { data: messages = [], refetch, isLoading: messagesLoading } = useQuery({
-    queryKey: ["/api/communication/messages", thread?.id],
-    enabled: !!thread?.id,
-    refetchInterval: 2000,
+    refetchInterval: 10000,
   });
 
   const sendMutation = useMutation({
     mutationFn: async (msg: string) => {
-      if (thread?.id) {
-        return apiRequest("POST", `/api/communication/threads/${thread.id}/messages`, { content: msg });
-      }
       return apiRequest("POST", `/api/drivers/${driverId}/sms`, { message: msg });
     },
     onSuccess: () => {
@@ -220,19 +207,9 @@ function DriverMessagesPanel({ load }: { load: any }) {
     },
   });
 
-  const handleQuickMessage = (text: string) => {
-    sendMutation.mutate(text);
-  };
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  const formatMessageTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + 
-           date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
 
   if (!driverId) {
     return (
@@ -244,175 +221,85 @@ function DriverMessagesPanel({ load }: { load: any }) {
 
   return (
     <div className="h-full flex flex-col bg-slate-950">
-      {/* Driver Header - matches Communication Dashboard */}
-      <div className="p-4 border-b border-slate-800 bg-slate-900/50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar className="w-10 h-10">
-              <AvatarFallback className="bg-slate-700 text-slate-300">
-                {driver?.name?.charAt(0).toUpperCase() || "D"}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-semibold text-white">{driver?.name || "Driver"}</p>
-              <p className="text-xs text-slate-400">{driver?.phone || "No phone"}</p>
-            </div>
+      {/* Driver Header */}
+      <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Avatar className="w-10 h-10">
+            <AvatarFallback className="bg-emerald-900 text-emerald-400">
+              {driver?.name?.slice(0, 2).toUpperCase() || "DR"}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="font-semibold text-white">{driver?.name || "Driver"}</p>
+            <p className="text-xs text-slate-400">{driver?.phone || "No phone"}</p>
           </div>
-          <div className="flex items-center gap-2">
-            {driver?.phone && (
-              <a href={`tel:${driver.phone}`}>
-                <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
-                  <Phone className="w-4 h-4" />
-                </Button>
-              </a>
-            )}
-            <Button size="sm" variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
-              <MoreVertical className="w-4 h-4" />
+        </div>
+        {driver?.phone && (
+          <a href={`tel:${driver.phone}`}>
+            <Button size="sm" variant="outline" className="border-slate-700 text-slate-300">
+              <Phone className="w-4 h-4" />
             </Button>
-          </div>
-        </div>
-        {/* Sub-header with thread info and AI toggle */}
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-800">
-          <div className="flex items-center gap-3 text-xs text-slate-400">
-            <span className="flex items-center gap-1">
-              <MessageSquare className="w-3 h-3" /> General Discussion
-            </span>
-            <span className="flex items-center gap-1">
-              <Circle className="w-3 h-3" /> {messages.length} messages
-            </span>
-          </div>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={() => setAiEnabled(!aiEnabled)}
-            className={cn(
-              "text-xs border-slate-700",
-              aiEnabled ? "bg-emerald-600/20 border-emerald-600 text-emerald-400" : "text-slate-400"
-            )}
-          >
-            <Brain className="w-3 h-3 mr-1" /> AI {aiEnabled ? "On" : "Off"}
-          </Button>
-        </div>
+          </a>
+        )}
       </div>
 
-      {/* Messages - Card style like Communication Dashboard */}
+      {/* Messages */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-3">
-          {messagesLoading ? (
-            <p className="text-center text-slate-500 text-sm py-8">Loading messages...</p>
-          ) : messages.length === 0 ? (
+          {messages.length === 0 ? (
             <p className="text-center text-slate-500 text-sm py-8">No messages yet</p>
           ) : (
-            messages.map((msg: any, i: number) => {
-              const isDispatch = msg.sender === 'dispatch' || msg.direction === 'outbound';
-              return (
-                <div key={msg.id || i} className={cn("flex", isDispatch ? "justify-end" : "justify-start")}>
-                  <div className={cn(
-                    "max-w-[75%] rounded-lg px-4 py-2",
-                    isDispatch 
-                      ? "bg-teal-600/10 text-slate-100 border border-teal-600/30" 
-                      : "bg-slate-800 text-slate-100"
-                  )}>
-                    <p className="text-sm">{msg.content || msg.message || msg.body}</p>
-                    <p className={cn(
-                      "text-[11px] mt-1",
-                      isDispatch ? "text-teal-400/70" : "text-slate-500"
-                    )}>
-                      {formatMessageTime(msg.createdAt || msg.timestamp)}
-                    </p>
-                  </div>
+            messages.map((msg: any, i: number) => (
+              <div key={i} className={cn("flex", msg.direction === "outbound" ? "justify-end" : "justify-start")}>
+                <div className={cn(
+                  "max-w-[75%] rounded-lg px-4 py-2",
+                  msg.direction === "outbound" 
+                    ? "bg-blue-600 text-white" 
+                    : "bg-slate-800 text-slate-100"
+                )}>
+                  <p className="text-sm">{msg.message || msg.body}</p>
+                  <p className="text-[10px] mt-1 opacity-60">
+                    {new Date(msg.createdAt || msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
-              );
-            })
+              </div>
+            ))
           )}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
-      {/* Quick Messages - 2 column grid with emojis like Communication Dashboard */}
-      <div className="p-3 border-t border-slate-800 bg-slate-900/30">
-        <h4 className="text-xs font-medium text-slate-400 mb-2">Quick Messages</h4>
-        <div className="grid grid-cols-2 gap-2">
+      {/* Quick Replies */}
+      <div className="px-4 py-2 border-t border-slate-800 bg-slate-900/30 flex gap-2 flex-wrap">
+        {[
+          { label: "ETA Check", text: "What's your current ETA?" },
+          { label: "Status Update", text: "Please send a status update when you can." },
+          { label: "At Pickup?", text: "Have you arrived at the pickup location?" },
+          { label: "Loaded?", text: "Are you loaded and ready to roll?" },
+          { label: "At Delivery?", text: "Have you arrived at the delivery location?" },
+        ].map((template) => (
           <Button
-            variant="outline"
+            key={template.label}
             size="sm"
-            onClick={() => handleQuickMessage('Hi! Just a friendly reminder about your pickup today. Please confirm when you arrive at the pickup location. Thanks!')}
-            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800 justify-start"
-          >
-            📍 Pickup Reminder
-          </Button>
-          
-          <Button
             variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Please provide an ETA for delivery. Customer is asking for updates. Thank you!')}
-            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800 justify-start"
+            className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs h-7"
+            onClick={() => setMessage(template.text)}
           >
-            🚚 Delivery ETA
+            {template.label}
           </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Hi! Can you please provide a quick status update on this load? Thanks!')}
-            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800 justify-start"
-          >
-            ❓ Status Check
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Great! Load confirmed. Please proceed to pickup location and keep me updated. Safe travels!')}
-            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800 justify-start"
-          >
-            ✅ Load Confirmed
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Please remember to get all required paperwork signed and send photos when pickup/delivery is complete.')}
-            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800 justify-start"
-          >
-            📋 Paperwork
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickMessage('Please contact the customer before arrival. Their contact info is in the load details. Thanks!')}
-            className="whitespace-nowrap text-xs border-slate-700 text-slate-300 hover:bg-slate-800 justify-start"
-          >
-            📞 Call Customer
-          </Button>
-        </div>
+        ))}
       </div>
 
-      {/* Message Input with action buttons - matches Communication Dashboard */}
+      {/* Input */}
       <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2">
           <Input
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1 !bg-slate-800 !border-slate-700 !text-white placeholder:!text-slate-500 focus:!ring-slate-600 focus:!border-slate-600"
+            placeholder="Type a message..."
+            className="flex-1 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && message.trim() && sendMutation.mutate(message)}
           />
-          <Button 
-            size="sm"
-            variant="outline" 
-            className="border-slate-700 text-slate-300 hover:bg-slate-800"
-          >
-            <FileText className="w-4 h-4" />
-          </Button>
-          <Button 
-            size="sm"
-            variant="outline" 
-            className="border-slate-700 text-slate-300 hover:bg-slate-800"
-          >
-            <ThumbsUp className="w-4 h-4" />
-          </Button>
           <Button 
             onClick={() => message.trim() && sendMutation.mutate(message)}
             disabled={!message.trim() || sendMutation.isPending}
