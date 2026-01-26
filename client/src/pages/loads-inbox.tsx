@@ -285,13 +285,26 @@ export default function LoadsInbox() {
   async function handleBook() {
     if (!bookModal.load) return;
 
+    // 1. VALIDATION: Ensure a driver is actually selected
+    if (!bookModal.driverId) {
+      toast({ 
+        title: "Driver Required", 
+        description: "Please select a driver before booking.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    console.log("🚀 Booking Load:", bookModal.load.id, "for Driver:", bookModal.driverId);
+
     // When driver is assigned, set status to "dispatched" to move from Inbox to Active Dispatch
     const result = await act(bookModal.load.id, "book", {
       booked_rate: parseFloat(bookModal.bookedRate) || undefined,
       assigned_truck_id: bookModal.truckId || undefined,
-      assigned_driver_id: bookModal.driverId || undefined,
+      assigned_driver_id: parseInt(bookModal.driverId) || undefined, // Ensure this is a number
       override_reason: bookModal.overrideReason || undefined,
-      status: bookModal.driverId ? "dispatched" : undefined // Move to Active Dispatch when driver assigned
+      status: "dispatched", // THIS FLIPS THE SWITCH - Move to Active Dispatch
+      sopProgress: { initialSms: true } // Mark Step 1 as auto-started
     });
 
     if (result.requiresOverride) {
@@ -312,14 +325,19 @@ export default function LoadsInbox() {
               type: "BOOKING_REQUEST"
             })
           });
+          console.log("✅ Booking SMS sent for Load:", result.pgLoadId);
         } catch (smsErr) {
           console.warn("Failed to send booking SMS:", smsErr);
         }
       }
       
+      // REFRESH EVERYTHING - Invalidate cache to update both Inbox & Active Loads
+      queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ga/loads"] });
+      
       toast({ 
-        title: "Load Dispatched 🚀", 
-        description: `Moved to Active Loads. ${bookModal.driverName ? `Confirmation SMS sent to ${bookModal.driverName}.` : ""}`
+        title: "Load Moved! 🚚", 
+        description: `Load is now in Active Loads. ${bookModal.driverName ? `Confirmation SMS sent to ${bookModal.driverName}.` : ""}`
       });
       setBookModal(prev => ({ ...prev, open: false }));
     }
