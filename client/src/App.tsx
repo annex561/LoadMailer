@@ -49,6 +49,7 @@ import FleetWorkOrders from "@/pages/fleet-work-orders";
 import FleetInspections from "@/pages/fleet-inspections";
 import FleetVendors from "@/pages/fleet-vendors";
 import LoadsInbox from "@/pages/loads-inbox";
+import ActiveLoads from "@/pages/active-loads";
 import ItemsPage from "@/pages/items";
 import LoadDetailsPage from "@/pages/load-details";
 import GmailSettings from "@/pages/gmail-settings";
@@ -102,6 +103,7 @@ function Router() {
       <Route path="/fleet/vendors" component={FleetVendors} />
       <Route path="/loads-inbox" component={LoadsInbox} />
       <Route path="/ga/loads" component={LoadsInbox} />
+      <Route path="/active-loads" component={ActiveLoads} />
       <Route path="/items" component={ItemsPage} />
       <Route path="/gmail-settings" component={GmailSettings} />
       <Route path="/loads/:id" component={LoadDetailsPage} />

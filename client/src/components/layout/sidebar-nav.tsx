@@ -24,6 +24,7 @@ const menuGroups = [
       { name: "Load Ops Board", href: "/dispatch" },
       { name: "Live Map", href: "/map" },
       { name: "RateCon Inbox", href: "/loads-inbox" },
+      { name: "Active Loads", href: "/active-loads" },
     ]
   },
   {
