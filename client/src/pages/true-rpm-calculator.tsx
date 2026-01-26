@@ -535,12 +535,16 @@ export default function TrueRPMCalculator() {
                   key={dest.id}
                   variant={selectedDest === dest.id ? "default" : "outline"}
                   onClick={() => setSelectedDest(dest.id)}
-                  className={`h-12 flex flex-col items-start justify-center px-3 relative ${
-                    selectedDest === dest.id ? "bg-teal-600" : ""
+                  className={`h-14 flex flex-col items-start justify-center px-4 relative ${
+                    selectedDest === dest.id 
+                      ? "bg-teal-600 hover:bg-teal-700 text-white border-teal-600" 
+                      : "border-2 hover:border-teal-500"
                   }`}
                 >
-                  <span className="font-medium text-xs truncate w-full text-left">{dest.name}</span>
-                  <span className="text-xs opacity-70 truncate w-full text-left">{dest.city}</span>
+                  <span className="font-semibold text-sm truncate w-full text-left">{dest.name}</span>
+                  <span className={`text-xs truncate w-full text-left ${
+                    selectedDest === dest.id ? "text-teal-100" : "text-muted-foreground"
+                  }`}>{dest.city}</span>
                   {dest.id.startsWith("custom-") && (
                     <button
                       onClick={(e) => { e.stopPropagation(); removeSavedDestination(dest.id); }}
@@ -554,10 +558,14 @@ export default function TrueRPMCalculator() {
               <Button
                 variant={selectedDest === "custom" ? "default" : "outline"}
                 onClick={() => setSelectedDest("custom")}
-                className={`h-12 ${selectedDest === "custom" ? "bg-teal-600" : ""}`}
+                className={`h-14 ${
+                  selectedDest === "custom" 
+                    ? "bg-teal-600 hover:bg-teal-700 text-white border-teal-600" 
+                    : "border-2 hover:border-teal-500"
+                }`}
               >
-                <MapPin className="w-4 h-4 mr-1" />
-                Custom
+                <MapPin className="w-4 h-4 mr-2" />
+                <span className="font-semibold">Custom</span>
               </Button>
             </div>
 
