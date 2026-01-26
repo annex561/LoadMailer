@@ -297,49 +297,61 @@ export default function LoadsInbox() {
 
     console.log("🚀 Booking Load:", bookModal.load.id, "for Driver:", bookModal.driverId);
 
-    // When driver is assigned, set status to "dispatched" to move from Inbox to Active Dispatch
-    const result = await act(bookModal.load.id, "book", {
-      booked_rate: parseFloat(bookModal.bookedRate) || undefined,
-      assigned_truck_id: bookModal.truckId || undefined,
-      assigned_driver_id: parseInt(bookModal.driverId) || undefined, // Ensure this is a number
-      override_reason: bookModal.overrideReason || undefined,
-      status: "dispatched", // THIS FLIPS THE SWITCH - Move to Active Dispatch
-      sopProgress: { initialSms: true } // Mark Step 1 as auto-started
-    });
-
-    if (result.requiresOverride) {
-      setBookModal(prev => ({
-        ...prev,
-        requiresOverride: true,
-        gateStatus: result.gateStatus || "YELLOW"
-      }));
-    } else if (result.ok) {
-      // Send booking confirmation SMS to driver if driver was assigned
-      if (bookModal.driverId && result.pgLoadId) {
-        try {
-          await fetch("/api/sms/send-template", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              loadId: result.pgLoadId,
-              type: "BOOKING_REQUEST"
-            })
-          });
-          console.log("✅ Booking SMS sent for Load:", result.pgLoadId);
-        } catch (smsErr) {
-          console.warn("Failed to send booking SMS:", smsErr);
-        }
-      }
-      
-      // REFRESH EVERYTHING - Invalidate cache to update both Inbox & Active Loads
-      queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/ga/loads"] });
-      
-      toast({ 
-        title: "Load Moved! 🚚", 
-        description: `Load is now in Active Loads. ${bookModal.driverName ? `Confirmation SMS sent to ${bookModal.driverName}.` : ""}`
+    try {
+      // When driver is assigned, set status to "dispatched" to move from Inbox to Active Dispatch
+      const result = await act(bookModal.load.id, "book", {
+        booked_rate: parseFloat(bookModal.bookedRate) || undefined,
+        assigned_truck_id: bookModal.truckId || undefined,
+        assigned_driver_id: parseInt(bookModal.driverId) || undefined,
+        override_reason: bookModal.overrideReason || undefined,
+        status: "dispatched",
+        sopProgress: { initialSms: true }
       });
-      setBookModal(prev => ({ ...prev, open: false }));
+
+      if (result.requiresOverride) {
+        setBookModal(prev => ({
+          ...prev,
+          requiresOverride: true,
+          gateStatus: result.gateStatus || "YELLOW"
+        }));
+        return;
+      }
+
+      if (result.ok && result.pgLoadId) {
+        // Use the ONE-SHOT dispatch endpoint to ensure status + SMS
+        try {
+          await apiRequest("POST", "/api/loads/dispatch", {
+            loadId: result.pgLoadId,
+            driverId: parseInt(bookModal.driverId)
+          });
+          console.log("✅ Dispatch complete for Load:", result.pgLoadId);
+        } catch (dispatchErr) {
+          console.warn("Dispatch endpoint failed (load still moved):", dispatchErr);
+        }
+        
+        // REFRESH EVERYTHING
+        queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/ga/loads"] });
+        
+        toast({ 
+          title: "Load Dispatched! 🚚", 
+          description: `Load is now in Active Loads. ${bookModal.driverName ? `SMS sent to ${bookModal.driverName}.` : ""}`
+        });
+        setBookModal(prev => ({ ...prev, open: false }));
+      } else if (result.ok) {
+        // Booking succeeded but no pgLoadId (shouldn't happen normally)
+        queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/ga/loads"] });
+        toast({ title: "Load Booked", description: "Load moved successfully." });
+        setBookModal(prev => ({ ...prev, open: false }));
+      }
+    } catch (error: any) {
+      console.error("❌ Booking failed:", error);
+      toast({ 
+        title: "Booking Failed", 
+        description: error?.message || "Could not move load. Please try again.", 
+        variant: "destructive" 
+      });
     }
   }
 
