@@ -161,12 +161,16 @@ export default function ActiveLoads() {
                     <SelectTrigger className="w-[200px] bg-slate-800 border-slate-600 text-slate-200 h-9 shadow-md">
                       <SelectValue placeholder="Select Driver" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border border-slate-600 shadow-xl max-h-[300px] z-50">
+                    <SelectContent 
+                      className="border border-slate-600 shadow-2xl max-h-[300px] z-[100]"
+                      style={{ backgroundColor: '#0f172a' }}
+                    >
                       {(drivers || []).map((driver: any) => (
                         <SelectItem 
                           key={driver.id} 
                           value={String(driver.id)}
-                          className="text-slate-200 hover:bg-slate-700 focus:bg-slate-700 focus:text-white cursor-pointer py-2"
+                          className="text-slate-200 hover:bg-slate-700 focus:bg-slate-700 focus:text-white cursor-pointer py-2.5 px-3"
+                          style={{ backgroundColor: '#0f172a' }}
                         >
                           {driver.name}
                         </SelectItem>
