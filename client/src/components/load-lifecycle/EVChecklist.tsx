@@ -182,8 +182,8 @@ export function EVChecklist({ load }: EVChecklistProps) {
                         <div className="flex gap-2">
                           {/* PRIMARY ACTION */}
                           {step.key === "tripMessage" ? (
-                             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 w-full" onClick={() => triggerAction("DISPATCH_INSTRUCTIONS", step.key)}>
-                               <MapPin className="w-3 h-3 mr-2" /> Send Addresses & Tracking Link
+                             <Button className="w-full bg-blue-600 font-bold" onClick={() => triggerAction("DISPATCH_INSTRUCTIONS", step.key)}>
+                               <MapPin className="w-4 h-4 mr-2" /> Send Addresses & Tracking
                              </Button>
                           ) : (
                              <Button 
