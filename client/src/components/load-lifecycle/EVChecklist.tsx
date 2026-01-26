@@ -19,8 +19,10 @@ interface EVChecklistProps {
 
 // 1. CONFIG: Define the 13 Steps & Their Automation Type
 const STEPS_CONFIG = [
-  { key: "initialSms", label: "Send Load Details", icon: Send, auto: false, desc: "Trigger dispatch SMS to driver." },
-  { key: "tripMessage", label: "Trip Message", icon: Truck, auto: true, desc: "Waiting for driver to reply 'CONFIRM'..." },
+  // STEP 1: Waiting for Driver Confirmation (Triggered by Booking)
+  { key: "initialSms", label: "Driver Confirmation", icon: Send, auto: true, desc: "Booking SMS sent. Waiting for 'YES'..." },
+  // STEP 2: Send Addresses & Tracking (The "Reaction")
+  { key: "tripMessage", label: "Send Dispatch Instructions", icon: MapPin, auto: false, desc: "Send Addresses & Tracking Link" },
   { key: "puArrived", label: "Arrived at Pickup", icon: MapPin, auto: true, desc: "Monitoring GPS geofence / Driver status..." },
   { key: "annexNotified", label: "Annex Notified", icon: ShieldCheck, auto: true, desc: "System auto-alerts Annex team." },
   { key: "puDocs", label: "Pickup Docs Uploaded", icon: FileText, auto: true, desc: "Scanning for BOL upload..." },
@@ -179,9 +181,9 @@ export function EVChecklist({ load }: EVChecklistProps) {
 
                         <div className="flex gap-2">
                           {/* PRIMARY ACTION */}
-                          {step.key === "initialSms" ? (
-                             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 w-full" onClick={() => triggerAction("INITIAL", step.key)}>
-                               <Send className="w-3 h-3 mr-2" /> Send Dispatch SMS
+                          {step.key === "tripMessage" ? (
+                             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 w-full" onClick={() => triggerAction("DISPATCH_INSTRUCTIONS", step.key)}>
+                               <MapPin className="w-3 h-3 mr-2" /> Send Addresses & Tracking Link
                              </Button>
                           ) : (
                              <Button 
