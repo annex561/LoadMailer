@@ -153,20 +153,20 @@ export default function ActiveLoads() {
                 <div className="flex items-center gap-2">
                   <UserPlus className="w-4 h-4 text-slate-500" />
                   <Select
-                    value={String(selectedLoad.driverId || "")}
+                    value={String(selectedLoad.driver?.id || "")}
                     onValueChange={(driverId) => {
                       assignDriverMutation.mutate({ loadId: selectedLoad.id, driverId });
                     }}
                   >
-                    <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700 text-slate-200 h-8">
-                      <SelectValue placeholder="Assign Driver" />
+                    <SelectTrigger className="w-[200px] bg-slate-800 border-slate-600 text-slate-200 h-9 shadow-md">
+                      <SelectValue placeholder="Select Driver" />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-800 border-slate-700">
+                    <SelectContent className="bg-slate-900 border border-slate-600 shadow-xl max-h-[300px] z-50">
                       {(drivers || []).map((driver: any) => (
                         <SelectItem 
                           key={driver.id} 
                           value={String(driver.id)}
-                          className="text-slate-200 hover:bg-slate-700 focus:bg-slate-700"
+                          className="text-slate-200 hover:bg-slate-700 focus:bg-slate-700 focus:text-white cursor-pointer py-2"
                         >
                           {driver.name}
                         </SelectItem>
