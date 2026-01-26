@@ -458,15 +458,18 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
           const baseUrl = process.env.REPLIT_DEPLOYMENT_URL || process.env.REPLIT_DEV_DOMAIN || 'https://traq-iq.replit.app';
           const loadViewUrl = `${baseUrl.startsWith('http') ? baseUrl : 'https://' + baseUrl}/driver/load/${id}`;
           
-          const message = `📦 LOAD ASSIGNMENT\n\n` +
-            `Load #${row.load_number || id.slice(0, 8)}\n` +
-            `From: ${row.origin_city || 'TBD'}, ${row.origin_state || ''}\n` +
-            `To: ${row.dest_city || 'TBD'}, ${row.dest_state || ''}\n` +
-            `Rate: $${rate || 0}\n` +
-            `Miles: ${row.miles || 'TBD'}\n\n` +
-            `Pickup: ${row.pickup_date || 'TBD'}\n\n` +
-            `View details: ${loadViewUrl}\n\n` +
-            `Reply YES to confirm.`;
+          const message = 
+            `TRAQ IQ - New Load Assigned\n` +
+            `━━━━━━━━━━━━━━━━━━━\n\n` +
+            `Load #${row.load_number || id.slice(0, 8)}\n\n` +
+            `📍 ${row.origin_city || 'TBD'}, ${row.origin_state || ''}\n` +
+            `   ↓\n` +
+            `📍 ${row.dest_city || 'TBD'}, ${row.dest_state || ''}\n\n` +
+            `💵 Rate: $${rate || 0}\n` +
+            `🚛 Miles: ${row.miles || 'TBD'}\n` +
+            `📅 Pickup: ${row.pickup_date || 'TBD'}\n\n` +
+            `View & Accept:\n${loadViewUrl}\n\n` +
+            `Reply YES to confirm or call dispatch with questions.`;
           
           const twilioClient = (await import("twilio")).default(
             process.env.TWILIO_ACCOUNT_SID,
