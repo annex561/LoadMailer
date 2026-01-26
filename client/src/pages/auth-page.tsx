@@ -37,7 +37,8 @@ export default function AuthPage() {
               <Input 
                 id="username" 
                 placeholder="e.g. Annex Luberisse" 
-                className="bg-slate-950 border-slate-800 focus-visible:ring-blue-600 text-white placeholder:text-slate-500"
+                className="!bg-slate-950 !border-slate-800 focus-visible:ring-blue-600 !text-slate-100 placeholder:!text-slate-500"
+                style={{ color: '#f1f5f9', backgroundColor: '#020617' }}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -48,7 +49,8 @@ export default function AuthPage() {
                 id="password" 
                 type="password" 
                 placeholder="••••••••" 
-                className="bg-slate-950 border-slate-800 focus-visible:ring-blue-600 text-white placeholder:text-slate-500"
+                className="!bg-slate-950 !border-slate-800 focus-visible:ring-blue-600 !text-slate-100 placeholder:!text-slate-500"
+                style={{ color: '#f1f5f9', backgroundColor: '#020617' }}
               />
             </div>
             <Button 
