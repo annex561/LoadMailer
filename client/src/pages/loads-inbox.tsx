@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -240,6 +241,11 @@ export default function LoadsInbox() {
       }
 
       await refresh();
+      
+      // Invalidate Active Loads cache so booked loads appear immediately
+      if (action === "book") {
+        queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
+      }
       return { ok: true };
     } catch (e: any) {
       toast({ title: "Action failed", description: e?.message, variant: "destructive" });
