@@ -1,11 +1,8 @@
 import { google } from 'googleapis';
 import { db } from "../db";
-import { gmailAccounts, loads, activityLog, customers } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
-import { rateconParser } from "./ratecon-parser";
-import { nanoid } from "nanoid";
-import gaDb, { logActivity as gaLogActivity } from "../ga-db";
-import { scoreLoad } from "../ga-scoring";
+import { gmailAccounts, loads, activityLog } from "@shared/schema"; 
+import { eq } from "drizzle-orm";
+import { rateconParser } from "./ratecon-parser"; 
 
 export const gmailIngest = {
   /**
@@ -19,541 +16,195 @@ export const gmailIngest = {
   },
 
   /**
-   * 1. Loops through ALL connected Gmail accounts in the DB.
-   * 2. Scans each inbox for RateCons.
+   * 1. Loops through ALL connected Gmail accounts.
    */
-  async scanAllAccounts(forceRescan: boolean = false) {
-    console.log(`🔄 Starting Multi-Account Scan... ${forceRescan ? '(FORCE RESCAN - includes read emails)' : ''}`);
-
-    if (!this.isConfigured()) {
-      console.log("⚠️ Gmail OAuth credentials not configured in environment.");
-      return [];
-    }
-
+  async scanAllAccounts() {
+    console.log("🔄 Starting Multi-Account Scan...");
     const accounts = await db.select().from(gmailAccounts).where(eq(gmailAccounts.isActive, true));
 
     if (accounts.length === 0) {
       console.log("⚠️ No Gmail accounts connected.");
-      return [];
+      return;
     }
 
-    const results = [];
     for (const account of accounts) {
       console.log(`📧 Scanning account: ${account.email}...`);
-      const accountWithFlag = { ...account, forceRescan };
-      const accountResult = await this.scanSingleAccount(accountWithFlag);
-      results.push(accountResult);
+      await this.scanSingleAccount(account);
     }
-
-    return results;
   },
 
   /**
-   * Process a single account using its unique stored Refresh Token
+   * 2. Scans a single account for emails with attachments
    */
   async scanSingleAccount(account: typeof gmailAccounts.$inferSelect) {
-    const result = {
-      accountId: account.id,
-      email: account.email,
-      companyId: account.companyId,
-      filesProcessed: 0,
-      loadsCreated: 0,
-      error: null as string | null
-    };
-
     try {
       const oauth2Client = new google.auth.OAuth2(
         process.env.GMAIL_CLIENT_ID,
         process.env.GMAIL_CLIENT_SECRET
       );
-
       oauth2Client.setCredentials({ refresh_token: account.refreshToken });
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      // If forceRescan is true, include read emails too
-      const forceRescan = (account as any).forceRescan === true;
-      const query = forceRescan 
-        ? 'subject:("Rate Confirmation" OR "RateCon" OR "Load Confirmation" OR "Booking Confirmation") has:attachment'
-        : 'is:unread subject:("Rate Confirmation" OR "RateCon" OR "Load Confirmation" OR "Booking Confirmation") has:attachment';
-      
-      console.log(`   📧 Scanning with query: ${forceRescan ? 'ALL emails (force rescan)' : 'UNREAD emails only'}`);
-      
+      // Search for UNREAD emails that have attachments
       const res = await gmail.users.messages.list({
         userId: 'me',
-        q: query,
-        maxResults: forceRescan ? 50 : 10
+        q: 'is:unread has:attachment', // Broader search to catch "Load Details" too
+        maxResults: 5
       });
 
       const messages = res.data.messages || [];
-      console.log(`   🔎 Found ${messages.length} emails for ${account.email}`);
+      console.log(`   🔎 Found ${messages.length} unread emails.`);
 
       for (const msg of messages) {
-        const processed = await this.processMessage(gmail, msg.id!, account.companyId);
-        if (processed.success) {
-          result.filesProcessed++;
-          if (processed.loadCreated) result.loadsCreated++;
-        }
+        await this.processMessage(gmail, msg.id!, account.companyId);
       }
 
+      // Update "Last Synced" timestamp
       await db.update(gmailAccounts)
         .set({ lastSyncedAt: new Date() })
         .where(eq(gmailAccounts.id, account.id));
 
-      console.log(`   ✅ ${account.email}: ${result.filesProcessed} PDFs processed, ${result.loadsCreated} loads created`);
-
-    } catch (error: any) {
-      console.error(`❌ Error scanning ${account.email}:`, error.message);
-      result.error = error.message;
+    } catch (error) {
+      console.error(`❌ Error scanning ${account.email}:`, error);
     }
-
-    return result;
   },
 
   /**
-   * Helper to download PDF, parse with AI, and create load
+   * 3. Process the Email: Finds ALL PDFs (RateCon AND Driver Sheet)
    */
-  async processMessage(gmail: any, msgId: string, companyId: string): Promise<{ success: boolean; loadCreated: boolean }> {
+  async processMessage(gmail: any, msgId: string, companyId: string) {
     try {
       const email = await gmail.users.messages.get({ userId: 'me', id: msgId });
-      const headers = email.data.payload?.headers || [];
-      const subject = headers.find((h: any) => h.name?.toLowerCase() === 'subject')?.value || '';
-      const from = headers.find((h: any) => h.name?.toLowerCase() === 'from')?.value || '';
       const parts = email.data.payload?.parts || [];
+      const subject = email.data.payload?.headers?.find((h: any) => h.name === 'Subject')?.value || "Unknown Subject";
 
-      let loadCreated = false;
+      console.log(`   📨 Processing: "${subject}"`);
 
+      let processedCount = 0;
+
+      // Loop through ALL attachments in the email
       for (const part of parts) {
         if (part.filename && part.filename.toLowerCase().endsWith('.pdf') && part.body?.attachmentId) {
-          // 1. Download
+          
+          console.log(`      📄 Found PDF: ${part.filename}`);
+
+          // A. Download
           const attachment = await gmail.users.messages.attachments.get({
-            userId: 'me',
-            messageId: msgId,
-            id: part.body.attachmentId
-          });
-
-          console.log(`   📄 Processing: ${part.filename}...`);
-
-          // 2. Parse (Send to OpenAI) - Convert base64 to Buffer
-          const pdfBuffer = Buffer.from(attachment.data.data!, 'base64');
-          const extractedData = await rateconParser.parsePdf(pdfBuffer);
-          console.log(`   🤖 AI Parsed: Load ${extractedData.loadNumber}, Rate $${extractedData.rate}`);
-
-          // 3. Find or create customer based on broker name
-          const brokerName = extractedData.brokerName || 'Unknown Broker';
-          let customer = await db.query.customers.findFirst({
-            where: and(eq(customers.name, brokerName), eq(customers.companyId, companyId))
+            userId: 'me', messageId: msgId, id: part.body!.attachmentId!
           });
           
-          if (!customer) {
-            // Create new customer for this broker with extracted details
-            const [newCustomer] = await db.insert(customers).values({
-              id: nanoid(),
-              companyId,
-              name: brokerName,
-              contactPerson: extractedData.dispatcherName || 'Rate Confirmation Import',
-              email: extractedData.brokerEmail || from || 'unknown@broker.com',
-              phone: extractedData.brokerPhone || 'N/A',
-              address: 'Auto-created from email import',
-              status: 'active'
-            }).returning();
-            customer = newCustomer;
-            console.log(`   📇 Created new customer: ${brokerName}`);
-          }
+          if (!attachment.data.data) continue;
+          const buffer = Buffer.from(attachment.data.data, 'base64');
+
+          // B. Parse (Extract Data)
+          const extractedData = await rateconParser.parsePdf(buffer);
           
-          // 4. Save to Database
-          const loadNumber = extractedData.loadNumber || `LOAD-${Date.now()}-${nanoid(6)}`;
+          // C. SMART MERGE (The new logic)
+          await this.upsertLoad(extractedData, companyId, part.filename);
           
-          const [newLoad] = await db.insert(loads).values({
-            id: nanoid(),
-            loadNumber,
-            companyId,
-            customerId: customer.id,
-            description: `${extractedData.origin} → ${extractedData.destination}`,
-            status: 'booked',
-            lifecycleStatus: 'booked',
-            origin: extractedData.origin || 'Unknown',
-            destination: extractedData.destination || 'Unknown',
-            pickupAddress: extractedData.origin || 'See Rate Confirmation',
-            deliveryAddress: extractedData.destination || 'See Rate Confirmation',
-            pickupTime: extractedData.pickupTime || 'TBD',
-            deliveryTime: extractedData.deliveryTime || 'TBD',
-            pickupDate: extractedData.pickupDate ? new Date(extractedData.pickupDate) : new Date(),
-            deliveryDate: extractedData.deliveryDate ? new Date(extractedData.deliveryDate) : undefined,
-            rate: String(extractedData.rate),
-            offeredRate: String(extractedData.rate),
-            weight: extractedData.weight || 0,
-            equipmentType: 'Dry Van',
-            rateconPath: part.filename,
-            bookedAt: new Date(),
-            miles: extractedData.miles || 0,
-            rpm: extractedData.rpm || 0,
-            brokerPhone: extractedData.brokerPhone,
-            brokerEmail: extractedData.brokerEmail,
-            dispatcherName: extractedData.dispatcherName,
-            assignedDriverName: extractedData.driverName,
-            specialInstructions: extractedData.notes,
-            notes: `Auto-imported from email: ${subject}\nFrom: ${from}`
-          }).returning();
-
-          console.log(`   ✅ Load #${newLoad.loadNumber} Created in DB!`);
-
-          // 4. Log Activity
-          await db.insert(activityLog).values({
-            companyId,
-            entityType: 'LOAD',
-            entityId: newLoad.id,
-            action: 'AUTO_INGEST',
-            actor: 'SYSTEM_AI',
-            details: {
-              filename: part.filename,
-              rate: extractedData.rate,
-              miles: extractedData.miles,
-              rpm: extractedData.rpm,
-              brokerName: extractedData.brokerName,
-              brokerPhone: extractedData.brokerPhone,
-              brokerEmail: extractedData.brokerEmail,
-              dispatcherName: extractedData.dispatcherName,
-              driverName: extractedData.driverName,
-              emailSubject: subject,
-              emailFrom: from,
-              specialInstructions: extractedData.notes
-            }
-          });
-
-          // 5. Also insert into GA Loads (RateCon Inbox) SQLite table
-          try {
-            const originParts = (extractedData.origin || '').split(',').map((s: string) => s.trim());
-            const destParts = (extractedData.destination || '').split(',').map((s: string) => s.trim());
-            
-            const gaLoadData = {
-              id: newLoad.id,
-              source: 'email',
-              origin_city: originParts[0] || null,
-              origin_state: originParts[1] || null,
-              origin_zip: null,
-              dest_city: destParts[0] || null,
-              dest_state: destParts[1] || null,
-              dest_zip: null,
-              pickup_dt: extractedData.pickupDate || null,
-              delivery_dt: extractedData.deliveryDate || null,
-              miles: extractedData.miles || null,
-              deadhead_miles: 0,
-              rate_total: extractedData.rate || null,
-              rpm: extractedData.miles && extractedData.rate ? Math.round((extractedData.rate / extractedData.miles) * 100) / 100 : null,
-              equipment: 'Dry Van',
-              weight_lbs: extractedData.weight || null,
-              length_ft: null,
-              broker_name: extractedData.brokerName || null,
-              broker_email: extractedData.brokerEmail || null,
-              broker_phone: extractedData.brokerPhone || null,
-              dispatcher_name: extractedData.dispatcherName || null,
-              driver_name: extractedData.driverName || null,
-              status: 'booked',
-              score: 0,
-              notes: `Auto-imported from email: ${subject}`,
-              raw_json: JSON.stringify(extractedData)
-            };
-            
-            // Calculate score
-            gaLoadData.score = scoreLoad(gaLoadData, { minRPM: 1.8, idealRPM: 2.3, maxRPM: 3.25 });
-            
-            const insertStmt = gaDb.prepare(`
-              INSERT INTO ga_loads (
-                id, source,
-                origin_city, origin_state, origin_zip,
-                dest_city, dest_state, dest_zip,
-                pickup_dt, delivery_dt,
-                miles, deadhead_miles,
-                rate_total, rpm,
-                equipment, weight_lbs, length_ft,
-                broker_name, broker_email, broker_phone,
-                dispatcher_name, driver_name,
-                status, score, notes, raw_json
-              ) VALUES (
-                @id, @source,
-                @origin_city, @origin_state, @origin_zip,
-                @dest_city, @dest_state, @dest_zip,
-                @pickup_dt, @delivery_dt,
-                @miles, @deadhead_miles,
-                @rate_total, @rpm,
-                @equipment, @weight_lbs, @length_ft,
-                @broker_name, @broker_email, @broker_phone,
-                @dispatcher_name, @driver_name,
-                @status, @score, @notes, @raw_json
-              )
-              ON CONFLICT(id) DO NOTHING
-            `);
-            
-            insertStmt.run(gaLoadData);
-            gaLogActivity(newLoad.id, 'email_ingested', 'system', { source: 'gmail', subject, from });
-            console.log(`   📥 Load also added to RateCon Inbox (GA Loads)`);
-          } catch (gaError: any) {
-            console.error(`   ⚠️ Failed to add to GA Loads:`, gaError.message);
-          }
-
-          // 6. Send SMS notification to assigned driver if found
-          if (extractedData.driverName) {
-            try {
-              await this.notifyAssignedDriver(
-                extractedData.driverName,
-                newLoad,
-                extractedData
-              );
-            } catch (notifyError: any) {
-              console.error(`   ⚠️ Driver notification failed:`, notifyError.message);
-            }
-          }
-
-          loadCreated = true;
+          processedCount++;
         }
       }
 
-      await gmail.users.messages.batchModify({
-        userId: 'me',
-        ids: [msgId],
-        removeLabelIds: ['UNREAD']
-      });
+      // Only mark as read if we actually did something with it
+      if (processedCount > 0) {
+        await gmail.users.messages.batchModify({
+          userId: 'me', ids: [msgId], removeLabelIds: ['UNREAD']
+        });
+        console.log("      ✅ Email marked as read.");
+      }
 
-      return { success: true, loadCreated };
-
-    } catch (error: any) {
-      console.error(`   ❌ Error processing message ${msgId}:`, error.message);
-      return { success: false, loadCreated: false };
+    } catch (error) {
+      console.error("      ❌ Failed to process message:", error);
     }
   },
 
   /**
-   * Get accounts for a specific company
+   * 4. THE SMART MERGE FUNCTION
+   * Checks if Load # exists. If yes, updates it. If no, creates it.
    */
-  async getAccountsForCompany(companyId: string) {
-    return db.select().from(gmailAccounts).where(
-      and(
-        eq(gmailAccounts.companyId, companyId),
-        eq(gmailAccounts.isActive, true)
-      )
-    );
-  },
-
-  /**
-   * Add a new Gmail account
-   */
-  async addAccount(data: { companyId: string; email: string; refreshToken: string }) {
-    const [account] = await db.insert(gmailAccounts).values(data).returning();
-    return account;
-  },
-
-  /**
-   * Update an account (company-scoped for security)
-   */
-  async updateAccountForCompany(id: string, companyId: string, updates: Partial<{
-    email: string;
-    refreshToken: string;
-    isActive: boolean;
-  }>) {
-    const [updated] = await db.update(gmailAccounts)
-      .set(updates)
-      .where(and(eq(gmailAccounts.id, id), eq(gmailAccounts.companyId, companyId)))
-      .returning();
-    return updated || null;
-  },
-
-  /**
-   * Delete an account (company-scoped for security)
-   */
-  async deleteAccountForCompany(id: string, companyId: string) {
-    const result = await db.delete(gmailAccounts)
-      .where(and(eq(gmailAccounts.id, id), eq(gmailAccounts.companyId, companyId)))
-      .returning();
-    return result.length > 0;
-  },
-
-  /**
-   * Test a refresh token against the shared OAuth app
-   */
-  async testAccount(refreshToken: string): Promise<{ success: boolean; email?: string; error?: string }> {
-    try {
-      if (!this.isConfigured()) {
-        return { success: false, error: 'GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET not configured' };
-      }
-
-      const oauth2Client = new google.auth.OAuth2(
-        process.env.GMAIL_CLIENT_ID,
-        process.env.GMAIL_CLIENT_SECRET
-      );
-      oauth2Client.setCredentials({ refresh_token: refreshToken });
-
-      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
-      const profile = await gmail.users.getProfile({ userId: 'me' });
-
-      return { success: true, email: profile.data.emailAddress || undefined };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  },
-
-  /**
-   * Scan accounts for a specific company only
-   */
-  async scanAccountsForCompany(companyId: string) {
-    console.log(`📧 Starting Gmail Scan for company ${companyId}...`);
-
-    const accounts = await this.getAccountsForCompany(companyId);
-    console.log(`📧 Found ${accounts.length} accounts for company ${companyId}`);
-
-    const results = [];
-    for (const account of accounts) {
-      const result = await this.scanSingleAccount(account);
-      results.push(result);
+  async upsertLoad(data: any, companyId: string, filename: string) {
+    // 1. Validate Data
+    const loadNum = data.loadNumber;
+    if (!loadNum || loadNum === "MANUAL-REVIEW" || loadNum === "PENDING") {
+      console.log("      ⚠️ Skipping invalid load number.");
+      return;
     }
 
-    return results;
-  },
+    // 2. Check if this load already exists in DB
+    const existingLoad = await db.query.loads.findFirst({
+      where: eq(loads.loadNumber, loadNum)
+    });
 
-  /**
-   * Send SMS notification to assigned driver when load is imported
-   * Attempts to match driver by name (scoped by company) and sends load details
-   */
-  async notifyAssignedDriver(
-    driverName: string,
-    load: any,
-    extractedData: any
-  ): Promise<boolean> {
-    try {
-      console.log(`   📱 Attempting to notify driver: ${driverName}`);
+    if (existingLoad) {
+      console.log(`      🔄 Merging data into existing Load #${loadNum}...`);
       
-      // Check Twilio configuration early
-      const twilioSid = process.env.TWILIO_ACCOUNT_SID;
-      const twilioToken = process.env.TWILIO_AUTH_TOKEN;
-      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+      // MERGE LOGIC: Only overwrite if the new data is "better" or missing
+      // e.g., If we have a Rate of $0, and this doc has $1000, update it.
+      // e.g., If we have empty notes, and this doc has instructions, append them.
       
-      if (!twilioSid || !twilioToken || !twilioPhone) {
-        console.log(`   ⚠️ Twilio not configured - cannot send SMS`);
-        await db.insert(activityLog).values({
-          companyId: load.companyId,
-          entityType: 'LOAD',
-          entityId: load.id,
-          action: 'DRIVER_NOTIFICATION_SKIPPED',
-          actor: 'SYSTEM',
-          details: { driverName, reason: 'Twilio not configured' }
-        });
-        return false;
-      }
-      
-      // Get storage to find driver by name
-      const { storage } = await import("../storage");
-      const allDrivers = await storage.getDrivers();
-      
-      // Normalize search name
-      const normalizedSearchName = driverName.toLowerCase().trim();
-      
-      // Filter drivers by company first (multi-tenant safety)
-      const companyDrivers = allDrivers.filter(d => d.companyId === load.companyId);
-      
-      // Find driver - prefer exact match, fallback to close match
-      let matchedDriver = companyDrivers.find(d => 
-        d.name?.toLowerCase().trim() === normalizedSearchName
-      );
-      
-      // If no exact match, try matching first+last name combination
-      if (!matchedDriver) {
-        const searchWords = normalizedSearchName.split(/\s+/).filter(w => w.length > 1);
-        if (searchWords.length >= 2) {
-          matchedDriver = companyDrivers.find(d => {
-            const driverWords = (d.name?.toLowerCase().trim() || '').split(/\s+/);
-            // Check if all search words appear in driver name
-            return searchWords.every(word => 
-              driverWords.some(dw => dw.includes(word) || word.includes(dw))
-            );
-          });
-        }
-      }
-      
-      if (!matchedDriver) {
-        console.log(`   ⚠️ No driver found matching name: ${driverName} (checked ${companyDrivers.length} company drivers)`);
-        await db.insert(activityLog).values({
-          companyId: load.companyId,
-          entityType: 'LOAD',
-          entityId: load.id,
-          action: 'DRIVER_NOTIFICATION_SKIPPED',
-          actor: 'SYSTEM',
-          details: { driverName, reason: 'Driver not found' }
-        });
-        return false;
-      }
-      
-      const driverPhone = matchedDriver.phoneNumber || matchedDriver.phone;
-      if (!driverPhone) {
-        console.log(`   ⚠️ Driver ${matchedDriver.name} has no phone number`);
-        await db.insert(activityLog).values({
-          companyId: load.companyId,
-          entityType: 'LOAD',
-          entityId: load.id,
-          action: 'DRIVER_NOTIFICATION_SKIPPED',
-          actor: 'SYSTEM',
-          details: { driverName: matchedDriver.name, driverId: matchedDriver.id, reason: 'No phone number' }
-        });
-        return false;
-      }
-      
-      // Build driver dashboard URL (consistent with send-dashboard-link endpoint)
-      const baseUrl = process.env.REPLIT_DEPLOYMENT_URL || process.env.REPLIT_DEV_DOMAIN || 'https://traq-iq.replit.app';
-      const dashboardUrl = `${baseUrl.startsWith('http') ? baseUrl : 'https://' + baseUrl}/mobile-driver-dashboard?driverId=${matchedDriver.id}`;
-      
-      const message = `📦 NEW LOAD ASSIGNED\n\n` +
-        `Load #${load.loadNumber}\n` +
-        `From: ${extractedData.origin || 'TBD'}\n` +
-        `To: ${extractedData.destination || 'TBD'}\n` +
-        `Rate: $${extractedData.rate || 0}\n` +
-        `Miles: ${extractedData.miles || 'TBD'}\n\n` +
-        `Pickup: ${extractedData.pickupDate || extractedData.pickupTime || 'TBD'}\n\n` +
-        `Your Dashboard: ${dashboardUrl}\n\n` +
-        `Reply YES to confirm.`;
-      
-      // Send via Twilio
-      const twilioClient = (await import("twilio")).default(twilioSid, twilioToken);
-      
-      const phoneNumber = driverPhone.startsWith('+') 
-        ? driverPhone 
-        : '+1' + driverPhone.replace(/\D/g, '');
-      
-      await twilioClient.messages.create({
-        to: phoneNumber,
-        from: twilioPhone,
-        body: message
-      });
-      
-      console.log(`   📱 SMS notification sent to driver ${matchedDriver.name} for load ${load.loadNumber}`);
-      
-      // Log activity
+      const newNotes = existingLoad.specialInstructions 
+        ? existingLoad.specialInstructions + "\n\n" + (data.notes || "") // Append
+        : data.notes;
+
+      await db.update(loads)
+        .set({
+          // Update Rate/Miles only if they are positive (don't overwrite with 0)
+          rate: data.rate > 0 ? data.rate : existingLoad.rate,
+          miles: data.miles > 0 ? data.miles : existingLoad.miles,
+          
+          // Always try to improve address data if missing
+          originCity: existingLoad.originCity === "Unknown" ? data.origin : existingLoad.originCity,
+          destCity: existingLoad.destCity === "Unknown" ? data.destination : existingLoad.destCity,
+          
+          // Merge Notes
+          specialInstructions: newNotes,
+          
+          // Update Broker Info if missing
+          brokerPhone: existingLoad.brokerPhone || data.brokerPhone,
+          dispatcherName: existingLoad.dispatcherName || data.dispatcherName
+        })
+        .where(eq(loads.id, existingLoad.id));
+        
+      // Log the merge
       await db.insert(activityLog).values({
-        companyId: load.companyId,
-        entityType: 'LOAD',
-        entityId: load.id,
-        action: 'DRIVER_NOTIFIED',
-        actor: 'SYSTEM',
-        details: {
-          driverId: matchedDriver.id,
-          driverName: matchedDriver.name,
-          driverPhone: phoneNumber,
-          method: 'SMS',
-          loadNumber: load.loadNumber,
-          matchType: matchedDriver.name?.toLowerCase().trim() === normalizedSearchName ? 'exact' : 'fuzzy'
-        }
+        entityType: "LOAD", entityId: existingLoad.id, action: "DOC_MERGE",
+        details: { filename, note: "Merged secondary document" }, actor: "SYSTEM_AI"
       });
+
+    } else {
+      console.log(`      ✨ Creating NEW Load #${loadNum}...`);
       
-      return true;
-    } catch (error: any) {
-      console.error(`   ❌ Failed to notify driver ${driverName}:`, error.message);
+      // CREATE LOGIC (Standard Insert)
+      const [newLoad] = await db.insert(loads).values({
+        loadNumber: loadNum,
+        rate: data.rate || 0,
+        miles: data.miles || 0,
+        rpm: data.rpm ? String(data.rpm) : "0",
+        
+        brokerName: data.brokerName || "Unknown",
+        brokerPhone: data.brokerPhone || "",
+        brokerEmail: data.brokerEmail || "",
+        dispatcherName: data.dispatcherName || "",
+        
+        pickupDate: data.pickupDate || new Date().toISOString(),
+        deliveryDate: data.deliveryDate || new Date().toISOString(),
+        originCity: data.origin || "Unknown",
+        destCity: data.destination || "Unknown",
+        weight: data.weight || 0,
+        
+        specialInstructions: data.notes || "",
+        status: "booked",
+        companyId: companyId,
+        sopProgress: {}, 
+      }).returning();
+
+      // Log the creation
       await db.insert(activityLog).values({
-        companyId: load.companyId,
-        entityType: 'LOAD',
-        entityId: load.id,
-        action: 'DRIVER_NOTIFICATION_FAILED',
-        actor: 'SYSTEM',
-        details: { driverName, error: error.message }
-      }).catch(() => {}); // Best-effort logging
-      return false;
+        entityType: "LOAD", entityId: newLoad.id, action: "AUTO_INGEST",
+        details: { filename, rate: data.rate }, actor: "SYSTEM_AI"
+      });
     }
   }
 };
