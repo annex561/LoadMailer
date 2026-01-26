@@ -128,21 +128,23 @@ export default function ActiveLoads() {
                   <TabsTrigger value="map" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
                     <Navigation className="w-4 h-4 mr-2" /> Live Map
                   </TabsTrigger>
-                  <TabsTrigger value="messages" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
-                    <MessageSquare className="w-4 h-4 mr-2" /> Driver Messages
-                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="sop" className="flex-1 overflow-hidden m-0 p-0">
-                  <ScrollArea className="h-full">
-                    <div className="p-6">
-                      <EVChecklist load={selectedLoad} />
+                  <div className="h-full flex">
+                    {/* Left side: EVChecklist */}
+                    <div className="flex-1 overflow-hidden">
+                      <ScrollArea className="h-full">
+                        <div className="p-6">
+                          <EVChecklist load={selectedLoad} />
+                        </div>
+                      </ScrollArea>
                     </div>
-                  </ScrollArea>
-                </TabsContent>
-
-                <TabsContent value="messages" className="flex-1 overflow-hidden m-0 p-0">
-                  <DriverMessagesPanel load={selectedLoad} />
+                    {/* Right side: Driver Messages */}
+                    <div className="w-[400px] border-l border-slate-800 flex flex-col">
+                      <DriverMessagesPanel load={selectedLoad} />
+                    </div>
+                  </div>
                 </TabsContent>
 
                 <TabsContent value="map" className="flex-1 overflow-hidden m-0 p-0">
