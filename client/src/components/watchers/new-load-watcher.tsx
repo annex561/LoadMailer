@@ -17,8 +17,9 @@ export function NewLoadWatcher() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   
-  // Store the ID of the last load we saw so we don't notify twice
-  const lastKnownLoadId = useRef<number | null>(null);
+  // Store ALL known load IDs to avoid false positives from list reordering
+  const knownLoadIds = useRef<Set<string>>(new Set());
+  const initialized = useRef(false);
 
   // Poll every 3 seconds (Fast check)
   const { data: latestLoad } = useQuery({
@@ -31,17 +32,30 @@ export function NewLoadWatcher() {
   useEffect(() => {
     if (!latestLoad) return;
 
+    const loadId = String(latestLoad.id);
+
     // 1. Initial Load (First run): Just save the ID, don't notify.
-    if (lastKnownLoadId.current === null) {
-      lastKnownLoadId.current = latestLoad.id;
+    if (!initialized.current) {
+      knownLoadIds.current.add(loadId);
+      initialized.current = true;
       return;
     }
 
-    // 2. Change Detected: If the new ID is different from what we had...
-    if (latestLoad.id !== lastKnownLoadId.current) {
+    // 2. Check if this is a TRULY new load we've never seen before
+    if (!knownLoadIds.current.has(loadId)) {
+      // Add to known IDs
+      knownLoadIds.current.add(loadId);
+
+      // Also verify it was created recently (within last 60 seconds) to avoid false positives
+      const createdAt = latestLoad.createdAt ? new Date(latestLoad.createdAt) : null;
+      const now = new Date();
+      const ageSeconds = createdAt ? (now.getTime() - createdAt.getTime()) / 1000 : 999;
       
-      // Update our ref so we don't notify again for this specific load
-      lastKnownLoadId.current = latestLoad.id;
+      // Only notify if load was created within the last 60 seconds
+      if (ageSeconds > 60) {
+        console.log(`Skipping notification for old load #${latestLoad.loadNumber} (${ageSeconds}s old)`);
+        return;
+      }
 
       // --- PLAY SOUND ---
       // This is a crisp "Success Chime"

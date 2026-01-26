@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard, MapPin, User, Phone, Mail, ChevronsUpDown } from "lucide-react";
+import { RefreshCw, Send, Check, X, Inbox, TrendingUp, DollarSign, Truck, FileText, History, Lightbulb, Receipt, CreditCard, MapPin, User, Phone, Mail, ChevronsUpDown, Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -104,6 +104,7 @@ export default function LoadsInbox() {
     loadId: "",
     activity: []
   });
+  const [booking, setBooking] = useState(false);
 
   async function loadData() {
     const [a, b] = await Promise.all([
@@ -297,6 +298,7 @@ export default function LoadsInbox() {
 
     console.log("🚀 Booking Load:", bookModal.load.id, "for Driver:", bookModal.driverId);
 
+    setBooking(true);
     try {
       // When driver is assigned, set status to "dispatched" to move from Inbox to Active Dispatch
       const result = await act(bookModal.load.id, "book", {
@@ -352,6 +354,8 @@ export default function LoadsInbox() {
         description: error?.message || "Could not move load. Please try again.", 
         variant: "destructive" 
       });
+    } finally {
+      setBooking(false);
     }
   }
 
@@ -858,10 +862,14 @@ export default function LoadsInbox() {
             </Button>
             <Button 
               onClick={handleBook}
-              disabled={!bookModal.driverId || (bookModal.requiresOverride && !bookModal.overrideReason)}
+              disabled={booking || !bookModal.driverId || (bookModal.requiresOverride && !bookModal.overrideReason)}
             >
-              <Check className="w-4 h-4 mr-2" />
-              {!bookModal.driverId ? "Select a Driver" : bookModal.requiresOverride ? "Override & Book" : "Book Load"}
+              {booking ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Check className="w-4 h-4 mr-2" />
+              )}
+              {booking ? "Booking..." : !bookModal.driverId ? "Select a Driver" : bookModal.requiresOverride ? "Override & Book" : "Book Load"}
             </Button>
           </DialogFooter>
         </DialogContent>
