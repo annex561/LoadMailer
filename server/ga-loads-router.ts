@@ -562,6 +562,10 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
             customerId: defaultCustomerId,
             driverId: assigned_driver_id ? String(assigned_driver_id) : null,
             description: `${row.origin_city || 'TBD'}, ${row.origin_state || ''} to ${row.dest_city || 'TBD'}, ${row.dest_state || ''}`,
+            originCity: row.origin_city || 'TBD',
+            originState: row.origin_state || '',
+            destCity: row.dest_city || 'TBD',
+            destState: row.dest_state || '',
             pickupAddress: `${row.origin_city || 'TBD'}, ${row.origin_state || ''}`,
             pickupDate: parseDate(row.pickup_dt),
             pickupTime: "TBD",
@@ -579,11 +583,15 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
           pgLoadId = newLoad?.id || null;
           console.log(`✅ Load ${row.load_number || id.slice(0, 8)} copied to PostgreSQL for tracking (ID: ${pgLoadId})`);
         } else {
-          // Update existing load with driver assignment (if any)
+          // Update existing load with driver assignment and city/state info
           await pgDb.update(pgLoads)
             .set({ 
               driverId: assigned_driver_id ? String(assigned_driver_id) : undefined,
-              status: "dispatched"
+              status: "dispatched",
+              originCity: row.origin_city || undefined,
+              originState: row.origin_state || undefined,
+              destCity: row.dest_city || undefined,
+              destState: row.dest_state || undefined
             })
             .where(eq(pgLoads.loadNumber, row.load_number || id.slice(0, 8)));
           
