@@ -1,347 +1,225 @@
-import { useState, useEffect } from "react";
-import { Check, Clock, Send, DollarSign, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { 
+  CheckCircle2, Circle, Lock, Send, Truck, MapPin, 
+  FileText, ShieldCheck, Clock, DollarSign, Fuel, ThumbsUp, 
+  AlertCircle, Radio
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface SopProgressState {
-  initialSms: boolean;
-  tripMessage: boolean;
-  puArrived: boolean;
-  annexNotified: boolean;
-  puDocs: boolean;
-  brokerConfirmed: boolean;
-  transitMonitored: boolean;
-  delDocsRequested: boolean;
-  driverReleased: boolean;
-  docsToEinstein: boolean;
-  factoringSent: boolean;
-  fuelLogged: boolean;
-  brokerThankYou: boolean;
-}
-
-const defaultSopProgress: SopProgressState = {
-  initialSms: false,
-  tripMessage: false,
-  puArrived: false,
-  annexNotified: false,
-  puDocs: false,
-  brokerConfirmed: false,
-  transitMonitored: false,
-  delDocsRequested: false,
-  driverReleased: false,
-  docsToEinstein: false,
-  factoringSent: false,
-  fuelLogged: false,
-  brokerThankYou: false,
-};
+import { cn } from "@/lib/utils";
 
 interface EVChecklistProps {
   load: any;
 }
 
+// 1. CONFIG: Define the 13 Steps & Their Automation Type
+const STEPS_CONFIG = [
+  { key: "initialSms", label: "Send Load Details", icon: Send, auto: false, desc: "Trigger dispatch SMS to driver." },
+  { key: "tripMessage", label: "Trip Message", icon: Truck, auto: true, desc: "Waiting for driver to reply 'CONFIRM'..." },
+  { key: "puArrived", label: "Arrived at Pickup", icon: MapPin, auto: true, desc: "Monitoring GPS geofence / Driver status..." },
+  { key: "annexNotified", label: "Annex Notified", icon: ShieldCheck, auto: true, desc: "System auto-alerts Annex team." },
+  { key: "puDocs", label: "Pickup Docs Uploaded", icon: FileText, auto: true, desc: "Scanning for BOL upload..." },
+  { key: "brokerConfirmed", label: "Broker Confirmed", icon: CheckCircle2, auto: false, desc: "VA: Call broker to confirm loaded." },
+  { key: "transitMonitored", label: "In Transit Monitoring", icon: Clock, auto: true, desc: "Tracking GPS macro-point updates..." },
+  { key: "delDocsRequested", label: "Request Delivery Docs", icon: FileText, auto: true, desc: "Auto-SMS sent 50 miles out." },
+  { key: "driverReleased", label: "Driver Released", icon: Truck, auto: false, desc: "VA: Verify empty & clear driver." },
+  { key: "docsToEinstein", label: "Docs to Einstein AI", icon: FileText, auto: true, desc: "AI analyzing POD for signature..." },
+  { key: "factoringSent", label: "Factoring Submission", icon: DollarSign, auto: false, desc: "VA: Submit invoice to factoring." },
+  { key: "fuelLogged", label: "Log Fuel Expenses", icon: Fuel, auto: false, desc: "VA: Enter fuel costs." },
+  { key: "brokerThankYou", label: "Broker Thank You", icon: ThumbsUp, auto: false, desc: "Send automated thank you email." },
+];
+
 export function EVChecklist({ load }: EVChecklistProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [fuelAmount, setFuelAmount] = useState(load.fuelCost?.toString() || "");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  
+  // Load State
+  const [steps, setSteps] = useState(load.sopProgress || {});
 
-  const [steps, setSteps] = useState<SopProgressState>(() => ({
-    ...defaultSopProgress,
-    ...(load.sopProgress || {}),
-  }));
+  // Find Active Step
+  const activeIndex = STEPS_CONFIG.findIndex(s => !steps[s.key]);
+  const currentStep = activeIndex === -1 ? null : STEPS_CONFIG[activeIndex];
 
+  // Auto-Scroll to Active Step
   useEffect(() => {
-    if (load.sopProgress) {
-      setSteps({ ...defaultSopProgress, ...load.sopProgress });
+    if (scrollRef.current) {
+      const activeElement = scrollRef.current.querySelector('[data-active="true"]');
+      if (activeElement) {
+        activeElement.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
     }
-    if (load.fuelCost) {
-      setFuelAmount(load.fuelCost.toString());
-    }
-  }, [load.sopProgress, load.fuelCost]);
+  }, [activeIndex]);
 
+  // DB Sync
   const updateProgress = useMutation({
-    mutationFn: async (newSteps: SopProgressState) => {
-      await apiRequest("PATCH", `/api/loads/${load.id}`, {
-        sopProgress: newSteps,
-        fuelCost: newSteps.fuelLogged ? parseFloat(fuelAmount) || undefined : undefined,
-      });
+    mutationFn: async (newSteps: any) => {
+      await apiRequest("PATCH", `/api/loads/${load.id}`, { sopProgress: newSteps });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/loads", load.id] });
-      toast({ title: "SOP Updated", description: "Workflow progress saved." });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to save progress", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: [`/api/loads/${load.id}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
     },
   });
 
-  const toggleStep = (key: keyof SopProgressState) => {
-    if (key === "fuelLogged" && !steps.fuelLogged && !fuelAmount) {
-      toast({ title: "Enter Fuel Cost", description: "Please enter fuel cost before marking as logged", variant: "destructive" });
-      return;
-    }
-    const newSteps = { ...steps, [key]: !steps[key] };
+  const toggleStep = (key: string, value: boolean) => {
+    const newSteps = { ...steps, [key]: value };
     setSteps(newSteps);
     updateProgress.mutate(newSteps);
+    toast({ title: "Updated", description: "SOP progress synced." });
   };
 
-  const handleSmsTrigger = async (type: string) => {
+  // Automated Action Handler
+  const triggerAction = async (type: string, stepKey: string) => {
     try {
+      toast({ title: "System Working...", description: "Executing automated command." });
       await apiRequest("POST", `/api/sms/send-template`, { loadId: load.id, type });
-      toast({ title: "SMS Sent", description: `${type} message sent to driver.` });
-      const stepKey = type === "INITIAL" ? "initialSms" : "tripMessage";
-      const newSteps = { ...steps, [stepKey]: true };
-      setSteps(newSteps);
-      updateProgress.mutate(newSteps);
-    } catch {
-      toast({ title: "Error", description: "Failed to send SMS", variant: "destructive" });
+      toggleStep(stepKey, true); // Auto-advance on success
+    } catch (e) {
+      toast({ title: "Error", variant: "destructive", description: "Command failed." });
     }
   };
-
-  const handleBrokerEmail = async () => {
-    try {
-      await apiRequest("POST", `/api/email/broker-thank-you`, { loadId: load.id });
-      toast({ title: "Email Sent", description: "POD sent to broker." });
-      const newSteps = { ...steps, brokerThankYou: true };
-      setSteps(newSteps);
-      updateProgress.mutate(newSteps);
-    } catch {
-      toast({ title: "Error", description: "Failed to send email", variant: "destructive" });
-    }
-  };
-
-  const isBeforeNoon = new Date().getHours() < 12;
-
-  const completedCount = Object.values(steps).filter(Boolean).length;
-  const totalSteps = Object.keys(steps).length;
-  const progressPercent = Math.round((completedCount / totalSteps) * 100);
 
   return (
-    <Card className="h-full border-l-4 border-l-blue-600 shadow-md">
-      <CardHeader className="bg-slate-50 dark:bg-slate-800 pb-2">
-        <CardTitle className="flex justify-between items-center text-lg font-bold text-slate-800 dark:text-slate-100">
-          EV SOP Checklist
-          <Badge variant={load.lifecycleStatus === "delivered" ? "default" : "outline"}>
-            {(load.lifecycleStatus || load.status || "unknown").toUpperCase()}
-          </Badge>
-        </CardTitle>
-        <div className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-          Load #{load.loadNumber} • {load.driverName || "Unassigned"}
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <div className="flex-1 bg-slate-200 dark:bg-slate-700 rounded-full h-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all"
-              style={{ width: `${progressPercent}%` }}
-            />
+    <Card className="h-full bg-slate-950 border-slate-800 text-slate-100 flex flex-col shadow-none">
+      
+      {/* HEADER */}
+      <CardHeader className="py-3 border-b border-slate-900 bg-slate-900/50">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-emerald-500" />
+            <h3 className="font-bold text-sm">Victory Protocol</h3>
           </div>
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-            {completedCount}/{totalSteps}
-          </span>
+          <Badge variant="outline" className="border-slate-700 text-slate-400 font-mono text-xs">
+            {activeIndex === -1 ? "COMPLETED" : `STEP ${activeIndex + 1}/13`}
+          </Badge>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4 p-4 overflow-y-auto max-h-[80vh]">
-        <div className="space-y-2">
-          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Phase 1: Dispatch
-          </h4>
+      {/* SCROLLABLE STEPPER */}
+      <ScrollArea className="flex-1" ref={scrollRef}>
+        <div className="p-4 space-y-1">
+          
+          {STEPS_CONFIG.map((step, index) => {
+            const isCompleted = steps[step.key];
+            const isActive = index === activeIndex;
+            const isLocked = index > activeIndex;
 
-          <div className="flex items-start gap-3">
-            <Checkbox checked={steps.initialSms} disabled className="mt-1" />
-            <div className="grid gap-1.5 leading-none flex-1">
-              <label className="text-sm font-medium leading-none">1. Send Load Details</label>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs w-full"
-                onClick={() => handleSmsTrigger("INITIAL")}
-                disabled={steps.initialSms}
+            return (
+              <div 
+                key={step.key} 
+                data-active={isActive}
+                className={cn(
+                  "relative border rounded-lg transition-all duration-500 overflow-hidden",
+                  isActive 
+                    ? "bg-slate-900/80 border-blue-500/50 shadow-[0_0_20px_-5px_rgba(59,130,246,0.15)] py-4 px-4 my-4 scale-105 z-10" 
+                    : isCompleted 
+                      ? "bg-slate-950 border-emerald-900/20 py-2 px-3 opacity-60 hover:opacity-100" 
+                      : "bg-slate-950 border-slate-800 py-2 px-3 opacity-30"
+                )}
               >
-                <Send className="w-3 h-3 mr-1" /> Send SMS Trigger
-              </Button>
-            </div>
-          </div>
+                {/* CONNECTING LINE */}
+                {index !== STEPS_CONFIG.length - 1 && (
+                  <div className={cn(
+                    "absolute left-[19px] top-10 bottom-0 w-[2px] z-0",
+                    isCompleted ? "bg-emerald-900" : "bg-slate-800",
+                    isActive && "hidden" // Hide line for active expanded card
+                  )} />
+                )}
 
-          <div className="flex items-start gap-3 pt-2">
-            <Checkbox checked={steps.tripMessage} disabled className="mt-1" />
-            <div className="grid gap-1.5 leading-none flex-1">
-              <label className="text-sm font-medium leading-none">2. Trip Message (On-Site)</label>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs w-full"
-                onClick={() => handleSmsTrigger("TRIP")}
-                disabled={steps.tripMessage}
-              >
-                <Send className="w-3 h-3 mr-1" /> Send Trip Link
-              </Button>
-            </div>
-          </div>
-        </div>
+                <div className="flex items-center gap-3 relative z-10">
+                  
+                  {/* ICON INDICATOR */}
+                  <div className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center shrink-0 border",
+                    isActive 
+                      ? "bg-blue-600 text-white border-blue-400" 
+                      : isCompleted 
+                        ? "bg-emerald-900/20 text-emerald-500 border-emerald-500/20" 
+                        : "bg-slate-900 text-slate-600 border-slate-700"
+                  )}>
+                    {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : 
+                     isActive ? <step.icon className="w-4 h-4 animate-pulse" /> :
+                     <Lock className="w-3 h-3" />}
+                  </div>
 
-        <Separator />
+                  {/* CONTENT */}
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center">
+                      <h4 className={cn(
+                        "text-sm font-medium",
+                        isActive ? "text-white text-base" : isCompleted ? "text-emerald-500 line-through" : "text-slate-500"
+                      )}>
+                        {step.label}
+                      </h4>
+                      
+                      {/* STATUS BADGE FOR ACTIVE */}
+                      {isActive && (
+                        <Badge className={cn(
+                          "text-[10px] px-2",
+                          step.auto ? "bg-blue-900/50 text-blue-300 animate-pulse border-blue-500/30" : "bg-amber-900/50 text-amber-300 border-amber-500/30"
+                        )}>
+                          {step.auto ? "🤖 MONITORING" : "👤 MANUAL ACTION"}
+                        </Badge>
+                      )}
+                    </div>
 
-        <div className="space-y-2">
-          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Phase 2: Transit
-          </h4>
+                    {/* EXPANDED DETAILS (Only for Active Step) */}
+                    {isActive && (
+                      <div className="mt-3 pl-1 animate-in slide-in-from-top-2">
+                        <p className="text-xs text-slate-400 mb-3 flex items-center gap-2">
+                          {step.auto ? <Radio className="w-3 h-3 text-blue-400" /> : <AlertCircle className="w-3 h-3 text-amber-400" />}
+                          {step.desc}
+                        </p>
 
-          <SopItem
-            label="3. Pickup Arrived"
-            checked={steps.puArrived}
-            onChange={() => toggleStep("puArrived")}
-          />
-          <SopItem
-            label="4. Annex Notified"
-            checked={steps.annexNotified}
-            onChange={() => toggleStep("annexNotified")}
-          />
-
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded border border-blue-100 dark:border-blue-800">
-            <SopItem
-              label="5. Pickup Docs (BOL/Photo)"
-              checked={steps.puDocs}
-              onChange={() => toggleStep("puDocs")}
-            />
-            <p className="text-[10px] text-blue-600 dark:text-blue-400 ml-6 mt-1">
-              *Verify Printed Name & Signature visible
-            </p>
-          </div>
-
-          <SopItem
-            label="6. Broker Confirmed"
-            checked={steps.brokerConfirmed}
-            onChange={() => toggleStep("brokerConfirmed")}
-          />
-          <SopItem
-            label="7. Transit Monitored (3-5hr)"
-            checked={steps.transitMonitored}
-            onChange={() => toggleStep("transitMonitored")}
-          />
-        </div>
-
-        <Separator />
-
-        <div className="space-y-2">
-          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Phase 3: Completion
-          </h4>
-
-          <SopItem
-            label="8. Delivery Docs Requested"
-            checked={steps.delDocsRequested}
-            onChange={() => toggleStep("delDocsRequested")}
-          />
-          <SopItem
-            label="9. Driver Released"
-            checked={steps.driverReleased}
-            onChange={() => toggleStep("driverReleased")}
-          />
-          <SopItem
-            label="10. Docs to Einstein"
-            checked={steps.docsToEinstein}
-            onChange={() => toggleStep("docsToEinstein")}
-          />
-
-          <div
-            className={`p-2 rounded border ${
-              isBeforeNoon
-                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                : "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800"
-            }`}
-          >
-            <SopItem
-              label="11. Factoring Sent"
-              checked={steps.factoringSent}
-              onChange={() => toggleStep("factoringSent")}
-            />
-            <div className="flex items-center gap-2 ml-6 mt-1">
-              <Clock className="w-3 h-3" />
-              <span className="text-[10px] font-bold">
-                {isBeforeNoon ? "ON TIME (Same Day)" : "NEXT DAY PROCESSING"}
-              </span>
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <div className="flex items-center gap-2 mb-1">
-              <Checkbox
-                checked={steps.fuelLogged}
-                onCheckedChange={() => toggleStep("fuelLogged")}
-              />
-              <label className="text-sm font-medium">12. Fuel Logged</label>
-            </div>
-            {steps.fuelLogged && (
-              <div className="ml-6 flex items-center gap-2">
-                <DollarSign className="w-3 h-3 text-slate-400" />
-                <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={fuelAmount}
-                  onChange={(e) => setFuelAmount(e.target.value)}
-                  className="h-7 text-xs w-24"
-                />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 text-xs"
-                  onClick={() => updateProgress.mutate(steps)}
-                  disabled={updateProgress.isPending}
-                >
-                  {updateProgress.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
-                </Button>
+                        <div className="flex gap-2">
+                          {/* PRIMARY ACTION */}
+                          {step.key === "initialSms" ? (
+                             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500 w-full" onClick={() => triggerAction("INITIAL", step.key)}>
+                               <Send className="w-3 h-3 mr-2" /> Send Dispatch SMS
+                             </Button>
+                          ) : (
+                             <Button 
+                               size="sm" 
+                               variant={step.auto ? "secondary" : "default"}
+                               className={cn(
+                                 "w-full text-xs font-bold border",
+                                 step.auto 
+                                   ? "bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700 hover:text-white" 
+                                   : "bg-blue-600 border-blue-500 text-white hover:bg-blue-500"
+                               )} 
+                               onClick={() => toggleStep(step.key, true)}
+                             >
+                               {step.auto ? "⚠ MANUAL OVERRIDE (Confirm)" : "MARK COMPLETED"}
+                             </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+            );
+          })}
 
-          <div className="pt-2">
-            <div className="flex items-center gap-2">
-              <Checkbox checked={steps.brokerThankYou} disabled />
-              <label className="text-sm font-medium">13. Broker Thank You</label>
+          {/* SUCCESS MESSAGE */}
+          {activeIndex === -1 && (
+            <div className="p-8 text-center bg-emerald-900/10 border border-emerald-900/30 rounded-xl mt-4">
+              <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ThumbsUp className="w-8 h-8 text-emerald-500" />
+              </div>
+              <h3 className="text-emerald-400 font-bold text-lg">Mission Accomplished</h3>
+              <p className="text-slate-500 text-xs mt-1">Load #17 Completed Successfully.</p>
             </div>
-            <Button
-              size="sm"
-              className="w-full mt-2 bg-slate-800 dark:bg-slate-700 text-xs"
-              disabled={!steps.driverReleased || steps.brokerThankYou}
-              onClick={handleBrokerEmail}
-            >
-              {steps.brokerThankYou ? (
-                <>
-                  <Check className="w-3 h-3 mr-1" /> Email Sent
-                </>
-              ) : (
-                "Send POD Email"
-              )}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+          )}
 
-function SopItem({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <Checkbox checked={checked} onCheckedChange={onChange} />
-      <label className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-        {label}
-      </label>
-    </div>
+        </div>
+      </ScrollArea>
+    </Card>
   );
 }
