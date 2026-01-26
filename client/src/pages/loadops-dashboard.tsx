@@ -84,6 +84,7 @@ import FleetWorkOrders from './fleet-work-orders';
 import FleetInspections from './fleet-inspections';
 import FleetVendors from './fleet-vendors';
 import LoadsInbox from './loads-inbox';
+import ActiveLoads from './active-loads';
 import ItemsPage from './items';
 import DriverLocationMap from '@/components/driver-location-map';
 
@@ -626,6 +627,8 @@ export default function LoadOpsDashboard() {
       case '/loads-inbox':
       case '/ga/loads':
         return <LoadsInbox />;
+      case '/active-loads':
+        return <ActiveLoads />;
       case '/items':
         return <ItemsPage />;
       default:
