@@ -246,7 +246,7 @@ export default function LoadsInbox() {
       if (action === "book") {
         queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
       }
-      return { ok: true };
+      return { ok: true, pgLoadId: r.pg_load_id };
     } catch (e: any) {
       toast({ title: "Action failed", description: e?.message, variant: "destructive" });
       return { ok: false, error: e?.message };
@@ -301,9 +301,25 @@ export default function LoadsInbox() {
         gateStatus: result.gateStatus || "YELLOW"
       }));
     } else if (result.ok) {
+      // Send booking confirmation SMS to driver if driver was assigned
+      if (bookModal.driverId && result.pgLoadId) {
+        try {
+          await fetch("/api/sms/send-template", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              loadId: result.pgLoadId,
+              type: "BOOKING_REQUEST"
+            })
+          });
+        } catch (smsErr) {
+          console.warn("Failed to send booking SMS:", smsErr);
+        }
+      }
+      
       toast({ 
-        title: "Load Dispatched", 
-        description: `Load moved to Active Dispatch${bookModal.driverName ? ` with ${bookModal.driverName}` : ""}`
+        title: "Load Dispatched 🚀", 
+        description: `Moved to Active Loads. ${bookModal.driverName ? `Confirmation SMS sent to ${bookModal.driverName}.` : ""}`
       });
       setBookModal(prev => ({ ...prev, open: false }));
     }
