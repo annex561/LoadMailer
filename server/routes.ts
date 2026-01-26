@@ -920,6 +920,14 @@ export async function registerRoutes(app: Express): Promise<void> {
           `Load #${load.loadNumber}\n\n` +
           `Open your dashboard for GPS tracking:\n${dashboardUrl}\n\n` +
           `Drive safe!`;
+      } else if (type === 'BOOKING_REQUEST') {
+        // Use the new SMS service method
+        const result = await smsLoadService.sendBookingRequest(load, driver);
+        return res.json({ success: result.success, message: result.success ? 'Booking request SMS sent' : result.error });
+      } else if (type === 'DISPATCH_INSTRUCTIONS') {
+        // Use the new SMS service method
+        const result = await smsLoadService.sendDispatchInstructions(load, driver);
+        return res.json({ success: result.success, message: result.success ? 'Dispatch instructions SMS sent' : result.error });
       } else {
         return res.status(400).json({ error: 'Invalid template type' });
       }
