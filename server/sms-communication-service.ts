@@ -52,6 +52,44 @@ export class SMSCommunicationService {
         return;
       }
 
+      // 🔐 CHECK FOR LOAD CONFIRMATION RESPONSE
+      const confirmationKeywords = ['yes', 'confirm', 'confirmed', 'accept', 'accepted', 'ok', 'okay'];
+      const normalizedMessage = message.trim().toLowerCase();
+      const isConfirmationResponse = confirmationKeywords.some(keyword => 
+        normalizedMessage === keyword || normalizedMessage.startsWith(keyword + ' ') || normalizedMessage.startsWith(keyword + '!')
+      );
+      
+      if (isConfirmationResponse) {
+        try {
+          // Find driver's most recent dispatched load that hasn't been confirmed
+          const allLoads = await storage.getAllLoads();
+          const unconfirmedLoad = allLoads.find(load => 
+            load.driverId === driver.id && 
+            load.status === 'dispatched' && 
+            !load.driverConfirmedAt
+          );
+          
+          if (unconfirmedLoad) {
+            // Mark load as confirmed by driver
+            await storage.updateLoad(unconfirmedLoad.id, {
+              driverConfirmedAt: new Date()
+            });
+            
+            console.log(`✅ Driver ${driver.name} confirmed load #${unconfirmedLoad.loadNumber}`);
+            
+            // Send confirmation acknowledgment
+            await this.sendSMS(fromPhone, 
+              `✅ Load #${unconfirmedLoad.loadNumber} CONFIRMED!\n\n` +
+              `${unconfirmedLoad.originCity || 'Origin'} → ${unconfirmedLoad.destCity || 'Destination'}\n\n` +
+              `Drive safe! Contact dispatch if you need anything.`
+            );
+            return; // Exit early - confirmation handled
+          }
+        } catch (confirmErr) {
+          console.error('Error processing load confirmation:', confirmErr);
+        }
+      }
+
       // Find or create unified communication thread for this driver (one thread per driver)
       const thread = await this.findOrCreateUnifiedThread(driver);
       

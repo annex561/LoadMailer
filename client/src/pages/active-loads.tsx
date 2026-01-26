@@ -78,11 +78,18 @@ export default function ActiveLoads() {
                     <Badge variant="outline" className="text-[10px] border-slate-600 text-slate-400">
                       #{load.loadNumber}
                     </Badge>
-                    <Badge className={cn("text-[10px] uppercase", 
-                      load.status === 'delivered' ? "bg-emerald-600" : "bg-blue-600"
-                    )}>
-                      {load.status}
-                    </Badge>
+                    <div className="flex gap-1">
+                      {load.driverConfirmedAt && (
+                        <Badge className="text-[10px] bg-emerald-600">
+                          ✓ Confirmed
+                        </Badge>
+                      )}
+                      <Badge className={cn("text-[10px] uppercase", 
+                        load.status === 'delivered' ? "bg-emerald-600" : "bg-blue-600"
+                      )}>
+                        {load.status}
+                      </Badge>
+                    </div>
                   </div>
                   <div className="font-bold text-sm text-slate-200 truncate">
                     {load.originCity} <span className="text-slate-600">→</span> {load.destCity}

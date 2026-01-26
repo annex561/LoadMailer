@@ -20,7 +20,7 @@ interface EVChecklistProps {
 // 1. CONFIG: Define the 13 Steps & Their Automation Type
 const STEPS_CONFIG = [
   // STEP 1: Waiting for Driver Confirmation (Triggered by Booking)
-  { key: "initialSms", label: "Driver Confirmation", icon: Send, auto: true, desc: "Booking SMS sent. Waiting for 'YES'..." },
+  { key: "initialSms", label: "Driver Confirmation", icon: Send, auto: true, desc: "Booking SMS sent. Waiting for driver to reply YES..." },
   // STEP 2: Send Addresses & Tracking (The "Reaction")
   { key: "tripMessage", label: "Send Dispatch Instructions", icon: MapPin, auto: false, desc: "Send Addresses & Tracking Link" },
   { key: "puArrived", label: "Arrived at Pickup", icon: MapPin, auto: true, desc: "Monitoring GPS geofence / Driver status..." },
@@ -41,8 +41,22 @@ export function EVChecklist({ load }: EVChecklistProps) {
   const queryClient = useQueryClient();
   const scrollRef = useRef<HTMLDivElement>(null);
   
-  // Load State
-  const [steps, setSteps] = useState(load.sopProgress || {});
+  // Load State - merge driverConfirmedAt into SOP progress
+  const [steps, setSteps] = useState(() => {
+    const baseProgress = load.sopProgress || {};
+    // Auto-complete "initialSms" step if driver confirmed the load via SMS
+    if (load.driverConfirmedAt) {
+      return { ...baseProgress, initialSms: true };
+    }
+    return baseProgress;
+  });
+  
+  // Update steps when load.driverConfirmedAt changes
+  useEffect(() => {
+    if (load.driverConfirmedAt && !steps.initialSms) {
+      setSteps((prev: any) => ({ ...prev, initialSms: true }));
+    }
+  }, [load.driverConfirmedAt]);
 
   // Find Active Step
   const activeIndex = STEPS_CONFIG.findIndex(s => !steps[s.key]);
