@@ -7,9 +7,11 @@ import {
   Settings, 
   ChevronDown,
   MessageSquare,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useUser } from "@/hooks/use-user";
 
 const menuGroups = [
   {
@@ -79,6 +81,7 @@ const menuGroups = [
 export function SidebarNav() {
   const [location] = useLocation();
   const [openGroups, setOpenGroups] = useState<string[]>(["Dispatch Command", "Load Management"]);
+  const { user, logout } = useUser();
 
   const toggleGroup = (title: string) => {
     setOpenGroups(prev => 
@@ -131,16 +134,22 @@ export function SidebarNav() {
       </div>
 
       <div className="p-4 border-t border-slate-800 bg-slate-950/50">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-slate-900 font-bold text-xs">
-            AL
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-slate-900 font-bold text-sm">
+            {user?.username.substring(0, 2).toUpperCase() || "AL"}
           </div>
           <div className="overflow-hidden">
-            <p className="text-sm font-medium text-white truncate">Annex Luberisse</p>
-            <p className="text-xs text-slate-500 truncate">Executive Admin</p>
+            <p className="text-sm font-medium text-white truncate">{user?.username || "Guest"}</p>
+            <p className="text-xs text-slate-500 truncate capitalize">{user?.role || "Admin"}</p>
           </div>
-          <Settings className="w-4 h-4 ml-auto text-slate-500 cursor-pointer hover:text-white" />
         </div>
+        
+        <button 
+          onClick={() => logout()}
+          className="w-full flex items-center gap-2 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-900/20 p-2 rounded-md transition-colors"
+        >
+          <LogOut className="w-4 h-4" /> Sign Out
+        </button>
       </div>
     </div>
   );
