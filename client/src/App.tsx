@@ -1,11 +1,12 @@
 import { Switch, Route } from "wouter";
-import { useState, createContext, useContext } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/hooks/use-user";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
+import AuthPage from "@/pages/auth-page";
 import Loads from "@/pages/loads";
 import DATLoads from "@/pages/dat-loads";
 import ManualLoadEntry from "@/pages/manual-load-entry";
@@ -116,31 +117,36 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <NewLoadWatcher />
-        <Switch>
-          {/* Standalone driver pages without sidebar/header - for driver self-service only */}
-          <Route path="/driver-onboarding" component={DriverOnboarding} />
-          <Route path="/simple-registration" component={SimpleDriverRegistration} />
-          <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
-          <Route path="/driver-dashboard">
-            <ErrorBoundary>
-              <MobileDriverDashboard />
-            </ErrorBoundary>
-          </Route>
-          <Route path="/mobile-driver-dashboard">
-            <ErrorBoundary>
-              <MobileDriverDashboard />
-            </ErrorBoundary>
-          </Route>
-          <Route path="/driver/load/:id" component={DriverLoadView} />
-          
-          {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
-          <Route>
-            <LoadOpsDashboard />
-          </Route>
-        </Switch>
-        <DATVerificationDialog />
-        <Toaster />
+        <AuthProvider>
+          <NewLoadWatcher />
+          <Switch>
+            {/* Auth page - no sidebar/header */}
+            <Route path="/auth" component={AuthPage} />
+            
+            {/* Standalone driver pages without sidebar/header - for driver self-service only */}
+            <Route path="/driver-onboarding" component={DriverOnboarding} />
+            <Route path="/simple-registration" component={SimpleDriverRegistration} />
+            <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
+            <Route path="/driver-dashboard">
+              <ErrorBoundary>
+                <MobileDriverDashboard />
+              </ErrorBoundary>
+            </Route>
+            <Route path="/mobile-driver-dashboard">
+              <ErrorBoundary>
+                <MobileDriverDashboard />
+              </ErrorBoundary>
+            </Route>
+            <Route path="/driver/load/:id" component={DriverLoadView} />
+            
+            {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
+            <Route>
+              <LoadOpsDashboard />
+            </Route>
+          </Switch>
+          <DATVerificationDialog />
+          <Toaster />
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
