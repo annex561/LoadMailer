@@ -114,6 +114,7 @@ export default function ActiveLoads() {
                       <CheckCircle2 className="w-4 h-4 mr-2" /> SOP Checklist
                     </TabsTrigger>
                     
+                    {/* THIS IS THE TAB YOU WERE MISSING */}
                     <TabsTrigger value="chat" className="data-[state=active]:border-b-2 data-[state=active]:border-emerald-500 data-[state=active]:text-emerald-400 rounded-none h-full px-0 bg-transparent text-slate-400">
                       <MessageSquare className="w-4 h-4 mr-2" /> Driver Chat
                     </TabsTrigger>
