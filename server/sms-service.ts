@@ -166,6 +166,70 @@ export class SMSLoadService {
     console.log(`[SMS DISABLED] Would process new load ${load?.loadNumber || load?.id}`);
     return false; // Return false as if no notifications were sent
   }
+
+  // THE "PLEASE CONFIRM" MESSAGE (Sent immediately when you Book)
+  async sendBookingRequest(load: any, driver: any): Promise<{ success: boolean; error?: string; messageSid?: string }> {
+    if (!driver || !driver.phone) {
+      console.log(`[SMS] No phone for driver, skipping booking request`);
+      return { success: false, error: 'No driver phone' };
+    }
+
+    const body = `
+🚨 NEW LOAD ASSIGNMENT
+------------------
+Load #${load.loadNumber || load.load_number || 'TBD'}
+Rate: $${load.rate || load.rate_total || 0}
+Trip: ${load.originCity || load.origin_city || 'TBD'} ➝ ${load.destCity || load.dest_city || 'TBD'}
+
+Reply "YES" to confirm and receive address details.
+`.trim();
+
+    return this.sendSMS(driver.phone, body);
+  }
+
+  // THE "INSTRUCTIONS & TRACKING" MESSAGE (Sent after Confirmation)
+  async sendDispatchInstructions(load: any, driver: any): Promise<{ success: boolean; error?: string; messageSid?: string }> {
+    if (!driver || !driver.phone) {
+      console.log(`[SMS] No phone for driver, skipping dispatch instructions`);
+      return { success: false, error: 'No driver phone' };
+    }
+
+    // CHECK: Do we have the address? (Driver Sheet logic)
+    const originCity = load.originCity || load.origin_city;
+    const destCity = load.destCity || load.dest_city;
+    const hasAddress = originCity && originCity !== "Unknown";
+    
+    let details = "";
+    if (hasAddress) {
+      details = `
+📍 PICKUP:
+${originCity}
+${load.pickupDate || load.pickup_dt || 'TBD'}
+
+📍 DELIVERY:
+${destCity}
+${load.deliveryDate || load.delivery_dt || 'TBD'}
+`.trim();
+    } else {
+      details = "⚠️ Addresses pending. Stand by for Driver Sheet.";
+    }
+
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+      : 'https://traq-iq.replit.app';
+    const trackingLink = `${baseUrl}/driver/tracking/${load.id}`;
+
+    const body = `
+✅ CONFIRMED. Thank you!
+
+${details}
+
+PLEASE ACTIVATE TRACKING NOW:
+${trackingLink}
+`.trim();
+
+    return this.sendSMS(driver.phone, body);
+  }
 }
 
 // Export singleton instance

@@ -1,0 +1,84 @@
+import twilio from "twilio";
+import { db } from "../db";
+import { drivers, loads } from "@shared/schema";
+import { eq } from "drizzle-orm";
+
+const client = process.env.TWILIO_ACCOUNT_SID 
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+  : null;
+
+export const smsService = {
+  // 1. THE "PLEASE CONFIRM" MESSAGE (Sent immediately when you Book)
+  async sendBookingRequest(load: any, driverId: number) {
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
+    if (!driver || !driver.phone) return false;
+
+    const body = `
+🚨 NEW LOAD ASSIGNMENT
+------------------
+Load #${load.loadNumber}
+Rate: $${load.rate}
+Trip: ${load.originCity} ➝ ${load.destCity}
+
+Reply "YES" to confirm and receive address details.
+`.trim();
+
+    return this.sendSms(driver.phone, body);
+  },
+
+  // 2. THE "INSTRUCTIONS & TRACKING" MESSAGE (Sent after Confirmation)
+  async sendDispatchInstructions(load: any, driverId: number) {
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
+    if (!driver || !driver.phone) return false;
+
+    // CHECK: Do we have the address? (Driver Sheet logic)
+    const hasAddress = load.originCity && load.originCity !== "Unknown";
+    
+    let details = "";
+    if (hasAddress) {
+      details = `
+📍 PICKUP:
+${load.originCity}
+${load.pickupDate}
+
+📍 DELIVERY:
+${load.destCity}
+${load.deliveryDate}
+`.trim();
+    } else {
+      details = "⚠️ Addresses pending. Stand by for Driver Sheet.";
+    }
+
+    const trackingLink = `https://traq-iq.replit.app/driver/tracking/${load.id}`;
+
+    const body = `
+✅ CONFIRMED. Thank you!
+
+${details}
+
+PLEASE ACTIVATE TRACKING NOW:
+${trackingLink}
+`.trim();
+
+    return this.sendSms(driver.phone, body);
+  },
+
+  // Helper function
+  async sendSms(to: string, body: string) {
+    if (!client) {
+      console.log("⚠️ TWILIO SIMULATION:", { to, body });
+      return { success: true, simulated: true };
+    }
+    try {
+      await client.messages.create({
+        body,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error("Twilio Error:", error);
+      return { success: false, error };
+    }
+  }
+};
