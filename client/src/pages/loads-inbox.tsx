@@ -805,10 +805,10 @@ export default function LoadsInbox() {
             </Button>
             <Button 
               onClick={handleBook}
-              disabled={bookModal.requiresOverride && !bookModal.overrideReason}
+              disabled={!bookModal.driverId || (bookModal.requiresOverride && !bookModal.overrideReason)}
             >
               <Check className="w-4 h-4 mr-2" />
-              {bookModal.requiresOverride ? "Override & Book" : "Book Load"}
+              {!bookModal.driverId ? "Select a Driver" : bookModal.requiresOverride ? "Override & Book" : "Book Load"}
             </Button>
           </DialogFooter>
         </DialogContent>
