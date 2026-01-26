@@ -26,6 +26,7 @@ const menuGroups = [
     icon: <FileText className="w-5 h-5" />,
     items: [
       { name: "RateCon Inbox", href: "/loads-inbox" },
+      { name: "Active Loads", href: "/active-loads" },
       { name: "Load History", href: "/loads" },
       { name: "Create New Load", href: "/manual-load-entry" },
       { name: "DAT Load Board", href: "/dat-loads" },
