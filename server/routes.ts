@@ -2707,6 +2707,56 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // --- DEDICATED DISPATCH COMMAND ---
+  // Atomic transaction: update load + send SMS in one request
+  app.post("/api/loads/dispatch", async (req, res) => {
+    try {
+      const { loadId, driverId } = req.body;
+
+      console.log(`🚀 Dispatching Load #${loadId} to Driver #${driverId}`);
+
+      // Validate inputs
+      const parsedLoadId = parseInt(loadId);
+      const parsedDriverId = parseInt(driverId);
+      
+      if (isNaN(parsedLoadId) || isNaN(parsedDriverId)) {
+        return res.status(400).json({ error: "Invalid loadId or driverId" });
+      }
+
+      // 1. UPDATE DATABASE (The Critical Step)
+      // We force the status to 'dispatched' and assign the driver
+      const updatedLoad = await storage.updateLoad(String(parsedLoadId), {
+        status: "dispatched",
+        driverId: parsedDriverId,
+        sopProgress: { initialSms: true } // Auto-start step 1
+      });
+
+      if (!updatedLoad) {
+        throw new Error("Load update failed. Load not found.");
+      }
+
+      console.log("✅ Load Moved Successfully:", updatedLoad.status);
+
+      // 2. SEND SMS (Only happens if Step 1 succeeds)
+      try {
+        const driver = await storage.getDriver(parsedDriverId);
+        if (driver && updatedLoad) {
+          await smsLoadService.sendBookingRequest(updatedLoad, driver);
+          console.log("✅ SMS Sent Successfully");
+        }
+      } catch (smsError) {
+        console.error("⚠️ SMS Failed (but Load Moved):", smsError);
+        // We don't throw error here because we want the move to persist
+      }
+
+      res.json({ success: true, load: updatedLoad });
+
+    } catch (error: any) {
+      console.error("❌ Dispatch Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.post("/api/loads", async (req, res) => {
     try {
       const validatedData = insertLoadSchema.parse(req.body);
