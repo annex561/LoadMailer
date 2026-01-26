@@ -394,7 +394,7 @@ function DriverMessagesPanel({ load }: { load: any }) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Type your message..."
-            className="flex-1 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+            className="flex-1 !bg-slate-800 !border-slate-700 !text-white placeholder:!text-slate-500 focus:!ring-slate-600 focus:!border-slate-600"
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && message.trim() && sendMutation.mutate(message)}
           />
           <Button 
