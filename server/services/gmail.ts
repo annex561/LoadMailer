@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
 import { db } from "../db";
-import { gmailAccounts, loads, activityLog } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { gmailAccounts, loads, activityLog, customers } from "@shared/schema";
+import { eq, and, ilike } from "drizzle-orm";
 import { rateconParser } from "./ratecon-parser";
 
 interface ScanResult {
@@ -206,6 +206,14 @@ export const gmailIngest = {
       return 'skipped';
     }
 
+    // Helper to safely convert to Date object
+    const toDate = (val: any): Date => {
+      if (!val) return new Date();
+      if (val instanceof Date) return val;
+      const parsed = new Date(val);
+      return isNaN(parsed.getTime()) ? new Date() : parsed;
+    };
+
     // Check Existence
     const existingLoad = await db.query.loads.findFirst({
       where: eq(loads.loadNumber, loadNum)
@@ -236,17 +244,53 @@ export const gmailIngest = {
     } else {
       console.log(`      ✨ Creating NEW Load #${loadNum}...`);
       
+      // Auto-create or find customer from broker info
+      const brokerName = data.brokerName || "Unknown Broker";
+      let customerId: string | null = null;
+      
+      // Try to find existing customer by name
+      const existingCustomer = await db.query.customers.findFirst({
+        where: ilike(customers.name, brokerName)
+      });
+      
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+        console.log(`      📋 Found existing customer: ${brokerName}`);
+      } else {
+        // Create new customer from broker info
+        console.log(`      👤 Creating new customer: ${brokerName}`);
+        const [newCustomer] = await db.insert(customers).values({
+          companyId: companyId,
+          name: brokerName,
+          contactPerson: data.dispatcherName || "Contact TBD",
+          email: data.brokerEmail || "unknown@broker.com",
+          phone: data.brokerPhone || "000-000-0000",
+          address: "Address TBD",
+          status: "active"
+        }).returning();
+        customerId = newCustomer.id;
+      }
+      
+      // Generate a description from available data
+      const description = `Load from ${data.origin || 'Unknown'} to ${data.destination || 'Unknown'}`;
+      
       await db.insert(loads).values({
         loadNumber: loadNum,
+        customerId: customerId,
+        description: description,
         rate: data.rate || 0,
         miles: data.miles || 0,
         rpm: data.rpm ? String(data.rpm) : "0",
-        brokerName: data.brokerName || "Unknown",
+        brokerName: brokerName,
         brokerPhone: data.brokerPhone || "",
         brokerEmail: data.brokerEmail || "",
         dispatcherName: data.dispatcherName || "",
-        pickupDate: data.pickupDate || new Date().toISOString(),
-        deliveryDate: data.deliveryDate || new Date().toISOString(),
+        pickupDate: toDate(data.pickupDate),
+        deliveryDate: toDate(data.deliveryDate),
+        pickupTime: data.pickupTime || "TBD",
+        deliveryTime: data.deliveryTime || "TBD",
+        pickupAddress: data.origin || "Address TBD",
+        deliveryAddress: data.destination || "Address TBD",
         originCity: data.origin || "Unknown",
         destCity: data.destination || "Unknown",
         weight: data.weight || 0,
