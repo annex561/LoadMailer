@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -302,7 +302,7 @@ export default function LoadsInbox() {
       const result = await act(bookModal.load.id, "book", {
         booked_rate: parseFloat(bookModal.bookedRate) || undefined,
         assigned_truck_id: bookModal.truckId || undefined,
-        assigned_driver_id: parseInt(bookModal.driverId) || undefined,
+        assigned_driver_id: bookModal.driverId || undefined,
         override_reason: bookModal.overrideReason || undefined,
         status: "dispatched",
         sopProgress: { initialSms: true }
@@ -322,7 +322,7 @@ export default function LoadsInbox() {
         try {
           await apiRequest("POST", "/api/loads/dispatch", {
             loadId: result.pgLoadId,
-            driverId: parseInt(bookModal.driverId)
+            driverId: bookModal.driverId
           });
           console.log("✅ Dispatch complete for Load:", result.pgLoadId);
         } catch (dispatchErr) {
@@ -382,6 +382,7 @@ export default function LoadsInbox() {
         bookedRate: String(load.offered_rate || load.rate_total || ""),
         truckId: topTruck?.id || "",
         driverId: topDriver?.id || "",
+        driverName: topDriver?.name || "",
         overrideReason: "",
         requiresOverride: false,
         gateStatus: topTruck?.gate?.status || ""

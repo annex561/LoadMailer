@@ -73,7 +73,7 @@ export default function ActiveLoads() {
       <div className="w-[300px] border-r border-slate-800 bg-slate-900 flex flex-col">
         <div className="p-4 border-b border-slate-800">
           <h2 className="font-bold text-white flex items-center gap-2">
-            <Truck className="w-4 h-4 text-emerald-500" /> Active Fleet ({activeLoads.length})
+            <Truck className="w-4 h-4 text-emerald-500" /> Active Loads ({activeLoads.length})
           </h2>
         </div>
         <ScrollArea className="flex-1">

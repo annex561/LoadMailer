@@ -2715,19 +2715,16 @@ export async function registerRoutes(app: Express): Promise<void> {
 
       console.log(`🚀 Dispatching Load #${loadId} to Driver #${driverId}`);
 
-      // Validate inputs
-      const parsedLoadId = parseInt(loadId);
-      const parsedDriverId = parseInt(driverId);
-      
-      if (isNaN(parsedLoadId) || isNaN(parsedDriverId)) {
-        return res.status(400).json({ error: "Invalid loadId or driverId" });
+      // Validate inputs - loadId and driverId can be UUIDs (strings) or numbers
+      if (!loadId || !driverId) {
+        return res.status(400).json({ error: "loadId and driverId are required" });
       }
 
       // 1. UPDATE DATABASE (The Critical Step)
       // We force the status to 'dispatched' and assign the driver
-      const updatedLoad = await storage.updateLoad(String(parsedLoadId), {
+      const updatedLoad = await storage.updateLoad(String(loadId), {
         status: "dispatched",
-        driverId: parsedDriverId,
+        driverId: String(driverId),
         sopProgress: { initialSms: true } // Auto-start step 1
       });
 
@@ -2739,7 +2736,7 @@ export async function registerRoutes(app: Express): Promise<void> {
 
       // 2. SEND SMS (Only happens if Step 1 succeeds)
       try {
-        const driver = await storage.getDriver(parsedDriverId);
+        const driver = await storage.getDriver(String(driverId));
         if (driver && updatedLoad) {
           await smsLoadService.sendBookingRequest(updatedLoad, driver);
           console.log("✅ SMS Sent Successfully");
