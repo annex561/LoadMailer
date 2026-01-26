@@ -124,8 +124,8 @@ export default function ActiveLoads() {
                   <TabsTrigger value="sop" className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
                     <FileText className="w-4 h-4 mr-2" /> SOP Steps
                   </TabsTrigger>
-                  <TabsTrigger value="chat" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
-                    <MessageSquare className="w-4 h-4 mr-2" /> Driver Chat
+                  <TabsTrigger value="messages" className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
+                    <MessageSquare className="w-4 h-4 mr-2" /> Driver Messages
                   </TabsTrigger>
                   <TabsTrigger value="map" className="rounded-none border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent h-12 px-6 text-slate-300 data-[state=active]:text-white">
                     <Navigation className="w-4 h-4 mr-2" /> Live Map
@@ -140,8 +140,8 @@ export default function ActiveLoads() {
                   </ScrollArea>
                 </TabsContent>
 
-                <TabsContent value="chat" className="flex-1 overflow-hidden m-0 p-0">
-                  <DriverChatWindow load={selectedLoad} />
+                <TabsContent value="messages" className="flex-1 overflow-hidden m-0 p-0">
+                  <DriverMessagesPanel load={selectedLoad} />
                 </TabsContent>
 
                 <TabsContent value="map" className="flex-1 overflow-hidden m-0 p-0">
@@ -178,7 +178,7 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`text-[10px] px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>{c.label}</span>;
 }
 
-function DriverChatWindow({ load }: { load: any }) {
+function DriverMessagesPanel({ load }: { load: any }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState("");
@@ -268,6 +268,27 @@ function DriverChatWindow({ load }: { load: any }) {
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
+
+      {/* Quick Replies */}
+      <div className="px-4 py-2 border-t border-slate-800 bg-slate-900/30 flex gap-2 flex-wrap">
+        {[
+          { label: "ETA Check", text: "What's your current ETA?" },
+          { label: "Status Update", text: "Please send a status update when you can." },
+          { label: "At Pickup?", text: "Have you arrived at the pickup location?" },
+          { label: "Loaded?", text: "Are you loaded and ready to roll?" },
+          { label: "At Delivery?", text: "Have you arrived at the delivery location?" },
+        ].map((template) => (
+          <Button
+            key={template.label}
+            size="sm"
+            variant="outline"
+            className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs h-7"
+            onClick={() => setMessage(template.text)}
+          >
+            {template.label}
+          </Button>
+        ))}
+      </div>
 
       {/* Input */}
       <div className="p-4 border-t border-slate-800 bg-slate-900/50">
