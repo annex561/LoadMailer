@@ -321,12 +321,13 @@ export const gmailIngest = {
         
         gaDb.prepare(`
           INSERT OR REPLACE INTO ga_loads (
-            id, source, origin_city, origin_state, dest_city, dest_state,
+            id, load_number, source, origin_city, origin_state, dest_city, dest_state,
             pickup_dt, miles, rate_total, rpm, equipment, weight_lbs,
             broker_name, broker_email, broker_phone, status, score, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         `).run(
           gaLoadId,
+          loadNum, // Store the actual load number for display
           'gmail',
           originParts[0] || 'Unknown',
           originParts[1] || '',

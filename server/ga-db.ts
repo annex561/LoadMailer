@@ -80,6 +80,9 @@ function safeAddColumn(table: string, column: string, type: string) {
   }
 }
 
+// Add load_number for professional display
+safeAddColumn("ga_loads", "load_number", "TEXT");
+
 // Add revenue pipeline columns to ga_loads
 safeAddColumn("ga_loads", "offered_at", "TEXT");
 safeAddColumn("ga_loads", "booked_at", "TEXT");
