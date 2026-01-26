@@ -475,7 +475,7 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
           const message = 
             `TRAQ IQ - New Load Assigned\n` +
             `━━━━━━━━━━━━━━━━━━━\n\n` +
-            `Load #${row.load_number || id.slice(0, 8)}\n\n` +
+            `Load #${row.load_number || 'LOAD-' + Math.abs(id.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 900000 + 100000)}\n\n` +
             `📍 ${row.origin_city || 'TBD'}, ${row.origin_state || ''}\n` +
             `   ↓\n` +
             `📍 ${row.dest_city || 'TBD'}, ${row.dest_state || ''}\n\n` +
