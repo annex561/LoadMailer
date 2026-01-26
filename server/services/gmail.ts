@@ -3,6 +3,8 @@ import { db } from "../db";
 import { gmailAccounts, loads, activityLog, customers } from "@shared/schema";
 import { eq, and, ilike } from "drizzle-orm";
 import { rateconParser } from "./ratecon-parser";
+import gaDb from "../ga-db";
+import { scoreLoad } from "../ga-scoring";
 
 interface ScanResult {
   account: string;
@@ -299,6 +301,53 @@ export const gmailIngest = {
         companyId: companyId,
         sopProgress: {}, 
       });
+      
+      // Also insert into GA Loads SQLite for inbox visibility
+      try {
+        const originParts = (data.origin || "Unknown").split(",").map(s => s.trim());
+        const destParts = (data.destination || "Unknown").split(",").map(s => s.trim());
+        const miles = data.miles || 0;
+        const rate = data.rate || 0;
+        const rpm = miles > 0 ? Math.round((rate / miles) * 100) / 100 : 0;
+        
+        const gaLoadId = `gmail-${loadNum}-${Date.now()}`;
+        const score = scoreLoad({
+          miles,
+          rate_total: rate,
+          rpm,
+          deadhead_miles: 0,
+          equipment: 'dry_van',
+        });
+        
+        gaDb.prepare(`
+          INSERT OR REPLACE INTO ga_loads (
+            id, source, origin_city, origin_state, dest_city, dest_state,
+            pickup_dt, miles, rate_total, rpm, equipment, weight_lbs,
+            broker_name, broker_email, broker_phone, status, score, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        `).run(
+          gaLoadId,
+          'gmail',
+          originParts[0] || 'Unknown',
+          originParts[1] || '',
+          destParts[0] || 'Unknown', 
+          destParts[1] || '',
+          data.pickupDate || new Date().toISOString(),
+          miles,
+          rate,
+          rpm,
+          'dry_van',
+          data.weight || 0,
+          brokerName,
+          data.brokerEmail || '',
+          data.brokerPhone || '',
+          'new', // Status is "new" so it shows in inbox
+          score
+        );
+        console.log(`      📥 Added to GA Loads Inbox: ${gaLoadId} (score: ${score})`);
+      } catch (gaErr) {
+        console.warn(`      ⚠️ Failed to add to GA Loads: ${gaErr}`);
+      }
       
       return 'created';
     }
