@@ -16,16 +16,6 @@ import { useState, useEffect, useRef } from "react";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
-
-const truckIcon = new L.DivIcon({
-  html: `<div style="background: #10b981; color: white; border-radius: 8px; padding: 4px 8px; font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">🚚 Driver</div>`,
-  className: "custom-truck-icon",
-  iconSize: [80, 30],
-  iconAnchor: [40, 15],
-});
 
 export default function ActiveLoads() {
   const { data: loads, isLoading } = useQuery({
@@ -315,6 +305,8 @@ function LiveMapPanel({ load }: { load: any }) {
   const lng = gpsData?.longitude || -80.8431;
   const hasGps = !!gpsData?.latitude;
 
+  const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.5}%2C${lat - 0.3}%2C${lng + 0.5}%2C${lat + 0.3}&layer=mapnik&marker=${lat}%2C${lng}`;
+
   return (
     <div className="h-full flex flex-col bg-slate-950">
       {/* Map Header */}
@@ -328,27 +320,29 @@ function LiveMapPanel({ load }: { load: any }) {
         </Badge>
       </div>
 
-      {/* Map */}
+      {/* Map - Using OpenStreetMap iframe */}
       <div className="flex-1 relative">
-        <MapContainer
-          center={[lat, lng]}
-          zoom={10}
-          style={{ height: "100%", width: "100%" }}
-          scrollWheelZoom={true}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <Marker position={[lat, lng]} icon={truckIcon}>
-            <Popup>
-              <div className="text-sm">
-                <strong>Driver Location</strong><br />
-                {gpsData?.address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}
-              </div>
-            </Popup>
-          </Marker>
-        </MapContainer>
+        <iframe
+          src={mapUrl}
+          style={{ border: 0, width: "100%", height: "100%" }}
+          allowFullScreen
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          title="Driver Location Map"
+        />
+        {/* Driver marker overlay */}
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
+          <div className="bg-emerald-500 text-white px-3 py-1 rounded-lg shadow-lg text-sm font-medium flex items-center gap-1">
+            🚚 Driver
+          </div>
+        </div>
+      </div>
+
+      {/* GPS Coordinates */}
+      <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 text-center">
+        <p className="text-xs text-slate-400">
+          {gpsData?.address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}
+        </p>
       </div>
 
       {/* Route Info Footer */}
