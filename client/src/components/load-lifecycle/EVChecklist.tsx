@@ -96,8 +96,9 @@ export function EVChecklist({ load }: EVChecklistProps) {
       toast({ title: "System Working...", description: "Executing automated command." });
       await apiRequest("POST", `/api/sms/send-template`, { loadId: load.id, type });
       toggleStep(stepKey, true); // Auto-advance on success
-    } catch (e) {
-      toast({ title: "Error", variant: "destructive", description: "Command failed." });
+    } catch (e: any) {
+      const errorMessage = e?.message || e?.error || "Command failed.";
+      toast({ title: "Error", variant: "destructive", description: errorMessage });
     }
   };
 

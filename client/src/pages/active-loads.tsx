@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   MapPin, Truck, Phone, MessageSquare, Send, 
-  FileText, ArrowRight, CheckCircle2, Calendar
+  FileText, ArrowRight, CheckCircle2, Calendar, UserPlus
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
@@ -16,9 +17,31 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 export default function ActiveLoads() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
   const { data: loads, isLoading } = useQuery<any[]>({ 
     queryKey: ["/api/loads"],
     refetchInterval: 2000 // Poll every 2s to ensure it catches the move immediately
+  });
+  
+  // Fetch available drivers for assignment
+  const { data: drivers } = useQuery<any[]>({ 
+    queryKey: ["/api/drivers"]
+  });
+  
+  // Mutation to assign driver to load
+  const assignDriverMutation = useMutation({
+    mutationFn: async ({ loadId, driverId }: { loadId: string; driverId: string }) => {
+      await apiRequest("PATCH", `/api/loads/${loadId}`, { driverId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/loads"] });
+      toast({ title: "Driver Assigned", description: "Driver has been assigned to this load." });
+    },
+    onError: (e: any) => {
+      toast({ title: "Error", variant: "destructive", description: e?.message || "Failed to assign driver" });
+    }
   });
 
   // --- THE FIX: BROADENED FILTER ---
@@ -95,7 +118,12 @@ export default function ActiveLoads() {
                     {load.originCity} <span className="text-slate-600">→</span> {load.destCity}
                   </div>
                   <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                    <Truck className="w-3 h-3" /> {load.driver?.name || "Unassigned"}
+                    <Truck className="w-3 h-3" /> 
+                    {load.driverId ? (
+                      <span className="text-emerald-400 font-medium">{load.driver?.name || `Driver #${load.driverId}`}</span>
+                    ) : (
+                      <span className="text-red-500 font-bold">Unassigned</span>
+                    )}
                   </div>
                 </button>
               ))
@@ -109,16 +137,45 @@ export default function ActiveLoads() {
         {selectedLoad ? (
           <>
             {/* HEADER */}
-            <div className="h-16 border-b border-slate-800 bg-slate-900/50 px-6 flex items-center justify-between">
+            <div className="min-h-16 border-b border-slate-800 bg-slate-900/50 px-6 py-3 flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-bold text-white flex items-center gap-2">
                   {selectedLoad.originCity} <ArrowRight className="w-5 h-5 text-slate-600" /> {selectedLoad.destCity}
                 </h1>
                 <p className="text-xs text-slate-400">
                   <span className="text-emerald-400 font-mono mr-3">${selectedLoad.rate}</span>
-                  {selectedLoad.driver?.name || "Unassigned"} • #{selectedLoad.loadNumber}
+                  #{selectedLoad.loadNumber}
                 </p>
               </div>
+              
+              {/* DRIVER ASSIGNMENT */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <UserPlus className="w-4 h-4 text-slate-500" />
+                  <Select
+                    value={String(selectedLoad.driverId || "")}
+                    onValueChange={(driverId) => {
+                      assignDriverMutation.mutate({ loadId: selectedLoad.id, driverId });
+                    }}
+                  >
+                    <SelectTrigger className="w-[180px] bg-slate-800 border-slate-700 text-slate-200 h-8">
+                      <SelectValue placeholder="Assign Driver" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      {(drivers || []).map((driver: any) => (
+                        <SelectItem 
+                          key={driver.id} 
+                          value={String(driver.id)}
+                          className="text-slate-200 hover:bg-slate-700 focus:bg-slate-700"
+                        >
+                          {driver.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
               <div className="flex gap-2">
                  {/* VIEW RATECON DIALOG */}
                  <Dialog open={isRateConOpen} onOpenChange={setIsRateConOpen}>
@@ -248,7 +305,7 @@ function DriverChatWindow({ load }: { load: any }) {
   return (
     <div className="flex flex-col h-full bg-slate-950">
       <div className="flex-1 p-6 space-y-4 overflow-y-auto">
-        <div className="text-center text-xs text-slate-600 my-4">Conversation started with Driver #{load.assignedDriverId}</div>
+        <div className="text-center text-xs text-slate-600 my-4">Conversation started with {load.driver?.name || (load.driverId ? `Driver #${load.driverId}` : 'Unassigned Driver')}</div>
         <div className="flex justify-end">
           <div className="bg-blue-600 text-white px-4 py-2 rounded-2xl rounded-tr-none max-w-[80%] text-sm shadow-lg shadow-blue-900/20">
             {load.sopProgress?.initialSms ? "Load details sent via SMS." : "Chat started."}
