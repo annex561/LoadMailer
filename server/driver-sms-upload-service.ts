@@ -115,11 +115,24 @@ export class DriverSMSUploadService {
 
   private async findLoadByCode(code: string): Promise<any | null> {
     try {
-      const loads = await storage.getLoads();
-      return loads.find((l: any) => 
-        l.loadNumber === code || l.loadNumber?.includes(code) || l.id === code
-      ) || null;
-    } catch { return null; }
+      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+      
+      const response = await fetch(`${baseUrl}/api/loads`);
+      if (!response.ok) return null;
+      
+      const loads = await response.json();
+      
+      const load = loads.find((l: any) => 
+        l.loadNumber === code ||
+        l.loadNumber?.includes(code) ||
+        l.id === code
+      );
+
+      return load || null;
+    } catch (error) {
+      console.error('Error finding load:', error);
+      return null;
+    }
   }
 
   private async downloadAndStoreMedia(twilioUrl: string, contentType: string, loadId: string): Promise<string> {

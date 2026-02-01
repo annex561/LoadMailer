@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { driverSMSUploadService } from './driver-sms-upload-service';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 
@@ -27,6 +28,26 @@ router.get('/load/:loadId/messages', (req: Request, res: Response) => {
 router.get('/load/:loadId/documents', (req: Request, res: Response) => {
   const docs = driverSMSUploadService.getLoadDocuments(req.params.loadId);
   res.json({ success: true, loadId: req.params.loadId, count: docs.length, documents: docs });
+});
+
+router.post('/test', async (req: Request, res: Response) => {
+  const { loadId, phone, body, numMedia } = req.body;
+  
+  const message = {
+    id: randomUUID(),
+    loadId,
+    driverPhone: phone || '+15551234567',
+    direction: 'inbound' as const,
+    body: body || 'Test message',
+    mediaUrls: [],
+    mediaTypes: [],
+    docType: 'freight_photos' as const,
+    timestamp: new Date(),
+  };
+  
+  (driverSMSUploadService as any).addMessageToLoad(loadId, message);
+  
+  res.json({ success: true, message: 'Test message added', loadId });
 });
 
 export default router;
