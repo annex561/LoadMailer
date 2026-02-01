@@ -1,3 +1,6 @@
+[2/1/26, 1:03:33 PM] Dr. Annex: Here's the full corrected *driver-sms-upload-service.ts*:
+
+[2/1/26, 1:03:33 PM] Dr. Annex: ⁠ typescript
 import { traqiqSopService } from './traqiq-sop-service';
 import { randomUUID } from 'crypto';
 
@@ -35,6 +38,7 @@ export class DriverSMSUploadService {
   constructor() {
     this.twilioAccountSid = process.env.TWILIO_ACCOUNT_SID || '';
     this.twilioAuthToken = process.env.TWILIO_AUTH_TOKEN || '';
+    // Set your Replit URL here or use env var
     this.baseUrl = process.env.BASE_URL || 'http://localhost:5000';
     console.log('📱 Driver SMS Upload Service initialized');
   }
@@ -111,6 +115,7 @@ export class DriverSMSUploadService {
 
     this.addMessageToLoad(load.id, message);
 
+    // Update SOP step if photos uploaded
     if (mediaUrls.length > 0 && docType !== 'other') {
       try {
         await traqiqSopService.handleDocumentUpload(load.id, docType as any);
@@ -123,12 +128,16 @@ export class DriverSMSUploadService {
     return {
       success: true,
       loadId: load.id,
-      message: `Received ${mediaUrls.length} photo(s) for Load ${load.loadNumber}. Tagged as: ${docType}`
+ ⁠
+[2/1/26, 1:03:33 PM] Dr. Annex: ⁠ typescript
+     message: `Received ${mediaUrls.length} photo(s) for Load ${load.loadNumber}. Tagged as: ${docType}`
     };
   }
 
+  // Fixed: Find load by code/number using internal fetch
   private async findLoadByCode(code: string): Promise<any | null> {
     try {
+      // Fetch all loads from API
       const response = await fetch(`${this.baseUrl}/api/loads`);
       if (!response.ok) {
         console.error(`Failed to fetch loads: ${response.status}`);
@@ -138,6 +147,7 @@ export class DriverSMSUploadService {
       const loads = await response.json();
       console.log(`📋 Searching ${loads.length} loads for code: ${code}`);
       
+      // Search by load number (exact match first, then partial)
       let load = loads.find((l: any) => l.loadNumber === code);
       
       if (!load) {
@@ -173,6 +183,10 @@ export class DriverSMSUploadService {
       const ext = contentType?.includes('png') ? 'png' : 'jpg';
       const filename = `${loadId}_${Date.now()}.${ext}`;
       const storedPath = `/uploads/loads/${loadId}/${filename}`;
+      
+      // TODO: Save file to disk/cloud storage
+      // const buffer = await response.arrayBuffer();
+      // await fs.writeFile(`./public${storedPath}`, Buffer.from(buffer));
       
       console.log(`📁 Media stored: ${storedPath}`);
       return storedPath;
@@ -218,3 +232,16 @@ export class DriverSMSUploadService {
 }
 
 export const driverSMSUploadService = new DriverSMSUploadService();
+ ⁠
+
+---
+
+*Important:* Set the ⁠ BASE_URL ⁠ environment variable in Replit:
+
+
+BASE_URL=https://66c29e54-1226-40b2-99a7-6591af2210d8-00-rjlpbou3l6wt.spock.replit.dev
+
+
+Or update line 18 in the file to hardcode it temporarily:
+⁠ typescript
+this.baseUrl = 'https://66c29e54-1226-40b2-99a7-6591af2210d8-00-rjlpbou3l6wt.spock.replit.dev';
