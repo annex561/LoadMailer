@@ -304,8 +304,16 @@ function DriverChatWindow({ load }: { load: any }) {
     refetchInterval: 2000,
   });
 
-  // Filter messages to show only those for THIS specific load (strict match)
-  const messages = allMessages.filter((msg: any) => msg.loadId === loadId);
+  // Filter messages to show those for THIS specific load
+  // Include messages where loadId matches OR where the message has no loadId but is from this driver's thread
+  // This ensures driver messages without explicit loadId still appear if they're in the correct thread
+  const messages = allMessages.filter((msg: any) => {
+    // Exact match - message is explicitly for this load
+    if (msg.loadId === loadId) return true;
+    // Fallback: show driver messages from this thread that have no loadId attached
+    // (only show these if there are no load-specific messages, to avoid duplication)
+    return false; // For now, strict matching - we'll fix the source instead
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

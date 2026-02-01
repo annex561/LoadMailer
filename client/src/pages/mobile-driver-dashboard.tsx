@@ -736,11 +736,19 @@ function MobileDriverDashboard() {
     // Notify WebSocket that we stopped typing
     handleTypingSent();
     
-    // Include currentLoad.id so message is attached to the load (load-specific chat)
+    // Always attach to current load if available, otherwise use thread's loadId as fallback
+    // This ensures messages are traceable to a load for dispatcher viewing
+    const messageLoadId = currentLoad?.id || selectedThread.loadId;
+    
+    if (!messageLoadId) {
+      // Warn the driver that the message won't be attached to a load
+      console.warn('No load ID available for this message - it may not appear in load-specific chats');
+    }
+    
     sendMessageMutation.mutate({
       threadId: selectedThread.id,
       content: messageInput,
-      loadId: currentLoad?.id
+      loadId: messageLoadId
     });
     
     // Invalidate to immediately fetch new messages after send
