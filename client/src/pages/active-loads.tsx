@@ -8,14 +8,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  MapPin, Truck, Phone, MessageSquare, 
+  MapPin, Truck, Phone, MessageSquare, Send,
   FileText, ArrowRight, CheckCircle2, Calendar, UserPlus
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
 import { LiveMap } from "@/components/load-lifecycle/LiveMap";
-import { LoadDriverChat } from "@/components/load-driver-chat";
 import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
 export default function ActiveLoads() {
@@ -262,17 +262,7 @@ export default function ActiveLoads() {
                     </div>
                   </TabsContent>
                   <TabsContent value="chat" className="h-full m-0 flex flex-col">
-                    <LoadDriverChat
-                      loadId={selectedLoad.id}
-                      loadNumber={selectedLoad.loadNumber}
-                      driverName={selectedLoad.driver?.name}
-                      driverPhone={selectedLoad.driver?.phone}
-                      onCallDriver={() => {
-                        if (selectedLoad.driver?.phone) {
-                          window.location.href = `tel:${selectedLoad.driver.phone}`;
-                        }
-                      }}
-                    />
+                    <DriverChatWindow load={selectedLoad} />
                   </TabsContent>
                   <TabsContent value="map" className="h-full m-0">
                     <LiveMap load={selectedLoad} />
@@ -291,3 +281,148 @@ export default function ActiveLoads() {
   );
 }
 
+function DriverChatWindow({ load }: { load: any }) {
+  const [message, setMessage] = useState("");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const driverId = load.driver?.id;
+
+  const { data: allThreads = [] } = useQuery<any[]>({
+    queryKey: ["/api/communication/threads"],
+    refetchInterval: 3000,
+  });
+
+  const driverThread = allThreads.find((t: any) => t.driverId === driverId);
+
+  const { data: messages = [] } = useQuery<any[]>({
+    queryKey: ["/api/communication/messages", driverThread?.id],
+    enabled: !!driverThread?.id,
+    refetchInterval: 2000,
+  });
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async ({ threadId, content }: { threadId: string; content: string }) => {
+      const response = await apiRequest("POST", `/api/communication/messages`, {
+        threadId,
+        content,
+        sender: "dispatch"
+      });
+      return response.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/communication/threads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/communication/messages", variables.threadId] });
+      setMessage("");
+      toast({ title: "Message sent", className: "bg-emerald-600 text-white" });
+    },
+    onError: () => {
+      toast({ title: "Failed to send message", variant: "destructive" });
+    }
+  });
+
+  const handleSend = () => {
+    if (message.trim() && driverThread?.id) {
+      sendMessageMutation.mutate({ threadId: driverThread.id, content: message.trim() });
+    }
+  };
+
+  if (!driverId) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-slate-500">
+        <div className="text-center">
+          <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p>No driver assigned to this load.</p>
+          <p className="text-xs mt-1">Assign a driver to start messaging.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-slate-950">
+      <div className="p-3 border-b border-slate-800 bg-slate-900/50 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold">
+          {load.driver?.name?.charAt(0) || '?'}
+        </div>
+        <div>
+          <div className="font-semibold text-white">{load.driver?.name || 'Driver'}</div>
+          <div className="text-xs text-slate-400">{load.driver?.phone || 'No phone'}</div>
+        </div>
+        {load.driver?.phone && (
+          <Button 
+            size="sm" 
+            className="ml-auto bg-emerald-600 hover:bg-emerald-500 h-8"
+            onClick={() => window.location.href = `tel:${load.driver.phone}`}
+          >
+            <Phone className="w-3 h-3 mr-1" /> Call
+          </Button>
+        )}
+      </div>
+
+      <ScrollArea className="flex-1 p-4">
+        {messages.length === 0 ? (
+          <div className="text-center text-slate-500 py-8">
+            <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p>No messages yet with {load.driver?.name}</p>
+            <p className="text-xs mt-1">Send a message to start the conversation.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {messages.map((msg: any) => (
+              <div
+                key={msg.id}
+                className={cn(
+                  "flex",
+                  msg.senderRole === 'dispatch' ? "justify-end" : "justify-start"
+                )}
+              >
+                <div
+                  className={cn(
+                    "max-w-[80%] rounded-2xl px-4 py-2 shadow-lg",
+                    msg.senderRole === 'dispatch'
+                      ? "bg-blue-600 text-white rounded-tr-none"
+                      : "bg-slate-800 text-slate-100 rounded-tl-none"
+                  )}
+                >
+                  <p className="text-sm">{msg.textContent}</p>
+                  <div className={cn(
+                    "text-[10px] mt-1",
+                    msg.senderRole === 'dispatch' ? "text-blue-200" : "text-slate-500"
+                  )}>
+                    {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
+      </ScrollArea>
+
+      <div className="p-4 bg-slate-900 border-t border-slate-800">
+        <div className="flex gap-2 max-w-4xl mx-auto">
+          <Input
+            placeholder={`Message ${load.driver?.name || 'driver'}...`}
+            className="bg-slate-950 border-slate-700 text-white focus-visible:ring-emerald-500 pl-4"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+          />
+          <Button
+            size="icon"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white shrink-0"
+            onClick={handleSend}
+            disabled={!message.trim() || sendMessageMutation.isPending || !driverThread?.id}
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
