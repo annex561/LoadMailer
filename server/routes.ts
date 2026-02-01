@@ -41,6 +41,7 @@ import { calculateMiles } from './services/distance-calculator';
 import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
 import gaLoadsRouter from "./ga-loads-router";
+import traqiqSopRoutes from "./traqiq-sop-routes";
 import twilio from "twilio";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -6212,6 +6213,11 @@ TRAQ IQ Dispatch Team
   app.use('/api/ga', gaLoadsRouter);
   console.log('✅ GA Loads SQLite routes registered');
   // ==================== End GA Loads Routes ====================
+
+  // ==================== TraqIQ SOP Victory Protocol Routes ====================
+  app.use('/api/traqiq-sop', traqiqSopRoutes);
+  console.log('✅ TraqIQ SOP Victory Protocol routes registered');
+  // ==================== End TraqIQ SOP Routes ====================
 
   console.log('✅ Essential routes registered - server ready for startup');
   
