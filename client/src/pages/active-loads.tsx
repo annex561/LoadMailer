@@ -493,11 +493,25 @@ function DriverChatWindow({ load }: { load: any }) {
                   {msg.mediaUrl && (
                     <div className="mb-2">
                       <img 
-                        src={msg.mediaUrl} 
+                        src={msg.mediaUrl.includes('api.twilio.com') 
+                          ? `/api/communication/media-proxy?url=${encodeURIComponent(msg.mediaUrl)}`
+                          : msg.mediaUrl
+                        } 
                         alt="attachment" 
                         className="rounded-lg max-w-full max-h-48 object-cover cursor-pointer"
-                        onClick={() => window.open(msg.mediaUrl, '_blank')}
+                        onClick={() => window.open(
+                          msg.mediaUrl.includes('api.twilio.com') 
+                            ? `/api/communication/media-proxy?url=${encodeURIComponent(msg.mediaUrl)}`
+                            : msg.mediaUrl, 
+                          '_blank'
+                        )}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          target.nextElementSibling?.classList.remove('hidden');
+                        }}
                       />
+                      <p className="text-xs text-slate-400 mt-1 hidden">Image failed to load</p>
                       <p className="text-xs text-slate-400 mt-1">[image attachment]</p>
                     </div>
                   )}

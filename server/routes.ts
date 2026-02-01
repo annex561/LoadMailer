@@ -4277,8 +4277,11 @@ TRAQ IQ Dispatch Team
       
       // Set appropriate headers and send the image
       res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Length', imageBuffer.byteLength.toString());
+      res.setHeader('Content-Disposition', 'inline');
       res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-      res.send(Buffer.from(imageBuffer));
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.end(Buffer.from(imageBuffer));
       
     } catch (error) {
       console.error('❌ Error proxying media:', error);
