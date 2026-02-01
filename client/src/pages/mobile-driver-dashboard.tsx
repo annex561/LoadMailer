@@ -353,11 +353,11 @@ function MobileDriverDashboard() {
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ threadId, content }: { threadId: string; content: string }) => {
+    mutationFn: async ({ threadId, content, loadId }: { threadId: string; content: string; loadId?: string }) => {
       const res = await fetch(`/api/communication/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId, content, sender: 'driver', driverId })
+        body: JSON.stringify({ threadId, content, sender: 'driver', driverId, loadId })
       });
       if (!res.ok) throw new Error('Failed to send message');
       return res.json();
@@ -394,7 +394,7 @@ function MobileDriverDashboard() {
 
   // Upload document mutation
   const uploadDocumentMutation = useMutation({
-    mutationFn: async ({ file, documentType, loadId }: { file: File; documentType: string; loadId: string }) => {
+    mutationFn: async ({ file, documentType, loadId, sendAsChatMessage }: { file: File; documentType: string; loadId: string; sendAsChatMessage?: boolean }) => {
       // Step 1: Get upload URL
       const uploadUrlRes = await fetch('/api/documents/upload-url', {
         method: 'POST',
@@ -411,6 +411,8 @@ function MobileDriverDashboard() {
       });
       if (!uploadRes.ok) throw new Error('Failed to upload file to storage');
 
+      const fileUrl = uploadUrl.split('?')[0];
+
       // Step 3: Create document record
       const createDocRes = await fetch(`/api/loads/${loadId}/upload-document`, {
         method: 'POST',
@@ -420,7 +422,7 @@ function MobileDriverDashboard() {
           driverId,
           documentType,
           fileName: file.name,
-          fileUrl: uploadUrl.split('?')[0],
+          fileUrl,
           fileSize: file.size,
           mimeType: file.type
         })
@@ -429,10 +431,30 @@ function MobileDriverDashboard() {
         const errorData = await createDocRes.json();
         throw new Error(errorData.error || 'Failed to create document record');
       }
-      return createDocRes.json();
+      
+      // Step 4: If sendAsChatMessage is true, also send a chat message with the image
+      if (sendAsChatMessage && selectedThread) {
+        await fetch('/api/communication/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadId: selectedThread.id,
+            content: `[Image: ${file.name}]`,
+            sender: 'driver',
+            driverId,
+            loadId,
+            mediaUrl: fileUrl
+          })
+        });
+      }
+      
+      return { ...await createDocRes.json(), fileUrl };
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/loads', currentLoad?.id, 'documents'] });
+      if (variables.sendAsChatMessage && selectedThread) {
+        queryClient.invalidateQueries({ queryKey: ['/api/communication/messages', selectedThread.id] });
+      }
       toast({
         title: 'Document Uploaded',
         description: 'Your document has been uploaded successfully.'
@@ -668,15 +690,38 @@ function MobileDriverDashboard() {
     
     setShowTypeModal(false);
     
+    // If it's a chat_attachment, send as chat message too
+    const isChatAttachment = documentType === 'chat_attachment';
+    
     uploadDocumentMutation.mutate({
       file: pendingFile,
       documentType,
-      loadId: currentLoad.id
+      loadId: currentLoad.id,
+      sendAsChatMessage: isChatAttachment
     });
     
     // Clear pending state
     setPendingFile(null);
     setPendingFilePreview(null);
+  };
+  
+  // Direct image upload from chat - auto-attaches to load as chat_attachment
+  const handleChatImageUpload = (file: File) => {
+    if (!currentLoad) {
+      toast({
+        title: 'No Active Load',
+        description: 'Please select a load before uploading images.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    uploadDocumentMutation.mutate({
+      file,
+      documentType: 'chat_attachment',
+      loadId: currentLoad.id,
+      sendAsChatMessage: true
+    });
   };
 
   const handleSendMessage = () => {
@@ -691,9 +736,11 @@ function MobileDriverDashboard() {
     // Notify WebSocket that we stopped typing
     handleTypingSent();
     
+    // Include currentLoad.id so message is attached to the load (load-specific chat)
     sendMessageMutation.mutate({
       threadId: selectedThread.id,
-      content: messageInput
+      content: messageInput,
+      loadId: currentLoad?.id
     });
     
     // Invalidate to immediately fetch new messages after send
@@ -1582,6 +1629,18 @@ function MobileDriverDashboard() {
                           : "bg-card text-foreground border-2 border-primary/20 rounded-tl-sm"
                       )}
                     >
+                      {/* Display image if message has mediaUrl */}
+                      {message.mediaUrl && (
+                        <div className="mb-2">
+                          <img 
+                            src={message.mediaUrl} 
+                            alt="attachment" 
+                            className="rounded-lg max-w-full max-h-48 object-cover cursor-pointer"
+                            onClick={() => window.open(message.mediaUrl, '_blank')}
+                          />
+                          <p className="text-xs opacity-70 mt-1">[image attachment]</p>
+                        </div>
+                      )}
                       <div className="text-sm whitespace-pre-wrap">{message.textContent || message.content}</div>
                       <div
                         className={cn(

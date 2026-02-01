@@ -332,30 +332,65 @@ function DriverChatWindow({ load }: { load: any }) {
     }
   });
 
-  // Upload image mutation
+  // Upload image mutation - uses presigned URL flow
   const uploadImageMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('loadId', loadId);
-      formData.append('driverId', driverId || '');
-      formData.append('documentType', 'chat_attachment');
-      
-      const response = await fetch('/api/documents/upload', {
+      // Step 1: Get upload URL
+      const uploadUrlRes = await fetch('/api/documents/upload-url', {
         method: 'POST',
-        body: formData
+        headers: { 'Content-Type': 'application/json' }
       });
-      if (!response.ok) throw new Error('Upload failed');
-      return response.json();
+      if (!uploadUrlRes.ok) throw new Error('Failed to get upload URL');
+      const { uploadUrl } = await uploadUrlRes.json();
+
+      // Step 2: Upload file directly to object storage
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file
+      });
+      if (!uploadRes.ok) throw new Error('Failed to upload file to storage');
+
+      const fileUrl = uploadUrl.split('?')[0];
+
+      // Step 3: Create document record
+      const createDocRes = await fetch(`/api/loads/${loadId}/upload-document`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          loadId,
+          driverId: driverId || '',
+          documentType: 'chat_attachment',
+          fileName: file.name,
+          fileUrl,
+          fileSize: file.size,
+          mimeType: file.type
+        })
+      });
+      if (!createDocRes.ok) {
+        const errorData = await createDocRes.json();
+        throw new Error(errorData.error || 'Failed to create document record');
+      }
+      
+      return { ...(await createDocRes.json()), fileUrl, fileName: file.name };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
-      // Send a message about the uploaded image
+      // Send a message with the image as a chat message
       if (driverThread?.id) {
-        sendMessageMutation.mutate({ 
-          threadId: driverThread.id, 
-          content: `[Image uploaded: ${data.fileName || 'attachment'}]`, 
-          loadId 
+        // Use the new mediaUrl field to display inline image in chat
+        fetch('/api/communication/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadId: driverThread.id,
+            content: `[Image: ${data.fileName || 'attachment'}]`,
+            sender: 'dispatch',
+            loadId,
+            mediaUrl: data.fileUrl
+          })
+        }).then(() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/communication/messages", driverThread.id] });
         });
       }
       toast({ title: "Image uploaded", description: "Image attached to load documents", className: "bg-teal-600 text-white" });

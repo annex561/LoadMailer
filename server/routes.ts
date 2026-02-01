@@ -4330,7 +4330,7 @@ TRAQ IQ Dispatch Team
   // Send message to thread via SMS
   app.post('/api/communication/messages', async (req, res) => {
     try {
-      const { threadId, content, sender = 'dispatch', driverId, loadId: requestLoadId } = req.body;
+      const { threadId, content, sender = 'dispatch', driverId, loadId: requestLoadId, mediaUrl } = req.body;
       
       if (!content) {
         return res.status(400).json({ error: 'Content is required' });
@@ -4527,8 +4527,9 @@ TRAQ IQ Dispatch Team
         senderId: sender === 'driver' ? thread.driverId : null,
         senderRole: sender,
         senderName: sender === 'driver' ? thread.driverName : 'Dispatcher',
-        messageType: 'text',
+        messageType: mediaUrl ? 'image' : 'text',
         textContent: content,
+        mediaUrl: mediaUrl || null,
         isRead: false,
         isSuggested: false,
         isSent: true,
