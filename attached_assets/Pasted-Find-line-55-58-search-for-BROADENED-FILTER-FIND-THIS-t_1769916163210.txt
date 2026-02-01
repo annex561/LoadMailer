@@ -1,0 +1,98 @@
+Find line ~55-58 (search for "BROADENED FILTER"):
+
+FIND THIS:
+
+⁠ typescript
+  const activeLoads = (loads || []).filter((load: any) => {
+    const status = load.status?.toLowerCase() || "";
+    // Show strictly these active states
+    return ["dispatched", "in_transit", "delivered", "assigned", "active"].includes(status);
+  }) || [];
+ ⁠
+
+
+REPLACE WITH:
+
+⁠ typescript
+  const activeLoads = (loads || []).filter((load: any) => {
+    const status = load.status?.toLowerCase() || "";
+    // FIXED: Show ALL statuses EXCEPT 'booked' and 'archived'
+    return !["booked", "archived"].includes(status);
+  }) || [];
+ ⁠
+
+---
+
+*FIX #2 — ⁠ server/routes.ts ⁠*
+
+Find line ~2908 (search for "SAFETY CHECK: Clean the Driver ID"):
+
+FIND THIS:
+
+⁠ typescript
+      // SAFETY CHECK: Clean the Driver ID
+      // If assignedDriverId is sent as a string "5", make sure it becomes a number 5
+      // If it's empty/invalid, don't try to update it to avoid DB crash
+      if (updates.assignedDriverId !== undefined) {
+        if (updates.assignedDriverId === null || updates.assignedDriverId === '') {
+          delete updates.assignedDriverId; // Remove empty values
+        } else {
+          updates.assignedDriverId = parseInt(updates.assignedDriverId);
+          if (isNaN(updates.assignedDriverId)) {
+            delete updates.assignedDriverId; // Remove bad data
+          }
+        }
+      }
+      
+      // Also handle driverId for backwards compatibility
+      if (updates.driverId !== undefined) {
+        if (updates.driverId === null || updates.driverId === '') {
+          delete updates.driverId;
+        } else {
+          updates.driverId = parseInt(updates.driverId);
+          if (isNaN(updates.driverId)) {
+            delete updates.driverId;
+          }
+        }
+      }
+ ⁠
+
+
+REPLACE WITH:
+
+⁠ typescript
+      // SAFETY CHECK: Validate and clean the Driver ID
+      // FIX: Return error for invalid driverId instead of silently removing it
+      if (updates.assignedDriverId !== undefined) {
+        if (updates.assignedDriverId === null || updates.assignedDriverId === '') {
+          delete updates.assignedDriverId; // Allow explicit null to clear assignment
+        } else {
+          const parsed = parseInt(updates.assignedDriverId);
+          if (isNaN(parsed)) {
+            return res.status(400).json({ 
+              error: "Invalid assignedDriverId", 
+              message: "Driver ID must be a valid number" 
+            });
+          }
+          updates.assignedDriverId = parsed;
+        }
+      }
+      
+      // Also handle driverId for backwards compatibility
+      if (updates.driverId !== undefined) {
+        if (updates.driverId === null || updates.driverId === '') {
+          delete updates.driverId; // Allow explicit null to clear assignment
+        } else {
+          const parsed = parseInt(updates.driverId);
+          if (isNaN(parsed)) {
+            return res.status(400).json({ 
+              error: "Invalid driverId", 
+              message: "Driver ID must be a valid number" 
+            });
+          }
+          updates.driverId = parsed;
+        }
+      }
+ ⁠
+
+---

@@ -48,8 +48,8 @@ export default function ActiveLoads() {
   // We want anything that is NOT 'booked' (Inbox) and NOT 'archived' (History)
   const activeLoads = (loads || []).filter((load: any) => {
     const status = load.status?.toLowerCase() || "";
-    // Show strictly these active states
-    return ["dispatched", "in_transit", "delivered", "assigned", "active"].includes(status);
+    // FIXED: Show ALL statuses EXCEPT 'booked' and 'archived'
+    return !["booked", "archived"].includes(status);
   }) || [];
 
   const [selectedLoadId, setSelectedLoadId] = useState<number | null>(null);

@@ -2903,29 +2903,36 @@ export async function registerRoutes(app: Express): Promise<void> {
       const updates = req.body;
       const { forceComplete, overrideReason } = req.query;
       
-      // SAFETY CHECK: Clean the Driver ID
-      // If assignedDriverId is sent as a string "5", make sure it becomes a number 5
-      // If it's empty/invalid, don't try to update it to avoid DB crash
+      // SAFETY CHECK: Validate and clean the Driver ID
+      // FIX: Return error for invalid driverId instead of silently removing it
       if (updates.assignedDriverId !== undefined) {
         if (updates.assignedDriverId === null || updates.assignedDriverId === '') {
-          delete updates.assignedDriverId; // Remove empty values
+          delete updates.assignedDriverId; // Allow explicit null to clear assignment
         } else {
-          updates.assignedDriverId = parseInt(updates.assignedDriverId);
-          if (isNaN(updates.assignedDriverId)) {
-            delete updates.assignedDriverId; // Remove bad data
+          const parsed = parseInt(updates.assignedDriverId);
+          if (isNaN(parsed)) {
+            return res.status(400).json({ 
+              error: "Invalid assignedDriverId", 
+              message: "Driver ID must be a valid number" 
+            });
           }
+          updates.assignedDriverId = parsed;
         }
       }
       
       // Also handle driverId for backwards compatibility
       if (updates.driverId !== undefined) {
         if (updates.driverId === null || updates.driverId === '') {
-          delete updates.driverId;
+          delete updates.driverId; // Allow explicit null to clear assignment
         } else {
-          updates.driverId = parseInt(updates.driverId);
-          if (isNaN(updates.driverId)) {
-            delete updates.driverId;
+          const parsed = parseInt(updates.driverId);
+          if (isNaN(parsed)) {
+            return res.status(400).json({ 
+              error: "Invalid driverId", 
+              message: "Driver ID must be a valid number" 
+            });
           }
+          updates.driverId = parsed;
         }
       }
       
