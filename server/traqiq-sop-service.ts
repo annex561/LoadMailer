@@ -344,6 +344,53 @@ export class TraqIQSOPService {
     });
     return result;
   }
+
+  async resetProtocol(loadId: string): Promise<TraqIQSOPState | null> {
+    const existingState = protocolStates.get(loadId);
+    
+    const state: TraqIQSOPState = {
+      loadId,
+      currentStep: SOPStep.DRIVER_CONFIRMATION,
+      stepHistory: existingState?.stepHistory || [],
+      gpsTracking: { isActive: false },
+      monitoring: { annexNotified: false, manualOverrideUsed: false },
+      documents: { bolUploaded: false, freightPhotosUploaded: false, podUploaded: false },
+    };
+    
+    state.stepHistory.push({
+      step: SOPStep.DRIVER_CONFIRMATION,
+      timestamp: new Date(),
+      triggeredBy: 'manual',
+      notes: '🔄 RESET FOR TESTING',
+    });
+    
+    protocolStates.set(loadId, state);
+    console.log(`🔄 TraqIQ SOP RESET for load ${loadId} - back to Step 1`);
+    return state;
+  }
+
+  async forceAdvance(loadId: string, notes?: string): Promise<TraqIQSOPState | null> {
+    const state = protocolStates.get(loadId);
+    if (!state) return null;
+
+    state.stepHistory.push({
+      step: state.currentStep,
+      timestamp: new Date(),
+      triggeredBy: 'manual',
+      notes: notes || 'Force advance (test mode)',
+    });
+
+    const nextStep = state.currentStep + 1;
+    if (nextStep > TOTAL_STEPS) {
+      console.log(`✅ TraqIQ SOP COMPLETE for load ${loadId}`);
+      return state;
+    }
+
+    state.currentStep = nextStep as SOPStep;
+    console.log(`🚛 Load ${loadId} → Step ${nextStep}: ${this.getStepInfo(nextStep)?.name}`);
+    protocolStates.set(loadId, state);
+    return state;
+  }
 }
 
 export const traqiqSopService = new TraqIQSOPService();

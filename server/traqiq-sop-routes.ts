@@ -65,4 +65,16 @@ router.get('/active', (req: Request, res: Response) => {
   res.json({ success: true, count: protocols.length, protocols });
 });
 
+router.post('/:loadId/reset', async (req: Request, res: Response) => {
+  const state = await traqiqSopService.resetProtocol(req.params.loadId);
+  if (!state) return res.status(404).json({ success: false, error: 'Failed to reset' });
+  res.json({ success: true, message: 'Protocol reset to Step 1', ...traqiqSopService.getProtocolStatus(req.params.loadId) });
+});
+
+router.post('/:loadId/force-advance', async (req: Request, res: Response) => {
+  const state = await traqiqSopService.forceAdvance(req.params.loadId, req.body.notes);
+  if (!state) return res.status(404).json({ success: false, error: 'Not found - initialize first' });
+  res.json({ success: true, ...traqiqSopService.getProtocolStatus(req.params.loadId) });
+});
+
 export default router;

@@ -1,0 +1,78 @@
+Add to traqiq-sop-service.ts* (before the export line):
+
+⁠ typescript
+  // Reset protocol for testing (keeps load, resets SOP state to step 1)
+  async resetProtocol(loadId: string): Promise<TraqIQSOPState | null> {
+    const existingState = protocolStates.get(loadId);
+    
+    const state: TraqIQSOPState = {
+      loadId,
+      currentStep: SOPStep.DRIVER_CONFIRMATION,
+      stepHistory: existingState?.stepHistory || [],
+      gpsTracking: { isActive: false },
+      monitoring: { annexNotified: false, manualOverrideUsed: false },
+      documents: { bolUploaded: false, freightPhotosUploaded: false, podUploaded: false },
+    };
+    
+    state.stepHistory.push({
+      step: SOPStep.DRIVER_CONFIRMATION,
+      timestamp: new Date(),
+      triggeredBy: 'manual',
+      notes: '🔄 RESET FOR TESTING',
+    });
+    
+    protocolStates.set(loadId, state);
+    console.log(`🔄 TraqIQ SOP RESET for load ${loadId} - back to Step 1`);
+    return state;
+  }
+
+  // Force advance (for testing - skips load validation)
+  async forceAdvance(loadId: string, notes?: string): Promise<TraqIQSOPState | null> {
+    const state = protocolStates.get(loadId);
+    if (!state) return null;
+
+    state.stepHistory.push({
+      step: state.currentStep,
+      timestamp: new Date(),
+      triggeredBy: 'manual',
+      notes: notes || 'Force advance (test mode)',
+    });
+
+    const nextStep = state.currentStep + 1;
+    if (nextStep > TOTAL_STEPS) {
+      console.log(`✅ TraqIQ SOP COMPLETE for load ${loadId}`);
+      return state;
+    }
+
+    state.currentStep = nextStep as SOPStep;
+    console.log(`🚛 Load ${loadId} → Step ${nextStep}: ${this.getStepInfo(nextStep)?.name}`);
+    protocolStates.set(loadId, state);
+    return state;
+  }
+ ⁠
+
+*Add to traqiq-sop-routes.ts* (before ⁠ export default router ⁠):
+
+⁠ typescript
+// POST /api/traqiq-sop/:loadId/reset - Reset protocol for testing
+router.post('/:loadId/reset', async (req: Request, res: Response) => {
+  const state = await traqiqSopService.resetProtocol(req.params.loadId);
+  if (!state) return res.status(404).json({ success: false, error: 'Failed to reset' });
+  res.json({ success: true, message: 'Protocol reset to Step 1', ...traqiqSopService.getProtocolStatus(req.params.loadId) });
+});
+
+// POST /api/traqiq-sop/:loadId/force-advance - Force advance for testing
+router.post('/:loadId/force-advance', async (req: Request, res: Response) => {
+  const state = await traqiqSopService.forceAdvance(req.params.loadId, req.body.notes);
+  if (!state) return res.status(404).json({ success: false, error: 'Not found - initialize first' });
+  res.json({ success: true, ...traqiqSopService.getProtocolStatus(req.params.loadId) });
+});
+ ⁠
+
+*New test flow:*
+
+POST /api/traqiq-sop/test-001/initialize  → Start at Step 1
+POST /api/traqiq-sop/test-001/force-advance  → Go to Step 2
+POST /api/traqiq-sop/test-001/force-advance  → Go to Step 3
+...
+POST /api/traqiq-sop/test-001/reset  → Back to Step 1
