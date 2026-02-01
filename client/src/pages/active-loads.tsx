@@ -8,12 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  MapPin, Truck, Phone, MessageSquare, Send, 
+  MapPin, Truck, Phone, MessageSquare, 
   FileText, ArrowRight, CheckCircle2, Calendar, UserPlus
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
 import { LiveMap } from "@/components/load-lifecycle/LiveMap";
+import { LoadDriverChat } from "@/components/load-driver-chat";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -261,7 +262,17 @@ export default function ActiveLoads() {
                     </div>
                   </TabsContent>
                   <TabsContent value="chat" className="h-full m-0 flex flex-col">
-                    <DriverChatWindow load={selectedLoad} />
+                    <LoadDriverChat
+                      loadId={selectedLoad.id}
+                      loadNumber={selectedLoad.loadNumber}
+                      driverName={selectedLoad.driver?.name}
+                      driverPhone={selectedLoad.driver?.phone}
+                      onCallDriver={() => {
+                        if (selectedLoad.driver?.phone) {
+                          window.location.href = `tel:${selectedLoad.driver.phone}`;
+                        }
+                      }}
+                    />
                   </TabsContent>
                   <TabsContent value="map" className="h-full m-0">
                     <LiveMap load={selectedLoad} />
@@ -280,54 +291,3 @@ export default function ActiveLoads() {
   );
 }
 
-// --- CHAT WINDOW COMPONENT ---
-function DriverChatWindow({ load }: { load: any }) {
-  const [message, setMessage] = useState("");
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const { data: messages } = useQuery({
-    queryKey: [`/api/messages/load/${load.id}`],
-    queryFn: async () => { try { return await (await fetch(`/api/messages/load/${load.id}`)).json() } catch { return [] } }
-  });
-
-  const sendMessage = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/sms/send-template", { loadId: load.id, type: "CUSTOM", customBody: message });
-    },
-    onSuccess: () => {
-      setMessage("");
-      toast({ title: "SMS Sent", className: "bg-emerald-600 text-white" });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to send SMS", variant: "destructive" });
-    }
-  });
-
-  return (
-    <div className="flex flex-col h-full bg-slate-950">
-      <div className="flex-1 p-6 space-y-4 overflow-y-auto">
-        <div className="text-center text-xs text-slate-600 my-4">Conversation started with {load.driver?.name || 'Unassigned Driver'}</div>
-        <div className="flex justify-end">
-          <div className="bg-blue-600 text-white px-4 py-2 rounded-2xl rounded-tr-none max-w-[80%] text-sm shadow-lg shadow-blue-900/20">
-            {load.sopProgress?.initialSms ? "Load details sent via SMS." : "Chat started."}
-          </div>
-        </div>
-      </div>
-      <div className="p-4 bg-slate-900 border-t border-slate-800">
-        <div className="flex gap-2 max-w-4xl mx-auto">
-          <Input 
-            placeholder="Type message to driver..." 
-            className="bg-slate-950 border-slate-700 text-white focus-visible:ring-emerald-500 pl-4"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage.mutate()}
-          />
-          <Button size="icon" className="bg-emerald-600 hover:bg-emerald-500 text-white shrink-0" onClick={() => sendMessage.mutate()} disabled={!message}>
-            <Send className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}

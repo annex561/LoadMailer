@@ -20,6 +20,11 @@ router.post('/incoming', async (req: Request, res: Response) => {
   res.send(driverSMSUploadService.generateAutoReply(result.success, reply));
 });
 
+router.get('/messages/:loadId', (req: Request, res: Response) => {
+  const messages = driverSMSUploadService.getLoadMessages(req.params.loadId);
+  res.json(messages);
+});
+
 router.get('/load/:loadId/messages', (req: Request, res: Response) => {
   const messages = driverSMSUploadService.getLoadMessages(req.params.loadId);
   res.json({ success: true, loadId: req.params.loadId, count: messages.length, messages });
@@ -28,6 +33,15 @@ router.get('/load/:loadId/messages', (req: Request, res: Response) => {
 router.get('/load/:loadId/documents', (req: Request, res: Response) => {
   const docs = driverSMSUploadService.getLoadDocuments(req.params.loadId);
   res.json({ success: true, loadId: req.params.loadId, count: docs.length, documents: docs });
+});
+
+router.post('/send', async (req: Request, res: Response) => {
+  const { loadId, body } = req.body;
+  if (!loadId || !body) {
+    return res.status(400).json({ success: false, error: 'loadId and body required' });
+  }
+  const success = await driverSMSUploadService.sendLoadMessage(loadId, '', body);
+  res.json({ success, message: 'Message queued' });
 });
 
 router.post('/test', async (req: Request, res: Response) => {
