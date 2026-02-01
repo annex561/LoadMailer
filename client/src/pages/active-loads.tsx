@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   MapPin, Truck, Phone, MessageSquare, Send,
-  FileText, ArrowRight, CheckCircle2, Calendar, UserPlus
+  FileText, ArrowRight, CheckCircle2, Calendar, UserPlus,
+  Image, Mic, ClipboardList, Clock, PhoneCall
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
@@ -286,6 +287,7 @@ function DriverChatWindow({ load }: { load: any }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const driverId = load.driver?.id;
   const loadId = load.id;
 
@@ -323,10 +325,43 @@ function DriverChatWindow({ load }: { load: any }) {
       queryClient.invalidateQueries({ queryKey: ["/api/communication/threads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/communication/messages", variables.threadId] });
       setMessage("");
-      toast({ title: "Message sent", className: "bg-emerald-600 text-white" });
+      toast({ title: "Message sent", className: "bg-teal-600 text-white" });
     },
     onError: () => {
       toast({ title: "Failed to send message", variant: "destructive" });
+    }
+  });
+
+  // Upload image mutation
+  const uploadImageMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('loadId', loadId);
+      formData.append('driverId', driverId || '');
+      formData.append('documentType', 'chat_attachment');
+      
+      const response = await fetch('/api/documents/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) throw new Error('Upload failed');
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents"] });
+      // Send a message about the uploaded image
+      if (driverThread?.id) {
+        sendMessageMutation.mutate({ 
+          threadId: driverThread.id, 
+          content: `[Image uploaded: ${data.fileName || 'attachment'}]`, 
+          loadId 
+        });
+      }
+      toast({ title: "Image uploaded", description: "Image attached to load documents", className: "bg-teal-600 text-white" });
+    },
+    onError: () => {
+      toast({ title: "Upload failed", variant: "destructive" });
     }
   });
 
@@ -336,23 +371,29 @@ function DriverChatWindow({ load }: { load: any }) {
     }
   };
 
-  // Quick reply templates for load-specific communication
-  const quickReplies = [
-    { label: "ETA?", message: "What's your current ETA?" },
-    { label: "Status", message: "Please provide a quick status update." },
-    { label: "Location", message: "What's your current location?" },
-    { label: "Loaded?", message: "Have you been loaded yet?" },
-    { label: "BOL", message: "Please upload the BOL when available." },
-    { label: "POD", message: "Don't forget to upload the POD after delivery." },
-    { label: "Call Me", message: "Please call dispatch when you get a chance." },
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      uploadImageMutation.mutate(file);
+    }
+  };
+
+  // Quick Messages - matching the screenshot design
+  const quickMessages = [
+    { icon: "📍", label: "Pickup Reminder", message: "Hi! Just a friendly reminder about your pickup today. Please confirm when you arrive at the pickup location. Thanks!" },
+    { icon: "🚛", label: "Delivery ETA", message: "What's your estimated time of arrival at the delivery location?" },
+    { icon: "❓", label: "Status Check", message: "Can you provide a quick status update on this load?" },
+    { icon: "✅", label: "Load Confirmed", message: "Great! The load has been confirmed. Please proceed as planned." },
+    { icon: "📋", label: "Paperwork", message: "Please upload the required paperwork (BOL/POD) when available." },
+    { icon: "📞", label: "Call Customer", message: "Please call the customer to confirm delivery details." },
   ];
 
   if (!driverId) {
     return (
-      <div className="flex-1 flex items-center justify-center text-slate-500 bg-slate-950/50">
+      <div className="flex-1 flex items-center justify-center bg-[#1a2634]">
         <div className="text-center">
-          <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-4">
-            <MessageSquare className="w-8 h-8 opacity-40" />
+          <div className="w-16 h-16 rounded-full bg-[#243447] flex items-center justify-center mx-auto mb-4">
+            <MessageSquare className="w-8 h-8 text-teal-500/50" />
           </div>
           <p className="font-medium text-slate-400">No driver assigned</p>
           <p className="text-xs mt-1 text-slate-500">Assign a driver to this load to start messaging.</p>
@@ -362,44 +403,23 @@ function DriverChatWindow({ load }: { load: any }) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-950">
-      {/* Header with driver info and load context */}
-      <div className="p-4 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-900/80">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-              {load.driver?.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2) || '?'}
-            </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-slate-900" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-semibold text-white text-lg">{load.driver?.name || 'Driver'}</div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Phone className="w-3 h-3" />
-              <span>{load.driver?.phone || 'No phone'}</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-emerald-400">Load #{load.loadNumber}</span>
-            </div>
-          </div>
-          {load.driver?.phone && (
-            <Button 
-              size="sm" 
-              className="bg-emerald-600 hover:bg-emerald-500 h-9 px-4 shadow-lg"
-              onClick={() => window.location.href = `tel:${load.driver.phone}`}
-            >
-              <Phone className="w-4 h-4 mr-1.5" /> Call
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className="flex flex-col h-full bg-[#1a2634]">
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelect}
+        accept="image/*"
+        className="hidden"
+      />
 
       {/* Messages area */}
-      <ScrollArea className="flex-1 p-4 bg-gradient-to-b from-slate-950 to-slate-900/50">
+      <ScrollArea className="flex-1 p-4">
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-center py-12">
             <div>
-              <div className="w-16 h-16 rounded-full bg-slate-800/50 flex items-center justify-center mx-auto mb-4">
-                <MessageSquare className="w-8 h-8 text-slate-600" />
+              <div className="w-16 h-16 rounded-full bg-[#243447] flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="w-8 h-8 text-teal-500/50" />
               </div>
               <p className="text-slate-400 font-medium">No messages yet</p>
               <p className="text-xs mt-1 text-slate-500 max-w-xs">
@@ -408,7 +428,7 @@ function DriverChatWindow({ load }: { load: any }) {
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {messages.map((msg: any) => (
               <div
                 key={msg.id}
@@ -419,22 +439,39 @@ function DriverChatWindow({ load }: { load: any }) {
               >
                 <div
                   className={cn(
-                    "max-w-[75%] rounded-2xl px-4 py-2.5",
+                    "max-w-[80%] rounded-xl px-4 py-3",
                     msg.senderRole === 'dispatch'
-                      ? "bg-emerald-600 text-white rounded-br-md shadow-lg shadow-emerald-900/30"
-                      : "bg-slate-800 text-slate-100 rounded-bl-md shadow-lg"
+                      ? "bg-[#2d4a5e] text-white"
+                      : "bg-[#243447] text-slate-100"
                   )}
                 >
+                  {/* Check if message contains image attachment */}
+                  {msg.mediaUrl && (
+                    <div className="mb-2">
+                      <img 
+                        src={msg.mediaUrl} 
+                        alt="attachment" 
+                        className="rounded-lg max-w-full max-h-48 object-cover cursor-pointer"
+                        onClick={() => window.open(msg.mediaUrl, '_blank')}
+                      />
+                      <p className="text-xs text-slate-400 mt-1">[image attachment]</p>
+                    </div>
+                  )}
                   <p className="text-sm whitespace-pre-wrap">{msg.textContent}</p>
                   <div className={cn(
-                    "text-[10px] mt-1 flex items-center gap-1",
-                    msg.senderRole === 'dispatch' ? "text-emerald-200/80" : "text-slate-500"
+                    "text-xs mt-2 flex items-center gap-2",
+                    msg.senderRole === 'dispatch' ? "text-teal-300/70" : "text-slate-500"
                   )}>
-                    {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
+                    {msg.createdAt && new Date(msg.createdAt).toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: 'numeric' 
+                    })}, {msg.createdAt && new Date(msg.createdAt).toLocaleTimeString('en-US', { 
+                      hour: '2-digit', 
+                      minute: '2-digit',
+                      hour12: false 
+                    })}
                     {msg.senderRole === 'dispatch' && (
-                      <svg className="w-3 h-3 text-emerald-200/80" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
+                      <span className="w-3 h-3 rounded-full border border-teal-400/50 inline-block" />
                     )}
                   </div>
                 </div>
@@ -445,35 +482,59 @@ function DriverChatWindow({ load }: { load: any }) {
         )}
       </ScrollArea>
 
-      {/* Quick replies */}
-      <div className="px-4 py-2 bg-slate-900/80 border-t border-slate-800/50 overflow-x-auto">
-        <div className="flex gap-1.5">
-          {quickReplies.map((reply) => (
+      {/* Quick Messages Grid - matching screenshot exactly */}
+      <div className="px-4 py-4 bg-[#1a2634]">
+        <p className="text-sm text-slate-400 mb-3 font-medium">Quick Messages</p>
+        <div className="grid grid-cols-2 gap-2">
+          {quickMessages.map((qm) => (
             <button
-              key={reply.label}
-              onClick={() => setMessage(reply.message)}
-              className="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full whitespace-nowrap transition-colors border border-slate-700/50"
+              key={qm.label}
+              onClick={() => setMessage(qm.message)}
+              className="flex items-center justify-center gap-2 py-3 px-4 bg-transparent border-2 border-teal-500/60 hover:border-teal-400 hover:bg-teal-500/10 text-teal-400 rounded-lg transition-all font-medium text-sm"
             >
-              {reply.label}
+              <span>{qm.icon}</span>
+              <span>{qm.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Message input */}
-      <div className="p-4 bg-slate-900 border-t border-slate-800">
-        <div className="flex gap-3 items-end">
-          <div className="flex-1">
+      {/* Message input bar - matching screenshot */}
+      <div className="p-4 bg-[#1a2634]">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 relative">
             <Input
-              placeholder={`Message ${load.driver?.name || 'driver'}...`}
-              className="bg-slate-800 border-slate-700 text-white focus-visible:ring-emerald-500 h-11 px-4 rounded-xl"
+              placeholder="Type your message..."
+              className="bg-[#243447] border-teal-500/40 text-white focus-visible:ring-teal-500 h-12 pl-4 pr-4 rounded-full"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
             />
           </div>
+          
+          {/* Document upload button */}
           <Button
-            className="bg-emerald-600 hover:bg-emerald-500 text-white h-11 w-11 rounded-xl shadow-lg shadow-emerald-900/30"
+            variant="ghost"
+            size="icon"
+            className="h-12 w-12 rounded-lg bg-teal-600 hover:bg-teal-500 text-white"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadImageMutation.isPending}
+          >
+            <FileText className="w-5 h-5" />
+          </Button>
+          
+          {/* Voice button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-12 w-12 rounded-lg bg-teal-600 hover:bg-teal-500 text-white"
+          >
+            <Mic className="w-5 h-5" />
+          </Button>
+          
+          {/* Send button */}
+          <Button
+            className="h-12 w-12 rounded-lg bg-teal-600 hover:bg-teal-500 text-white"
             onClick={handleSend}
             disabled={!message.trim() || sendMessageMutation.isPending || !driverThread?.id}
           >
