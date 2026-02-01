@@ -1599,6 +1599,15 @@ function MobileDriverDashboard() {
             <Phone className="h-5 w-5" />
           </div>
 
+          {/* No Active Load Warning */}
+          {!currentLoad && (
+            <div className="mx-4 mt-2 p-3 bg-amber-500/20 border border-amber-500/50 rounded-lg">
+              <p className="text-sm text-amber-200 text-center">
+                ⚠️ No active load. Messages sent here may not appear in load-specific chats.
+              </p>
+            </div>
+          )}
+
           {/* Messages */}
           <div className="flex-1 p-4 space-y-3 bg-background overflow-y-auto">
             {messages.length === 0 ? (
