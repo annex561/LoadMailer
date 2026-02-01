@@ -194,21 +194,42 @@ Reply "YES" to confirm and receive address details.
       return { success: false, error: 'No driver phone' };
     }
 
-    // CHECK: Do we have the address? (Driver Sheet logic)
-    const originCity = load.originCity || load.origin_city;
-    const destCity = load.destCity || load.dest_city;
-    const hasAddress = originCity && originCity !== "Unknown";
+    // Helper to format dates nicely
+    const formatDate = (dateVal: any): string => {
+      if (!dateVal) return 'TBD';
+      try {
+        const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return 'TBD';
+        // Format: "Wed, Jan 28 @ 8:00 AM"
+        const options: Intl.DateTimeFormatOptions = { 
+          weekday: 'short', 
+          month: 'short', 
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        };
+        return d.toLocaleString('en-US', options);
+      } catch {
+        return 'TBD';
+      }
+    };
+
+    // Use FULL addresses if available, fallback to city names
+    const pickupAddr = load.pickupAddress || load.pickup_address || load.originCity || load.origin_city || 'TBD';
+    const deliveryAddr = load.deliveryAddress || load.delivery_address || load.destCity || load.dest_city || 'TBD';
+    const hasAddress = pickupAddr && pickupAddr !== "Unknown" && pickupAddr !== "Address TBD";
     
     let details = "";
     if (hasAddress) {
       details = `
 📍 PICKUP:
-${originCity}
-${load.pickupDate || load.pickup_dt || 'TBD'}
+${pickupAddr}
+${formatDate(load.pickupDate || load.pickup_dt)}
 
 📍 DELIVERY:
-${destCity}
-${load.deliveryDate || load.delivery_dt || 'TBD'}
+${deliveryAddr}
+${formatDate(load.deliveryDate || load.delivery_dt)}
 `.trim();
     } else {
       details = "⚠️ Addresses pending. Stand by for Driver Sheet.";

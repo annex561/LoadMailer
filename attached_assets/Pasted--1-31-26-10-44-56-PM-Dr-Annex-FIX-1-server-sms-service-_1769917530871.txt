@@ -1,0 +1,141 @@
+[1/31/26, 10:44:56 PM] Dr. Annex: FIX 1: ⁠ server/sms-service.ts ⁠*
+
+Find the ⁠ sendDispatchInstructions ⁠ function (around line 195) and replace the ENTIRE function with this:
+
+⁠ typescript
+  // THE "INSTRUCTIONS & TRACKING" MESSAGE (Sent after Confirmation)
+  async sendDispatchInstructions(load: any, driver: any): Promise<{ success: boolean; error?: string; messageSid?: string }> {
+    if (!driver || !driver.phone) {
+      console.log(`[SMS] No phone for driver, skipping dispatch instructions`);
+      return { success: false, error: 'No driver phone' };
+    }
+
+    // Helper to format dates nicely
+    const formatDate = (dateVal: any): string => {
+      if (!dateVal) return 'TBD';
+      try {
+        const d = new Date(dateVal);
+        if (isNaN(d.getTime())) return 'TBD';
+        // Format: "Wed, Jan 28 @ 8:00 AM"
+        const options: Intl.DateTimeFormatOptions = { 
+          weekday: 'short', 
+          month: 'short', 
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        };
+        return d.toLocaleString('en-US', options);
+      } catch {
+        return 'TBD';
+      }
+    };
+
+    // Use FULL addresses if available, fallback to city names
+    const pickupAddr = load.pickupAddress || load.pickup_address || load.originCity || load.origin_city || 'TBD';
+    const deliveryAddr = load.deliveryAddress || load.delivery_address || load.destCity || load.dest_city || 'TBD';
+    const hasAddress = pickupAddr && pickupAddr !== "Unknown" && pickupAddr !== "Address TBD";
+    
+    let details = "";
+    if (hasAddress) {
+      details = `
+📍 PICKUP:
+${pickupAddr}
+${formatDate(load.pickupDate || load.pickup_dt)}
+
+📍 DELIVERY:
+${deliveryAddr}
+${formatDate(load.deliveryDate || load.delivery_dt)}
+`.trim();
+    } else {
+      details = "⚠️ Addresses pending. Stand by for Driver Sheet.";
+    }
+
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+      : 'https://traq-iq.replit.app';
+    const trackingLink = `${baseUrl}/driver/tracking/${load.id}`;
+
+    const body = `
+✅ CONFIRMED. Thank you!
+
+${details}
+
+PLEASE ACTIVATE TRACKING NOW:
+${trackingLink}
+`.trim();
+
+    return this.sendSMS(driver.phone, body);
+  }
+ ⁠
+
+---
+
+*FIX 2: ⁠ client/src/App.tsx ⁠*
+
+Find this line (around line 142):
+⁠ typescript
+<Route path="/driver/load/:id" component={DriverLoadView} />
+ ⁠
+
+Add these 2 lines RIGHT AFTER it:
+⁠ typescript
+<Route path="/driver/tracking/:id" component={DriverTracker} />
+<Route path="/driver-tracker" component={DriverTracker} />
+ ⁠
+
+---
+
+*FIX 3: ⁠ client/src/pages/driver-tracker.tsx ⁠*
+
+Find the ⁠ useEffect ⁠ that starts with ⁠ // Get driver ID and tracking token ⁠ (around line 41) and replace the ENTIRE useEffect block with:
+
+[1/31/26, 10:44:56 PM] Dr. Annex: ⁠ typescript
+  // Get driver ID and tracking token from URL parameters or path
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const driver = params.get('driver');
+    const token = params.get('token');
+    
+    // Check for /driver/tracking/:loadId format
+    const pathMatch = window.location.pathname.match(/\/driver\/tracking\/([^/]+)/);
+    const loadIdFromPath = pathMatch ? pathMatch[1] : null;
+    
+    if (loadIdFromPath) {
+      // Fetch load details to get driver info
+      fetch(`/api/loads/${loadIdFromPath}`)
+        .then(res => res.json())
+        .then(load => {
+          if (load && load.driverId) {
+            setDriverId(String(load.driverId));
+            // Generate a simple token from load ID for tracking auth
+            setTrackingToken(`load-${loadIdFromPath}`);
+            setStatus('Ready to start tracking');
+          } else {
+            setStatus('❌ No driver assigned to this load yet.');
+          }
+        })
+        .catch(() => {
+          setStatus('❌ Failed to load tracking info. Please try again.');
+        });
+      return;
+    }
+    
+    // Fallback to query params
+    if (!driver) {
+      setStatus('❌ No driver ID provided. Please use the link from your dashboard.');
+      return;
+    }
+    
+    if (!token) {
+      setStatus('❌ No tracking token provided. Please start tracking from your dashboard.');
+      return;
+    }
+    
+    setDriverId(driver);
+    setTrackingToken(token);
+    setStatus('Ready to start tracking');
+  }, []);
+ ⁠
+
+---

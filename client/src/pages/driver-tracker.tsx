@@ -36,12 +36,37 @@ export default function DriverTracker() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Get driver ID and tracking token from URL parameters
+  // Get driver ID and tracking token from URL parameters or path
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const driver = params.get('driver');
     const token = params.get('token');
     
+    // Check for /driver/tracking/:loadId format
+    const pathMatch = window.location.pathname.match(/\/driver\/tracking\/([^/]+)/);
+    const loadIdFromPath = pathMatch ? pathMatch[1] : null;
+    
+    if (loadIdFromPath) {
+      // Fetch load details to get driver info
+      fetch(`/api/loads/${loadIdFromPath}`)
+        .then(res => res.json())
+        .then(load => {
+          if (load && load.driverId) {
+            setDriverId(String(load.driverId));
+            // Generate a simple token from load ID for tracking auth
+            setTrackingToken(`load-${loadIdFromPath}`);
+            setStatus('Ready to start tracking');
+          } else {
+            setStatus('❌ No driver assigned to this load yet.');
+          }
+        })
+        .catch(() => {
+          setStatus('❌ Failed to load tracking info. Please try again.');
+        });
+      return;
+    }
+    
+    // Fallback to query params
     if (!driver) {
       setStatus('❌ No driver ID provided. Please use the link from your dashboard.');
       return;

@@ -140,6 +140,8 @@ function App() {
               </ErrorBoundary>
             </Route>
             <Route path="/driver/load/:id" component={DriverLoadView} />
+            <Route path="/driver/tracking/:id" component={DriverTracker} />
+            <Route path="/driver-tracker" component={DriverTracker} />
             
             {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
             <Route>
