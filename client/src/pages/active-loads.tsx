@@ -304,15 +304,32 @@ function DriverChatWindow({ load }: { load: any }) {
     refetchInterval: 2000,
   });
 
-  // Filter messages to show those for THIS specific load
-  // Include messages where loadId matches OR driver messages without explicit loadId
-  // This ensures incoming SMS replies appear even if they couldn't detect the load context
+  // Filter messages to show those for THIS specific load ONLY
+  // Messages must either have matching loadId OR be driver replies without loadId 
+  // that were sent during this load's active timeframe
   const messages = allMessages.filter((msg: any) => {
     // Exact match - message is explicitly for this load
     if (msg.loadId === loadId) return true;
-    // Show driver messages from this thread that have no loadId attached
-    // These are likely incoming SMS where load context couldn't be detected
-    if (msg.senderRole === 'driver' && (!msg.loadId || msg.loadId === null)) return true;
+    
+    // For driver messages without loadId, only show if they fall within this load's timeframe
+    // This prevents the same message from appearing in multiple load chats
+    if (msg.senderRole === 'driver' && (!msg.loadId || msg.loadId === null)) {
+      // Get the load's start date (pickup or creation date)
+      const loadStartDate = load.pickupDate ? new Date(load.pickupDate) : 
+                           load.createdAt ? new Date(load.createdAt) : null;
+      const loadEndDate = load.deliveryDate ? new Date(load.deliveryDate) : null;
+      const msgDate = msg.createdAt ? new Date(msg.createdAt) : null;
+      
+      if (loadStartDate && msgDate) {
+        // Show messages sent after load started and before delivery (or now if not delivered)
+        const effectiveEndDate = loadEndDate || new Date();
+        // Add buffer: show messages from 1 day before pickup to be safe
+        const bufferStart = new Date(loadStartDate.getTime() - 24 * 60 * 60 * 1000);
+        if (msgDate >= bufferStart && msgDate <= effectiveEndDate) {
+          return true;
+        }
+      }
+    }
     return false;
   });
 
