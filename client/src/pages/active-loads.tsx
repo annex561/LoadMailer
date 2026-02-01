@@ -305,14 +305,15 @@ function DriverChatWindow({ load }: { load: any }) {
   });
 
   // Filter messages to show those for THIS specific load
-  // Include messages where loadId matches OR where the message has no loadId but is from this driver's thread
-  // This ensures driver messages without explicit loadId still appear if they're in the correct thread
+  // Include messages where loadId matches OR driver messages without explicit loadId
+  // This ensures incoming SMS replies appear even if they couldn't detect the load context
   const messages = allMessages.filter((msg: any) => {
     // Exact match - message is explicitly for this load
     if (msg.loadId === loadId) return true;
-    // Fallback: show driver messages from this thread that have no loadId attached
-    // (only show these if there are no load-specific messages, to avoid duplication)
-    return false; // For now, strict matching - we'll fix the source instead
+    // Show driver messages from this thread that have no loadId attached
+    // These are likely incoming SMS where load context couldn't be detected
+    if (msg.senderRole === 'driver' && (!msg.loadId || msg.loadId === null)) return true;
+    return false;
   });
 
   useEffect(() => {
