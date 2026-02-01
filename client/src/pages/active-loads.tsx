@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
+import { LiveMap } from "@/components/load-lifecycle/LiveMap";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -262,11 +263,8 @@ export default function ActiveLoads() {
                   <TabsContent value="chat" className="h-full m-0 flex flex-col">
                     <DriverChatWindow load={selectedLoad} />
                   </TabsContent>
-                  <TabsContent value="map" className="h-full m-0 bg-slate-900 flex items-center justify-center">
-                    <div className="text-center text-slate-500">
-                      <MapPin className="w-16 h-16 mx-auto mb-4 opacity-20" />
-                      <p>GPS Map Integration Pending</p>
-                    </div>
+                  <TabsContent value="map" className="h-full m-0">
+                    <LiveMap load={selectedLoad} />
                   </TabsContent>
                 </div>
               </Tabs>
