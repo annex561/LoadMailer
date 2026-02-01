@@ -4330,7 +4330,7 @@ TRAQ IQ Dispatch Team
   // Send message to thread via SMS
   app.post('/api/communication/messages', async (req, res) => {
     try {
-      const { threadId, content, sender = 'dispatch', driverId } = req.body;
+      const { threadId, content, sender = 'dispatch', driverId, loadId: requestLoadId } = req.body;
       
       if (!content) {
         return res.status(400).json({ error: 'Content is required' });
@@ -4393,12 +4393,14 @@ TRAQ IQ Dispatch Team
         // Format message based on thread type
         let smsMessage: string;
         
-        if (thread.threadType === 'general') {
+        if (thread.threadType === 'general' && !requestLoadId) {
           // General chat: Simple message format
           smsMessage = `Message from Dispatch: ${content}`;
         } else {
           // Load communication: Include load context with route information
-          const load = thread.loadId ? await storage.getLoad(thread.loadId) : null;
+          // Use requestLoadId if provided (for load-specific chats), otherwise fallback to thread.loadId
+          const loadIdForContext = requestLoadId || thread.loadId;
+          const load = loadIdForContext ? await storage.getLoad(loadIdForContext) : null;
           if (load) {
             // Extract locations with improved error handling
             const pickupLocation = extractCityState(load.pickupAddress);
@@ -4517,10 +4519,11 @@ TRAQ IQ Dispatch Team
         }
       }
 
-      // Store message in database
+      // Store message in database - use requestLoadId if provided, otherwise fall back to thread loadId
+      const messageLoadId = requestLoadId || thread.loadId || null;
       await storage.createLoadMessage({
         threadId: thread.id,
-        loadId: thread.loadId || null,
+        loadId: messageLoadId,
         senderId: sender === 'driver' ? thread.driverId : null,
         senderRole: sender,
         senderName: sender === 'driver' ? thread.driverName : 'Dispatcher',

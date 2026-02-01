@@ -287,6 +287,7 @@ function DriverChatWindow({ load }: { load: any }) {
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const driverId = load.driver?.id;
+  const loadId = load.id;
 
   const { data: allThreads = [] } = useQuery<any[]>({
     queryKey: ["/api/communication/threads"],
@@ -295,22 +296,26 @@ function DriverChatWindow({ load }: { load: any }) {
 
   const driverThread = allThreads.find((t: any) => t.driverId === driverId);
 
-  const { data: messages = [] } = useQuery<any[]>({
+  const { data: allMessages = [] } = useQuery<any[]>({
     queryKey: ["/api/communication/messages", driverThread?.id],
     enabled: !!driverThread?.id,
     refetchInterval: 2000,
   });
+
+  // Filter messages to show only those for THIS specific load (strict match)
+  const messages = allMessages.filter((msg: any) => msg.loadId === loadId);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ threadId, content }: { threadId: string; content: string }) => {
+    mutationFn: async ({ threadId, content, loadId }: { threadId: string; content: string; loadId: string }) => {
       const response = await apiRequest("POST", `/api/communication/messages`, {
         threadId,
         content,
-        sender: "dispatch"
+        sender: "dispatch",
+        loadId
       });
       return response.json();
     },
@@ -327,7 +332,7 @@ function DriverChatWindow({ load }: { load: any }) {
 
   const handleSend = () => {
     if (message.trim() && driverThread?.id) {
-      sendMessageMutation.mutate({ threadId: driverThread.id, content: message.trim() });
+      sendMessageMutation.mutate({ threadId: driverThread.id, content: message.trim(), loadId });
     }
   };
 
@@ -368,8 +373,8 @@ function DriverChatWindow({ load }: { load: any }) {
         {messages.length === 0 ? (
           <div className="text-center text-slate-500 py-8">
             <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>No messages yet with {load.driver?.name}</p>
-            <p className="text-xs mt-1">Send a message to start the conversation.</p>
+            <p>No messages yet for Load #{load.loadNumber}</p>
+            <p className="text-xs mt-1">Send a message to {load.driver?.name} about this load.</p>
           </div>
         ) : (
           <div className="space-y-3">
