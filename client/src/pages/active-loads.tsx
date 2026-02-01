@@ -336,13 +336,26 @@ function DriverChatWindow({ load }: { load: any }) {
     }
   };
 
+  // Quick reply templates for load-specific communication
+  const quickReplies = [
+    { label: "ETA?", message: "What's your current ETA?" },
+    { label: "Status", message: "Please provide a quick status update." },
+    { label: "Location", message: "What's your current location?" },
+    { label: "Loaded?", message: "Have you been loaded yet?" },
+    { label: "BOL", message: "Please upload the BOL when available." },
+    { label: "POD", message: "Don't forget to upload the POD after delivery." },
+    { label: "Call Me", message: "Please call dispatch when you get a chance." },
+  ];
+
   if (!driverId) {
     return (
-      <div className="flex-1 flex items-center justify-center text-slate-500">
+      <div className="flex-1 flex items-center justify-center text-slate-500 bg-slate-950/50">
         <div className="text-center">
-          <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>No driver assigned to this load.</p>
-          <p className="text-xs mt-1">Assign a driver to start messaging.</p>
+          <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center mx-auto mb-4">
+            <MessageSquare className="w-8 h-8 opacity-40" />
+          </div>
+          <p className="font-medium text-slate-400">No driver assigned</p>
+          <p className="text-xs mt-1 text-slate-500">Assign a driver to this load to start messaging.</p>
         </div>
       </div>
     );
@@ -350,31 +363,49 @@ function DriverChatWindow({ load }: { load: any }) {
 
   return (
     <div className="flex flex-col h-full bg-slate-950">
-      <div className="p-3 border-b border-slate-800 bg-slate-900/50 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold">
-          {load.driver?.name?.charAt(0) || '?'}
+      {/* Header with driver info and load context */}
+      <div className="p-4 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-900/80">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+              {load.driver?.name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2) || '?'}
+            </div>
+            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-slate-900" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-white text-lg">{load.driver?.name || 'Driver'}</div>
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Phone className="w-3 h-3" />
+              <span>{load.driver?.phone || 'No phone'}</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-emerald-400">Load #{load.loadNumber}</span>
+            </div>
+          </div>
+          {load.driver?.phone && (
+            <Button 
+              size="sm" 
+              className="bg-emerald-600 hover:bg-emerald-500 h-9 px-4 shadow-lg"
+              onClick={() => window.location.href = `tel:${load.driver.phone}`}
+            >
+              <Phone className="w-4 h-4 mr-1.5" /> Call
+            </Button>
+          )}
         </div>
-        <div>
-          <div className="font-semibold text-white">{load.driver?.name || 'Driver'}</div>
-          <div className="text-xs text-slate-400">{load.driver?.phone || 'No phone'}</div>
-        </div>
-        {load.driver?.phone && (
-          <Button 
-            size="sm" 
-            className="ml-auto bg-emerald-600 hover:bg-emerald-500 h-8"
-            onClick={() => window.location.href = `tel:${load.driver.phone}`}
-          >
-            <Phone className="w-3 h-3 mr-1" /> Call
-          </Button>
-        )}
       </div>
 
-      <ScrollArea className="flex-1 p-4">
+      {/* Messages area */}
+      <ScrollArea className="flex-1 p-4 bg-gradient-to-b from-slate-950 to-slate-900/50">
         {messages.length === 0 ? (
-          <div className="text-center text-slate-500 py-8">
-            <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>No messages yet for Load #{load.loadNumber}</p>
-            <p className="text-xs mt-1">Send a message to {load.driver?.name} about this load.</p>
+          <div className="h-full flex items-center justify-center text-center py-12">
+            <div>
+              <div className="w-16 h-16 rounded-full bg-slate-800/50 flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="w-8 h-8 text-slate-600" />
+              </div>
+              <p className="text-slate-400 font-medium">No messages yet</p>
+              <p className="text-xs mt-1 text-slate-500 max-w-xs">
+                Start a conversation with {load.driver?.name} about Load #{load.loadNumber}
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -388,18 +419,23 @@ function DriverChatWindow({ load }: { load: any }) {
               >
                 <div
                   className={cn(
-                    "max-w-[80%] rounded-2xl px-4 py-2 shadow-lg",
+                    "max-w-[75%] rounded-2xl px-4 py-2.5",
                     msg.senderRole === 'dispatch'
-                      ? "bg-blue-600 text-white rounded-tr-none"
-                      : "bg-slate-800 text-slate-100 rounded-tl-none"
+                      ? "bg-emerald-600 text-white rounded-br-md shadow-lg shadow-emerald-900/30"
+                      : "bg-slate-800 text-slate-100 rounded-bl-md shadow-lg"
                   )}
                 >
-                  <p className="text-sm">{msg.textContent}</p>
+                  <p className="text-sm whitespace-pre-wrap">{msg.textContent}</p>
                   <div className={cn(
-                    "text-[10px] mt-1",
-                    msg.senderRole === 'dispatch' ? "text-blue-200" : "text-slate-500"
+                    "text-[10px] mt-1 flex items-center gap-1",
+                    msg.senderRole === 'dispatch' ? "text-emerald-200/80" : "text-slate-500"
                   )}>
                     {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
+                    {msg.senderRole === 'dispatch' && (
+                      <svg className="w-3 h-3 text-emerald-200/80" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
                   </div>
                 </div>
               </div>
@@ -409,22 +445,39 @@ function DriverChatWindow({ load }: { load: any }) {
         )}
       </ScrollArea>
 
+      {/* Quick replies */}
+      <div className="px-4 py-2 bg-slate-900/80 border-t border-slate-800/50 overflow-x-auto">
+        <div className="flex gap-1.5">
+          {quickReplies.map((reply) => (
+            <button
+              key={reply.label}
+              onClick={() => setMessage(reply.message)}
+              className="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full whitespace-nowrap transition-colors border border-slate-700/50"
+            >
+              {reply.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Message input */}
       <div className="p-4 bg-slate-900 border-t border-slate-800">
-        <div className="flex gap-2 max-w-4xl mx-auto">
-          <Input
-            placeholder={`Message ${load.driver?.name || 'driver'}...`}
-            className="bg-slate-950 border-slate-700 text-white focus-visible:ring-emerald-500 pl-4"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-          />
+        <div className="flex gap-3 items-end">
+          <div className="flex-1">
+            <Input
+              placeholder={`Message ${load.driver?.name || 'driver'}...`}
+              className="bg-slate-800 border-slate-700 text-white focus-visible:ring-emerald-500 h-11 px-4 rounded-xl"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+            />
+          </div>
           <Button
-            size="icon"
-            className="bg-emerald-600 hover:bg-emerald-500 text-white shrink-0"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white h-11 w-11 rounded-xl shadow-lg shadow-emerald-900/30"
             onClick={handleSend}
             disabled={!message.trim() || sendMessageMutation.isPending || !driverThread?.id}
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-5 h-5" />
           </Button>
         </div>
       </div>
