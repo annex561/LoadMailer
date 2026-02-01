@@ -42,6 +42,7 @@ import nodemailer from "nodemailer";
 import { randomUUID } from "crypto";
 import gaLoadsRouter from "./ga-loads-router";
 import traqiqSopRoutes from "./traqiq-sop-routes";
+import driverSMSUploadRoutes from "./driver-sms-upload-routes";
 import twilio from "twilio";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -6218,6 +6219,11 @@ TRAQ IQ Dispatch Team
   app.use('/api/traqiq-sop', traqiqSopRoutes);
   console.log('✅ TraqIQ SOP Victory Protocol routes registered');
   // ==================== End TraqIQ SOP Routes ====================
+
+  // ==================== Driver SMS Upload Routes ====================
+  app.use('/api/driver-sms', driverSMSUploadRoutes);
+  console.log('✅ Driver SMS Upload routes registered');
+  // ==================== End Driver SMS Upload Routes ====================
 
   console.log('✅ Essential routes registered - server ready for startup');
   
