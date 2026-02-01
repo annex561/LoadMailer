@@ -296,7 +296,12 @@ function DriverChatWindow({ load }: { load: any }) {
     refetchInterval: 3000,
   });
 
-  const driverThread = allThreads.find((t: any) => t.driverId === driverId);
+  // Find the active unified thread for this driver (not archived ones)
+  const driverThread = allThreads.find((t: any) => 
+    t.driverId === driverId && 
+    t.status === 'active' && 
+    t.threadType === 'unified'
+  ) || allThreads.find((t: any) => t.driverId === driverId && t.status === 'active');
 
   const { data: allMessages = [] } = useQuery<any[]>({
     queryKey: ["/api/communication/messages", driverThread?.id],
@@ -304,32 +309,23 @@ function DriverChatWindow({ load }: { load: any }) {
     refetchInterval: 2000,
   });
 
-  // Filter messages to show those for THIS specific load ONLY
-  // Messages must either have matching loadId OR be driver replies without loadId 
-  // that were sent during this load's active timeframe
+  // Filter messages to show those for THIS specific load
+  // Strategy: 
+  // 1. Always show messages with matching loadId
+  // 2. For ACTIVE loads (not delivered), show ALL driver messages without loadId
+  // 3. For COMPLETED loads, only show messages that match by loadId
+  const isActiveLoad = !load.status || !['delivered', 'completed', 'cancelled'].includes(load.status.toLowerCase());
+  
   const messages = allMessages.filter((msg: any) => {
     // Exact match - message is explicitly for this load
     if (msg.loadId === loadId) return true;
     
-    // For driver messages without loadId, only show if they fall within this load's timeframe
-    // This prevents the same message from appearing in multiple load chats
-    if (msg.senderRole === 'driver' && (!msg.loadId || msg.loadId === null)) {
-      // Get the load's start date (pickup or creation date)
-      const loadStartDate = load.pickupDate ? new Date(load.pickupDate) : 
-                           load.createdAt ? new Date(load.createdAt) : null;
-      const loadEndDate = load.deliveryDate ? new Date(load.deliveryDate) : null;
-      const msgDate = msg.createdAt ? new Date(msg.createdAt) : null;
-      
-      if (loadStartDate && msgDate) {
-        // Show messages sent after load started and before delivery (or now if not delivered)
-        const effectiveEndDate = loadEndDate || new Date();
-        // Add buffer: show messages from 1 day before pickup to be safe
-        const bufferStart = new Date(loadStartDate.getTime() - 24 * 60 * 60 * 1000);
-        if (msgDate >= bufferStart && msgDate <= effectiveEndDate) {
-          return true;
-        }
-      }
+    // For active loads, show all driver messages without loadId
+    // This ensures current conversations appear without being overly filtered
+    if (isActiveLoad && msg.senderRole === 'driver' && (!msg.loadId || msg.loadId === null)) {
+      return true;
     }
+    
     return false;
   });
 
