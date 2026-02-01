@@ -73,13 +73,13 @@ export default function ActiveLoads() {
     <div className="flex h-[calc(100vh-60px)] bg-slate-950 text-slate-100 overflow-hidden">
       
       {/* LEFT PANEL: FLEET LIST */}
-      <div className="w-[300px] border-r border-slate-800 bg-slate-900 flex flex-col">
-        <div className="p-4 border-b border-slate-800">
+      <div className="w-[300px] h-full border-r border-slate-800 bg-slate-900 flex flex-col">
+        <div className="p-4 border-b border-slate-800 shrink-0">
           <h2 className="font-bold text-white flex items-center gap-2">
             <Truck className="w-4 h-4 text-emerald-500" /> Active Loads ({activeLoads.length})
           </h2>
         </div>
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 h-0">
           <div className="space-y-1 p-2">
             {activeLoads.length === 0 ? (
               <div className="p-4 text-center">
