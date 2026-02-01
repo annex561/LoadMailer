@@ -41,17 +41,16 @@ export class DriverSMSUploadService {
 
   parseLoadCode(body: string): string | null {
     if (!body) return null;
-    const patterns = [
-      /LOAD[-:\s]?(\d+)/i,
-      /LOAD[-:\s]?([A-Z0-9-]+)/i,
-      /^#(\d+)/,
-      /TRIP[-:\s]?(\d+)/i,
-      /^(\d{6,})/,
-    ];
-    for (const pattern of patterns) {
-      const match = body.match(pattern);
-      if (match) return match[1];
-    }
+    
+    const numMatch = body.match(/^(\d{6,})\b/);
+    if (numMatch) return numMatch[1];
+    
+    const loadMatch = body.match(/\bLOAD[-:\s#]?([A-Z0-9-]{3,})/i);
+    if (loadMatch) return loadMatch[1];
+    
+    const tripMatch = body.match(/\bTRIP[-:\s#]?(\d+)/i);
+    if (tripMatch) return tripMatch[1];
+    
     return null;
   }
 
