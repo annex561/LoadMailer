@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,8 +16,9 @@ import {
   Truck, Users, ClipboardList, Calendar, Plus, Send, MessageCircle, 
   MapPin, DollarSign, Phone, Mail, Navigation, Activity, FileText, 
   Package, Clock, User, AlertCircle, CheckCircle, XCircle, Map as MapIcon,
-  ChevronDown, ChevronUp, TrendingUp, Eye
+  ChevronDown, ChevronUp, TrendingUp, Eye, Search, Circle
 } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import type { LoadWithRelations, Driver } from '@shared/schema';
@@ -56,6 +57,9 @@ interface CommunicationThread {
   lastMessageTimestamp: Date;
   driverName?: string;
   loadNumber?: string;
+  unreadDispatchMessages?: number;
+  unreadDriverMessages?: number;
+  status?: string;
 }
 
 interface ActivityFeedItem {
@@ -114,6 +118,8 @@ export default function DispatcherDashboard() {
   const [smsMessage, setSmsMessage] = useState('');
   const [smsTemplate, setSmsTemplate] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+  const [smsDriverSearch, setSmsDriverSearch] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -176,6 +182,87 @@ export default function DispatcherDashboard() {
     participantName: 'Dispatcher',
     enabled: !!selectedDriverThread?.id && activeTab === 'sms'
   });
+
+  // Fetch messages for the selected driver's thread
+  const { data: smsMessages = [] } = useQuery<any[]>({
+    queryKey: ['/api/communication/messages', selectedDriverThread?.id],
+    queryFn: async () => {
+      if (!selectedDriverThread?.id) return [];
+      const response = await fetch(`/api/communication/messages?threadId=${selectedDriverThread.id}`);
+      if (!response.ok) throw new Error('Failed to fetch messages');
+      return response.json();
+    },
+    enabled: !!selectedDriverThread?.id,
+    refetchInterval: 2000
+  });
+
+  // Auto-scroll to latest message
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [smsMessages]);
+
+  // Get initials for driver avatar
+  const getDriverInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  // Get driver status color
+  const getDriverStatusColor = (status: string) => {
+    switch (status) {
+      case 'available': return 'bg-green-500';
+      case 'on_route': return 'bg-blue-500';
+      case 'unavailable': return 'bg-gray-400';
+      default: return 'bg-gray-400';
+    }
+  };
+
+  // Filter drivers for SMS based on search
+  const smsFilteredDrivers = drivers.filter(driver => 
+    driver.name.toLowerCase().includes(smsDriverSearch.toLowerCase()) ||
+    driver.phone?.includes(smsDriverSearch)
+  );
+
+  // Get unread count for a driver
+  const getUnreadCount = (driverId: string) => {
+    const thread = threads.find((t: CommunicationThread) => t.driverId === driverId);
+    return thread?.unreadDispatchMessages || 0;
+  };
+
+  // Get last message preview for a driver
+  const getLastMessagePreview = (driverId: string) => {
+    const thread = threads.find((t: CommunicationThread) => t.driverId === driverId);
+    return thread?.lastMessage || 'No messages yet';
+  };
+
+  // Get last message time for a driver
+  const getLastMessageTime = (driverId: string) => {
+    const thread = threads.find((t: CommunicationThread) => t.driverId === driverId);
+    if (!thread?.lastMessageTimestamp) return '';
+    return formatDistanceToNow(new Date(thread.lastMessageTimestamp), { addSuffix: false });
+  };
+
+  // Quick message templates with categories
+  const messageTemplates = [
+    { category: 'Check-in', templates: [
+      { label: 'Status Update', message: 'Hey! Can you give me a quick status update on your current load?' },
+      { label: 'ETA Check', message: 'What\'s your ETA to the delivery location?' },
+      { label: 'Location Check', message: 'What\'s your current location?' }
+    ]},
+    { category: 'Load', templates: [
+      { label: 'New Load Available', message: 'We have a new load available. Check your dashboard for details!' },
+      { label: 'Load Assigned', message: 'You\'ve been assigned a new load. Please confirm when ready to proceed.' },
+      { label: 'Pickup Reminder', message: 'Reminder: Your pickup is scheduled for today. Please confirm you\'re on track.' }
+    ]},
+    { category: 'Documents', templates: [
+      { label: 'BOL Needed', message: 'Please upload your Bill of Lading (BOL) when available.' },
+      { label: 'POD Reminder', message: 'Don\'t forget to upload your Proof of Delivery after unloading.' },
+      { label: 'Doc Approved', message: 'Your uploaded document has been approved. Thanks!' }
+    ]},
+    { category: 'Urgent', templates: [
+      { label: 'Call Dispatch', message: 'Please call dispatch ASAP. We need to speak with you.' },
+      { label: 'Issue Follow-up', message: 'Following up on the issue you reported. Any updates?' }
+    ]}
+  ];
 
   // Fetch driver locations for map
   const { data: driverLocations } = useQuery({
@@ -1122,142 +1209,249 @@ export default function DispatcherDashboard() {
           )}
         </TabsContent>
 
-        {/* SMS Dispatch Tab */}
-        <TabsContent value="sms" className="space-y-4 mt-6">
-          <Card className="shadow-md rounded-xl">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageCircle className="w-5 h-5" />
-                Send SMS to Driver
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Driver selection */}
-              <div>
-                <label className="text-sm font-medium mb-2 block">Select Driver</label>
-                <Select value={selectedSMSDriver || ''} onValueChange={setSelectedSMSDriver}>
-                  <SelectTrigger data-testid="select-sms-driver">
-                    <SelectValue placeholder="Select driver" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {drivers.map(driver => (
-                      <SelectItem key={driver.id} value={driver.id}>
-                        {driver.name} - {driver.phone || 'No phone'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {/* Quick templates */}
-              <div>
-                <label className="text-sm font-medium mb-2 block">Quick Templates</label>
-                <div className="flex gap-2 flex-wrap">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setSmsMessage('Are you available for a load?')}
-                    data-testid="button-template-availability"
-                  >
-                    Check Availability
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setSmsMessage('Please provide load status update')}
-                    data-testid="button-template-status"
-                  >
-                    Status Update
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setSmsMessage('Load assigned - check your dashboard')}
-                    data-testid="button-template-assigned"
-                  >
-                    Load Assigned
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Message input */}
-              <div>
-                <label className="text-sm font-medium mb-2 block">Message</label>
-                <Textarea 
-                  value={smsMessage}
-                  onChange={(e) => {
-                    setSmsMessage(e.target.value);
-                    handleDispatcherTypingChange();
-                  }}
-                  placeholder="Type your message..."
-                  rows={4}
-                  data-testid="input-sms-message"
-                />
-              </div>
-              
-              {/* Typing indicator - shows when driver is typing */}
-              {driversTyping.length > 0 && selectedDriverThread && (
-                <div className="py-2" data-testid="dispatcher-typing-indicator">
-                  <TypingIndicator 
-                    name={driversTyping[0].participantName}
-                    size="sm"
+        {/* SMS Dispatch Tab - Modern Messaging Interface */}
+        <TabsContent value="sms" className="mt-6">
+          <div className="flex h-[calc(100vh-280px)] min-h-[500px] bg-card rounded-xl shadow-md border overflow-hidden">
+            {/* Driver List Panel */}
+            <div className="w-80 border-r flex flex-col bg-muted/30">
+              {/* Header with Search */}
+              <div className="p-4 border-b bg-card">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  Drivers
+                </h3>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search drivers..."
+                    value={smsDriverSearch}
+                    onChange={(e) => setSmsDriverSearch(e.target.value)}
+                    className="pl-9"
+                    data-testid="search-sms-drivers"
                   />
                 </div>
-              )}
-              
-              {/* Send button */}
-              <Button 
-                onClick={() => {
-                  if (!selectedSMSDriver) {
-                    toast({ title: 'Please select a driver', variant: 'destructive' });
-                    return;
-                  }
-                  if (!smsMessage.trim()) {
-                    toast({ title: 'Please enter a message', variant: 'destructive' });
-                    return;
-                  }
-                  handleDispatcherTypingSent();
-                  sendSMSMutation.mutate({ driverId: selectedSMSDriver, message: smsMessage });
-                }}
-                disabled={sendSMSMutation.isPending}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                data-testid="button-send-sms"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                {sendSMSMutation.isPending ? 'Sending...' : 'Send SMS'}
-              </Button>
-              
-              {/* Recent messages */}
-              <div className="mt-6">
-                <h4 className="font-semibold mb-2">Recent Messages</h4>
-                <ScrollArea className="h-48">
-                  {threads.slice(0, 10).length > 0 ? (
-                    threads.slice(0, 10).map(thread => (
-                      <div key={thread.id} className="p-2 border-b border-border" data-testid={`thread-${thread.id}`}>
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{thread.driverName || 'Unknown Driver'}</p>
-                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                              {thread.lastMessage}
+              </div>
+
+              {/* Driver List */}
+              <ScrollArea className="flex-1">
+                {smsFilteredDrivers.length > 0 ? (
+                  smsFilteredDrivers.map(driver => {
+                    const unreadCount = getUnreadCount(driver.id);
+                    const isSelected = selectedSMSDriver === driver.id;
+                    return (
+                      <div
+                        key={driver.id}
+                        onClick={() => setSelectedSMSDriver(driver.id)}
+                        className={`p-3 cursor-pointer border-b transition-colors ${
+                          isSelected 
+                            ? 'bg-primary/10 border-l-4 border-l-primary' 
+                            : 'hover:bg-muted/50'
+                        }`}
+                        data-testid={`driver-card-${driver.id}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Avatar with status indicator */}
+                          <div className="relative">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback className={`${isSelected ? 'bg-primary text-primary-foreground' : 'bg-slate-200 dark:bg-slate-700'} text-sm font-medium`}>
+                                {getDriverInitials(driver.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-background ${getDriverStatusColor(driver.status || 'unavailable')}`} />
+                          </div>
+
+                          {/* Driver info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-sm truncate">{driver.name}</span>
+                              {unreadCount > 0 && (
+                                <Badge className="bg-primary text-primary-foreground text-xs px-1.5 min-w-[20px] flex justify-center">
+                                  {unreadCount}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                              <Phone className="w-3 h-3" />
+                              <span className="truncate">{driver.phone || 'No phone'}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1 truncate">
+                              {getLastMessagePreview(driver.id)}
                             </p>
                           </div>
-                          <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                            {thread.lastMessageTimestamp 
-                              ? `${formatDistanceToNow(new Date(thread.lastMessageTimestamp))} ago`
-                              : 'No messages'}
+
+                          {/* Time */}
+                          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                            {getLastMessageTime(driver.id)}
                           </span>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
-                      No recent messages
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">No drivers found</p>
+                  </div>
+                )}
+              </ScrollArea>
+            </div>
+
+            {/* Chat Panel */}
+            <div className="flex-1 flex flex-col">
+              {selectedSMSDriver ? (
+                <>
+                  {/* Chat Header */}
+                  <div className="p-4 border-b bg-card flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback className="bg-primary text-primary-foreground">
+                          {getDriverInitials(drivers.find(d => d.id === selectedSMSDriver)?.name || 'D')}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <h4 className="font-semibold">{drivers.find(d => d.id === selectedSMSDriver)?.name || 'Driver'}</h4>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Phone className="w-3 h-3" />
+                          {drivers.find(d => d.id === selectedSMSDriver)?.phone || 'No phone'}
+                          <span className="mx-1">•</span>
+                          <span className={`capitalize ${
+                            drivers.find(d => d.id === selectedSMSDriver)?.status === 'available' 
+                              ? 'text-green-600' 
+                              : drivers.find(d => d.id === selectedSMSDriver)?.status === 'on_route'
+                                ? 'text-blue-600'
+                                : 'text-gray-500'
+                          }`}>
+                            {drivers.find(d => d.id === selectedSMSDriver)?.status || 'Unknown'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Messages Area */}
+                  <ScrollArea className="flex-1 p-4 bg-muted/20">
+                    {smsMessages.length > 0 ? (
+                      <div className="space-y-3">
+                        {smsMessages.map((msg: any) => (
+                          <div
+                            key={msg.id}
+                            className={`flex ${msg.senderRole === 'dispatch' ? 'justify-end' : 'justify-start'}`}
+                          >
+                            <div
+                              className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
+                                msg.senderRole === 'dispatch'
+                                  ? 'bg-primary text-primary-foreground rounded-br-md'
+                                  : 'bg-card border shadow-sm rounded-bl-md'
+                              }`}
+                            >
+                              <p className="text-sm whitespace-pre-wrap">{msg.textContent || msg.content}</p>
+                              <p className={`text-[10px] mt-1 ${
+                                msg.senderRole === 'dispatch' ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                              }`}>
+                                {msg.createdAt && formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                        <div ref={messagesEndRef} />
+                      </div>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-center text-muted-foreground">
+                        <div>
+                          <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                          <p>No messages yet</p>
+                          <p className="text-xs mt-1">Send a message to start the conversation</p>
+                        </div>
+                      </div>
+                    )}
+                  </ScrollArea>
+
+                  {/* Typing Indicator */}
+                  {driversTyping.length > 0 && selectedDriverThread && (
+                    <div className="px-4 py-2 bg-muted/20 border-t" data-testid="dispatcher-typing-indicator">
+                      <TypingIndicator 
+                        name={driversTyping[0].participantName}
+                        size="sm"
+                      />
                     </div>
                   )}
-                </ScrollArea>
-              </div>
-            </CardContent>
-          </Card>
+
+                  {/* Quick Templates */}
+                  <div className="px-4 py-2 border-t bg-card/50 overflow-x-auto">
+                    <div className="flex gap-1.5 text-xs">
+                      {messageTemplates.map((cat) => (
+                        cat.templates.slice(0, 2).map((template) => (
+                          <Button
+                            key={template.label}
+                            variant="outline"
+                            size="sm"
+                            className="text-xs whitespace-nowrap h-7 px-2"
+                            onClick={() => setSmsMessage(template.message)}
+                          >
+                            {template.label}
+                          </Button>
+                        ))
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Message Input */}
+                  <div className="p-4 border-t bg-card">
+                    <div className="flex gap-2">
+                      <Textarea
+                        value={smsMessage}
+                        onChange={(e) => {
+                          setSmsMessage(e.target.value);
+                          handleDispatcherTypingChange();
+                        }}
+                        placeholder="Type your message..."
+                        rows={1}
+                        className="resize-none min-h-[44px] max-h-24"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            if (smsMessage.trim()) {
+                              handleDispatcherTypingSent();
+                              sendSMSMutation.mutate({ driverId: selectedSMSDriver, message: smsMessage });
+                            }
+                          }
+                        }}
+                        data-testid="input-sms-message"
+                      />
+                      <Button
+                        onClick={() => {
+                          if (!smsMessage.trim()) {
+                            toast({ title: 'Please enter a message', variant: 'destructive' });
+                            return;
+                          }
+                          handleDispatcherTypingSent();
+                          sendSMSMutation.mutate({ driverId: selectedSMSDriver, message: smsMessage });
+                        }}
+                        disabled={sendSMSMutation.isPending || !smsMessage.trim()}
+                        className="h-11 px-6"
+                        data-testid="button-send-sms"
+                      >
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* Empty State - No driver selected */
+                <div className="flex-1 flex items-center justify-center text-center text-muted-foreground bg-muted/10">
+                  <div>
+                    <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                      <MessageCircle className="w-10 h-10 opacity-50" />
+                    </div>
+                    <h3 className="text-lg font-medium text-foreground mb-1">Driver Messaging</h3>
+                    <p className="text-sm max-w-xs mx-auto">
+                      Select a driver from the list to start a conversation or view message history
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 
