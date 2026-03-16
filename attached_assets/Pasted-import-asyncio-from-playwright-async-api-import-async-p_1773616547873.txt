@@ -1,0 +1,75 @@
+import asyncio
+from playwright.async_api import async_playwright
+
+async def scrape_load_board():
+    # --- 1. Configuration --- 
+    # Replace with your actual credentials and load board URL
+    TARGET_URL = "https://example-pakistan-loadboard.com/login"
+    USERNAME = "your_username"
+    PASSWORD = "your_password"
+    
+    # --- 2. Proxy Configuration ---
+    # This is where your Pakistan proxy details go. 
+    # You will purchase these from a proxy provider (e.g., Webshare, Oxylabs, BrightData).
+    PROXY_SETTINGS = {
+        "server": "http://your_pakistan_proxy_ip:port", # Can also be socks5:// depending on your provider
+        "username": "your_proxy_username",
+        "password": "your_proxy_password"
+    }
+
+    async with async_playwright() as p:
+        # Launch the browser in headless mode (required for Replit) and route through the proxy
+        browser = await p.chromium.launch(
+            headless=True,
+            proxy=PROXY_SETTINGS
+        ) 
+        
+        # Create a new context with a standard user agent to look like a normal human browser
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        
+        page = await context.new_page()
+
+        print(f"Navigating to {TARGET_URL} securely through Pakistan proxy...")
+        await page.goto(TARGET_URL)
+
+        # --- 3. Login Sequence ---
+        print("Logging in...")
+        await page.fill('input[name="username"]', USERNAME)
+        await page.fill('input[name="password"]', PASSWORD)
+        await page.click('button[type="submit"]')
+
+        # Wait for the main load board table to load after login
+        print("Waiting for load board to populate...")
+        await page.wait_for_selector('.load-table', timeout=15000)
+
+        # --- 4. Extraction Sequence ---
+        print("Extracting loads...")
+        load_rows = await page.query_selector_all('.load-row')
+        
+        extracted_loads = []
+        for row in load_rows:
+            # Safely extract text from the specific columns
+            origin_element = await row.query_selector('.origin-column')
+            dest_element = await row.query_selector('.dest-column')
+            rate_element = await row.query_selector('.rate-column')
+            
+            origin = await origin_element.inner_text() if origin_element else "N/A"
+            destination = await dest_element.inner_text() if dest_element else "N/A"
+            rate = await rate_element.inner_text() if rate_element else "N/A"
+            
+            load_data = {
+                "origin": origin.strip(),
+                "destination": destination.strip(),
+                "rate": rate.strip()
+            }
+            extracted_loads.append(load_data)
+            print(f"Found Load: {load_data}")
+
+        print(f"Successfully extracted {len(extracted_loads)} loads.")
+        
+        await browser.close()
+
+if __name__ == "__main__":
+    asyncio.run(scrape_load_board())

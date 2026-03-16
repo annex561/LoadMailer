@@ -1,0 +1,143 @@
+import random
+
+# ==========================================
+# 1. CONFIGURATION (Tweak these)
+# ==========================================
+INSTRUMENT = "MNQ"
+POINT_VALUE = 2.0         # $2 per point for MNQ
+INITIAL_QTY = 5           # Starting contracts
+MAX_QTY = 30              # Target total contracts
+SCALE_BATCH_SIZES = [5, 5, 5, 10] # Sequence of adds (5+5+5+5+10 = 30)
+SAFETY_BUFFER_PTS = 20    # VITAL: How much breathing room (in points) you need
+                          # after adding to survive a wick.
+
+# ==========================================
+# 2. THE CALCULATOR (The Math)
+# ==========================================
+def run_calculator():
+    print(f"\n=== {INSTRUMENT} SCALING ROADMAP (Goal: {MAX_QTY} Contracts) ===")
+    print(f"Constraint: Must keep a {SAFETY_BUFFER_PTS} point buffer so wicks don't cause a loss.\n")
+    
+    current_qty = INITIAL_QTY
+    # We use 0 as a relative starting price to simplify the math
+    avg_entry = 0.0 
+    
+    print(f"{'ACTION':<25} | {'PRICE MOVE REQ':<18} | {'PROFIT TARGET ($)':<20} | {'NEW TOTAL'}")
+    print("-" * 85)
+    
+    # Starting state
+    print(f"{f'Start with {INITIAL_QTY}':<25} | {'0.00 pts':<18} | {'$0.00':<20} | {current_qty}")
+
+    roadmap = []
+    
+    for add_qty in SCALE_BATCH_SIZES:
+        if current_qty >= MAX_QTY:
+            break
+            
+        # THE FORMULA:
+        # We need the price to rise enough so that after we add more contracts,
+        # our NEW Average Price is still 'SAFETY_BUFFER_PTS' away from the current market price.
+        # This prevents the "Add and immediately turn red" scenario.
+        
+        # 1. Calculate the "Leverage Drag"
+        # Adding contracts drags your average price up. We need to clear that drag + the buffer.
+        total_new_qty = current_qty + add_qty
+        required_move = SAFETY_BUFFER_PTS * (total_new_qty / current_qty)
+        
+        # 2. The Price Level where we pull the trigger
+        trigger_price = avg_entry + required_move
+        
+        # 3. The Dollar Amount you will see on your screen at that moment
+        # Open P&L = (Trigger Price - Old Avg) * Old Qty * Point Value
+        profit_target_dollars = (trigger_price - avg_entry) * current_qty * POINT_VALUE
+        
+        # 4. Calculate the New Average Price after the add
+        # New Avg = ((Old Qty * Old Avg) + (Add Qty * Trigger Price)) / Total Qty
+        new_avg_entry = ((current_qty * avg_entry) + (add_qty * trigger_price)) / total_new_qty
+        
+        print(f"{f'Add {add_qty} contracts':<25} | {f'+{trigger_price:.2f} pts':<18} | {f'${profit_target_dollars:,.2f}':<20} | {total_new_qty}")
+        
+        roadmap.append({
+            "trigger_price": trigger_price,
+            "profit_target": profit_target_dollars,
+            "add_qty": add_qty
+        })
+        
+        # Reset for next loop
+        current_qty = total_new_qty
+        avg_entry = new_avg_entry
+
+    return roadmap
+
+# ==========================================
+# 3. THE SIMULATION (The Test)
+# ==========================================
+def run_simulation(roadmap):
+    print(f"\n\n=== RUNNING MARKET SIMULATION (Checking for Wicks) ===")
+    
+    # Simulation settings
+    start_price = 15000.00
+    market_price = start_price
+    
+    # Portfolio settings
+    qty = INITIAL_QTY
+    avg_price = start_price
+    stop_loss = start_price - SAFETY_BUFFER_PTS # Initial stop
+    
+    scale_step = 0
+    
+    # We simulate 300 minutes (5 hours) of trading
+    # We create a random walk with a strong upward trend but high volatility (wicks)
+    
+    print(f"Entry: {start_price} | Qty: {qty} | Stop: {stop_loss}")
+    
+    for minute in range(1, 301):
+        # Create random movement: Trend (+1.5) + Noise (Random -10 to +12)
+        move = 1.0 + random.uniform(-8, 10) 
+        market_price += move
+        
+        # 1. CHECK STOP LOSS
+        if market_price <= stop_loss:
+            pnl = (stop_loss - avg_price) * qty * POINT_VALUE
+            print(f"!!! STOPPED OUT at {market_price:.2f} | PnL: ${pnl:.2f} !!!")
+            return
+
+        # 2. CHECK SCALING TARGET
+        if scale_step < len(roadmap):
+            target = roadmap[scale_step]
+            
+            # Calculate current open P&L relative to current avg
+            # Note: We use the relative price movement from the roadmap to trigger
+            # The roadmap 'trigger_price' is relative to entry 0.
+            # So we check if (Market Price - Start Price) >= Target Trigger Price
+            
+            current_rise = market_price - start_price
+            
+            if current_rise >= target['trigger_price']:
+                add_n = target['add_qty']
+                old_avg = avg_price
+                
+                # Execute Scale
+                new_qty = qty + add_n
+                # Weighted Average Formula
+                new_avg = ((qty * old_avg) + (add_n * market_price)) / new_qty
+                
+                # Move Stop Loss to Break Even (New Average)
+                stop_loss = new_avg 
+                
+                print(f"Minute {minute}: TARGET HIT! Adding {add_n}. "
+                      f"Price: {market_price:.2f}. "
+                      f"New Avg: {new_avg:.2f}. "
+                      f"Stop moved to {stop_loss:.2f}.")
+                
+                qty = new_qty
+                avg_price = new_avg
+                scale_step += 1
+                
+    # End result
+    final_pnl = (market_price - avg_price) * qty * POINT_VALUE
+    print(f"\nRESULT: Ended with {qty} contracts. Final P&L: ${final_pnl:,.2f}")
+
+if __name__ == "__main__":
+    roadmap = run_calculator()
+    run_simulation(roadmap)
