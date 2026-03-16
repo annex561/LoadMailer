@@ -18,7 +18,7 @@ import { DATAPIService } from "./dat-api-service";
 import { DATWebsiteScraper } from "./dat-website-scraper";
 import { RealDATScraper } from "./real-dat-scraper";
 import { DATLoadPoster } from "./dat-load-poster";
-import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema, insertTruckSchema, insertVendorSchema, insertFleetInspectionSchema, insertInspectionItemSchema, insertWorkOrderSchema, insertWorkOrderEventSchema, insertBreakdownReportSchema, insertFleetDocumentSchema, insertMaintenancePlanSchema, gmailAccounts } from "@shared/schema";
+import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema, insertTruckSchema, insertVendorSchema, insertFleetInspectionSchema, insertInspectionItemSchema, insertWorkOrderSchema, insertWorkOrderEventSchema, insertBreakdownReportSchema, insertFleetDocumentSchema, insertMaintenancePlanSchema, gmailAccounts, activityLog } from "@shared/schema";
 import { db } from "./db";
 import { aiCommunicationService } from "./ai-communication-service";
 import { DocumentUploadService } from "./document-upload-service";
@@ -5518,12 +5518,18 @@ TRAQ IQ Dispatch Team
     try {
       const { origin, destination, rate } = req.body;
 
-      if (!origin || !destination) {
-        return res.status(400).json({ error: 'Missing required fields: origin, destination' });
+      if (!origin || typeof origin !== 'string' || !origin.trim()) {
+        return res.status(400).json({ error: 'Missing or invalid required field: origin' });
+      }
+      if (!destination || typeof destination !== 'string' || !destination.trim()) {
+        return res.status(400).json({ error: 'Missing or invalid required field: destination' });
+      }
+      if (!rate) {
+        return res.status(400).json({ error: 'Missing required field: rate' });
       }
 
-      const rateDisplay = rate ? `$${rate}` : 'Contact dispatch';
-      const message = `🚛 NEW LOAD ALERT\n${origin} → ${destination}\nRate: ${rateDisplay}\n\nReply YES to claim or call dispatch.`;
+      const rateDisplay = typeof rate === 'number' ? `$${rate.toLocaleString()}` : `$${rate}`;
+      const message = `🚛 NEW LOAD ALERT\n${origin.trim()} → ${destination.trim()}\nRate: ${rateDisplay}\n\nReply YES to claim or call dispatch.`;
 
       console.log(`📡 Webhook /new-load received: ${origin} → ${destination} | Rate: ${rateDisplay}`);
 
@@ -5562,9 +5568,26 @@ TRAQ IQ Dispatch Team
 
       console.log(`✅ Broadcast complete: ${successes} sent, ${failures} failed out of ${results.length} drivers`);
 
+      try {
+        await db.insert(activityLog).values({
+          companyId: 'default-company',
+          entityType: 'webhook_load_broadcast',
+          entityId: `broadcast-${Date.now()}`,
+          action: 'sms_broadcast',
+          actor: 'webhook',
+          details: {
+            load: { origin: origin.trim(), destination: destination.trim(), rate: rateDisplay },
+            summary: { total: results.length, sent: successes, failed: failures },
+            failedDrivers: results.filter((r) => !r.success).map((r) => ({ id: r.driverId, name: r.driverName, error: r.error })),
+          },
+        });
+      } catch (logErr) {
+        console.error('⚠️ Failed to persist broadcast log:', logErr);
+      }
+
       res.json({
         status: 'broadcast_complete',
-        load: { origin, destination, rate: rateDisplay },
+        load: { origin: origin.trim(), destination: destination.trim(), rate: rateDisplay },
         summary: { total: results.length, sent: successes, failed: failures },
         details: results,
       });
