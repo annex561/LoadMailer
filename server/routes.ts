@@ -5524,11 +5524,11 @@ TRAQ IQ Dispatch Team
       if (!destination || typeof destination !== 'string' || !destination.trim()) {
         return res.status(400).json({ error: 'Missing or invalid required field: destination' });
       }
-      if (!rate) {
+      if (rate === undefined || rate === null || rate === '') {
         return res.status(400).json({ error: 'Missing required field: rate' });
       }
 
-      const rateDisplay = typeof rate === 'number' ? `$${rate.toLocaleString()}` : `$${rate}`;
+      const rateDisplay = typeof rate === 'number' ? `$${rate.toLocaleString()}` : `$${String(rate).replace(/^\$/, '')}`;
       const message = `🚛 NEW LOAD ALERT\n${origin.trim()} → ${destination.trim()}\nRate: ${rateDisplay}\n\nReply YES to claim or call dispatch.`;
 
       console.log(`📡 Webhook /new-load received: ${origin} → ${destination} | Rate: ${rateDisplay}`);
