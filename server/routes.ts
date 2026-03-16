@@ -5513,6 +5513,67 @@ TRAQ IQ Dispatch Team
   app.post('/api/sms/status', handleSmsStatus);
   app.post('/api/sms/status-callback', handleSmsStatus);
 
+  // ==================== Webhook: New Load SMS Broadcast ====================
+  app.post('/api/webhook/new-load', async (req, res) => {
+    try {
+      const { origin, destination, rate } = req.body;
+
+      if (!origin || !destination) {
+        return res.status(400).json({ error: 'Missing required fields: origin, destination' });
+      }
+
+      const rateDisplay = rate ? `$${rate}` : 'Contact dispatch';
+      const message = `🚛 NEW LOAD ALERT\n${origin} → ${destination}\nRate: ${rateDisplay}\n\nReply YES to claim or call dispatch.`;
+
+      console.log(`📡 Webhook /new-load received: ${origin} → ${destination} | Rate: ${rateDisplay}`);
+
+      const allDrivers = await storage.getAllDrivers();
+      const eligibleDrivers = allDrivers.filter(
+        (d) => d.status !== 'inactive' && d.status !== 'terminated' && (d.phone || d.phoneNumber)
+      );
+
+      console.log(`📨 Broadcasting new load to ${eligibleDrivers.length} drivers...`);
+
+      const results: { driverId: string; driverName: string; success: boolean; error?: string }[] = [];
+
+      for (const driver of eligibleDrivers) {
+        const phone = driver.phoneNumber || driver.phone;
+        if (!phone) continue;
+        try {
+          const smsResult = await smsLoadService.sendSMS(phone, message);
+          results.push({
+            driverId: driver.id,
+            driverName: driver.name,
+            success: smsResult.success,
+            error: smsResult.error,
+          });
+        } catch (err: any) {
+          results.push({
+            driverId: driver.id,
+            driverName: driver.name,
+            success: false,
+            error: err.message,
+          });
+        }
+      }
+
+      const successes = results.filter((r) => r.success).length;
+      const failures = results.filter((r) => !r.success).length;
+
+      console.log(`✅ Broadcast complete: ${successes} sent, ${failures} failed out of ${results.length} drivers`);
+
+      res.json({
+        status: 'broadcast_complete',
+        load: { origin, destination, rate: rateDisplay },
+        summary: { total: results.length, sent: successes, failed: failures },
+        details: results,
+      });
+    } catch (error: any) {
+      console.error('❌ Error in /api/webhook/new-load:', error);
+      res.status(500).json({ error: 'Failed to broadcast load alert', details: error.message });
+    }
+  });
+
   // ==================== MVFRS (Fleet Reliability System) Routes ====================
   
   // Trucks CRUD
