@@ -18,7 +18,7 @@ import { DATAPIService } from "./dat-api-service";
 import { DATWebsiteScraper } from "./dat-website-scraper";
 import { RealDATScraper } from "./real-dat-scraper";
 import { DATLoadPoster } from "./dat-load-poster";
-import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema, insertTruckSchema, insertVendorSchema, insertFleetInspectionSchema, insertInspectionItemSchema, insertWorkOrderSchema, insertWorkOrderEventSchema, insertBreakdownReportSchema, insertFleetDocumentSchema, insertMaintenancePlanSchema, gmailAccounts, activityLog } from "@shared/schema";
+import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, type InsertLoad, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema, insertTruckSchema, insertVendorSchema, insertFleetInspectionSchema, insertInspectionItemSchema, insertWorkOrderSchema, insertWorkOrderEventSchema, insertBreakdownReportSchema, insertFleetDocumentSchema, insertMaintenancePlanSchema, gmailAccounts, activityLog } from "@shared/schema";
 import { db } from "./db";
 import { aiCommunicationService } from "./ai-communication-service";
 import { DocumentUploadService } from "./document-upload-service";
@@ -5625,11 +5625,25 @@ TRAQ IQ Dispatch Team
 
       const rate = parseFloat(String(Rate));
       const mileage = parseFloat(String(Mileage));
-      const rpm = RPM !== undefined && RPM !== null ? parseFloat(String(RPM)) : (mileage > 0 ? parseFloat((rate / mileage).toFixed(2)) : 0);
+      if (isNaN(rate) || rate <= 0) {
+        return res.status(400).json({ error: 'Rate must be a positive number' });
+      }
+      if (isNaN(mileage) || mileage <= 0) {
+        return res.status(400).json({ error: 'Mileage must be a positive number' });
+      }
+      const rpmRaw = RPM !== undefined && RPM !== null ? parseFloat(String(RPM)) : rate / mileage;
+      const rpm = isNaN(rpmRaw) ? 0 : parseFloat(rpmRaw.toFixed(2));
       const MIN_RPM = 1.80;
       const rpmWarning = rpm < MIN_RPM;
 
       const hasLocationData = PickupLat !== undefined && PickupLon !== undefined;
+      if (hasLocationData) {
+        const latVal = parseFloat(String(PickupLat));
+        const lonVal = parseFloat(String(PickupLon));
+        if (isNaN(latVal) || isNaN(lonVal)) {
+          return res.status(400).json({ error: 'PickupLat and PickupLon must be valid numbers' });
+        }
+      }
 
       console.log(`📡 Amazon Relay webhook received: Rate=$${rate} | Miles=${mileage} | RPM=$${rpm}/mi | HasLocation=${hasLocationData}`);
 
@@ -5695,7 +5709,7 @@ TRAQ IQ Dispatch Team
 
           try {
             await db.insert(activityLog).values({
-              companyId: 'default-company',
+              companyId: realCompanyId,
               entityType: 'relay_alert',
               entityId: `relay-${Date.now()}`,
               action: 'no_driver_available',
@@ -5749,17 +5763,18 @@ TRAQ IQ Dispatch Team
         let savedLoadNumber: string | null = null;
         try {
           const now = new Date();
-          const loadData: any = {
-            loadNumber: `RELAY-${Date.now()}`,
+          const pickupDateStr = now.toISOString().slice(0, 10);
+          const deliveryDateStr = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const loadData: InsertLoad = {
             customerId,
             driverId: matched.id,
             assignedDriverName: matched.name,
             description: `Amazon Relay Load — ${pickupCity}, ${pickupState} → ${deliveryCity}, ${deliveryState}`,
             pickupAddress: `${pickupCity}, ${pickupState}`,
-            pickupDate: now,
+            pickupDate: pickupDateStr,
             pickupTime: '08:00',
             deliveryAddress: `${deliveryCity}, ${deliveryState}`,
-            deliveryDate: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
+            deliveryDate: deliveryDateStr,
             deliveryTime: '17:00',
             rate,
             miles: mileage,
