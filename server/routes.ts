@@ -5533,6 +5533,13 @@ TRAQ IQ Dispatch Team
 
       console.log(`📡 Webhook /new-load received: ${origin} → ${destination} | Rate: ${rateDisplay}`);
 
+      // Resolve real company ID for FK constraint
+      let webhookCompanyId = 'default-company';
+      try {
+        const companies = await storage.getAllCompanies();
+        if (companies.length > 0) webhookCompanyId = companies[0].id;
+      } catch (_) {}
+
       const allDrivers = await storage.getAllDrivers();
       const eligibleDrivers = allDrivers.filter(
         (d) => d.status !== 'inactive' && d.status !== 'terminated' && (d.phone || d.phoneNumber)
@@ -5570,7 +5577,7 @@ TRAQ IQ Dispatch Team
 
       try {
         await db.insert(activityLog).values({
-          companyId: 'default-company',
+          companyId: webhookCompanyId,
           entityType: 'webhook_load_broadcast',
           entityId: `broadcast-${Date.now()}`,
           action: 'sms_broadcast',
@@ -5594,6 +5601,287 @@ TRAQ IQ Dispatch Team
     } catch (error: any) {
       console.error('❌ Error in /api/webhook/new-load:', error);
       res.status(500).json({ error: 'Failed to broadcast load alert', details: error.message });
+    }
+  });
+
+  // ==================== Amazon Relay Webhook — GPS Proximity Dispatch ====================
+  app.post('/api/relay-alert', async (req, res) => {
+    try {
+      const {
+        Rate, Mileage, RPM, LoadLink,
+        PickupCity, PickupState, PickupLat, PickupLon,
+        DeliveryCity, DeliveryState, DeliveryLat, DeliveryLon,
+      } = req.body;
+
+      if (Rate === undefined || Rate === null) {
+        return res.status(400).json({ error: 'Missing required field: Rate' });
+      }
+      if (Mileage === undefined || Mileage === null) {
+        return res.status(400).json({ error: 'Missing required field: Mileage' });
+      }
+      if (!LoadLink) {
+        return res.status(400).json({ error: 'Missing required field: LoadLink' });
+      }
+
+      const rate = parseFloat(String(Rate));
+      const mileage = parseFloat(String(Mileage));
+      const rpm = RPM !== undefined && RPM !== null ? parseFloat(String(RPM)) : (mileage > 0 ? parseFloat((rate / mileage).toFixed(2)) : 0);
+      const MIN_RPM = 1.80;
+      const rpmWarning = rpm < MIN_RPM;
+
+      const hasLocationData = PickupLat !== undefined && PickupLon !== undefined;
+
+      console.log(`📡 Amazon Relay webhook received: Rate=$${rate} | Miles=${mileage} | RPM=$${rpm}/mi | HasLocation=${hasLocationData}`);
+
+      // --- Haversine distance calculation (inline, coords in degrees) ---
+      function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
+        const R = 3959;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      // Resolve the real company ID (FK constraint requires it to exist in companies table)
+      let realCompanyId = 'default-company';
+      try {
+        const companies = await storage.getAllCompanies();
+        if (companies.length > 0) realCompanyId = companies[0].id;
+      } catch (_) {}
+
+      // --- PROXIMITY DISPATCH (when location data is included) ---
+      if (hasLocationData) {
+        const pickupLat = parseFloat(String(PickupLat));
+        const pickupLon = parseFloat(String(PickupLon));
+        const pickupCity = PickupCity ? String(PickupCity) : 'Unknown';
+        const pickupState = PickupState ? String(PickupState) : '';
+        const deliveryCity = DeliveryCity ? String(DeliveryCity) : 'Unknown';
+        const deliveryState = DeliveryState ? String(DeliveryState) : '';
+
+        // Find all available drivers with GPS locations — single batch query
+        const [allDrivers, allActiveLocations] = await Promise.all([
+          storage.getAllDrivers(),
+          storage.getActiveDriverLocationsWithDriverInfo(),
+        ]);
+
+        const driverStatusMap = new Map(allDrivers.map(d => [d.id, d]));
+
+        type DriverMatch = {
+          driver: typeof allDrivers[0];
+          distance: number;
+          location: { latitude: number; longitude: number };
+        };
+        const driversWithDistance: DriverMatch[] = [];
+
+        // De-duplicate: keep only the latest location per driver
+        const seenDriverIds = new Set<string>();
+        for (const loc of allActiveLocations) {
+          if (seenDriverIds.has(loc.driverId)) continue;
+          seenDriverIds.add(loc.driverId);
+          if (loc.latitude === null || loc.longitude === null) continue;
+          const driver = driverStatusMap.get(loc.driverId);
+          if (!driver || driver.status !== 'available') continue;
+          const dist = haversine(loc.latitude, loc.longitude, pickupLat, pickupLon);
+          if (dist <= 50) {
+            driversWithDistance.push({ driver, distance: dist, location: { latitude: loc.latitude, longitude: loc.longitude } });
+          }
+        }
+
+        const availableDrivers = allDrivers.filter(d => d.status === 'available');
+
+        if (driversWithDistance.length === 0) {
+          console.log(`⚠️ No available drivers within 50 miles of ${pickupCity}, ${pickupState}`);
+
+          try {
+            await db.insert(activityLog).values({
+              companyId: 'default-company',
+              entityType: 'relay_alert',
+              entityId: `relay-${Date.now()}`,
+              action: 'no_driver_available',
+              actor: 'relay-webhook',
+              details: {
+                load: { rate, mileage, rpm, loadLink: LoadLink, pickup: `${pickupCity}, ${pickupState}`, delivery: `${deliveryCity}, ${deliveryState}` },
+                reason: 'No available drivers within 50 miles of pickup',
+                rpmWarning,
+              },
+            });
+          } catch (logErr) { console.error('⚠️ Failed to persist relay log:', logErr); }
+
+          return res.json({
+            status: 'no_driver_available',
+            reason: 'No available drivers within 50 miles of pickup location',
+            pickup: `${pickupCity}, ${pickupState}`,
+            rpmCheck: { rpm, threshold: MIN_RPM, passed: !rpmWarning, warning: rpmWarning ? `RPM $${rpm} is below minimum $${MIN_RPM}` : null },
+          });
+        }
+
+        // Pick the closest
+        driversWithDistance.sort((a, b) => a.distance - b.distance);
+        const { driver: matched, distance: distToPickup } = driversWithDistance[0];
+
+        console.log(`✅ Closest driver: ${matched.name} (${distToPickup.toFixed(1)} mi from pickup)`);
+
+        // Find or use default customer for Amazon Relay loads
+        let customerId = 'default-customer';
+        try {
+          const customers = await storage.getAllCustomers();
+          const amazonCustomer = customers.find(c => c.name?.toLowerCase().includes('amazon'));
+          if (amazonCustomer) {
+            customerId = amazonCustomer.id;
+          } else {
+            const newCustomer = await storage.createCustomer({
+              name: 'Amazon Relay',
+              contactPerson: 'Amazon Relay',
+              email: 'relay@amazon.com',
+              phone: 'N/A',
+              address: 'Amazon Logistics',
+              companyId: realCompanyId,
+            });
+            customerId = newCustomer.id;
+          }
+        } catch (custErr) {
+          console.error('⚠️ Could not find/create Amazon customer:', custErr);
+        }
+
+        // Save load to database
+        let savedLoadId: string | null = null;
+        let savedLoadNumber: string | null = null;
+        try {
+          const now = new Date();
+          const loadData: any = {
+            loadNumber: `RELAY-${Date.now()}`,
+            customerId,
+            driverId: matched.id,
+            assignedDriverName: matched.name,
+            description: `Amazon Relay Load — ${pickupCity}, ${pickupState} → ${deliveryCity}, ${deliveryState}`,
+            pickupAddress: `${pickupCity}, ${pickupState}`,
+            pickupDate: now,
+            pickupTime: '08:00',
+            deliveryAddress: `${deliveryCity}, ${deliveryState}`,
+            deliveryDate: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
+            deliveryTime: '17:00',
+            rate,
+            miles: mileage,
+            rpm,
+            status: 'assigned',
+            sourceBoard: 'amazon_relay',
+            originCity: pickupCity,
+            originState: pickupState,
+            destCity: deliveryCity,
+            destState: deliveryState,
+            specialInstructions: `Amazon Relay Load Link: ${LoadLink}`,
+            companyId: realCompanyId,
+          };
+          const savedLoad = await storage.createLoad(loadData);
+          savedLoadId = savedLoad.id;
+          savedLoadNumber = savedLoad.loadNumber;
+          console.log(`💾 Load saved: ${savedLoadNumber} (${savedLoadId})`);
+        } catch (loadErr) {
+          console.error('⚠️ Failed to save load:', loadErr);
+        }
+
+        // Send targeted SMS to matched driver
+        const phone = matched.phoneNumber || matched.phone;
+        let smsResult = { success: false, error: 'No phone number' };
+        if (phone) {
+          const rpmDisplay = `$${rpm.toFixed(2)}/mi`;
+          const msg = [
+            `🚛 AMAZON RELAY LOAD`,
+            `📍 ${pickupCity}, ${pickupState} → ${deliveryCity}, ${deliveryState}`,
+            `💵 Rate: $${rate.toLocaleString()} (${rpmDisplay} RPM)`,
+            `📏 Miles: ${mileage}`,
+            `🔗 ${LoadLink}`,
+            `\nReply YES to accept or call dispatch.`,
+          ].join('\n');
+
+          smsResult = await smsLoadService.sendSMS(phone, msg);
+          console.log(`📱 SMS to ${matched.name}: ${smsResult.success ? '✅ sent' : '❌ failed - ' + smsResult.error}`);
+        }
+
+        // Persist to activity log
+        try {
+          await db.insert(activityLog).values({
+            companyId: realCompanyId,
+            entityType: 'relay_alert',
+            entityId: savedLoadId || `relay-${Date.now()}`,
+            action: 'proximity_dispatch',
+            actor: 'relay-webhook',
+            details: {
+              load: { rate, mileage, rpm, loadLink: LoadLink, pickup: `${pickupCity}, ${pickupState}`, delivery: `${deliveryCity}, ${deliveryState}` },
+              dispatched: { driverId: matched.id, driverName: matched.name, distanceToPickup: parseFloat(distToPickup.toFixed(1)) },
+              smsResult,
+              rpmWarning,
+              savedLoadId,
+              savedLoadNumber,
+              driversChecked: availableDrivers.length,
+              driversInRange: driversWithDistance.length,
+            },
+          });
+        } catch (logErr) { console.error('⚠️ Failed to persist relay log:', logErr); }
+
+        return res.json({
+          status: 'dispatched',
+          driver: { id: matched.id, name: matched.name, distanceToPickupMiles: parseFloat(distToPickup.toFixed(1)) },
+          load: { id: savedLoadId, loadNumber: savedLoadNumber, rate, mileage, rpm, pickup: `${pickupCity}, ${pickupState}`, delivery: `${deliveryCity}, ${deliveryState}`, loadLink: LoadLink },
+          sms: { sent: smsResult.success, error: smsResult.error || null },
+          rpmCheck: { rpm, threshold: MIN_RPM, passed: !rpmWarning, warning: rpmWarning ? `RPM $${rpm.toFixed(2)} is below minimum $${MIN_RPM}` : null },
+          driversChecked: availableDrivers.length,
+          driversInRange: driversWithDistance.length,
+        });
+      }
+
+      // --- FALLBACK BROADCAST (no location data) ---
+      console.log(`📡 No location data — falling back to broadcast to all available drivers`);
+      const origin = 'N/A';
+      const destination = 'N/A';
+      const broadcastMsg = [
+        `🚛 AMAZON RELAY LOAD`,
+        `💵 Rate: $${rate.toLocaleString()} | ${mileage} miles ($${rpm.toFixed(2)}/mi RPM)`,
+        `🔗 ${LoadLink}`,
+        `\nReply YES to claim or call dispatch.`,
+      ].join('\n');
+
+      const allDrivers = await storage.getAllDrivers();
+      const eligible = allDrivers.filter(d => d.status !== 'inactive' && d.status !== 'terminated' && (d.phone || d.phoneNumber));
+      const broadcastResults: { driverId: string; driverName: string; success: boolean; error?: string }[] = [];
+
+      for (const driver of eligible) {
+        const phone = driver.phoneNumber || driver.phone;
+        if (!phone) continue;
+        try {
+          const r = await smsLoadService.sendSMS(phone, broadcastMsg);
+          broadcastResults.push({ driverId: driver.id, driverName: driver.name, success: r.success, error: r.error });
+        } catch (err: any) {
+          broadcastResults.push({ driverId: driver.id, driverName: driver.name, success: false, error: err.message });
+        }
+      }
+
+      const sent = broadcastResults.filter(r => r.success).length;
+      const failed = broadcastResults.filter(r => !r.success).length;
+
+      try {
+        await db.insert(activityLog).values({
+          companyId: realCompanyId,
+          entityType: 'relay_alert',
+          entityId: `relay-broadcast-${Date.now()}`,
+          action: 'broadcast_fallback',
+          actor: 'relay-webhook',
+          details: { load: { rate, mileage, rpm, loadLink: LoadLink }, summary: { total: broadcastResults.length, sent, failed }, rpmWarning },
+        });
+      } catch (logErr) { console.error('⚠️ Failed to persist relay broadcast log:', logErr); }
+
+      return res.json({
+        status: 'broadcast_fallback',
+        reason: 'No location data provided — broadcast sent to all available drivers',
+        load: { rate, mileage, rpm, loadLink: LoadLink },
+        summary: { total: broadcastResults.length, sent, failed },
+        rpmCheck: { rpm, threshold: MIN_RPM, passed: !rpmWarning, warning: rpmWarning ? `RPM $${rpm.toFixed(2)} is below minimum $${MIN_RPM}` : null },
+      });
+
+    } catch (error: any) {
+      console.error('❌ Error in /api/relay-alert:', error);
+      res.status(500).json({ error: 'Relay alert processing failed', details: error.message });
     }
   });
 
