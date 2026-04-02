@@ -22,7 +22,7 @@ import { eq, and, desc, gte, lte, avg, count, sql } from "drizzle-orm";
 import { canHandleEquipmentType, getEquipmentTypeInfo } from "../shared/equipment-types";
 
 // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'not-configured' });
 
 interface LoadMatchingContext {
   driver: Driver;
