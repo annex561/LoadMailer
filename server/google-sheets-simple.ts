@@ -24,14 +24,14 @@ class GoogleSheetsSimple {
   private isRunning = false;
 
   // Convert Google Sheets load to proper Load format for driver notifications
-  private async convertToLoadFormat(googleSheetsLoad: any): Promise<LoadWithRelations | null> {
+  private async convertToLoadFormat(googleSheetsLoad: any): Promise<any> {
     try {
       // Create or find a default customer for Google Sheets loads
       let customer;
       try {
         const customers = await storage.getAllCustomers();
         customer = customers.find(c => c.name === 'Google Sheets Customer');
-        
+
         if (!customer) {
           customer = await storage.createCustomer({
             name: 'Google Sheets Customer',
@@ -55,10 +55,10 @@ class GoogleSheetsSimple {
 
       // Parse pickup date - handle formats like "8/24 - 8/27", "8/24", "ASAP"
       let pickupDate = new Date();
-      
+
       if (googleSheetsLoad.pickup && googleSheetsLoad.pickup !== 'ASAP') {
         const pickupStr = googleSheetsLoad.pickup.trim();
-        
+
         // Handle date ranges like "8/24 - 8/27" by taking the first date
         if (pickupStr.includes(' - ')) {
           const firstDate = pickupStr.split(' - ')[0].trim();
@@ -74,7 +74,7 @@ class GoogleSheetsSimple {
           }
         }
       }
-      
+
       // Create delivery date (add 2 days to pickup)
       let deliveryDate = new Date(pickupDate);
       deliveryDate.setDate(deliveryDate.getDate() + 2);
@@ -86,7 +86,7 @@ class GoogleSheetsSimple {
       // Map equipment type from Google Sheets to standard types
       const equipmentMapping: Record<string, string> = {
         'van': 'dry_van',
-        'box truck': 'box_truck', 
+        'box truck': 'box_truck',
         'sprinter': 'sprinter_van',
         'flatbed': 'flatbed',
         'reefer': 'refrigerated',
@@ -163,166 +163,146 @@ class GoogleSheetsSimple {
   private async importGoogleSheetsLoads() {
     try {
       console.log('🔄 Importing Google Sheets loads...');
-      
-      // Fetch CSV data
+
       const csvUrl = `https://docs.google.com/spreadsheets/d/${this.spreadsheetId}/export?format=csv&gid=0`;
       console.log(`📡 Fetching CSV from: ${csvUrl}`);
-      
+
       const response = await fetch(csvUrl);
-      
+
       if (!response.ok) {
         throw new Error(`Failed to fetch CSV: ${response.status}`);
       }
-      
+
       const csvText = await response.text();
       console.log(`📊 CSV data length: ${csvText.length} chars, first 200 chars: ${csvText.substring(0, 200)}`);
-      
+
       const lines = csvText.trim().split('\n');
       console.log(`📋 Found ${lines.length} lines total`);
-      
+
       if (lines.length < 2) {
         console.log('📋 No data found in Google Sheets');
         return;
       }
 
-      // Parse CSV and create loads
-      const dataRows = lines.slice(1); // Skip header row
+      const dataRows = lines.slice(1);
       let newLoadsCount = 0;
+      const googleSheetsLoadArray: any[] = [];
 
-      // Parse CSV and create loads array
-      const googleSheetsLoadArray = [];
-      
       for (let i = 0; i < dataRows.length; i++) {
         const row = dataRows[i];
         const values = this.parseCSVRow(row);
-        
         if (values.length < 5) continue;
 
-        // Fixed mapping based on screenshot showing: Pay | Total miles | Pick Up | Delivery | pick up date | Deadhead | Weight | Load Type | Contact Info | Company
-        const pay = values[0] || '';        // '$361'
-        const miles = values[1] || '';      // '837'
-        const origin = values[2] || '';     // 'Pick Up location'
-        const destination = values[3] || '';// 'Delivery location'
-        const pickupDate = values[4] || ''; // 'pick up date'
-        const deadhead = values[5] || '';   // 'Deadhead'
-        const weight = values[6] || '';     // 'Weight'
-        const loadType = values[7] || '';   // 'Load Type' (EQUIPMENT)
-        const contact = values[8] || '';    // 'Contact Info' (PHONE)
-        const company = values[9] || '';    // 'Company'
+        const rowId        = values[0] || '';
+        const miles        = values[1] || '';
+        const origin       = values[2] || '';
+        const destination  = values[3] || '';
+        const pickupOffset = values[4] || '';
+        const deadheadRaw  = values[5] || '';
+        const weight       = values[6] || '';
+        const trailerSpec  = values[7] || '';
+        const contactInfo  = values[8] || '';
+        const companyName  = values[9] || '';
 
-        // Skip header row data - detect if this looks like header content
-        if (origin.toLowerCase().includes('pick up') || 
+        if (origin.toLowerCase().includes('pick up') ||
             origin.toLowerCase().includes('delivery') ||
             destination.toLowerCase().includes('delivery') ||
-            destination.toLowerCase().includes('pick up')) {
-          console.log(`📋 Skipping header row: ${origin} → ${destination}`);
-          continue;
-        }
+            destination.toLowerCase().includes('pick up')) continue;
 
-        // Comprehensive validation for complete loads only
-        if (!this.isValidLoad(origin, destination, pickupDate, contact, company)) {
-          console.log(`📋 Skipping incomplete load: ${origin} → ${destination} (missing required fields)`);
-          continue;
-        }
+        if (!this.isValidLoad(origin, destination, pickupOffset, contactInfo, companyName)) continue;
 
-        // Create stable ID from load content to prevent duplicates across runs
-        const stableId = `GS-${origin}-${destination}-${pay}-${miles}`.replace(/[^a-zA-Z0-9-]/g, '').substring(0, 100);
-        
+        const pickupDate = this.convertDayOffset(pickupOffset);
+        const equipment = this.parseEquipment(trailerSpec);
+        const isPhone = /^\(?\d/.test(contactInfo.trim());
+        const phone   = isPhone ? contactInfo.trim() : '';
+        const email   = (!isPhone && contactInfo.includes('@'))
+                          ? contactInfo.trim()
+                          : 'dispatch@lampslogistics.com';
+        const stableId = `GQ-${rowId}`.substring(0, 100);
+
         const load = {
           id: stableId,
           origin: origin,
           destination: destination,
-          pickup: pickupDate || 'ASAP',
+          pickup: pickupDate,
           weight: this.cleanNumber(weight) || 0,
-          rate: this.cleanNumber(pay),
+          rate: '0',
           miles: this.cleanNumber(miles),
-          equipment: 'Van',  // Default equipment type
+          equipment: equipment,
           broker: 'Google Sheets',
-          email: 'dispatch@lampslogistics.com',
-          phone: loadType || 'N/A',      // loadType actually contains phone numbers
-          deadhead: this.cleanNumber(deadhead) || 0,  // Add deadhead from column F
-          company: contact || 'Unknown',  // contact actually contains company names
+          email: email,
+          phone: phone || 'N/A',
+          deadhead: 0,
+          company: companyName || 'Unknown',
+          trailerSpec: trailerSpec,
           scrapedAt: new Date()
         };
 
         googleSheetsLoadArray.push(load);
         newLoadsCount++;
-
-        // Track load IDs for deduplication (note: in-memory only, resets on restart)
-        // Database load creation is disabled to prevent server overload
-        // Loads are stored in memory for API display only
-        if (!processedLoadIds.has(load.id)) {
-          processedLoadIds.add(load.id);
-        }
+        if (!processedLoadIds.has(load.id)) processedLoadIds.add(load.id);
       }
 
-      // Store loads directly in memory for API serving
       googleSheetsLoads = googleSheetsLoadArray;
       console.log(`📋 Stored ${googleSheetsLoads.length} loads in memory for API serving`);
+      console.log(`✅ Google Sheets import complete: ${newLoadsCount} loads added`);
 
-      console.log(`✅ Google Sheets import complete: ${newLoadsCount} loads added, ${processedLoadIds.size} total tracked for notifications`);
-      
     } catch (error) {
-      console.error('❌ Google Sheets import error:', error.message);
+      console.error('❌ Google Sheets import error:', (error as Error).message);
     }
   }
 
+  private convertDayOffset(offsetStr: string): string {
+    if (!offsetStr || offsetStr.trim() === '') return 'ASAP';
+    const offset = parseInt(offsetStr.trim(), 10);
+    if (isNaN(offset)) return offsetStr.trim();
+    const date = new Date();
+    date.setDate(date.getDate() + offset);
+    return `${date.getMonth()+1}/${date.getDate()}/${date.getFullYear()}`;
+  }
+
+  private parseEquipment(trailerSpec: string): string {
+    if (!trailerSpec) return 'Van';
+    const spec = trailerSpec.toLowerCase();
+    if (spec.includes('53') || spec.includes('48')) return 'Van';
+    if (spec.includes('26') || spec.includes('24') || spec.includes('20')) return 'Box Truck';
+    if (spec.includes('sprinter') || spec.includes('cargo van')) return 'Sprinter';
+    if (spec.includes('flatbed')) return 'Flatbed';
+    if (spec.includes('reefer') || spec.includes('refrigerat')) return 'Reefer';
+    if (spec.includes('van')) return 'Van';
+    if (spec.includes('box')) return 'Box Truck';
+    return trailerSpec;
+  }
+
   private parseCSVRow(row: string): string[] {
-    // Simple CSV parser that handles quoted values
     const values: string[] = [];
     let currentValue = '';
     let insideQuotes = false;
-    
     for (let i = 0; i < row.length; i++) {
       const char = row[i];
-      
-      if (char === '"') {
-        insideQuotes = !insideQuotes;
-      } else if (char === ',' && !insideQuotes) {
-        values.push(currentValue.trim());
-        currentValue = '';
-      } else {
-        currentValue += char;
-      }
+      if (char === '"') { insideQuotes = !insideQuotes; }
+      else if (char === ',' && !insideQuotes) { values.push(currentValue.trim()); currentValue = ''; }
+      else { currentValue += char; }
     }
-    
     values.push(currentValue.trim());
     return values;
   }
 
   private cleanNumber(value: string): string {
     if (!value) return '0';
-    // Remove non-numeric characters except decimal point
-    const cleaned = value.replace(/[^0-9.]/g, '');
-    return cleaned || '0';
+    return value.replace(/[^0-9.]/g, '') || '0';
   }
 
-  // Validation function to ensure loads are complete before sending to drivers
   private isValidLoad(origin: string, destination: string, pickupDate: string, contact: string, company: string): boolean {
-    // For now, allow loads to show in dashboard but add validation for driver notifications
-    // Check pickup location - must exist and not be completely empty
-    if (!origin || origin.trim().length < 2) {
-      return false;
-    }
-
-    // Allow loads to pass validation for dashboard display
-    // Only strict validation will be for actual driver notifications later
+    if (!origin || origin.trim().length < 2) return false;
     return true;
   }
 }
 
-// Export singleton instance
 export const googleSheetsSimple = new GoogleSheetsSimple();
 
-// Export function to get current loads
 export function getGoogleSheetsLoads() {
   console.log(`🔍 getGoogleSheetsLoads() called - returning ${googleSheetsLoads.length} loads`);
-  
-  // If no loads, return empty array but log the issue
-  if (!googleSheetsLoads || googleSheetsLoads.length === 0) {
-    console.log('⚠️ No loads found in memory, returning empty array');
-    return [];
-  }
-  
-  return [...googleSheetsLoads]; // Return a copy to prevent mutations
+  if (!googleSheetsLoads || googleSheetsLoads.length === 0) { return []; }
+  return [...googleSheetsLoads];
 }
