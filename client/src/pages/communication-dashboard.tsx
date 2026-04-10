@@ -1226,7 +1226,7 @@ export default function CommunicationDashboard() {
   return (
     <div className="flex h-full bg-background" data-testid="communication-dashboard">
       {/* Thread List Sidebar */}
-      <div className="w-80 min-w-80 max-w-80 flex-shrink-0 border-r border-border bg-card flex flex-col shadow-sm">
+      <div className="w-80 min-w-80 max-w-80 flex-shrink-0 border-r border-border bg-card flex flex-col shadow-sm overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-border bg-card shadow-sm">
           <div className="flex items-center justify-between mb-4">
@@ -1324,7 +1324,7 @@ export default function CommunicationDashboard() {
 
         {/* Thread List - Unified Conversations */}
         <ScrollArea className="flex-1">
-          <div className="px-3 py-2">
+          <div className="px-3 py-2 w-full">
             {/* Loading Skeleton */}
             {threadsLoading && (
               <div className="px-1 py-1.5 space-y-1.5">
@@ -1347,7 +1347,7 @@ export default function CommunicationDashboard() {
             {!threadsLoading && sortedThreads.map((thread) => (
               <button
                 key={thread.id}
-                className={`w-full mb-2 text-left cursor-pointer transition-all duration-200 ease-in-out hover:bg-muted/50 hover:border-primary/30 hover:shadow-md rounded-lg border overflow-hidden ${
+                className={`w-full mb-2 text-left cursor-pointer transition-all duration-200 ease-in-out hover:bg-muted/50 hover:border-primary/30 hover:shadow-md rounded-lg border ${
                   selectedThread?.id === thread.id ? 'border-l-4 border-primary bg-muted/30 shadow-sm' : 'border-border bg-card'
                 }`}
                 onClick={() => setSelectedThread(thread)}
@@ -1394,7 +1394,7 @@ export default function CommunicationDashboard() {
                   
                   {/* Last message */}
                   {thread.lastMessageText && (
-                    <div className="space-y-1 pt-1 border-t border-border/50 overflow-hidden">
+                    <div className="space-y-1 pt-1 border-t border-border/50">
                       <p className="text-xs text-muted-foreground truncate">
                         {thread.lastMessageSender === 'dispatch' ? 'You: ' : ''}
                         {thread.lastMessageText}
