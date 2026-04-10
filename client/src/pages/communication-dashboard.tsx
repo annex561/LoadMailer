@@ -1224,7 +1224,7 @@ export default function CommunicationDashboard() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] bg-background" data-testid="communication-dashboard">
+    <div className="flex h-full bg-background" data-testid="communication-dashboard">
       {/* Thread List Sidebar */}
       <div className="w-80 min-w-80 max-w-80 flex-shrink-0 border-r border-border bg-card flex flex-col shadow-sm">
         {/* Header */}
@@ -1423,7 +1423,7 @@ export default function CommunicationDashboard() {
       </div>
 
       {/* Chat Interface */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {selectedThread ? (
           <>
             {/* Chat Header */}

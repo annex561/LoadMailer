@@ -1029,7 +1029,7 @@ export default function LoadOpsDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen bg-background flex overflow-hidden">
       {/* Sidebar - using shared component */}
       <SidebarNav />
 
