@@ -1324,10 +1324,10 @@ export default function CommunicationDashboard() {
 
         {/* Thread List - Unified Conversations */}
         <ScrollArea className="flex-1">
-          <div className="p-2">
+          <div className="px-3 py-2">
             {/* Loading Skeleton */}
             {threadsLoading && (
-              <div className="p-2 space-y-1.5">
+              <div className="px-1 py-1.5 space-y-1.5">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <div key={i} className="bg-card border border-border rounded-lg p-2.5 animate-pulse">
                     <div className="flex items-start justify-between mb-2">
@@ -1347,13 +1347,13 @@ export default function CommunicationDashboard() {
             {!threadsLoading && sortedThreads.map((thread) => (
               <button
                 key={thread.id}
-                className={`w-full mb-2 text-left cursor-pointer transition-all duration-200 ease-in-out hover:bg-muted/50 hover:border-primary/30 hover:shadow-md rounded-lg border ${
-                  selectedThread?.id === thread.id ? 'ring-2 ring-primary border-primary/50 shadow-lg bg-muted/30' : 'border-border bg-card'
+                className={`w-full mb-2 text-left cursor-pointer transition-all duration-200 ease-in-out hover:bg-muted/50 hover:border-primary/30 hover:shadow-md rounded-lg border overflow-hidden ${
+                  selectedThread?.id === thread.id ? 'border-l-4 border-primary bg-muted/30 shadow-sm' : 'border-border bg-card'
                 }`}
                 onClick={() => setSelectedThread(thread)}
                 data-testid={`button-thread-${thread.id}`}
               >
-                <div className="p-3 space-y-2">
+                <div className="px-4 py-3 space-y-2">
                   {/* Top row: Driver name + Avatar */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1394,7 +1394,7 @@ export default function CommunicationDashboard() {
                   
                   {/* Last message */}
                   {thread.lastMessageText && (
-                    <div className="space-y-1 pt-1 border-t border-border/50">
+                    <div className="space-y-1 pt-1 border-t border-border/50 overflow-hidden">
                       <p className="text-xs text-muted-foreground truncate">
                         {thread.lastMessageSender === 'dispatch' ? 'You: ' : ''}
                         {thread.lastMessageText}
