@@ -4118,28 +4118,34 @@ TRAQ IQ Dispatch Team
       
       console.log(`✅ Dispatcher SMS sent successfully to ${driver.name} (${normalizedPhone})`);
       
-      // Find or create general communication thread for this driver
+      // Find or create communication thread for this driver (reuse existing active thread of any type)
       let thread = null;
       try {
         const threads = await storage.getAllLoadCommunicationThreads();
-        thread = threads.find((t: any) => 
-          t.driverId === driverId && 
-          t.threadType === 'general'
-        );
+        // Prefer the most recently active thread for this driver (any type) so dispatch
+        // outbound messages and inbound SMS always land in the same conversation thread.
+        const driverActiveThreads = threads
+          .filter((t: any) => t.driverId === driverId && t.status === 'active')
+          .sort((a: any, b: any) => {
+            const aTime = new Date(a.lastMessageAt || 0).getTime();
+            const bTime = new Date(b.lastMessageAt || 0).getTime();
+            return bTime - aTime;
+          });
+        thread = driverActiveThreads[0] || null;
         
-        // If no general thread exists, create one
+        // If no thread exists at all, create a unified one
         if (!thread) {
           thread = await storage.createLoadCommunicationThread({
             driverId,
             loadId: null,
-            threadType: 'general',
+            threadType: 'unified',
             driverName: driver.name,
             loadNumber: null,
             loadOrigin: null,
             loadDestination: null,
             loadOfferStatus: null
           });
-          console.log(`✅ Created new general thread for driver ${driver.name}`);
+          console.log(`✅ Created new unified thread for driver ${driver.name}`);
         }
         
         // Create message record in the thread

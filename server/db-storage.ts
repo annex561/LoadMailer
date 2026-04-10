@@ -1869,6 +1869,7 @@ export class DatabaseStorage implements IStorage {
       .from(schema.loadCommunicationThreads)
       .leftJoin(schema.drivers, eq(schema.loadCommunicationThreads.driverId, schema.drivers.id))
       .leftJoin(schema.loads, eq(schema.loadCommunicationThreads.loadId, schema.loads.id))
+      .where(eq(schema.loadCommunicationThreads.status, 'active'))
       .orderBy(desc(schema.loadCommunicationThreads.lastMessageAt));
 
     return threads;
@@ -1911,15 +1912,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnifiedThreadByDriver(driverId: string): Promise<schema.LoadCommunicationThread | undefined> {
+    // Return the most recently active thread for this driver regardless of thread_type,
+    // so inbound SMS always lands in the same thread the UI is displaying.
     const result = await db.select()
       .from(schema.loadCommunicationThreads)
       .where(
         and(
           eq(schema.loadCommunicationThreads.driverId, driverId),
-          eq(schema.loadCommunicationThreads.threadType, 'unified'),
           eq(schema.loadCommunicationThreads.status, 'active')
         )
       )
+      .orderBy(desc(schema.loadCommunicationThreads.lastMessageAt))
       .limit(1);
     return result[0];
   }

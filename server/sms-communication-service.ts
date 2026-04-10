@@ -52,6 +52,10 @@ export class SMSCommunicationService {
         return;
       }
 
+      // Find or create unified communication thread for this driver (one thread per driver)
+      // Do this BEFORE any early-return paths so every inbound message can be persisted.
+      const thread = await this.findOrCreateUnifiedThread(driver);
+
       // 🔐 CHECK FOR LOAD CONFIRMATION RESPONSE
       const confirmationKeywords = ['yes', 'confirm', 'confirmed', 'accept', 'accepted', 'ok', 'okay'];
       const normalizedMessage = message.trim().toLowerCase();
@@ -60,6 +64,21 @@ export class SMSCommunicationService {
       );
       
       if (isConfirmationResponse) {
+        // Persist the incoming confirmation message BEFORE acting on it
+        if (message && message.trim()) {
+          await this.createMessageRecord({
+            threadId: thread.id,
+            loadId: null,
+            senderId: driver.id,
+            senderRole: 'driver',
+            senderName: driver.name,
+            messageType: 'text',
+            textContent: message,
+            smsMessageId: smsId,
+            metadata: { smsId, fromPhone, routingReason: 'confirmation_response' }
+          }, true);
+        }
+
         try {
           // Find driver's most recent dispatched load that hasn't been confirmed
           // Sort by createdAt descending to get the most recent one
@@ -94,7 +113,7 @@ export class SMSCommunicationService {
               `${unconfirmedLoad.originCity || 'Origin'} → ${unconfirmedLoad.destCity || 'Destination'}\n\n` +
               `Drive safe! Contact dispatch if you need anything.`
             );
-            return; // Exit early - confirmation handled
+            return; // Exit early - confirmation handled (message already saved above)
           } else {
             // No pending load to confirm - let the driver know
             await this.sendSMS(fromPhone,
@@ -106,9 +125,6 @@ export class SMSCommunicationService {
           console.error('Error processing load confirmation:', confirmErr);
         }
       }
-
-      // Find or create unified communication thread for this driver (one thread per driver)
-      const thread = await this.findOrCreateUnifiedThread(driver);
       
       // Cache loads for both detection and dual-routing to avoid redundant queries
       const allLoads = await storage.getAllLoads();
@@ -268,15 +284,17 @@ export class SMSCommunicationService {
       // Send acknowledgment to driver
       await this.sendSMS(fromPhone, "✅ Message received. Dispatch has been notified.");
       
-      // Log communication activity for primary load context
+      // Log communication activity for primary load context (only when load is present)
       const primaryContext = loadContexts[0];
-      await this.logCommunication(primaryContext.loadId, thread.id, 'message_sent', driver.id, 'driver', {
-        messageType: 'text',
-        messageLength: message.length,
-        fromPhone: fromPhone,
-        loadContext: primaryContext,
-        totalContexts: loadContexts.length
-      });
+      if (primaryContext.loadId) {
+        await this.logCommunication(primaryContext.loadId, thread.id, 'message_sent', driver.id, 'driver', {
+          messageType: 'text',
+          messageLength: message.length,
+          fromPhone: fromPhone,
+          loadContext: primaryContext,
+          totalContexts: loadContexts.length
+        });
+      }
 
       console.log(`✅ SMS processed for ${driver.name}. Saved to ${loadContexts.length} context(s): ${loadContexts.map(c => c.loadNumber || 'general').join(', ')}`);
     } catch (error) {
@@ -504,13 +522,14 @@ export class SMSCommunicationService {
   }
 
   private async logCommunication(
-    loadId: string, 
+    loadId: string | null, 
     threadId: string, 
     action: string, 
     actorId: string, 
     actorRole: string, 
     details: any
   ): Promise<void> {
+    if (!loadId) return; // communication_logs requires a non-null load_id
     await storage.createCommunicationLog({
       loadId,
       threadId,

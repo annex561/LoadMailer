@@ -1,0 +1,15 @@
+BUG: Inbound SMS messages from drivers are being acknowledged with auto-replies but NOT saved to the database. They never appear in the Message Center UI.
+
+REPRO: I just texted "Got it" to +1 (423) 455-5007 from +1 (205) 861-4115. TRAQ IQ replied "✅ Message received. Dispatch has been notified." but the message "Got it" does not appear in the Message Center conversation thread with Annex Luberisse (+12058614115). Twilio logs confirm the inbound was received at /api/sms/webhook and a 200 was returned.
+
+ROOT CAUSE: The POST /api/sms/webhook handler sends canned auto-replies like "No pending load found to confirm..." and "✅ Message received. Dispatch has been notified." but does not INSERT the incoming message row into the messages table (or whatever table the Message Center UI reads from).
+
+TASK:
+1. Find the file that handles POST /api/sms/webhook (grep for "sms/webhook" or the string "Message received. Dispatch has been notified.").
+2. Find the Drizzle schema table that stores driver messages / conversation messages (the one the /communication-dashboard Message Center reads from — look in shared/schema.ts or server/db/schema.ts).
+3. Refactor the /api/sms/webhook handler so that EVERY inbound SMS is persisted to that messages table BEFORE any load-matching or auto-reply logic runs. The persistence must be unconditional — even if the body doesn't match a load number, even if there's no known driver, save the row. Use the Twilio From number to look up or create the driver/conversation.
+4. Keep the existing auto-reply logic, but make sure it runs AFTER the persistence step, never instead of it.
+5. Make sure the inserted row uses direction="inbound" (or equivalent) so the Message Center renders it on the left side of the conversation thread.
+6. After the fix, restart the server, then manually test: I will text "fix-test-1" from +1 (205) 861-4115 to +1 (423) 455-5007 and it must appear in the Message Center conversation thread with Annex Luberisse within 10 seconds. Report back when done.
+
+DO NOT change any Twilio configuration, environment variables, or the webhook URL. Only fix the handler logic and database write.
