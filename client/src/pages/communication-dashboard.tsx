@@ -1395,7 +1395,7 @@ export default function CommunicationDashboard() {
                   {/* Last message */}
                   {thread.lastMessageText && (
                     <div className="space-y-1 pt-1 border-t border-border/50">
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-xs text-muted-foreground line-clamp-2">
                         {thread.lastMessageSender === 'dispatch' ? 'You: ' : ''}
                         {thread.lastMessageText}
                       </p>
