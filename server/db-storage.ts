@@ -1,17 +1,13 @@
-import { drizzle } from 'drizzle-orm/neon-http';
-import { neon } from '@neondatabase/serverless';
-import { eq, and, or, desc, sql as drizzleSql, notInArray } from 'drizzle-orm';
+import { eq, and, or, desc, sql as drizzleSql, notInArray, inArray } from 'drizzle-orm';
 import * as schema from '@shared/schema';
 import { IStorage } from './storage';
 import { randomUUID, randomBytes } from 'crypto';
 import { nanoid } from 'nanoid';
+import { db } from './db';
 
 function generateSecureTrackingToken(): string {
   return randomBytes(32).toString('hex');
 }
-
-const sql = neon(process.env.DATABASE_URL!);
-const db = drizzle(sql, { schema });
 
 export class DatabaseStorage implements IStorage {
   // Driver operations
@@ -21,9 +17,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllDrivers(): Promise<schema.Driver[]> {
-    const drivers = await db.select().from(schema.drivers);
-    console.log(`📋 Database returned ${drivers.length} drivers:`, drivers.map(d => `${d.name} (${d.id})`));
-    return drivers;
+    return await db.select().from(schema.drivers);
   }
 
   async createDriver(insertDriver: schema.InsertDriver): Promise<schema.Driver> {
@@ -272,6 +266,19 @@ export class DatabaseStorage implements IStorage {
       
       return result;
     }
+  }
+
+  async getActiveLoadsForDispatch(): Promise<{ id: string; driverId: string | null; loadNumber: string; status: string }[]> {
+    const result = await db
+      .select({
+        id: schema.loads.id,
+        driverId: schema.loads.driverId,
+        loadNumber: schema.loads.loadNumber,
+        status: schema.loads.status,
+      })
+      .from(schema.loads)
+      .where(inArray(schema.loads.status, ['assigned', 'in_transit', 'at_pickup', 'at_delivery']));
+    return result;
   }
 
   async createLoad(insertLoad: schema.InsertLoad): Promise<schema.LoadWithRelations> {
@@ -1833,7 +1840,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllLoadCommunicationThreads(): Promise<any[]> {
-    console.log('🚀 DB Storage - getAllLoadCommunicationThreads called');
     const threads = await db
       .select({
         id: schema.loadCommunicationThreads.id,

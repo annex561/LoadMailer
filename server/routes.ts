@@ -3752,27 +3752,21 @@ TRAQ IQ Dispatch Team
         return res.json(enrichedThreads);
       }
       
-      // Full query for dispatcher dashboard
-      let threads = await storage.getAllLoadCommunicationThreads();
-      
-      // Full enrichment only for dispatcher dashboard (no filter)
-      const allDrivers = await storage.getAllDrivers();
-      const allLoads = await storage.getAllLoads();
+      // Full query for dispatcher dashboard - run all three in parallel for speed
+      const [threads, allDrivers, activeLoads] = await Promise.all([
+        storage.getAllLoadCommunicationThreads(),
+        storage.getAllDrivers(),
+        (storage as any).getActiveLoadsForDispatch(),
+      ]);
       
       // For each thread, enrich with driver status and current load info
-      const enrichedThreads = await Promise.all(threads.map(async (thread) => {
-        const messages = await storage.getLoadMessagesByThread(thread.id);
-        const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-        
+      // Use cached thread data instead of N+1 message queries for performance
+      const enrichedThreads = threads.map((thread) => {
         // Find driver info
-        const driver = allDrivers.find(d => d.id === thread.driverId);
+        const driver = allDrivers.find((d: any) => d.id === thread.driverId);
         
         // Find driver's current active load (not necessarily the thread's load)
-        const activeLoad = allLoads.find(load => 
-          load.driverId === thread.driverId && 
-          (load.status === 'assigned' || load.status === 'in_transit' || 
-           load.status === 'at_pickup' || load.status === 'at_delivery')
-        );
+        const activeLoad = activeLoads.find((load: any) => load.driverId === thread.driverId);
         
         // Determine driver status
         const driverStatus = activeLoad ? 'Active' : 'Available';
@@ -3782,14 +3776,14 @@ TRAQ IQ Dispatch Team
           ...thread,
           lastMessage: thread.lastMessageText,
           lastMessageTimestamp: thread.lastMessageAt,
-          lastMessageSenderRole: lastMessage?.senderRole || null,
+          lastMessageSenderRole: thread.lastMessageSender || null,
           // New enhanced fields
           driverStatus,
           currentLoadNumber, // Current active load (may differ from thread.loadNumber)
           driverEquipmentType: driver?.equipmentType || null,
           driverMood: driver?.currentMood || null
         };
-      }));
+      });
       
       res.json(enrichedThreads);
     } catch (error) {
