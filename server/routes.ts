@@ -2563,9 +2563,6 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Send dashboard links to all active drivers
   app.post("/api/drivers/send-dashboard-links", requireBulkAuthorization, bulkSmsRateLimiter, async (req, res) => {
     try {
-      const userIdentifier = req.user?.claims?.email || (req.headers['x-admin-api-key'] ? 'API_KEY' : 'DEV_MODE');
-      console.log(`🚨 BULK SMS SEND INITIATED - User: ${userIdentifier}, IP: ${req.ip}, Time: ${new Date().toISOString()}`);
-      
       const drivers = await storage.getAllDrivers();
       
       // Filter for drivers with valid phone numbers
