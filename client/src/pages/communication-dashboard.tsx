@@ -1403,7 +1403,9 @@ export default function CommunicationDashboard() {
                   {thread.lastMessageText && (
                     <div className="space-y-1 pt-1 border-t border-border/50">
                       <p className="text-xs text-muted-foreground line-clamp-2">
-                        {thread.lastMessageSender === 'dispatch' ? 'You: ' : ''}
+                        {thread.lastMessageSender === 'dispatch'
+                          ? 'You: '
+                          : `${thread.driverPhone || thread.driverName || 'Driver'}: `}
                         {thread.lastMessageText}
                       </p>
                       <p className="text-[10px] text-muted-foreground/70">

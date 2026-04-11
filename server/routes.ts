@@ -5434,18 +5434,21 @@ TRAQ IQ Dispatch Team
         }
       }
 
-      // Handle incoming SMS/MMS through communication service
-      await smsCommunicationService.handleIncomingSMS(From, Body || '', MessageSid, mediaUrls, mediaTypes);
-      
-      // Respond with TwiML to acknowledge receipt
+      // Respond to Twilio IMMEDIATELY with empty TwiML to avoid the 15-second timeout.
+      // Processing is done async below — getAllLoads() alone can take 13+ seconds.
+      // Using empty <Response> instead of <Message> to avoid sending a duplicate
+      // "Message received" SMS to the driver on top of the one sent by handleIncomingSMS.
       res.set('Content-Type', 'text/xml');
-      res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Message>Message received</Message>
-</Response>`);
+      res.send(`<?xml version="1.0" encoding="UTF-8"?><Response></Response>`);
+
+      // Process the inbound SMS asynchronously (fire-and-forget)
+      smsCommunicationService.handleIncomingSMS(From, Body || '', MessageSid, mediaUrls, mediaTypes)
+        .catch(err => console.error('❌ Error processing inbound SMS:', err));
     } catch (error) {
       console.error('❌ Error handling SMS webhook:', error);
-      res.status(500).send('Error processing SMS');
+      if (!res.headersSent) {
+        res.status(500).send('Error processing SMS');
+      }
     }
   });
 

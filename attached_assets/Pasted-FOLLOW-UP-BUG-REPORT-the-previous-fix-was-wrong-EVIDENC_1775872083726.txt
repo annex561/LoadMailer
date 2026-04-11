@@ -1,0 +1,21 @@
+FOLLOW-UP BUG REPORT — the previous fix was wrong.
+
+EVIDENCE the data IS persisting:
+- Annex Luberisse conversation unread count went from 57 to 62 after I sent 5 test SMS messages from +1 (205) 861-4115 to +1 (423) 455-5007. Exactly matches. The database is receiving and storing inbound messages and incrementing unread count.
+
+REAL BUG: The conversation thread view in the Message Center (/communication-dashboard) is NOT RENDERING inbound messages. It only shows outgoing messages. The inbound rows exist in the database but are being filtered out, or the query only returns direction='outbound', or the render loop is skipping them.
+
+YOUR TASK:
+1. FIRST, prove the data is there. Open the Drizzle database tab or run a SQL query against the messages table. Show me the last 10 rows for the conversation with Annex Luberisse (+12058614115) ordered by created_at DESC. I want to see if rows with body='Tfg's', 'Got it', 'Ok thanks', 'The only thing that', 'Ok' exist and what their direction/from/to columns look like.
+
+2. Then open client/src/pages/communication-dashboard.tsx (or wherever the Message Center thread view is rendered — grep for "General Discussion" or "220 messages" strings).
+
+3. Find the query or hook that loads messages for the selected conversation thread. Check whether it has a WHERE clause filtering by direction, or whether the component's render loop has a conditional that skips inbound rows. Look for anything like `direction === 'outbound'`, `msg.isOutgoing`, `.filter(m => m.from === ourNumber)`, etc.
+
+4. Fix it so BOTH inbound AND outbound messages render in the thread, with inbound on the left side (driver) and outbound on the right side (dispatch), sorted by created_at ASC.
+
+5. Also fix the sidebar preview — the conversation preview currently shows "You: Hi! Just a friendly reminder..." but it should show the actual most-recent message regardless of direction. Look at the query that generates the conversation preview and remove any direction filter.
+
+6. Restart and tell me when done. I will text "render-test-1" from +1 (205) 861-4115 to +1 (423) 455-5007 and it must appear in the Annex Luberisse thread on the LEFT side (driver message) within 10 seconds, and in the sidebar preview as "+12058614115: render-test-1".
+
+DO NOT touch Twilio config, the webhook route, the auto-reply logic, or any notification sound code. Only fix the query/render filter in the Message Center.

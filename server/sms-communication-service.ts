@@ -508,8 +508,11 @@ export class SMSCommunicationService {
     if (updateThreadStats) {
       const thread = await storage.getLoadCommunicationThread(messageData.threadId);
       if (thread) {
+        const previewText = (messageData.textContent || '').substring(0, 100);
         await storage.updateLoadCommunicationThread(thread.id, {
           lastMessageAt: new Date(),
+          lastMessageText: previewText || (messageData.mediaUrl ? '[image attachment]' : ''),
+          lastMessageSender: messageData.senderRole,
           messageCount: thread.messageCount + 1,
           unreadDispatchMessages: messageData.senderRole === 'driver' 
             ? thread.unreadDispatchMessages + 1 
