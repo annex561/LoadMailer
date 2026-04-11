@@ -308,23 +308,30 @@ export default function CommunicationDashboard() {
       
       // Play notification sound if there are new messages
       if (hasNewMessages && isAudioUnlockedRef.current && audioContextRef.current) {
-        try {
-          const context = audioContextRef.current;
-          const oscillator = context.createOscillator();
-          const gainNode = context.createGain();
-          
-          oscillator.connect(gainNode);
-          gainNode.connect(context.destination);
-          
-          oscillator.frequency.value = 800; // Frequency in Hz
-          gainNode.gain.setValueAtTime(0.3, context.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
-          
-          oscillator.start(context.currentTime);
-          oscillator.stop(context.currentTime + 0.5);
-        } catch (error) {
-          console.error('Failed to play notification sound:', error);
-        }
+        const playSound = async () => {
+          try {
+            const context = audioContextRef.current!;
+            // Resume context if it was suspended (e.g. after tab was backgrounded)
+            if (context.state === 'suspended') {
+              await context.resume();
+            }
+            const oscillator = context.createOscillator();
+            const gainNode = context.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(context.destination);
+            
+            oscillator.frequency.value = 800;
+            gainNode.gain.setValueAtTime(0.3, context.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
+            
+            oscillator.start(context.currentTime);
+            oscillator.stop(context.currentTime + 0.5);
+          } catch (error) {
+            console.error('Failed to play notification sound:', error);
+          }
+        };
+        playSound();
       }
     }
     
