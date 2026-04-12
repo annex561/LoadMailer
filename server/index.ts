@@ -135,7 +135,15 @@ app.use((req, res, next) => {
 (async () => {
   try {
     log('🚀 Starting server initialization...');
-    
+
+    // Ensure all DB columns exist (idempotent ALTER TABLE IF NOT EXISTS)
+    try {
+      const { ensureSchema } = await import('./ensure-schema');
+      await ensureSchema();
+    } catch (e: any) {
+      log(`⚠️ ensureSchema failed: ${e.message}`);
+    }
+
     // Initialize Stripe schema and sync data BEFORE route registration
     const databaseUrl = process.env.DATABASE_URL;
     if (databaseUrl) {
