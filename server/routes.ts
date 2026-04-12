@@ -803,6 +803,32 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Send a direct SMS to any phone number (admin use)
+  app.post('/api/sms/send-direct', async (req, res) => {
+    try {
+      const { to, message } = req.body;
+      if (!to || !message) {
+        return res.status(400).json({ error: 'to and message are required' });
+      }
+      if (!twilioPhoneNumber) {
+        return res.status(503).json({ error: 'Twilio not configured' });
+      }
+      const normalizedTo = normalizePhoneToE164(to);
+      if (!normalizedTo) {
+        return res.status(400).json({ error: 'Invalid phone number' });
+      }
+      const result = await twilioClient.messages.create({
+        to: normalizedTo,
+        from: twilioPhoneNumber,
+        body: message,
+      });
+      res.json({ success: true, sid: result.sid, to: normalizedTo });
+    } catch (err: any) {
+      console.error('send-direct SMS error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Send test SMS to specific driver
   app.post('/api/sms/test/:driverId', async (req, res) => {
     try {
