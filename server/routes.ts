@@ -2430,6 +2430,62 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Manual driver onboarding endpoint (used by the Add Driver form)
+  app.post("/api/drivers/manual-onboard", async (req, res) => {
+    try {
+      const manualDriverData = {
+        name: req.body.name,
+        email: req.body.email,
+        phone: req.body.phone,
+        licenseNumber: req.body.licenseNumber,
+        licenseState: req.body.licenseState,
+        licenseExpiry: req.body.licenseExpiry,
+        equipmentType: req.body.equipmentType,
+        maxWeight: req.body.maxWeight,
+        maxLength: req.body.maxLength,
+        loadType: req.body.loadType,
+        city: req.body.city,
+        state: req.body.state,
+        zipCode: req.body.zipCode,
+        vehicleYear: req.body.vehicleYear,
+        vehicleMake: req.body.vehicleMake,
+        vehicleModel: req.body.vehicleModel || "",
+        isOnboarded: true,
+        status: "available"
+      };
+
+      const duplicates = await storage.findDuplicateDrivers(
+        manualDriverData.name,
+        manualDriverData.email,
+        manualDriverData.phone
+      );
+
+      if (duplicates.length > 0) {
+        const duplicateFields: string[] = [];
+        duplicates.forEach((dup: any) => {
+          if (dup.name === manualDriverData.name) duplicateFields.push("name");
+          if (dup.email === manualDriverData.email) duplicateFields.push("email");
+          if (dup.phone === manualDriverData.phone) duplicateFields.push("phone");
+        });
+        return res.status(409).json({
+          error: `Driver already exists with the same ${duplicateFields.join(", ")}.`,
+          duplicates,
+          duplicateFields,
+          message: `A driver with this ${duplicateFields.join(", ")} already exists in your fleet.`
+        });
+      }
+
+      const validatedData = insertDriverSchema.parse(manualDriverData);
+      const driver = await storage.createDriver(validatedData);
+      res.status(201).json(driver);
+    } catch (error) {
+      console.error("Error creating manual driver:", error);
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Failed to create driver manually"
+      });
+    }
+  });
+
   // Send dashboard link SMS to a single driver
   app.post("/api/drivers/:id/send-dashboard-link", async (req, res) => {
     try {
