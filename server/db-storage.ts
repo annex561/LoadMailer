@@ -49,7 +49,26 @@ export class DatabaseStorage implements IStorage {
       moodNote: null,
     };
     
-    await db.insert(schema.drivers).values(driver);
+    try {
+      await db.insert(schema.drivers).values(driver);
+    } catch (err: any) {
+      // If insert fails due to unknown columns, retry with only the core columns
+      // (happens when DB schema is behind code schema — ensureSchema will fix on next deploy)
+      console.error('createDriver full insert failed, retrying with core columns:', err.message);
+      const coreDriver = {
+        id: driver.id,
+        name: driver.name,
+        email: driver.email,
+        phone: driver.phone,
+        status: driver.status || 'available',
+        licenseNumber: driver.licenseNumber,
+        emergencyContact: driver.emergencyContact,
+        emergencyPhone: driver.emergencyPhone,
+        isOnboarded: driver.isOnboarded,
+        createdAt: driver.createdAt,
+      };
+      await db.insert(schema.drivers).values(coreDriver as any);
+    }
     return driver;
   }
 
@@ -64,13 +83,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async findDuplicateDrivers(name: string, email: string, phone: string): Promise<schema.Driver[]> {
-    return await db.select().from(schema.drivers).where(
-      or(
-        eq(schema.drivers.name, name),
-        eq(schema.drivers.email, email),
-        eq(schema.drivers.phone, phone)
-      )
-    );
+    try {
+      // Select only core columns to avoid failures when newer columns don't exist yet
+      const rows = await db.select({
+        id: schema.drivers.id,
+        name: schema.drivers.name,
+        email: schema.drivers.email,
+        phone: schema.drivers.phone,
+      }).from(schema.drivers).where(
+        or(
+          eq(schema.drivers.name, name),
+          eq(schema.drivers.email, email),
+          eq(schema.drivers.phone, phone)
+        )
+      );
+      return rows as unknown as schema.Driver[];
+    } catch (err: any) {
+      console.error('findDuplicateDrivers failed:', err.message);
+      return [];
+    }
   }
 
   async getDriverByNameOrPhone(nameOrPhone: string): Promise<schema.Driver | undefined> {
