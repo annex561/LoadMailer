@@ -53,6 +53,11 @@ app.post(
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Health check for Railway (must respond quickly)
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 // API route protection middleware - ensures API routes are handled before Vite fallback
 app.use('/api', (req, res, next) => {
   // Mark this request as an API request
@@ -159,7 +164,7 @@ app.use((req, res, next) => {
         log('✅ Stripe data synced to PostgreSQL');
       } catch (error: any) {
         log(`⚠️ Stripe initialization failed: ${error.message}`);
-        log('⚠️ Continuing without Stripe - please configure Stripe connection in Replit');
+        log('⚠️ Continuing without Stripe - please configure STRIPE_SECRET_KEY in Railway environment variables');
       }
     } else {
       log('⚠️ DATABASE_URL not found - skipping Stripe initialization');

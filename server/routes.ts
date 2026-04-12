@@ -30,7 +30,7 @@ import { datScraperService as puppeteerDATService } from './dat-puppeteer-scrape
 import { googleSheetsService } from './google-sheets-service';
 import { smsLoadService } from './sms-service';
 import { smsCommunicationService } from './sms-communication-service';
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated } from "./auth";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';

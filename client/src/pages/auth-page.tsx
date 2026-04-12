@@ -7,17 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Truck } from "lucide-react";
 
 export default function AuthPage() {
-  const { login } = useUser();
+  const { login, isLoading, error } = useUser();
   const [username, setUsername] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [password, setPassword] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setTimeout(() => {
-      login(username || "Annex Luberisse");
-      setLoading(false);
-    }, 800);
+    await login(username, password);
   };
 
   return (
@@ -33,35 +29,42 @@ export default function AuthPage() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input 
-                id="username" 
-                placeholder="e.g. Annex Luberisse" 
+              <Label htmlFor="username">Username or Email</Label>
+              <Input
+                id="username"
+                placeholder="username or email"
                 className="!bg-slate-950 !border-slate-800 focus-visible:ring-blue-600 !text-slate-100 placeholder:!text-slate-500"
                 style={{ color: '#f1f5f9', backgroundColor: '#020617' }}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                required
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                placeholder="••••••••" 
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
                 className="!bg-slate-950 !border-slate-800 focus-visible:ring-blue-600 !text-slate-100 placeholder:!text-slate-500"
                 style={{ color: '#f1f5f9', backgroundColor: '#020617' }}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
               />
             </div>
-            <Button 
-              type="submit" 
+            {error && (
+              <p className="text-sm text-red-400">{error}</p>
+            )}
+            <Button
+              type="submit"
               className="w-full bg-blue-600 hover:bg-blue-500 font-bold"
-              disabled={loading}
+              disabled={isLoading}
             >
-              {loading ? "Authenticating..." : "Sign In"}
+              {isLoading ? "Authenticating..." : "Sign In"}
             </Button>
           </form>
-          
+
           <div className="mt-4 text-center text-xs text-slate-500">
             Authorized Personnel Only • IP Logged
           </div>

@@ -1,0 +1,187 @@
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
+import type { Express, RequestHandler } from "express";
+import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { promisify } from "util";
+import { storage } from "./storage";
+import { db } from "./db";
+import { users } from "@shared/schema";
+import { eq, or } from "drizzle-orm";
+
+const scryptAsync = promisify(scrypt);
+
+// Hash a plain-text password
+export async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16).toString("hex");
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  return `${buf.toString("hex")}.${salt}`;
+}
+
+// Compare a plain-text password against a stored hash
+export async function verifyPassword(
+  password: string,
+  stored: string
+): Promise<boolean> {
+  const [hashed, salt] = stored.split(".");
+  if (!hashed || !salt) return false;
+  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  const storedBuf = Buffer.from(hashed, "hex");
+  return timingSafeEqual(buf, storedBuf);
+}
+
+// Look up a user by username or email
+async function findUser(usernameOrEmail: string) {
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(
+      or(
+        eq(users.username, usernameOrEmail),
+        eq(users.email, usernameOrEmail)
+      )
+    );
+  return user;
+}
+
+export function getSession() {
+  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  const pgStore = connectPg(session);
+  const sessionStore = new pgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: true,
+    ttl: sessionTtl,
+    tableName: "sessions",
+  });
+  return session({
+    secret: process.env.SESSION_SECRET ?? "traqiq-dev-secret-change-in-production",
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: sessionTtl,
+    },
+  });
+}
+
+export async function setupAuth(app: Express) {
+  app.set("trust proxy", 1);
+  app.use(getSession());
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  passport.use(
+    new LocalStrategy(
+      { usernameField: "username", passwordField: "password" },
+      async (usernameOrEmail, password, done) => {
+        try {
+          const user = await findUser(usernameOrEmail);
+          if (!user) {
+            return done(null, false, { message: "Invalid username or password" });
+          }
+          if (!user.password) {
+            return done(null, false, { message: "Invalid username or password" });
+          }
+          const valid = await verifyPassword(password, user.password);
+          if (!valid) {
+            return done(null, false, { message: "Invalid username or password" });
+          }
+          return done(null, user);
+        } catch (err) {
+          return done(err);
+        }
+      }
+    )
+  );
+
+  passport.serializeUser((user: any, cb) => cb(null, user.id));
+  passport.deserializeUser(async (id: string, cb) => {
+    try {
+      const user = await storage.getUser(id);
+      cb(null, user ?? false);
+    } catch (err) {
+      cb(err);
+    }
+  });
+
+  // POST /api/login — accept JSON body { username, password }
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) {
+        return res.status(401).json({ message: info?.message ?? "Invalid credentials" });
+      }
+      req.login(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
+        const { password: _pw, ...safeUser } = user;
+        return res.json({ ok: true, user: safeUser });
+      });
+    })(req, res, next);
+  });
+
+  // POST /api/register — create a new dispatcher account
+  app.post("/api/register", async (req, res, next) => {
+    try {
+      const { username, email, password, firstName, lastName } = req.body as {
+        username?: string;
+        email?: string;
+        password?: string;
+        firstName?: string;
+        lastName?: string;
+      };
+
+      if (!password || (!username && !email)) {
+        return res.status(400).json({ message: "username/email and password are required" });
+      }
+
+      // Check for existing user
+      const existing = await findUser(username ?? email ?? "");
+      if (existing) {
+        return res.status(409).json({ message: "User already exists" });
+      }
+
+      const hashed = await hashPassword(password);
+      const newUser = await storage.upsertUser({
+        username: username ?? null,
+        email: email ?? null,
+        password: hashed,
+        firstName: firstName ?? null,
+        lastName: lastName ?? null,
+        role: "dispatcher",
+      });
+
+      req.login(newUser, (err) => {
+        if (err) return next(err);
+        const { password: _pw, ...safeUser } = newUser;
+        return res.status(201).json({ ok: true, user: safeUser });
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // GET /api/logout
+  app.get("/api/logout", (req, res) => {
+    req.logout(() => {
+      res.redirect("/");
+    });
+  });
+
+  // POST /api/logout (for frontend fetch calls)
+  app.post("/api/logout", (req, res) => {
+    req.logout(() => {
+      res.json({ ok: true });
+    });
+  });
+}
+
+// Middleware: require authenticated session
+export const isAuthenticated: RequestHandler = (req, res, next) => {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ message: "Unauthorized" });
+};
