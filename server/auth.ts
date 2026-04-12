@@ -47,16 +47,28 @@ async function findUser(usernameOrEmail: string) {
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-    ttl: sessionTtl,
-    tableName: "sessions",
-  });
+
+  // Use Postgres session store when DATABASE_URL is available, otherwise fall back to memory
+  let store: session.Store | undefined;
+  if (process.env.DATABASE_URL) {
+    try {
+      const pgStore = connectPg(session);
+      store = new pgStore({
+        conString: process.env.DATABASE_URL,
+        createTableIfMissing: true,
+        ttl: sessionTtl,
+        tableName: "sessions",
+      });
+    } catch (err) {
+      console.warn("Session DB store failed to init, falling back to memory store:", err);
+    }
+  } else {
+    console.warn("DATABASE_URL not set — using in-memory session store (sessions will not persist across restarts)");
+  }
+
   return session({
     secret: process.env.SESSION_SECRET ?? "traqiq-dev-secret-change-in-production",
-    store: sessionStore,
+    store,
     resave: false,
     saveUninitialized: false,
     cookie: {
