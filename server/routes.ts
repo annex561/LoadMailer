@@ -2433,10 +2433,12 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Manual driver onboarding endpoint (used by the Add Driver form)
   app.post("/api/drivers/manual-onboard", async (req, res) => {
     try {
+      const normalizedDriverPhone = normalizePhoneToE164(req.body.phone) || req.body.phone;
       const manualDriverData = {
         name: req.body.name,
         email: req.body.email,
-        phone: req.body.phone,
+        phone: normalizedDriverPhone,
+        phoneNumber: normalizedDriverPhone,
         licenseNumber: req.body.licenseNumber,
         licenseState: req.body.licenseState,
         licenseExpiry: req.body.licenseExpiry,
