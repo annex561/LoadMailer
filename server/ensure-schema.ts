@@ -1,85 +1,83 @@
 /**
  * Ensures the database schema has all required columns.
- * Uses ADD COLUMN IF NOT EXISTS so it's safe to run on every startup.
- * Each column is added independently so one failure doesn't block others.
+ * Uses ADD COLUMN IF NOT EXISTS — safe to run every startup.
  */
-import { pool } from './db';
+import { sql } from 'drizzle-orm';
+import { db } from './db';
 import { log } from './vite';
 
-async function addColumn(client: any, table: string, column: string, definition: string) {
+async function addCol(table: string, column: string, definition: string) {
   try {
-    await client.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${definition}`);
+    await db.execute(sql.raw(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${definition}`));
   } catch (e: any) {
-    // Ignore "already exists" errors, log others
-    if (!e.message?.includes('already exists') && !e.message?.includes('duplicate column')) {
-      log(`⚠️  ${table}.${column}: ${e.message}`);
+    if (!e.message?.includes('already exists')) {
+      log(`⚠️  schema: ${table}.${column}: ${e.message}`);
     }
   }
 }
 
-async function addConstraint(client: any, table: string, name: string, definition: string) {
+async function addConstraint(name: string, statement: string) {
   try {
-    await client.query(`ALTER TABLE ${table} ADD CONSTRAINT ${name} ${definition}`);
-  } catch (_e) { /* ignore — constraint already exists */ }
+    await db.execute(sql.raw(statement));
+  } catch (_e) { /* already exists */ }
 }
 
 export async function ensureSchema(): Promise<void> {
-  if (!pool) {
+  if (!db) {
     log('⚠️ No DATABASE_URL — skipping schema migration');
     return;
   }
 
-  const client = await pool.connect();
   try {
-    log('🔧 Running schema migration...');
+    log('🔧 Ensuring DB schema...');
 
-    // ── Drivers table ──────────────────────────────────────────────────────
-    await addColumn(client, 'drivers', 'company_id', 'VARCHAR');
-    await addColumn(client, 'drivers', 'equipment_type', "TEXT NOT NULL DEFAULT 'dry_van'");
-    await addColumn(client, 'drivers', 'load_type', "TEXT DEFAULT 'full_partial'");
-    await addColumn(client, 'drivers', 'max_length', 'INTEGER DEFAULT 53');
-    await addColumn(client, 'drivers', 'max_weight', 'INTEGER DEFAULT 26000');
-    await addColumn(client, 'drivers', 'phone_number', 'TEXT');
-    await addColumn(client, 'drivers', 'city', 'TEXT');
-    await addColumn(client, 'drivers', 'enable_sms_notifications', 'BOOLEAN NOT NULL DEFAULT false');
-    await addColumn(client, 'drivers', 'current_mood', "TEXT DEFAULT '😐'");
-    await addColumn(client, 'drivers', 'mood_updated_at', 'TIMESTAMP');
-    await addColumn(client, 'drivers', 'mood_note', 'TEXT');
-    await addColumn(client, 'drivers', 'total_loads', 'INTEGER DEFAULT 0');
-    await addColumn(client, 'drivers', 'completed_loads', 'INTEGER DEFAULT 0');
-    await addColumn(client, 'drivers', 'average_rating', 'REAL DEFAULT 0.0');
-    await addColumn(client, 'drivers', 'total_ratings', 'INTEGER DEFAULT 0');
-    await addColumn(client, 'drivers', 'total_miles', 'INTEGER DEFAULT 0');
-    await addColumn(client, 'drivers', 'total_revenue', 'REAL DEFAULT 0.0');
-    await addColumn(client, 'drivers', 'on_time_deliveries', 'INTEGER DEFAULT 0');
-    await addColumn(client, 'drivers', 'late_deliveries', 'INTEGER DEFAULT 0');
-    await addColumn(client, 'drivers', 'cancelled_loads', 'INTEGER DEFAULT 0');
-    await addColumn(client, 'drivers', 'last_load_date', 'TIMESTAMP');
-    await addColumn(client, 'drivers', 'best_streak', 'INTEGER DEFAULT 0');
-    await addColumn(client, 'drivers', 'current_streak', 'INTEGER DEFAULT 0');
-    await addColumn(client, 'drivers', 'average_delivery_time', 'REAL DEFAULT 0.0');
-    await addColumn(client, 'drivers', 'fuel_efficiency', 'REAL DEFAULT 0.0');
-    await addColumn(client, 'drivers', 'maintenance_score', 'REAL DEFAULT 100.0');
-    await addColumn(client, 'drivers', 'safety_score', 'REAL DEFAULT 100.0');
-    await addColumn(client, 'drivers', 'tracking_token', 'VARCHAR(64)');
-    await addColumn(client, 'drivers', 'license_state', 'TEXT');
-    await addColumn(client, 'drivers', 'license_expiry', 'TEXT');
-    await addColumn(client, 'drivers', 'state', 'TEXT');
-    await addColumn(client, 'drivers', 'zip_code', 'TEXT');
-    await addColumn(client, 'drivers', 'vehicle_year', 'TEXT');
-    await addColumn(client, 'drivers', 'vehicle_make', 'TEXT');
-    await addColumn(client, 'drivers', 'vehicle_model', 'TEXT');
-    await addColumn(client, 'drivers', 'telegram_id', 'TEXT');
-    await addColumn(client, 'drivers', 'telegram_username', 'TEXT');
-    await addColumn(client, 'drivers', 'enable_telegram_notifications', 'BOOLEAN NOT NULL DEFAULT false');
+    // ── Drivers ──────────────────────────────────────────────────
+    await addCol('drivers', 'company_id', 'VARCHAR');
+    await addCol('drivers', 'equipment_type', "TEXT NOT NULL DEFAULT 'dry_van'");
+    await addCol('drivers', 'load_type', "TEXT DEFAULT 'full_partial'");
+    await addCol('drivers', 'max_length', 'INTEGER DEFAULT 53');
+    await addCol('drivers', 'max_weight', 'INTEGER DEFAULT 26000');
+    await addCol('drivers', 'phone_number', 'TEXT');
+    await addCol('drivers', 'city', 'TEXT');
+    await addCol('drivers', 'enable_sms_notifications', 'BOOLEAN NOT NULL DEFAULT false');
+    await addCol('drivers', 'current_mood', "TEXT DEFAULT '😐'");
+    await addCol('drivers', 'mood_updated_at', 'TIMESTAMP');
+    await addCol('drivers', 'mood_note', 'TEXT');
+    await addCol('drivers', 'total_loads', 'INTEGER DEFAULT 0');
+    await addCol('drivers', 'completed_loads', 'INTEGER DEFAULT 0');
+    await addCol('drivers', 'average_rating', 'REAL DEFAULT 0.0');
+    await addCol('drivers', 'total_ratings', 'INTEGER DEFAULT 0');
+    await addCol('drivers', 'total_miles', 'INTEGER DEFAULT 0');
+    await addCol('drivers', 'total_revenue', 'REAL DEFAULT 0.0');
+    await addCol('drivers', 'on_time_deliveries', 'INTEGER DEFAULT 0');
+    await addCol('drivers', 'late_deliveries', 'INTEGER DEFAULT 0');
+    await addCol('drivers', 'cancelled_loads', 'INTEGER DEFAULT 0');
+    await addCol('drivers', 'last_load_date', 'TIMESTAMP');
+    await addCol('drivers', 'best_streak', 'INTEGER DEFAULT 0');
+    await addCol('drivers', 'current_streak', 'INTEGER DEFAULT 0');
+    await addCol('drivers', 'average_delivery_time', 'REAL DEFAULT 0.0');
+    await addCol('drivers', 'fuel_efficiency', 'REAL DEFAULT 0.0');
+    await addCol('drivers', 'maintenance_score', 'REAL DEFAULT 100.0');
+    await addCol('drivers', 'safety_score', 'REAL DEFAULT 100.0');
+    await addCol('drivers', 'tracking_token', 'VARCHAR(64)');
+    await addCol('drivers', 'license_state', 'TEXT');
+    await addCol('drivers', 'license_expiry', 'TEXT');
+    await addCol('drivers', 'state', 'TEXT');
+    await addCol('drivers', 'zip_code', 'TEXT');
+    await addCol('drivers', 'vehicle_year', 'TEXT');
+    await addCol('drivers', 'vehicle_make', 'TEXT');
+    await addCol('drivers', 'vehicle_model', 'TEXT');
+    await addCol('drivers', 'telegram_id', 'TEXT');
+    await addCol('drivers', 'telegram_username', 'TEXT');
+    await addCol('drivers', 'enable_telegram_notifications', 'BOOLEAN NOT NULL DEFAULT false');
 
-    await addConstraint(client, 'drivers', 'drivers_phone_number_unique', 'UNIQUE (phone_number)');
-    await addConstraint(client, 'drivers', 'drivers_tracking_token_unique', 'UNIQUE (tracking_token)');
+    await addConstraint('drivers_phone_number_unique',
+      'ALTER TABLE drivers ADD CONSTRAINT drivers_phone_number_unique UNIQUE (phone_number)');
+    await addConstraint('drivers_tracking_token_unique',
+      'ALTER TABLE drivers ADD CONSTRAINT drivers_tracking_token_unique UNIQUE (tracking_token)');
 
-    log('✅ Schema migration complete');
+    log('✅ DB schema up to date');
   } catch (err: any) {
-    log(`⚠️ Schema migration error: ${err.message}`);
-  } finally {
-    client.release();
+    log(`⚠️ ensureSchema error: ${err.message}`);
   }
 }
