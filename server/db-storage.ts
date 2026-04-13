@@ -3,7 +3,7 @@ import * as schema from '@shared/schema';
 import { IStorage } from './storage';
 import { randomUUID, randomBytes } from 'crypto';
 import { nanoid } from 'nanoid';
-import { db } from './db';
+import { db, pool } from './db';
 
 function generateSecureTrackingToken(): string {
   return randomBytes(32).toString('hex');
@@ -52,22 +52,29 @@ export class DatabaseStorage implements IStorage {
     try {
       await db.insert(schema.drivers).values(driver);
     } catch (err: any) {
-      // If insert fails due to unknown columns, retry with only the core columns
-      // (happens when DB schema is behind code schema — ensureSchema will fix on next deploy)
-      console.error('createDriver full insert failed, retrying with core columns:', err.message);
-      const coreDriver = {
-        id: driver.id,
-        name: driver.name,
-        email: driver.email,
-        phone: driver.phone,
-        status: driver.status || 'available',
-        licenseNumber: driver.licenseNumber,
-        emergencyContact: driver.emergencyContact,
-        emergencyPhone: driver.emergencyPhone,
-        isOnboarded: driver.isOnboarded,
-        createdAt: driver.createdAt,
-      };
-      await db.insert(schema.drivers).values(coreDriver as any);
+      // Drizzle generates SQL for ALL schema columns — if some don't exist in DB yet,
+      // fall back to raw SQL with only the guaranteed original columns.
+      console.error('createDriver full insert failed, falling back to raw SQL:', err.message);
+      const client = await pool!.connect();
+      try {
+        await client.query(
+          `INSERT INTO drivers (id, name, email, phone, status, license_number, is_onboarded, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (id) DO NOTHING`,
+          [
+            driver.id,
+            driver.name,
+            driver.email,
+            driver.phone,
+            driver.status || 'available',
+            driver.licenseNumber || null,
+            driver.isOnboarded ?? true,
+            driver.createdAt || new Date(),
+          ]
+        );
+      } finally {
+        client.release();
+      }
     }
     return driver;
   }
