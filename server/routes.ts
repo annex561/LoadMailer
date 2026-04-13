@@ -2520,7 +2520,6 @@ export async function registerRoutes(app: Express): Promise<void> {
           VALUES (${newId}, ${manualDriverData.name}, ${manualDriverData.email},
                   ${manualDriverData.phone}, 'available',
                   ${manualDriverData.licenseNumber || null}, true, NOW())
-          ON CONFLICT DO NOTHING
         `);
         driver = { id: newId, ...manualDriverData, status: 'available', isOnboarded: true, createdAt: new Date() };
       }
