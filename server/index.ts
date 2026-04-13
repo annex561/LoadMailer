@@ -58,6 +58,24 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// Diagnostic: show actual DB columns for drivers table
+app.get("/api/debug/schema", async (_req, res) => {
+  try {
+    const { db } = await import('./db');
+    const { sql } = await import('drizzle-orm');
+    const result = await db.execute(sql`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE table_name = 'drivers'
+      ORDER BY ordinal_position
+    `);
+    const rows = (result.rows ?? result) as any[];
+    res.json({ columns: rows.map((r: any) => r.column_name), details: rows });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // API route protection middleware - ensures API routes are handled before Vite fallback
 app.use('/api', (req, res, next) => {
   // Mark this request as an API request
