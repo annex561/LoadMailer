@@ -12,12 +12,34 @@ function generateSecureTrackingToken(): string {
 export class DatabaseStorage implements IStorage {
   // Driver operations
   async getDriver(id: string): Promise<schema.Driver | undefined> {
-    const result = await db.select().from(schema.drivers).where(eq(schema.drivers.id, id));
-    return result[0];
+    try {
+      const result = await db.select().from(schema.drivers).where(eq(schema.drivers.id, id));
+      return result[0];
+    } catch (err: any) {
+      console.error('getDriver full select failed, using raw SQL:', err.message);
+      const client = await pool!.connect();
+      try {
+        const result = await client.query('SELECT * FROM drivers WHERE id = $1', [id]);
+        return result.rows[0] as unknown as schema.Driver;
+      } finally {
+        client.release();
+      }
+    }
   }
 
   async getAllDrivers(): Promise<schema.Driver[]> {
-    return await db.select().from(schema.drivers);
+    try {
+      return await db.select().from(schema.drivers);
+    } catch (err: any) {
+      console.error('getAllDrivers full select failed, using raw SQL:', err.message);
+      const client = await pool!.connect();
+      try {
+        const result = await client.query('SELECT * FROM drivers ORDER BY created_at DESC');
+        return result.rows as unknown as schema.Driver[];
+      } finally {
+        client.release();
+      }
+    }
   }
 
   async createDriver(insertDriver: schema.InsertDriver): Promise<schema.Driver> {
