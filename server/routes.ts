@@ -1583,8 +1583,9 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const drivers = await storage.getAllDrivers();
       res.json(drivers);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch drivers" });
+    } catch (error: any) {
+      console.error('GET /api/drivers error:', error?.message || error);
+      res.status(500).json({ error: error?.message || "Failed to fetch drivers" });
     }
   });
 

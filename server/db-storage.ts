@@ -1,4 +1,4 @@
-import { eq, and, or, desc, sql as drizzleSql, notInArray, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, sql as drizzleSql, sql, notInArray, inArray } from 'drizzle-orm';
 import * as schema from '@shared/schema';
 import { IStorage } from './storage';
 import { randomUUID, randomBytes } from 'crypto';
@@ -16,13 +16,14 @@ export class DatabaseStorage implements IStorage {
       const result = await db.select().from(schema.drivers).where(eq(schema.drivers.id, id));
       return result[0];
     } catch (err: any) {
-      console.error('getDriver full select failed, using raw SQL:', err.message);
-      const client = await pool!.connect();
+      console.error('getDriver Drizzle failed:', err.message);
       try {
-        const result = await client.query('SELECT * FROM drivers WHERE id = $1', [id]);
-        return result.rows[0] as unknown as schema.Driver;
-      } finally {
-        client.release();
+        const result = await db.execute(sql`SELECT * FROM drivers WHERE id = ${id}`);
+        const rows = (result.rows ?? result) as any[];
+        return rows[0] as unknown as schema.Driver;
+      } catch (err2: any) {
+        console.error('getDriver raw SQL also failed:', err2.message);
+        return undefined;
       }
     }
   }
@@ -31,13 +32,14 @@ export class DatabaseStorage implements IStorage {
     try {
       return await db.select().from(schema.drivers);
     } catch (err: any) {
-      console.error('getAllDrivers full select failed, using raw SQL:', err.message);
-      const client = await pool!.connect();
+      console.error('getAllDrivers Drizzle failed:', err.message);
       try {
-        const result = await client.query('SELECT * FROM drivers ORDER BY created_at DESC');
-        return result.rows as unknown as schema.Driver[];
-      } finally {
-        client.release();
+        // Raw SQL fallback — works regardless of which columns exist
+        const result = await db.execute(sql`SELECT * FROM drivers ORDER BY created_at DESC`);
+        return (result.rows ?? result) as unknown as schema.Driver[];
+      } catch (err2: any) {
+        console.error('getAllDrivers raw SQL also failed:', err2.message);
+        return [];
       }
     }
   }
