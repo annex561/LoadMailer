@@ -58,37 +58,45 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Diagnostic: show actual DB columns and test insert using neon() HTTP
+// Diagnostic: show actual DB columns using drizzle WebSocket connection
 app.get("/api/debug/schema", async (_req, res) => {
   try {
-    const { neon } = await import('@neondatabase/serverless');
-    const sql = neon(process.env.DATABASE_URL!);
-    const rows = await sql`
-      SELECT column_name, data_type, is_nullable
-      FROM information_schema.columns
-      WHERE table_name = 'drivers'
-      ORDER BY ordinal_position
-    `;
+    const { db } = await import('./db');
+    const { sql } = await import('drizzle-orm');
+    const result = await db.execute(
+      sql`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'drivers' ORDER BY ordinal_position`
+    );
+    const rows = Array.isArray(result) ? result : (result as any).rows ?? [];
     res.json({ columns: rows.map((r: any) => r.column_name), count: rows.length });
   } catch (e: any) {
-    res.status(500).json({ error: e.message, stack: e.stack?.slice(0, 500) });
+    res.status(500).json({
+      error: e.message,
+      cause: e.cause?.message,
+      data: (e as any).data,
+      code: (e as any).code
+    });
   }
 });
 
 app.get("/api/debug/insert-test", async (_req, res) => {
   try {
-    const { neon } = await import('@neondatabase/serverless');
-    const sql = neon(process.env.DATABASE_URL!);
+    const { db } = await import('./db');
+    const { sql } = await import('drizzle-orm');
     const { randomUUID } = await import('crypto');
     const testId = randomUUID();
-    await sql`
-      INSERT INTO drivers (id, name, email, phone, status, is_onboarded, created_at)
-      VALUES (${testId}, 'Test Driver', ${'test_' + testId + '@test.com'}, ${'+19995550001'}, 'available', true, NOW())
-    `;
-    await sql`DELETE FROM drivers WHERE id = ${testId}`;
+    const testEmail = `test_${Date.now()}@test.com`;
+    await db.execute(
+      sql`INSERT INTO drivers (id, name, email, phone, status, is_onboarded, created_at) VALUES (${testId}, 'Test', ${testEmail}, '+19995550001', 'available', true, NOW())`
+    );
+    await db.execute(sql`DELETE FROM drivers WHERE id = ${testId}`);
     res.json({ success: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message, code: (e as any).code, detail: (e as any).detail, constraint: (e as any).constraint });
+    res.status(500).json({
+      error: e.message,
+      cause: e.cause?.message,
+      data: (e as any).data,
+      code: (e as any).code
+    });
   }
 });
 
