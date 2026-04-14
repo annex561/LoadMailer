@@ -58,38 +58,37 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Diagnostic: show actual DB columns for drivers table
+// Diagnostic: show actual DB columns and test insert using neon() HTTP
 app.get("/api/debug/schema", async (_req, res) => {
   try {
-    const { pool } = await import('./db');
-    const result = await pool.query(`
-      SELECT column_name, data_type, is_nullable, column_default
+    const { neon } = await import('@neondatabase/serverless');
+    const sql = neon(process.env.DATABASE_URL!);
+    const rows = await sql`
+      SELECT column_name, data_type, is_nullable
       FROM information_schema.columns
       WHERE table_name = 'drivers'
       ORDER BY ordinal_position
-    `);
-    res.json({ columns: result.rows.map((r: any) => r.column_name), details: result.rows });
+    `;
+    res.json({ columns: rows.map((r: any) => r.column_name), count: rows.length });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: e.message, stack: e.stack?.slice(0, 500) });
   }
 });
 
-// Diagnostic: try a raw driver insert and show exact error
 app.get("/api/debug/insert-test", async (_req, res) => {
   try {
-    const { pool } = await import('./db');
+    const { neon } = await import('@neondatabase/serverless');
+    const sql = neon(process.env.DATABASE_URL!);
     const { randomUUID } = await import('crypto');
     const testId = randomUUID();
-    await pool.query(
-      `INSERT INTO drivers (id, name, email, phone, status, license_number, is_onboarded, created_at)
-       VALUES ($1, $2, $3, $4, 'available', $5, true, NOW())`,
-      [testId, 'Test Driver', `test_${testId}@test.com`, `+1999${testId.slice(0,7)}`, null]
-    );
-    // Clean up
-    await pool.query(`DELETE FROM drivers WHERE id = $1`, [testId]);
-    res.json({ success: true, message: 'Test insert and delete succeeded' });
+    await sql`
+      INSERT INTO drivers (id, name, email, phone, status, is_onboarded, created_at)
+      VALUES (${testId}, 'Test Driver', ${'test_' + testId + '@test.com'}, ${'+19995550001'}, 'available', true, NOW())
+    `;
+    await sql`DELETE FROM drivers WHERE id = ${testId}`;
+    res.json({ success: true });
   } catch (e: any) {
-    res.status(500).json({ error: e.message, code: e.code, detail: e.detail, column: e.column, constraint: e.constraint });
+    res.status(500).json({ error: e.message, code: (e as any).code, detail: (e as any).detail, constraint: (e as any).constraint });
   }
 });
 
