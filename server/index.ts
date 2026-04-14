@@ -58,45 +58,33 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Diagnostic: show actual DB columns using drizzle WebSocket connection
+// Diagnostic: show actual DB columns and test insert
 app.get("/api/debug/schema", async (_req, res) => {
   try {
-    const { db } = await import('./db');
-    const { sql } = await import('drizzle-orm');
-    const result = await db.execute(
-      sql`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'drivers' ORDER BY ordinal_position`
+    const { pool } = await import('./db');
+    const result = await pool.query(
+      `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'drivers' ORDER BY ordinal_position`
     );
-    const rows = Array.isArray(result) ? result : (result as any).rows ?? [];
-    res.json({ columns: rows.map((r: any) => r.column_name), count: rows.length });
+    res.json({ columns: result.rows.map((r: any) => r.column_name), count: result.rows.length });
   } catch (e: any) {
-    res.status(500).json({
-      error: e.message,
-      cause: e.cause?.message,
-      data: (e as any).data,
-      code: (e as any).code
-    });
+    res.status(500).json({ error: e.message, code: (e as any).code, detail: (e as any).detail });
   }
 });
 
 app.get("/api/debug/insert-test", async (_req, res) => {
   try {
-    const { db } = await import('./db');
-    const { sql } = await import('drizzle-orm');
+    const { pool } = await import('./db');
     const { randomUUID } = await import('crypto');
     const testId = randomUUID();
     const testEmail = `test_${Date.now()}@test.com`;
-    await db.execute(
-      sql`INSERT INTO drivers (id, name, email, phone, status, is_onboarded, created_at) VALUES (${testId}, 'Test', ${testEmail}, '+19995550001', 'available', true, NOW())`
+    await pool.query(
+      `INSERT INTO drivers (id, name, email, phone, status, is_onboarded, created_at) VALUES ($1, 'Test', $2, '+19995550001', 'available', true, NOW())`,
+      [testId, testEmail]
     );
-    await db.execute(sql`DELETE FROM drivers WHERE id = ${testId}`);
-    res.json({ success: true });
+    await pool.query(`DELETE FROM drivers WHERE id = $1`, [testId]);
+    res.json({ success: true, message: 'Insert + delete worked!' });
   } catch (e: any) {
-    res.status(500).json({
-      error: e.message,
-      cause: e.cause?.message,
-      data: (e as any).data,
-      code: (e as any).code
-    });
+    res.status(500).json({ error: e.message, code: (e as any).code, detail: (e as any).detail, constraint: (e as any).constraint });
   }
 });
 

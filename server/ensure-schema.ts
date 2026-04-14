@@ -1,12 +1,11 @@
 /**
- * Ensures the database schema has all required columns via Drizzle WebSocket connection.
+ * Ensures the database schema has all required columns.
+ * Uses pool.query() directly — works with both Neon and Railway Postgres.
  */
-import { sql } from 'drizzle-orm';
-import { db } from './db';
 import { log } from './vite';
 
 export async function ensureSchema(): Promise<void> {
-  if (!process.env.DATABASE_URL || !db) {
+  if (!process.env.DATABASE_URL) {
     log('⚠️ No DATABASE_URL — skipping schema migration');
     return;
   }
@@ -52,22 +51,29 @@ export async function ensureSchema(): Promise<void> {
     ['enable_telegram_notifications', 'BOOLEAN NOT NULL DEFAULT false'],
   ];
 
-  log('🔧 Ensuring DB schema...');
-  let ok = 0;
+  try {
+    const { pool } = await import('./db');
+    if (!pool) { log('⚠️ No pool — skipping schema migration'); return; }
 
-  for (const [col, def] of columns) {
-    try {
-      await db.execute(sql.raw(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS ${col} ${def}`));
-      ok++;
-    } catch (e: any) {
-      if (!e.message?.includes('already exists')) {
-        log(`⚠️ schema ${col}: ${e.message}`);
+    log('🔧 Ensuring DB schema...');
+    let ok = 0;
+
+    for (const [col, def] of columns) {
+      try {
+        await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS ${col} ${def}`);
+        ok++;
+      } catch (e: any) {
+        if (!e.message?.includes('already exists')) {
+          log(`⚠️ schema ${col}: ${e.message}`);
+        }
       }
     }
+
+    try { await pool.query(`ALTER TABLE drivers ADD CONSTRAINT drivers_phone_number_unique UNIQUE (phone_number)`); } catch (_) {}
+    try { await pool.query(`ALTER TABLE drivers ADD CONSTRAINT drivers_tracking_token_unique UNIQUE (tracking_token)`); } catch (_) {}
+
+    log(`✅ Schema migration done (${ok}/${columns.length} columns)`);
+  } catch (err: any) {
+    log(`⚠️ ensureSchema error: ${err.message}`);
   }
-
-  try { await db.execute(sql.raw(`ALTER TABLE drivers ADD CONSTRAINT drivers_phone_number_unique UNIQUE (phone_number)`)); } catch (_) {}
-  try { await db.execute(sql.raw(`ALTER TABLE drivers ADD CONSTRAINT drivers_tracking_token_unique UNIQUE (tracking_token)`)); } catch (_) {}
-
-  log(`✅ Schema migration done (${ok}/${columns.length} columns checked)`);
 }
