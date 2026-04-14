@@ -61,18 +61,35 @@ app.get("/api/health", (_req, res) => {
 // Diagnostic: show actual DB columns for drivers table
 app.get("/api/debug/schema", async (_req, res) => {
   try {
-    const { db } = await import('./db');
-    const { sql } = await import('drizzle-orm');
-    const result = await db.execute(sql`
+    const { pool } = await import('./db');
+    const result = await pool.query(`
       SELECT column_name, data_type, is_nullable, column_default
       FROM information_schema.columns
       WHERE table_name = 'drivers'
       ORDER BY ordinal_position
     `);
-    const rows = (result.rows ?? result) as any[];
-    res.json({ columns: rows.map((r: any) => r.column_name), details: rows });
+    res.json({ columns: result.rows.map((r: any) => r.column_name), details: result.rows });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// Diagnostic: try a raw driver insert and show exact error
+app.get("/api/debug/insert-test", async (_req, res) => {
+  try {
+    const { pool } = await import('./db');
+    const { randomUUID } = await import('crypto');
+    const testId = randomUUID();
+    await pool.query(
+      `INSERT INTO drivers (id, name, email, phone, status, license_number, is_onboarded, created_at)
+       VALUES ($1, $2, $3, $4, 'available', $5, true, NOW())`,
+      [testId, 'Test Driver', `test_${testId}@test.com`, `+1999${testId.slice(0,7)}`, null]
+    );
+    // Clean up
+    await pool.query(`DELETE FROM drivers WHERE id = $1`, [testId]);
+    res.json({ success: true, message: 'Test insert and delete succeeded' });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message, code: e.code, detail: e.detail, column: e.column, constraint: e.constraint });
   }
 });
 
