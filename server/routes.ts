@@ -272,7 +272,7 @@ function normalizePhoneToE164(phoneNumber: string | undefined | null): string | 
 // Helper function to determine the correct base URL with protocol based on environment
 function getBaseUrl(): string {
   // Priority 1: Custom domain (TRAQ IQ production domain)
-  const customDomain = process.env.CUSTOM_DOMAIN || 'traqiqs.io';
+  const customDomain = process.env.CUSTOM_DOMAIN || 'traqiq.app';
   
   // Priority 2: Development/Replit domains
   const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
@@ -1665,14 +1665,11 @@ export async function registerRoutes(app: Express): Promise<void> {
           }
         }
         
-        const latOffset = (Math.random() - 0.5) * 0.05; 
-        const lngOffset = (Math.random() - 0.5) * 0.05;
-        
         return {
           driverId: driver.id,
           driverName: driver.name,
-          latitude: baseLocation.lat + latOffset,
-          longitude: baseLocation.lng + lngOffset,
+          latitude: baseLocation.lat,
+          longitude: baseLocation.lng,
           address: baseLocation.city,
           lastUpdate: new Date().toISOString(),
           speed: 0,

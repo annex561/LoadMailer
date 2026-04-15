@@ -45,7 +45,7 @@ export default function DriverLocationMap() {
   // Fetch real-time driver locations
   const { data: response, isLoading } = useQuery<LocationsResponse>({
     queryKey: ["/api/driver-locations/active"],
-    refetchInterval: 15000, // Refresh every 15 seconds
+    refetchInterval: 5000, // Refresh every 5 seconds for near-real-time tracking
   });
 
   const locations = response?.locations || [];
@@ -88,8 +88,8 @@ export default function DriverLocationMap() {
       });
       
       // Add tile layer with proper attribution
-      window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors',
+      window.L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a> contributors',
         maxZoom: 18,
         minZoom: 3
       }).addTo(map);
