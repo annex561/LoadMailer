@@ -199,7 +199,7 @@ function DATLoads() {
   // Google Sheets loads (all loads)
   const { data: loads = [], isLoading, refetch, dataUpdatedAt } = useQuery<GoogleSheetsLoad[]>({
     queryKey: ["/api/dat-loads"],
-    refetchInterval: 10000,
+    refetchInterval: 30000, // matches server 30s import cycle
     refetchIntervalInBackground: true,
     staleTime: 0,
     gcTime: 0,
@@ -208,7 +208,7 @@ function DATLoads() {
   // Hot loads — includes auto-dispatched and pending-manual loads
   const { data: hotLoads = [], refetch: refetchHotLoads } = useQuery<HotLoad[]>({
     queryKey: ["/api/hot-loads"],
-    refetchInterval: 30000,
+    refetchInterval: 30000, // sync with server cycle
     // Show ALL statuses so dispatcher can see what was auto-sent
     select: (data: HotLoad[]) => data, // no filter — show dispatched + pending
   });
@@ -275,12 +275,12 @@ function DATLoads() {
     } catch { /* noop */ }
   };
 
-  // Countdown timer
+  // Countdown timer — 30s cycle
   useEffect(() => {
     const timer = setInterval(() => {
-      const elapsed = (Date.now() / 1000) % 10;
-      setCountdown(Math.max(0, Math.ceil(10 - elapsed)));
-    }, 100);
+      const elapsed = (Date.now() / 1000) % 30;
+      setCountdown(Math.max(0, Math.ceil(30 - elapsed)));
+    }, 250);
     return () => clearInterval(timer);
   }, [dataUpdatedAt]);
 
@@ -303,7 +303,7 @@ function DATLoads() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">The Load Board</h1>
           <div className="flex items-center gap-4 mt-1">
-            <p className="text-gray-600">✅ Auto-importing every 10 seconds · {loads.length} loads available</p>
+            <p className="text-gray-600">✅ Auto-importing every 30 seconds · {loads.length} loads available</p>
             <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
               <Timer className="w-4 h-4 text-blue-600" />
               <span className="text-sm font-medium text-blue-700">Next update in {countdown}s</span>

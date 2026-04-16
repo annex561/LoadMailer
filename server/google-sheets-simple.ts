@@ -141,14 +141,14 @@ class GoogleSheetsSimple {
     // Import immediately
     await this.importGoogleSheetsLoads();
 
-    // Set up 3-minute interval (180 seconds)
+    // Set up 30-second interval — loads come in fast, timing is everything
     this.importInterval = setInterval(async () => {
       if (this.isRunning) {
         await this.importGoogleSheetsLoads();
       }
-    }, 180000);
+    }, 30000);
 
-    console.log('✅ Google Sheets auto-import started - checking every 3 minutes');
+    console.log('✅ Google Sheets auto-import started - checking every 30 seconds');
   }
 
   stop() {

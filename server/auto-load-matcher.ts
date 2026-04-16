@@ -333,10 +333,10 @@ export const autoLoadMatcher = {
     if (isRunning) return;
     isRunning = true;
 
-    // Run immediately, then every 5 minutes
+    // Run immediately, then every 30 seconds — loads come in fast, timing is everything
     runMatcher();
-    matcherInterval = setInterval(runMatcher, 5 * 60 * 1000);
-    console.log("[AutoMatcher] Started — scanning every 5 minutes");
+    matcherInterval = setInterval(runMatcher, 30 * 1000);
+    console.log("[AutoMatcher] Started — scanning every 30 seconds");
   },
 
   stop() {

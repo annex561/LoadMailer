@@ -381,7 +381,7 @@ app.use((req, res, next) => {
           try {
             const { autoLoadMatcher } = await import('./auto-load-matcher');
             autoLoadMatcher.start();
-            log('✅ Auto Load Matcher started — scanning every 5 minutes for ideal loads');
+            log('✅ Auto Load Matcher started — scanning every 30 seconds for ideal loads');
           } catch (error: any) {
             log(`⚠️ Auto Load Matcher failed to start: ${error.message || error}`);
           }
