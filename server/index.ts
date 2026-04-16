@@ -375,6 +375,19 @@ app.use((req, res, next) => {
         })();
       }, 2000);
         
+      // 2.5 Auto Load Matcher (scores loads, finds nearest driver, surfaces hot loads)
+      setTimeout(() => {
+        (async () => {
+          try {
+            const { autoLoadMatcher } = await import('./auto-load-matcher');
+            autoLoadMatcher.start();
+            log('✅ Auto Load Matcher started — scanning every 5 minutes for ideal loads');
+          } catch (error: any) {
+            log(`⚠️ Auto Load Matcher failed to start: ${error.message || error}`);
+          }
+        })();
+      }, 2500);
+
       // 3. Tennessee Load Generation (completely independent)
       setTimeout(() => {
         (async () => {

@@ -235,10 +235,8 @@ ${formatDate(load.deliveryDate || load.delivery_dt)}
       details = "⚠️ Addresses pending. Stand by for Driver Sheet.";
     }
 
-    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-      ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
-      : 'https://traq-iq.replit.app';
-    const trackingLink = `${baseUrl}/driver/tracking/${load.id}`;
+    const baseUrl = process.env.CUSTOM_DOMAIN || 'https://traqiq.app';
+    const trackingLink = `${baseUrl}/driver-tracker?driver=${load.driverId || load.driver_id || ''}&token=${load.trackingToken || load.tracking_token || ''}`;
 
     const body = `
 ✅ CONFIRMED. Thank you!

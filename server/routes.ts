@@ -3833,6 +3833,108 @@ TRAQ IQ Dispatch Team
     }
   });
   
+  // ─── Auto Load Matcher Routes ─────────────────────────────────────────────
+
+  // GET /api/hot-loads — returns pending auto-matched hot loads for dispatcher
+  app.get('/api/hot-loads', async (_req, res) => {
+    try {
+      const { autoLoadMatcher } = await import('./auto-load-matcher');
+      res.json(autoLoadMatcher.getHotLoads());
+    } catch (e: any) {
+      res.json([]);
+    }
+  });
+
+  // GET /api/hot-loads/stats — matcher stats
+  app.get('/api/hot-loads/stats', async (_req, res) => {
+    try {
+      const { autoLoadMatcher } = await import('./auto-load-matcher');
+      res.json(autoLoadMatcher.getStats());
+    } catch (e: any) {
+      res.json({ total: 0, pending: 0, isRunning: false });
+    }
+  });
+
+  // POST /api/hot-loads/:id/dispatch — dispatcher approves, sends SMS to driver
+  app.post('/api/hot-loads/:id/dispatch', async (req, res) => {
+    try {
+      const { autoLoadMatcher } = await import('./auto-load-matcher');
+      const hotLoad = autoLoadMatcher.getHotLoads().find(h => h.id === req.params.id);
+      if (!hotLoad) return res.status(404).json({ error: 'Hot load not found' });
+
+      // Send booking request SMS to driver
+      if (hotLoad.matchedDriverPhone) {
+        try {
+          const { smsLoadService } = await import('./sms-service');
+          const fakeLoad = {
+            loadNumber: hotLoad.sourceLoadId,
+            load_number: hotLoad.sourceLoadId,
+            rate: hotLoad.rate,
+            rate_total: hotLoad.rate,
+            originCity: hotLoad.origin,
+            origin_city: hotLoad.origin,
+            destCity: hotLoad.destination,
+            dest_city: hotLoad.destination,
+          };
+          const fakeDriver = {
+            phone: hotLoad.matchedDriverPhone,
+            name: hotLoad.matchedDriverName,
+          };
+          await smsLoadService.sendBookingRequest(fakeLoad, fakeDriver);
+        } catch (smsErr: any) {
+          console.error('[HotLoad] SMS failed:', smsErr.message);
+        }
+      }
+
+      autoLoadMatcher.markDispatched(req.params.id);
+      res.json({ success: true, message: 'Dispatch SMS sent to driver' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/hot-loads/:id/dismiss — dispatcher dismisses a match
+  app.post('/api/hot-loads/:id/dismiss', async (req, res) => {
+    try {
+      const { autoLoadMatcher } = await import('./auto-load-matcher');
+      const ok = autoLoadMatcher.dismissMatch(req.params.id);
+      res.json({ success: ok });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/dispatch-criteria — get current ideal load criteria
+  app.get('/api/dispatch-criteria', async (_req, res) => {
+    try {
+      const { autoLoadMatcher } = await import('./auto-load-matcher');
+      res.json(autoLoadMatcher.getCriteria());
+    } catch (e: any) {
+      res.json({});
+    }
+  });
+
+  // PUT /api/dispatch-criteria — update ideal load criteria
+  app.put('/api/dispatch-criteria', async (req, res) => {
+    try {
+      const { autoLoadMatcher } = await import('./auto-load-matcher');
+      const updated = autoLoadMatcher.updateCriteria(req.body);
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/dispatch-criteria/reset — reset to defaults
+  app.post('/api/dispatch-criteria/reset', async (_req, res) => {
+    try {
+      const { autoLoadMatcher } = await import('./auto-load-matcher');
+      res.json(autoLoadMatcher.resetCriteria());
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Communication threads route - CRITICAL for dashboard
   // Enhanced to include driver status and current active load information
   // Supports ?driverId= filter for efficient mobile dashboard loading

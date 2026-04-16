@@ -247,6 +247,14 @@ class GoogleSheetsSimple {
       console.log(`📋 Stored ${googleSheetsLoads.length} loads in memory for API serving`);
       console.log(`✅ Google Sheets import complete: ${newLoadsCount} loads added`);
 
+      // Feed loads into auto-matcher for driver proximity matching
+      try {
+        const { autoLoadMatcher } = await import('./auto-load-matcher');
+        autoLoadMatcher.feedLoads(googleSheetsLoadArray);
+      } catch (e) {
+        // non-fatal
+      }
+
     } catch (error) {
       console.error('❌ Google Sheets import error:', (error as Error).message);
     }
