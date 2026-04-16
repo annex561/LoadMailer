@@ -106,13 +106,20 @@ export class SMSCommunicationService {
             });
             
             console.log(`✅ Driver ${driver.name} confirmed load #${unconfirmedLoad.loadNumber}`);
-            
-            // Send confirmation acknowledgment
-            await this.sendSMS(fromPhone, 
-              `✅ Load #${unconfirmedLoad.loadNumber} CONFIRMED!\n\n` +
-              `${unconfirmedLoad.originCity || 'Origin'} → ${unconfirmedLoad.destCity || 'Destination'}\n\n` +
-              `Drive safe! Contact dispatch if you need anything.`
-            );
+
+            // Immediately send full dispatch instructions + GPS tracking link
+            try {
+              const { loadLifecycleService } = await import('./load-lifecycle-service');
+              await loadLifecycleService.triggerForLoad(unconfirmedLoad.id);
+            } catch (lifecycleErr: any) {
+              console.error('Lifecycle trigger error:', lifecycleErr.message);
+              // Fallback: send basic confirmation
+              await this.sendSMS(fromPhone,
+                `✅ Load #${unconfirmedLoad.loadNumber} CONFIRMED!\n\n` +
+                `${unconfirmedLoad.originCity || 'Origin'} → ${unconfirmedLoad.destCity || 'Destination'}\n\n` +
+                `Full details and tracking link coming momentarily.`
+              );
+            }
             return; // Exit early - confirmation handled (message already saved above)
           } else {
             // No pending load to confirm - let the driver know

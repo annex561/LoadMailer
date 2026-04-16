@@ -3846,6 +3846,86 @@ TRAQ IQ Dispatch Team
     }
   });
 
+  // ─── Load Lifecycle Routes ─────────────────────────────────────────────────
+
+  // GET /api/lifecycle/sop/:loadId — get SOP progress for a load
+  app.get('/api/lifecycle/sop/:loadId', async (req, res) => {
+    try {
+      const load = await storage.getLoad(req.params.loadId);
+      if (!load) return res.status(404).json({ error: 'Load not found' });
+      res.json({
+        loadId: load.id,
+        loadNumber: load.loadNumber,
+        status: load.status,
+        sopProgress: (load as any).sopProgress || {},
+        driverConfirmedAt: (load as any).driverConfirmedAt,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/lifecycle/submit-factoring/:loadId — manually trigger Einstein email
+  app.post('/api/lifecycle/submit-factoring/:loadId', async (req, res) => {
+    try {
+      const load = await storage.getLoad(req.params.loadId);
+      if (!load) return res.status(404).json({ error: 'Load not found' });
+
+      const einsteinEmail = process.env.EINSTEIN_EMAIL || process.env.FACTORING_EMAIL;
+      if (!einsteinEmail) return res.status(400).json({ error: 'EINSTEIN_EMAIL env var not set' });
+
+      const driver = load.driverId ? await storage.getDriver(load.driverId) : null;
+      const rate = (load as any).rate || (load as any).rate_total || 0;
+
+      await transporter.sendMail({
+        from: process.env.SMTP_USER || 'dispatch@traqiq.app',
+        to: einsteinEmail,
+        subject: `📦 Factoring Package — Load #${load.loadNumber} | ${(load as any).originCity || ''} → ${(load as any).destCity || ''}`,
+        html: `
+          <h2>Factoring Submission — Load #${load.loadNumber}</h2>
+          <p><b>Driver:</b> ${driver?.name || 'N/A'}</p>
+          <p><b>Route:</b> ${(load as any).originCity || ''} → ${(load as any).destCity || ''}</p>
+          <p><b>Rate:</b> $${Number(rate).toLocaleString()}</p>
+          <p><b>Load #:</b> ${load.loadNumber}</p>
+          <p>Please submit to factoring: RateCon + BOL + freight photos. Documents are stored in TRAQ-IQ.</p>
+          <p style="color:#999;font-size:12px;">Sent by TRAQ-IQ · LAMP Logistics</p>
+        `,
+      });
+
+      await storage.updateLoad(load.id, {
+        sopProgress: { ...((load as any).sopProgress || {}), einsteinSubmitted: true, einsteinSubmittedAt: new Date().toISOString() },
+      });
+
+      res.json({ success: true, message: `Factoring package emailed to ${einsteinEmail}` });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/lifecycle/release-driver/:loadId — send "you are good to go" to driver
+  app.post('/api/lifecycle/release-driver/:loadId', async (req, res) => {
+    try {
+      const load = await storage.getLoad(req.params.loadId);
+      if (!load) return res.status(404).json({ error: 'Load not found' });
+      const driver = load.driverId ? await storage.getDriver(load.driverId) : null;
+      if (!driver?.phone) return res.status(400).json({ error: 'No driver phone' });
+
+      const { smsLoadService } = await import('./sms-service');
+      await (smsLoadService as any).sendSMS(driver.phone,
+        `✅ You are GOOD TO GO!\n\nLoad #${load.loadNumber} is complete. Thank you for the great work!\n\nYour documents have been received. Stay safe out there. We'll be in touch for your next load. 🚛`
+      );
+
+      await storage.updateLoad(load.id, {
+        status: 'delivered',
+        sopProgress: { ...((load as any).sopProgress || {}), driverReleased: true },
+      });
+
+      res.json({ success: true, message: 'Driver released' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // GET /api/hot-loads/stats — matcher stats
   app.get('/api/hot-loads/stats', async (_req, res) => {
     try {
