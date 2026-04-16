@@ -80,18 +80,32 @@ function HotLoadCard({ hotLoad, onDispatch, onDismiss, isDispatching }: {
   onDismiss: (id: string) => void;
   isDispatching: boolean;
 }) {
+  const isAutoDispatched = hotLoad.status === 'dispatched';
+  const borderColor = isAutoDispatched ? 'border-green-300' : 'border-amber-300';
+
   return (
-    <div className="bg-white border-2 border-amber-300 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+    <div className={`bg-white border-2 ${borderColor} rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5 text-amber-500" />
-          <span className="font-bold text-gray-900 text-sm">
+        <div className="flex items-center gap-2 min-w-0">
+          {isAutoDispatched
+            ? <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+            : <Zap className="w-5 h-5 text-amber-500 flex-shrink-0" />
+          }
+          <span className="font-bold text-gray-900 text-sm truncate">
             {hotLoad.origin} → {hotLoad.destination}
           </span>
         </div>
         <ScoreBadge score={hotLoad.score} />
       </div>
+
+      {/* Auto-dispatched badge */}
+      {isAutoDispatched && (
+        <div className="flex items-center gap-1.5 bg-green-50 border border-green-200 rounded-lg px-2 py-1 mb-3">
+          <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+          <span className="text-xs font-medium text-green-700">SMS auto-sent to {hotLoad.matchedDriverName}</span>
+        </div>
+      )}
 
       {/* Rate / Miles / RPM */}
       <div className="grid grid-cols-3 gap-2 mb-3">
@@ -123,12 +137,12 @@ function HotLoadCard({ hotLoad, onDispatch, onDismiss, isDispatching }: {
       ) : (
         <div className="flex items-center gap-2 bg-amber-50 rounded-lg p-2 mb-3 text-sm">
           <AlertTriangle className="w-4 h-4 text-amber-500" />
-          <span className="text-amber-700">No driver GPS on file — manual assignment needed</span>
+          <span className="text-amber-700 text-xs">No driver phone — manual dispatch needed</span>
         </div>
       )}
 
-      {/* Equipment & weight */}
-      <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+      {/* Equipment / weight / broker */}
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-3 flex-wrap">
         {hotLoad.equipment && <Badge variant="secondary">{hotLoad.equipment}</Badge>}
         {hotLoad.weight && <span>{hotLoad.weight} lbs</span>}
         {hotLoad.broker && <span className="truncate">· {hotLoad.broker}</span>}
@@ -136,23 +150,39 @@ function HotLoadCard({ hotLoad, onDispatch, onDismiss, isDispatching }: {
 
       {/* Actions */}
       <div className="flex gap-2">
-        <Button
-          size="sm"
-          className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-          onClick={() => onDispatch(hotLoad.id)}
-          disabled={isDispatching}
-        >
-          <Send className="w-3 h-3 mr-1" />
-          {isDispatching ? "Sending..." : "Dispatch SMS"}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="border-red-200 text-red-500 hover:bg-red-50"
-          onClick={() => onDismiss(hotLoad.id)}
-        >
-          <XCircle className="w-3 h-3" />
-        </Button>
+        {isAutoDispatched ? (
+          /* Already auto-dispatched — just show dismiss */
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 text-gray-500"
+            onClick={() => onDismiss(hotLoad.id)}
+          >
+            <XCircle className="w-3 h-3 mr-1" />
+            Dismiss
+          </Button>
+        ) : (
+          /* Pending manual dispatch (no driver phone found) */
+          <>
+            <Button
+              size="sm"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => onDispatch(hotLoad.id)}
+              disabled={isDispatching}
+            >
+              <Send className="w-3 h-3 mr-1" />
+              {isDispatching ? "Sending..." : "Send SMS"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-red-200 text-red-500 hover:bg-red-50"
+              onClick={() => onDismiss(hotLoad.id)}
+            >
+              <XCircle className="w-3 h-3" />
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -175,10 +205,12 @@ function DATLoads() {
     gcTime: 0,
   });
 
-  // Hot loads (auto-matched by scorer)
+  // Hot loads — includes auto-dispatched and pending-manual loads
   const { data: hotLoads = [], refetch: refetchHotLoads } = useQuery<HotLoad[]>({
     queryKey: ["/api/hot-loads"],
-    refetchInterval: 30000, // check every 30s
+    refetchInterval: 30000,
+    // Show ALL statuses so dispatcher can see what was auto-sent
+    select: (data: HotLoad[]) => data, // no filter — show dispatched + pending
   });
 
   // Dispatch criteria
@@ -269,7 +301,7 @@ function DATLoads() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">DAT Load Board</h1>
+          <h1 className="text-3xl font-bold text-gray-900">The Load Board</h1>
           <div className="flex items-center gap-4 mt-1">
             <p className="text-gray-600">✅ Auto-importing every 10 seconds · {loads.length} loads available</p>
             <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
@@ -293,14 +325,21 @@ function DATLoads() {
       {/* ── Hot Loads Section ── */}
       {hotLoads.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
             <Zap className="w-5 h-5 text-amber-600" />
             <h2 className="text-lg font-bold text-amber-900">
-              🔥 Hot Loads — Auto-Matched to Drivers
+              🔥 Hot Loads — Fully Automatic
             </h2>
-            <Badge className="bg-amber-500 text-white ml-1">{hotLoads.length} ready</Badge>
-            <p className="text-sm text-amber-700 ml-2">
-              Scored ≥50 RPM · Nearest driver matched by GPS · One click to dispatch
+            <Badge className="bg-green-500 text-white ml-1">
+              {hotLoads.filter((h: HotLoad) => h.status === 'dispatched').length} auto-sent
+            </Badge>
+            {hotLoads.filter((h: HotLoad) => h.status === 'pending').length > 0 && (
+              <Badge className="bg-amber-500 text-white">
+                {hotLoads.filter((h: HotLoad) => h.status === 'pending').length} need manual
+              </Badge>
+            )}
+            <p className="text-sm text-amber-700">
+              Scored ≥50 · Nearest driver matched by GPS · SMS sent automatically
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

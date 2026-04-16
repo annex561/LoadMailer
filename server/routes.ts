@@ -3835,11 +3835,12 @@ TRAQ IQ Dispatch Team
   
   // ─── Auto Load Matcher Routes ─────────────────────────────────────────────
 
-  // GET /api/hot-loads — returns pending auto-matched hot loads for dispatcher
+  // GET /api/hot-loads — returns all recent auto-matched loads (dispatched + pending)
   app.get('/api/hot-loads', async (_req, res) => {
     try {
       const { autoLoadMatcher } = await import('./auto-load-matcher');
-      res.json(autoLoadMatcher.getHotLoads());
+      // Return all matches so dispatcher sees what was auto-sent and what needs manual action
+      res.json(autoLoadMatcher.getAllMatches());
     } catch (e: any) {
       res.json([]);
     }

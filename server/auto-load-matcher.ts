@@ -278,17 +278,49 @@ async function runMatcher(): Promise<void> {
       };
 
       hotLoads.set(loadId, hotLoad);
+
+      // ── AUTO-DISPATCH: send SMS immediately, no dispatcher click needed ──
+      if (bestDriver?.phone) {
+        try {
+          const { smsLoadService } = await import('./sms-service');
+          const smsLoad = {
+            loadNumber: loadId,
+            load_number: loadId,
+            rate,
+            rate_total: rate,
+            originCity: hotLoad.origin,
+            origin_city: hotLoad.origin,
+            destCity: hotLoad.destination,
+            dest_city: hotLoad.destination,
+          };
+          const smsDriver = { phone: bestDriver.phone, name: bestDriver.name };
+          const result = await smsLoadService.sendBookingRequest(smsLoad, smsDriver);
+          if (result.success) {
+            hotLoad.status = 'dispatched';
+            console.log(`[AutoMatcher] ✅ Auto-dispatched load ${loadId} → ${bestDriver.name} (${bestDriver.phone})`);
+          } else {
+            console.warn(`[AutoMatcher] ⚠️ SMS failed for ${loadId}: ${result.error}`);
+          }
+        } catch (smsErr: any) {
+          console.error(`[AutoMatcher] SMS error for ${loadId}:`, smsErr.message);
+        }
+      } else {
+        // No driver phone — leave as pending for dispatcher to handle
+        console.log(`[AutoMatcher] 📋 Hot load ${loadId} queued (no driver phone — manual dispatch needed)`);
+      }
     }
 
-    // Clean up dismissed/dispatched loads older than 1 hour
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    // Clean up dismissed/dispatched loads older than 2 hours
+    const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
     for (const [id, hl] of hotLoads) {
-      if (hl.status !== 'pending' && new Date(hl.createdAt).getTime() < oneHourAgo) {
+      if (hl.status !== 'pending' && new Date(hl.createdAt).getTime() < twoHoursAgo) {
         hotLoads.delete(id);
       }
     }
 
-    console.log(`[AutoMatcher] Ran: ${scored.length} hot loads found, ${hotLoads.size} total in queue`);
+    const autoSent = Array.from(hotLoads.values()).filter(h => h.status === 'dispatched').length;
+    const pending = Array.from(hotLoads.values()).filter(h => h.status === 'pending').length;
+    console.log(`[AutoMatcher] Run complete: ${scored.length} hot loads scored, ${autoSent} auto-dispatched, ${pending} pending manual`);
   } catch (err: any) {
     console.error("[AutoMatcher] Error:", err.message);
   }

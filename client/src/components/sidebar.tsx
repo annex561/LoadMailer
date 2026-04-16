@@ -32,7 +32,7 @@ const menuGroups = [
       { name: "Load History", href: "/loads" },
       { name: "Driver Messages", href: "/communication-dashboard" },
       { name: "Create New Load", href: "/manual-load-entry" },
-      { name: "DAT Load Board", href: "/dat-loads" },
+      { name: "The Load Board", href: "/dat-loads" },
       { name: "Items (AR)", href: "/items" },
     ]
   },
