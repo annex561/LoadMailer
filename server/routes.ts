@@ -1150,40 +1150,41 @@ export async function registerRoutes(app: Express): Promise<void> {
       });
 
       const messages = list.data.messages || [];
+      const results: any[] = [];
+      const findAtt = (p: any): any[] => {
+        let out: any[] = [];
+        if (p.filename && p.filename.toLowerCase().endsWith('.pdf') && p.body?.attachmentId) out.push(p);
+        if (p.parts) for (const part of p.parts) out = out.concat(findAtt(part));
+        return out;
+      };
+
+      const hasOpenAIKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'not-configured');
+      const openAIKeyLength = process.env.OPENAI_API_KEY?.length || 0;
+
       for (const msg of messages) {
         const email = await gmail.users.messages.get({ userId: 'me', id: msg.id! });
         const subject = email.data.payload?.headers?.find((h: any) => h.name === 'Subject')?.value || '';
-
-        const findAtt = (p: any): any[] => {
-          let out: any[] = [];
-          if (p.filename && p.filename.toLowerCase().endsWith('.pdf') && p.body?.attachmentId) out.push(p);
-          if (p.parts) for (const part of p.parts) out = out.concat(findAtt(part));
-          return out;
-        };
+        const from = email.data.payload?.headers?.find((h: any) => h.name === 'From')?.value || '';
         const atts = findAtt(email.data.payload);
         if (atts.length === 0) continue;
-
         const att = atts[0];
         const data = await gmail.users.messages.attachments.get({
           userId: 'me', messageId: msg.id!, id: att.body.attachmentId,
         });
         if (!data.data.data) continue;
         const buffer = Buffer.from(data.data.data, 'base64');
-
-        const hasOpenAIKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'not-configured');
         const parsed = await rateconParser.parsePdf(buffer);
-
-        return res.json({
-          email: { subject, messageId: msg.id },
-          filename: att.filename,
-          pdfSizeBytes: buffer.length,
-          hasOpenAIKey,
-          openAIKeyLength: process.env.OPENAI_API_KEY?.length || 0,
-          parsed,
+        results.push({
+          subject, from, filename: att.filename, sizeBytes: buffer.length,
+          loadNumber: parsed.loadNumber,
+          rate: parsed.rate,
+          origin: parsed.origin,
+          destination: parsed.destination,
+          notes: parsed.notes?.substring(0, 200),
         });
       }
 
-      res.json({ error: 'no PDFs found in last 7d' });
+      res.json({ hasOpenAIKey, openAIKeyLength, count: results.length, results });
     } catch (error: any) {
       console.error('debug parse error:', error);
       res.status(500).json({ error: error.message || String(error), stack: error.stack });

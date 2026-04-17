@@ -152,8 +152,9 @@ export const rateconParser = {
         notes: extracted.notes || undefined
       };
 
-    } catch (error) {
-      console.error("❌ Parser Error:", error);
+    } catch (error: any) {
+      const errMsg = error?.message || String(error);
+      console.error("❌ Parser Error:", errMsg, error?.stack);
       return {
         loadNumber: "MANUAL-REVIEW",
         brokerName: "Unknown",
@@ -165,7 +166,7 @@ export const rateconParser = {
         weight: 0,
         miles: 0,
         rpm: 0,
-        notes: "Error parsing PDF"
+        notes: `Error parsing PDF: ${errMsg}`
       };
     }
   }
