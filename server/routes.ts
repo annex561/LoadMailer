@@ -1127,6 +1127,69 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // DEBUG: pull 1 recent PDF from Gmail and run it through the parser with verbose output
+  app.post('/api/debug/parse-last-pdf', async (req, res) => {
+    try {
+      const { google } = await import('googleapis');
+      const { rateconParser } = await import('./services/ratecon-parser');
+      const accounts = await db.select().from(gmailAccounts).where(eq(gmailAccounts.isActive, true));
+      if (accounts.length === 0) return res.status(400).json({ error: 'no active Gmail account' });
+      const account = accounts[0];
+
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GMAIL_CLIENT_ID,
+        process.env.GMAIL_CLIENT_SECRET
+      );
+      oauth2Client.setCredentials({ refresh_token: account.refreshToken });
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+      const list = await gmail.users.messages.list({
+        userId: 'me',
+        q: 'has:attachment filename:pdf newer_than:7d',
+        maxResults: 10,
+      });
+
+      const messages = list.data.messages || [];
+      for (const msg of messages) {
+        const email = await gmail.users.messages.get({ userId: 'me', id: msg.id! });
+        const subject = email.data.payload?.headers?.find((h: any) => h.name === 'Subject')?.value || '';
+
+        const findAtt = (p: any): any[] => {
+          let out: any[] = [];
+          if (p.filename && p.filename.toLowerCase().endsWith('.pdf') && p.body?.attachmentId) out.push(p);
+          if (p.parts) for (const part of p.parts) out = out.concat(findAtt(part));
+          return out;
+        };
+        const atts = findAtt(email.data.payload);
+        if (atts.length === 0) continue;
+
+        const att = atts[0];
+        const data = await gmail.users.messages.attachments.get({
+          userId: 'me', messageId: msg.id!, id: att.body.attachmentId,
+        });
+        if (!data.data.data) continue;
+        const buffer = Buffer.from(data.data.data, 'base64');
+
+        const hasOpenAIKey = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'not-configured');
+        const parsed = await rateconParser.parsePdf(buffer);
+
+        return res.json({
+          email: { subject, messageId: msg.id },
+          filename: att.filename,
+          pdfSizeBytes: buffer.length,
+          hasOpenAIKey,
+          openAIKeyLength: process.env.OPENAI_API_KEY?.length || 0,
+          parsed,
+        });
+      }
+
+      res.json({ error: 'no PDFs found in last 7d' });
+    } catch (error: any) {
+      console.error('debug parse error:', error);
+      res.status(500).json({ error: error.message || String(error), stack: error.stack });
+    }
+  });
+
   // FORCE RESCAN: re-scan Gmail including already-read emails, then backfill dispatch
   app.post('/api/gmail/force-rescan', async (req, res) => {
     try {
