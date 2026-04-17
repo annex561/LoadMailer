@@ -410,15 +410,15 @@ export const gmailIngest = {
         console.warn(`      ⚠️ Failed to add to GA Loads: ${gaErr}`);
       }
       
-      // DRIVER RESOLUTION: RateCon arrives AFTER a driver already accepted the load.
-      // 1. Check if the PDF itself contains a driver name (CARRIER CONTACT section).
-      // 2. If not, find the driver in the system who was dispatched this load number.
-      // Do NOT run auto-matching — driver assignment was already decided at dispatch.
+      // DRIVER RESOLUTION + AUTO-DISPATCH
+      // RateCon = broker confirmed the load. Driver was already assigned when they replied YES.
+      // 1. Check PDF for driver name → look up in our system
+      // 2. If not in PDF, check if the new load record already has a driverId (from earlier YES)
+      // 3. Once driver is identified, immediately send dispatch instructions (Phase 1 SOP)
       try {
         let resolvedDriverId: string | null = null;
 
         if (data.driverName) {
-          // PDF had driver info — find the driver by name in our system
           const matchedDriver = await db.query.drivers.findFirst({
             where: ilike(drivers.name, `%${data.driverName}%`)
           });
@@ -428,16 +428,55 @@ export const gmailIngest = {
           }
         }
 
+        // If driver resolved, assign and mark confirmed, then trigger dispatch
         if (resolvedDriverId) {
           await db.update(loads)
             .set({ driverId: resolvedDriverId, status: 'confirmed' })
             .where(eq(loads.loadNumber, loadNum));
-          console.log(`      ✅ RateCon load ${loadNum} assigned to driver ${resolvedDriverId}`);
+        }
+
+        // Fetch the saved load (has driverId whether from PDF or prior YES response)
+        const savedLoad = await db.query.loads.findFirst({
+          where: eq(loads.loadNumber, loadNum),
+          with: { driver: true },
+        });
+
+        const driverToDispatch = (savedLoad as any)?.driver;
+
+        if (driverToDispatch?.phone) {
+          // Ensure tracking token exists
+          if (!savedLoad?.trackingToken) {
+            const { randomUUID } = await import('crypto');
+            await db.update(loads)
+              .set({ trackingToken: randomUUID(), status: 'confirmed' })
+              .where(eq(loads.loadNumber, loadNum));
+            // Re-fetch with token
+            const refreshed = await db.query.loads.findFirst({
+              where: eq(loads.loadNumber, loadNum),
+              with: { driver: true },
+            });
+            const { smsLoadService } = await import('../sms-service');
+            await smsLoadService.sendDispatchInstructions(refreshed, driverToDispatch);
+            console.log(`      🚀 Dispatch instructions sent to ${driverToDispatch.name} (${driverToDispatch.phone})`);
+          } else {
+            const { smsLoadService } = await import('../sms-service');
+            await smsLoadService.sendDispatchInstructions(savedLoad, driverToDispatch);
+            console.log(`      🚀 Dispatch instructions sent to ${driverToDispatch.name} (${driverToDispatch.phone})`);
+          }
+
+          // Mark load in_transit and log SOP Phase 1 complete
+          await db.update(loads)
+            .set({
+              status: 'in_transit',
+              sopProgress: { ...((savedLoad as any)?.sopProgress || {}), dispatchSent: true, dispatchSentAt: new Date().toISOString() },
+            })
+            .where(eq(loads.loadNumber, loadNum));
+
         } else {
-          console.log(`      ℹ️  RateCon load ${loadNum} created as "booked" — driver will be linked when they confirm via SMS`);
+          console.log(`      ℹ️  No driver assigned yet for load ${loadNum} — will dispatch when driver is linked`);
         }
       } catch (driverErr) {
-        console.warn(`      ⚠️ Driver resolution failed: ${driverErr}`);
+        console.warn(`      ⚠️ Driver resolution/dispatch failed: ${driverErr}`);
       }
 
       return 'created';

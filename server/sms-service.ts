@@ -238,12 +238,18 @@ ${formatDate(load.deliveryDate || load.delivery_dt)}
     const baseUrl = process.env.CUSTOM_DOMAIN || 'https://traqiq.app';
     const trackingLink = `${baseUrl}/driver-tracker?driver=${load.driverId || load.driver_id || ''}&token=${load.trackingToken || load.tracking_token || ''}`;
 
+    const specialInstructions = load.specialInstructions || load.special_instructions || load.notes || '';
+    const brokerContact = load.brokerPhone || load.broker_phone
+      ? `\n📞 BROKER: ${load.brokerName || load.broker_name || 'Broker'} — ${load.brokerPhone || load.broker_phone}`
+      : '';
+
     const body = `
-✅ CONFIRMED. Thank you!
+✅ LOAD CONFIRMED — DISPATCH INSTRUCTIONS
 
 ${details}
+${brokerContact}${specialInstructions ? `\n\n📋 SPECIAL INSTRUCTIONS:\n${specialInstructions}` : ''}
 
-PLEASE ACTIVATE TRACKING NOW:
+ACTIVATE GPS TRACKING NOW:
 ${trackingLink}
 `.trim();
 
