@@ -229,18 +229,52 @@ export const gmailIngest = {
         ? existingLoad.specialInstructions + "\n\n" + (data.notes || "")
         : data.notes;
 
+      const mergedRate   = data.rate > 0 ? data.rate : existingLoad.rate;
+      const mergedMiles  = data.miles > 0 ? data.miles : existingLoad.miles;
+      const mergedOrigin = (!existingLoad.originCity || existingLoad.originCity === "Unknown" || existingLoad.originCity === "Error") ? data.origin : existingLoad.originCity;
+      const mergedDest   = (!existingLoad.destCity   || existingLoad.destCity   === "Unknown" || existingLoad.destCity   === "Error") ? data.destination : existingLoad.destCity;
+
       await db.update(loads)
         .set({
-          rate: data.rate > 0 ? data.rate : existingLoad.rate,
-          miles: data.miles > 0 ? data.miles : existingLoad.miles,
-          originCity: existingLoad.originCity === "Unknown" || existingLoad.originCity === "Error" ? data.origin : existingLoad.originCity,
-          destCity: existingLoad.destCity === "Unknown" || existingLoad.destCity === "Error" ? data.destination : existingLoad.destCity,
+          rate: mergedRate,
+          miles: mergedMiles,
+          originCity: mergedOrigin,
+          destCity: mergedDest,
           specialInstructions: newNotes,
           brokerPhone: existingLoad.brokerPhone || data.brokerPhone,
+          brokerEmail: existingLoad.brokerEmail || data.brokerEmail,
           dispatcherName: existingLoad.dispatcherName || data.dispatcherName,
         })
         .where(eq(loads.id, existingLoad.id));
-        
+
+      // Mirror update into SQLite ga_loads so inbox stays in sync
+      try {
+        const originParts = (mergedOrigin || "").split(",").map((s: string) => s.trim());
+        const destParts   = (mergedDest   || "").split(",").map((s: string) => s.trim());
+        const rpm = mergedMiles > 0 ? Math.round(((mergedRate || 0) / mergedMiles) * 100) / 100 : 0;
+        gaDb.prepare(`
+          UPDATE ga_loads SET
+            origin_city=?, origin_state=?, dest_city=?, dest_state=?,
+            rate_total=?, miles=?, rpm=?,
+            broker_email=COALESCE(NULLIF(broker_email,''), ?),
+            broker_phone=COALESCE(NULLIF(broker_phone,''), ?),
+            dispatcher_name=COALESCE(NULLIF(dispatcher_name,''), ?),
+            notes=?
+          WHERE load_number=?
+        `).run(
+          originParts[0] || 'Unknown', originParts[1] || '',
+          destParts[0]   || 'Unknown', destParts[1]   || '',
+          mergedRate, mergedMiles, rpm,
+          data.brokerEmail    || '',
+          data.brokerPhone    || '',
+          data.dispatcherName || '',
+          newNotes || '',
+          loadNum
+        );
+      } catch (gaErr) {
+        console.warn(`      ⚠️ Failed to sync update to GA Loads: ${gaErr}`);
+      }
+
       return 'updated';
 
     } else {
@@ -302,14 +336,22 @@ export const gmailIngest = {
         sopProgress: {}, 
       });
       
-      // Also insert into GA Loads SQLite for inbox visibility
+      // Insert into GA Loads SQLite for RateCon Inbox visibility
       try {
-        const originParts = (data.origin || "Unknown").split(",").map((s: string) => s.trim());
-        const destParts = (data.destination || "Unknown").split(",").map((s: string) => s.trim());
+        const originParts = (data.origin || "").split(",").map((s: string) => s.trim());
+        const destParts   = (data.destination || "").split(",").map((s: string) => s.trim());
+        const originCity  = originParts[0] || 'Unknown';
+        const originState = originParts[1] || '';
+        const destCity    = destParts[0]   || 'Unknown';
+        const destState   = destParts[1]   || '';
+
         const miles = data.miles || 0;
-        const rate = data.rate || 0;
-        const rpm = miles > 0 ? Math.round((rate / miles) * 100) / 100 : 0;
-        
+        const rate  = data.rate  || 0;
+        const rpm   = miles > 0 ? Math.round((rate / miles) * 100) / 100 : 0;
+
+        // Flag zero-rate loads for manual review instead of silently passing $0
+        const loadStatus = rate === 0 ? 'manual_review' : 'new';
+
         const gaLoadId = `gmail-${loadNum}-${Date.now()}`;
         const score = scoreLoad({
           miles,
@@ -318,34 +360,52 @@ export const gmailIngest = {
           deadhead_miles: 0,
           equipment: 'dry_van',
         });
-        
+
         gaDb.prepare(`
           INSERT OR REPLACE INTO ga_loads (
-            id, load_number, source, origin_city, origin_state, dest_city, dest_state,
-            pickup_dt, miles, rate_total, rpm, equipment, weight_lbs,
-            broker_name, broker_email, broker_phone, status, score, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            id, load_number, source,
+            origin_city, origin_state,
+            dest_city, dest_state,
+            pickup_dt, delivery_dt,
+            miles, rate_total, rpm,
+            equipment, weight_lbs,
+            broker_name, broker_email, broker_phone,
+            dispatcher_name, driver_name,
+            notes, status, score,
+            created_at
+          ) VALUES (
+            ?, ?, ?,
+            ?, ?,
+            ?, ?,
+            ?, ?,
+            ?, ?, ?,
+            ?, ?,
+            ?, ?, ?,
+            ?, ?,
+            ?, ?, ?,
+            datetime('now')
+          )
         `).run(
           gaLoadId,
-          loadNum, // Store the actual load number for display
+          loadNum,
           'gmail',
-          originParts[0] || 'Unknown',
-          originParts[1] || '',
-          destParts[0] || 'Unknown', 
-          destParts[1] || '',
-          data.pickupDate || new Date().toISOString(),
-          miles,
-          rate,
-          rpm,
+          originCity, originState,
+          destCity,   destState,
+          data.pickupDate   || null,
+          data.deliveryDate || null,
+          miles,  rate,  rpm,
           'dry_van',
           data.weight || 0,
           brokerName,
           data.brokerEmail || '',
           data.brokerPhone || '',
-          'new', // Status is "new" so it shows in inbox
+          data.dispatcherName || '',
+          data.driverName     || '',
+          data.notes          || '',
+          loadStatus,
           score
         );
-        console.log(`      📥 Added to GA Loads Inbox: ${gaLoadId} (score: ${score})`);
+        console.log(`      📥 RateCon Inbox: ${gaLoadId} | ${originCity}, ${originState} → ${destCity}, ${destState} | $${rate} | score:${score}${rate === 0 ? ' ⚠️ MANUAL REVIEW (no rate)' : ''}`);
       } catch (gaErr) {
         console.warn(`      ⚠️ Failed to add to GA Loads: ${gaErr}`);
       }
