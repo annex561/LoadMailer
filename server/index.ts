@@ -414,26 +414,7 @@ app.use((req, res, next) => {
         })();
       }, 2500);
 
-      // 3. Tennessee Load Generation (completely independent)
-      setTimeout(() => {
-        (async () => {
-          try {
-            const { simpleDATConnector } = await import('./simple-dat-connector.js');
-            const { telegramService } = await import('./telegram-service.js');
-            
-            // Check if Telegram service is properly initialized before starting load generation
-            if (telegramService.isServiceRunning()) {
-              await simpleDATConnector.startRealLoadGeneration(telegramService);
-              log('✅ Tennessee load generation started with Telegram notifications');
-            } else {
-              await simpleDATConnector.startRealLoadGeneration(null);
-              log('✅ Tennessee load generation started without Telegram (service not running)');
-            }
-          } catch (error) {
-            log(`⚠️ Tennessee load generation failed to start: ${error.message || error}`);
-          }
-        })();
-      }, 3000);
+      // Tennessee load simulation REMOVED — real loads only from Google Sheets + DAT
       
       log('✅ Background services scheduled to start independently after server deployment');
     }
