@@ -1131,11 +1131,12 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.post('/api/dispatch/backfill-today', async (req, res) => {
     try {
       const { gmailIngest } = await import('./services/gmail');
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
+      // Accept ?hours=N query param, default 72h to cover timezone gaps
+      const hours = parseInt((req.query.hours as string) || '72', 10);
+      const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
       const todaysLoads = await db.query.loads.findMany({
-        where: gte(loads.createdAt, startOfDay),
+        where: gte(loads.createdAt, since),
         with: { driver: true },
       });
 
