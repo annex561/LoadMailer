@@ -232,26 +232,46 @@ async function runMatcher(): Promise<void> {
 
       if (pickupCoords && availableDrivers.length > 0) {
         for (const driver of availableDrivers) {
-          // Get driver's latest GPS location
+          // Priority 1: live GPS ping
           const loc = driverLocations.find(l => l.driverId === driver.id);
-          if (!loc?.latitude || !loc?.longitude) continue;
+          let driverLat: number | null = null;
+          let driverLon: number | null = null;
+          let locationSource = "none";
+
+          if (loc?.latitude && loc?.longitude) {
+            driverLat = loc.latitude;
+            driverLon = loc.longitude;
+            locationSource = "gps";
+          } else if (driver.city) {
+            // Priority 2: driver's home city from profile
+            const homeCoords = getCityCoords(driver.city);
+            if (homeCoords) {
+              driverLat = homeCoords[0];
+              driverLon = homeCoords[1];
+              locationSource = "home_city";
+            }
+          }
+
+          // Skip driver entirely if we have no location at all
+          if (driverLat === null || driverLon === null) continue;
 
           const dist = haversineDistance(
-            loc.latitude, loc.longitude,
+            driverLat, driverLon,
             pickupCoords[0], pickupCoords[1]
           );
 
-          if (dist < bestDistance && dist <= criteria.maxDeadheadMiles) {
+          // Only match if driver is actually within deadhead limit
+          if (dist <= criteria.maxDeadheadMiles && dist < bestDistance) {
             bestDistance = dist;
-            bestDriver = driver;
+            bestDriver = { ...driver, _locationSource: locationSource };
           }
         }
       }
 
-      // If no GPS-located driver, just pick first available
-      if (!bestDriver && availableDrivers.length > 0) {
-        bestDriver = availableDrivers[0];
-        bestDistance = 0;
+      // NO fallback — if no driver is close enough, skip this load entirely
+      if (!bestDriver) {
+        console.log(`[AutoMatcher] ⏭️  Skipping load ${loadId} — no driver within ${criteria.maxDeadheadMiles}mi of ${pickupCityState}`);
+        continue;
       }
 
       const hotLoad: HotLoad = {
@@ -332,6 +352,9 @@ export const autoLoadMatcher = {
   start() {
     if (isRunning) return;
     isRunning = true;
+
+    // Clear any stale matches from previous runs
+    hotLoads.clear();
 
     // Run immediately, then every 30 seconds — loads come in fast, timing is everything
     runMatcher();
