@@ -1165,15 +1165,7 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // Auto-start Gmail scheduler on server startup
-  (async () => {
-    try {
-      const { gmailScheduler } = await import('./services/gmail-scheduler');
-      gmailScheduler.start(1); // Poll every 1 minute
-    } catch (error) {
-      console.error('Failed to start Gmail scheduler:', error);
-    }
-  })();
+  // Gmail scheduler is started in index.ts background services — not here
 
   // ============================================================================
   // GMAIL MULTI-ACCOUNT MANAGEMENT ENDPOINTS

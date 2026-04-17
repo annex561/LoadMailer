@@ -375,6 +375,19 @@ app.use((req, res, next) => {
         })();
       }, 2000);
         
+      // 2.1 Gmail RateCon Scanner — runs every 1 minute, always on
+      setTimeout(() => {
+        (async () => {
+          try {
+            const { gmailScheduler } = await import('./services/gmail-scheduler');
+            gmailScheduler.start(1);
+            log('✅ Gmail RateCon scanner started — scanning inbox every 1 minute');
+          } catch (error: any) {
+            log(`⚠️ Gmail scanner failed to start: ${error.message || error}`);
+          }
+        })();
+      }, 1500);
+
       // 2.25 Load Lifecycle Service (YES handler, check-ins, doc requests, Einstein email)
       setTimeout(() => {
         (async () => {
