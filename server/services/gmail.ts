@@ -223,6 +223,9 @@ export const gmailIngest = {
 
     if (existingLoad) {
       console.log(`      🔄 Merging data into Load #${loadNum}...`);
+      // Store the pre-merge dispatch state so we can detect whether this update
+      // completes the RateCon and should trigger a dispatch SMS.
+      const alreadyDispatched = !!(existingLoad.sopProgress as any)?.dispatchSent;
       
       // MERGE LOGIC
       const newNotes = existingLoad.specialInstructions 
@@ -273,6 +276,13 @@ export const gmailIngest = {
         );
       } catch (gaErr) {
         console.warn(`      ⚠️ Failed to sync update to GA Loads: ${gaErr}`);
+      }
+
+      // AUTO-DISPATCH on update path (only if not already dispatched)
+      if (!alreadyDispatched) {
+        await this.resolveAndDispatch(loadNum, data);
+      } else {
+        console.log(`      ℹ️  Load ${loadNum} already dispatched — skipping SMS`);
       }
 
       return 'updated';
@@ -410,76 +420,106 @@ export const gmailIngest = {
         console.warn(`      ⚠️ Failed to add to GA Loads: ${gaErr}`);
       }
       
-      // DRIVER RESOLUTION + AUTO-DISPATCH
-      // RateCon = broker confirmed the load. Driver was already assigned when they replied YES.
-      // 1. Check PDF for driver name → look up in our system
-      // 2. If not in PDF, check if the new load record already has a driverId (from earlier YES)
-      // 3. Once driver is identified, immediately send dispatch instructions (Phase 1 SOP)
-      try {
-        let resolvedDriverId: string | null = null;
+      await this.resolveAndDispatch(loadNum, data);
 
-        if (data.driverName) {
-          const matchedDriver = await db.query.drivers.findFirst({
-            where: ilike(drivers.name, `%${data.driverName}%`)
-          });
-          if (matchedDriver) {
-            resolvedDriverId = matchedDriver.id;
-            console.log(`      👤 Driver from RateCon PDF: ${matchedDriver.name}`);
-          }
-        }
+      return 'created';
+    }
+  },
 
-        // If driver resolved, assign and mark confirmed, then trigger dispatch
-        if (resolvedDriverId) {
+  /**
+   * Resolve driver + send dispatch SMS (called from both create and update paths).
+   * Never throws — logs failures and falls back to notifying the dispatcher.
+   */
+  async resolveAndDispatch(loadNum: string, data: any): Promise<void> {
+    try {
+      // 1. If PDF gave us a driver name, try to attach it to the load
+      if (data.driverName) {
+        const matchedDriver = await db.query.drivers.findFirst({
+          where: ilike(drivers.name, `%${data.driverName}%`)
+        });
+        if (matchedDriver) {
           await db.update(loads)
-            .set({ driverId: resolvedDriverId, status: 'confirmed' })
+            .set({ driverId: matchedDriver.id, status: 'confirmed' })
             .where(eq(loads.loadNumber, loadNum));
+          console.log(`      👤 Driver from RateCon PDF: ${matchedDriver.name}`);
+        } else {
+          console.log(`      ⚠️ Driver "${data.driverName}" not found in drivers table`);
         }
+      }
 
-        // Fetch the saved load (has driverId whether from PDF or prior YES response)
-        const savedLoad = await db.query.loads.findFirst({
+      // 2. Fetch the load with its driver (may have been linked via earlier YES response)
+      let savedLoad = await db.query.loads.findFirst({
+        where: eq(loads.loadNumber, loadNum),
+        with: { driver: true },
+      });
+
+      if (!savedLoad) {
+        console.warn(`      ⚠️ Load ${loadNum} not found after upsert — cannot dispatch`);
+        return;
+      }
+
+      const driverToDispatch = (savedLoad as any).driver;
+      const { smsLoadService } = await import('../sms-service');
+
+      // 3. No driver linked → notify dispatcher so nothing is silently dropped
+      if (!driverToDispatch?.phone) {
+        console.log(`      ℹ️  No driver on load ${loadNum} — notifying dispatcher`);
+        const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER || process.env.DISPATCHER_PHONE;
+        if (dispatcherPhone) {
+          await smsLoadService.sendSMS(
+            dispatcherPhone,
+            `⚠️ RateCon received for load #${loadNum} but no driver is linked. ` +
+            `Origin: ${savedLoad.originCity || 'TBD'} → ${savedLoad.destCity || 'TBD'}. ` +
+            `Rate: $${savedLoad.rate || 0}. Assign a driver to dispatch.`
+          );
+        }
+        return;
+      }
+
+      // 4. Ensure tracking token exists, then dispatch
+      if (!savedLoad.trackingToken) {
+        const { randomUUID } = await import('crypto');
+        await db.update(loads)
+          .set({ trackingToken: randomUUID(), status: 'confirmed' })
+          .where(eq(loads.loadNumber, loadNum));
+        savedLoad = await db.query.loads.findFirst({
           where: eq(loads.loadNumber, loadNum),
           with: { driver: true },
         });
-
-        const driverToDispatch = (savedLoad as any)?.driver;
-
-        if (driverToDispatch?.phone) {
-          // Ensure tracking token exists
-          if (!savedLoad?.trackingToken) {
-            const { randomUUID } = await import('crypto');
-            await db.update(loads)
-              .set({ trackingToken: randomUUID(), status: 'confirmed' })
-              .where(eq(loads.loadNumber, loadNum));
-            // Re-fetch with token
-            const refreshed = await db.query.loads.findFirst({
-              where: eq(loads.loadNumber, loadNum),
-              with: { driver: true },
-            });
-            const { smsLoadService } = await import('../sms-service');
-            await smsLoadService.sendDispatchInstructions(refreshed, driverToDispatch);
-            console.log(`      🚀 Dispatch instructions sent to ${driverToDispatch.name} (${driverToDispatch.phone})`);
-          } else {
-            const { smsLoadService } = await import('../sms-service');
-            await smsLoadService.sendDispatchInstructions(savedLoad, driverToDispatch);
-            console.log(`      🚀 Dispatch instructions sent to ${driverToDispatch.name} (${driverToDispatch.phone})`);
-          }
-
-          // Mark load in_transit and log SOP Phase 1 complete
-          await db.update(loads)
-            .set({
-              status: 'in_transit',
-              sopProgress: { ...((savedLoad as any)?.sopProgress || {}), dispatchSent: true, dispatchSentAt: new Date().toISOString() },
-            })
-            .where(eq(loads.loadNumber, loadNum));
-
-        } else {
-          console.log(`      ℹ️  No driver assigned yet for load ${loadNum} — will dispatch when driver is linked`);
-        }
-      } catch (driverErr) {
-        console.warn(`      ⚠️ Driver resolution/dispatch failed: ${driverErr}`);
       }
 
-      return 'created';
+      const dispatchResult = await smsLoadService.sendDispatchInstructions(savedLoad, driverToDispatch);
+
+      if (dispatchResult?.success) {
+        console.log(`      🚀 Dispatch SMS sent to ${driverToDispatch.name} (${driverToDispatch.phone}) — SID ${dispatchResult.messageSid}`);
+        await db.update(loads)
+          .set({
+            status: 'in_transit',
+            sopProgress: { ...((savedLoad as any)?.sopProgress || {}), dispatchSent: true, dispatchSentAt: new Date().toISOString() },
+          })
+          .where(eq(loads.loadNumber, loadNum));
+      } else {
+        console.error(`      ❌ Dispatch SMS FAILED for load ${loadNum}: ${dispatchResult?.error}`);
+        const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER || process.env.DISPATCHER_PHONE;
+        if (dispatcherPhone) {
+          await smsLoadService.sendSMS(
+            dispatcherPhone,
+            `❌ Failed to SMS driver ${driverToDispatch.name} for load #${loadNum}: ${dispatchResult?.error || 'unknown error'}`
+          );
+        }
+      }
+    } catch (err: any) {
+      console.error(`      ❌ resolveAndDispatch error for load ${loadNum}:`, err);
+      try {
+        const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER || process.env.DISPATCHER_PHONE;
+        if (dispatcherPhone) {
+          const { smsLoadService } = await import('../sms-service');
+          await smsLoadService.sendSMS(
+            dispatcherPhone,
+            `❌ Dispatch automation error for load #${loadNum}: ${err?.message || err}`
+          );
+        }
+      } catch {}
     }
   },
 
