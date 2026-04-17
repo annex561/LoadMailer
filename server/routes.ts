@@ -20,6 +20,7 @@ import { RealDATScraper } from "./real-dat-scraper";
 import { DATLoadPoster } from "./dat-load-poster";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, type InsertLoad, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema, insertTruckSchema, insertVendorSchema, insertFleetInspectionSchema, insertInspectionItemSchema, insertWorkOrderSchema, insertWorkOrderEventSchema, insertBreakdownReportSchema, insertFleetDocumentSchema, insertMaintenancePlanSchema, gmailAccounts, activityLog } from "@shared/schema";
 import { db } from "./db";
+import { eq } from "drizzle-orm";
 import { aiCommunicationService } from "./ai-communication-service";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService, objectStorageClient, parseObjectPath } from "./objectStorage";
@@ -1010,6 +1011,95 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // ============================================================================
+  // GMAIL OAUTH SETUP — one-click flow to get refresh token and register account
+  // ============================================================================
+
+  app.get('/api/gmail/oauth/start', (req, res) => {
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    if (!clientId) {
+      return res.status(500).send('GMAIL_CLIENT_ID is not set in Railway environment variables.');
+    }
+    const redirectUri = `https://traqiq.app/api/gmail/oauth/callback`;
+    const scope = [
+      'https://www.googleapis.com/auth/gmail.readonly',
+      'https://www.googleapis.com/auth/gmail.modify',
+    ].join(' ');
+    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', scope);
+    url.searchParams.set('access_type', 'offline');
+    url.searchParams.set('prompt', 'consent'); // force refresh_token issuance
+    res.redirect(url.toString());
+  });
+
+  app.get('/api/gmail/oauth/callback', async (req, res) => {
+    const { code, error } = req.query as { code?: string; error?: string };
+    if (error || !code) {
+      return res.status(400).send(`OAuth error: ${error || 'no code returned'}`);
+    }
+    try {
+      const clientId = process.env.GMAIL_CLIENT_ID!;
+      const clientSecret = process.env.GMAIL_CLIENT_SECRET!;
+      const redirectUri = `https://traqiq.app/api/gmail/oauth/callback`;
+
+      // Exchange code for tokens
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code',
+        }),
+      });
+      const tokens = await tokenRes.json() as any;
+      if (!tokens.refresh_token) {
+        return res.status(400).send(`No refresh_token returned. Tokens received: ${JSON.stringify(tokens)}`);
+      }
+
+      // Get the email address for this account
+      const profileRes = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      const profile = await profileRes.json() as any;
+      const email = profile.emailAddress || 'unknown@gmail.com';
+
+      // Save to gmailAccounts table (upsert by email)
+      const existing = await db.select().from(gmailAccounts).where(eq(gmailAccounts.email, email));
+      if (existing.length > 0) {
+        await db.update(gmailAccounts)
+          .set({ refreshToken: tokens.refresh_token, isActive: true })
+          .where(eq(gmailAccounts.email, email));
+        console.log(`📧 Updated Gmail account: ${email}`);
+      } else {
+        await db.insert(gmailAccounts).values({
+          email,
+          refreshToken: tokens.refresh_token,
+          companyId: 'default',
+          isActive: true,
+        });
+        console.log(`📧 Registered new Gmail account: ${email}`);
+      }
+
+      res.send(`
+        <html><body style="font-family:sans-serif;max-width:500px;margin:60px auto;text-align:center">
+          <h2 style="color:#16a34a">✅ Gmail Connected</h2>
+          <p><strong>${email}</strong> is now registered.</p>
+          <p>TRAQ-IQ will scan this inbox every minute for Rate Confirmations automatically.</p>
+          <p><a href="https://traqiq.app">Return to TRAQ-IQ</a></p>
+        </body></html>
+      `);
+    } catch (err: any) {
+      console.error('Gmail OAuth callback error:', err);
+      res.status(500).send(`OAuth callback failed: ${err.message}`);
+    }
+  });
+
   // Custom Gmail OAuth - Manual Trigger for Rate Confirmation Ingestion
   app.get('/api/ingest/status', async (req, res) => {
     try {
@@ -1042,13 +1132,11 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { gmailIngest } = await import('./services/gmail');
       const { smsLoadService } = await import('./sms-service');
-      const { eq: eqOp } = await import('drizzle-orm');
-
       // Auto-seed Gmail account from env var if not already in DB
       const envToken = process.env.GMAIL_REFRESH_TOKEN;
       const envEmail = process.env.GMAIL_USER || process.env.SMTP_USER || 'dispatch@lamplogi.com';
       if (envToken) {
-        const existing = await db.select().from(gmailAccounts).where(eqOp(gmailAccounts.refreshToken, envToken));
+        const existing = await db.select().from(gmailAccounts).where(eq(gmailAccounts.refreshToken, envToken));
         if (existing.length === 0) {
           await db.insert(gmailAccounts).values({
             email: envEmail,
