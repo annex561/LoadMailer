@@ -243,8 +243,16 @@ ${formatDate(load.deliveryDate || load.delivery_dt)}
       ? `\n📞 BROKER: ${load.brokerName || load.broker_name || 'Broker'} — ${load.brokerPhone || load.broker_phone}`
       : '';
 
+    const rate  = load.rate || load.rate_total;
+    const miles = load.miles;
+    const rpm   = (rate && miles && miles > 0) ? (rate / miles).toFixed(2) : null;
+    const payLine = rate
+      ? `💰 PAY: $${Number(rate).toLocaleString()}${rpm ? ` ($${rpm}/mi)` : ''}${miles ? ` | ${miles} miles` : ''}`
+      : '';
+
     const body = `
 ✅ LOAD CONFIRMED — DISPATCH INSTRUCTIONS
+${payLine ? `\n${payLine}` : ''}
 
 ${details}
 ${brokerContact}${specialInstructions ? `\n\n📋 SPECIAL INSTRUCTIONS:\n${specialInstructions}` : ''}
