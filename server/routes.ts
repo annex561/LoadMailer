@@ -1030,9 +1030,102 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       console.log("Manual Gmail trigger received...");
       const { gmailIngest } = await import('./services/gmail');
-      const files = await gmailIngest.scanInbox();
-      res.json({ success: true, filesProcessed: files });
+      const count = await gmailIngest.scanInbox();
+      res.json({ success: true, filesProcessed: count });
     } catch (error: any) {
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
+  // TEST: Pull last RateCon and send dispatch SMS to driver as a dry-run
+  app.post('/api/test/ratecon-pipeline', async (req, res) => {
+    try {
+      const { gmailIngest } = await import('./services/gmail');
+      const { smsLoadService } = await import('./sms-service');
+      const { eq: eqOp } = await import('drizzle-orm');
+
+      // Auto-seed Gmail account from env var if not already in DB
+      const envToken = process.env.GMAIL_REFRESH_TOKEN;
+      const envEmail = process.env.GMAIL_USER || process.env.SMTP_USER || 'dispatch@lamplogi.com';
+      if (envToken) {
+        const existing = await db.select().from(gmailAccounts).where(eqOp(gmailAccounts.refreshToken, envToken));
+        if (existing.length === 0) {
+          await db.insert(gmailAccounts).values({
+            email: envEmail,
+            refreshToken: envToken,
+            companyId: 'default',
+            isActive: true,
+          });
+          console.log(`[TEST] Auto-seeded Gmail account: ${envEmail}`);
+        }
+      }
+
+      // Run full Gmail scan
+      const results = await gmailIngest.scanAllAccounts();
+      const totalCreated = results.reduce((s: number, r: any) => s + (r.loadsCreated || 0), 0);
+      const totalUpdated = results.reduce((s: number, r: any) => s + (r.loadsUpdated || 0), 0);
+      const totalFiles  = results.reduce((s: number, r: any) => s + (r.filesProcessed || 0), 0);
+      const errors      = results.flatMap((r: any) => r.errors || []);
+
+      // Find the most recently booked load from Gmail
+      const bookedLoads = await storage.getLoadsByStatus('booked');
+      const recentLoad = bookedLoads.sort((a: any, b: any) =>
+        new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      )[0];
+
+      if (!recentLoad) {
+        return res.json({
+          success: true,
+          message: 'Scan complete — no booked loads found. Check Gmail credentials or inbox for new RateCons.',
+          filesProcessed: totalFiles,
+          loadsCreated: totalCreated,
+          errors,
+        });
+      }
+
+      // Send test SMS to driver (if assigned) or DISPATCHER_PHONE as proof
+      const driverPhone = (recentLoad as any).driver?.phone;
+      const testPhone = driverPhone || process.env.DISPATCHER_PHONE;
+      let smsSent = false;
+      if (testPhone) {
+        const pickupDateStr = recentLoad.pickupDate
+          ? new Date(recentLoad.pickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : 'TBD';
+        const msg = [
+          `[TEST - RateCon Pipeline] ✅`,
+          `Load #${recentLoad.loadNumber}`,
+          `${recentLoad.originCity} → ${recentLoad.destCity}`,
+          `Rate: $${recentLoad.rate} | Miles: ${recentLoad.miles}`,
+          `Pickup: ${pickupDateStr}`,
+          `Broker: ${recentLoad.brokerName || 'N/A'}`,
+          driverPhone ? '' : `(sent to dispatcher — no driver assigned yet)`,
+        ].filter(Boolean).join('\n');
+        await smsLoadService.sendSMS(testPhone, msg);
+        smsSent = true;
+      }
+
+      res.json({
+        success: true,
+        filesProcessed: totalFiles,
+        loadsCreated: totalCreated,
+        loadsUpdated: totalUpdated,
+        errors,
+        testLoad: {
+          id: recentLoad.id,
+          loadNumber: recentLoad.loadNumber,
+          origin: recentLoad.originCity,
+          destination: recentLoad.destCity,
+          rate: recentLoad.rate,
+          miles: recentLoad.miles,
+          broker: recentLoad.brokerName,
+          status: recentLoad.status,
+          driverId: recentLoad.driverId || null,
+        },
+        smsSent,
+        smsSentTo: testPhone || 'no phone configured (set DISPATCHER_PHONE in Railway env)',
+      });
+    } catch (error: any) {
+      console.error('[TEST] RateCon pipeline error:', error);
       res.status(500).json({ error: error.message || String(error) });
     }
   });
