@@ -1127,6 +1127,20 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // FORCE RESCAN: re-scan Gmail including already-read emails, then backfill dispatch
+  app.post('/api/gmail/force-rescan', async (req, res) => {
+    try {
+      const { gmailIngest } = await import('./services/gmail');
+      const query = (req.body?.query as string) || 'has:attachment filename:pdf newer_than:7d';
+      const maxResults = parseInt(req.body?.maxResults || '50', 10);
+      const scanResults = await gmailIngest.forceRescan(query, maxResults);
+      res.json({ scanResults });
+    } catch (error: any) {
+      console.error('Force rescan error:', error);
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
   // BACKFILL: Dispatch SMS for every load created today that hasn't been dispatched yet
   app.post('/api/dispatch/backfill-today', async (req, res) => {
     try {

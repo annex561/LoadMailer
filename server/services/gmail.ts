@@ -62,7 +62,7 @@ export const gmailIngest = {
   /**
    * 2. ACCOUNT SCAN: Finds unread emails with attachments
    */
-  async scanSingleAccount(account: typeof gmailAccounts.$inferSelect): Promise<ScanResult> {
+  async scanSingleAccount(account: typeof gmailAccounts.$inferSelect, queryOverride?: string, maxResults: number = 10): Promise<ScanResult> {
     const result: ScanResult = {
       account: account.email,
       filesProcessed: 0,
@@ -80,15 +80,15 @@ export const gmailIngest = {
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      // SEARCH QUERY: Unread emails that might have files
+      const q = queryOverride || 'is:unread';
       const res = await gmail.users.messages.list({
         userId: 'me',
-        q: 'is:unread',
-        maxResults: 10
+        q,
+        maxResults,
       });
 
       const messages = res.data.messages || [];
-      console.log(`   🔎 Found ${messages.length} unread emails.`);
+      console.log(`   🔎 Found ${messages.length} emails (q="${q}").`);
 
       for (const msg of messages) {
         const msgResult = await this.processMessage(gmail, msg.id!, account.companyId);
@@ -534,6 +534,21 @@ export const gmailIngest = {
   async scanInbox(): Promise<number> {
     const results = await this.scanAllAccounts();
     return results.reduce((sum, r) => sum + r.filesProcessed, 0);
+  },
+
+  /**
+   * Force-rescan all connected accounts with a custom Gmail query
+   * (ignores is:unread so already-read RateCons still get processed).
+   */
+  async forceRescan(query: string = 'has:attachment filename:pdf newer_than:7d', maxResults: number = 50): Promise<ScanResult[]> {
+    console.log(`🔁 [GMAIL] Force rescan with q="${query}"`);
+    const accounts = await db.select().from(gmailAccounts).where(eq(gmailAccounts.isActive, true));
+    const results: ScanResult[] = [];
+    for (const account of accounts) {
+      const r = await this.scanSingleAccount(account, query, maxResults);
+      results.push(r);
+    }
+    return results;
   },
 
   async getAccountsForCompany(companyId: string) {
