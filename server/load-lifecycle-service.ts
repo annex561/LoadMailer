@@ -34,7 +34,6 @@ import { storage } from "./storage";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const EINSTEIN_EMAIL   = process.env.EINSTEIN_EMAIL   || process.env.FACTORING_EMAIL || "";
 const DISPATCHER_PHONE = process.env.DISPATCHER_PHONE || process.env.TWILIO_PHONE_NUMBER || "";
 const BASE_URL         = process.env.CUSTOM_DOMAIN    || "https://traqiq.app";
 
@@ -287,49 +286,56 @@ async function runLifecycleCheck(): Promise<void> {
         }
       }
 
-      // ── PHASE 5A: Email full doc package to Einstein ──
+      // ── PHASE 5A: Submit directly to factoring company ──
+      const FACTORING_EMAIL = process.env.FACTORING_EMAIL || process.env.EINSTEIN_EMAIL || "";
       if (
         load.status === "delivered" &&
         !sentEinsteinPkg.has(load.id) &&
-        !sopProgress.einsteinSubmitted &&
-        EINSTEIN_EMAIL
+        !sopProgress.factoringSubmitted &&
+        FACTORING_EMAIL
       ) {
         const docs = await storage.getDocumentsByLoad?.(load.id) || [];
-        const hasBOL    = docs.some((d: any) => ["bol", "pickup_bol", "delivery_bol", "pod"].includes(d.documentType));
-        const hasPhotos = docs.some((d: any) => d.documentType === "freight_photo");
+        const hasBOL = docs.some((d: any) => ["bol", "pickup_bol", "delivery_bol", "pod"].includes(d.documentType));
 
         if (hasBOL) {
           try {
             const rate = (load as any).rate || (load as any).rate_total || 0;
+            const origin = (load as any).originCity || (load as any).origin_city || "Origin";
+            const dest   = (load as any).destCity   || (load as any).dest_city   || "Destination";
+
             await mailer.sendMail({
               from: process.env.SMTP_USER || "dispatch@traqiq.app",
-              to: EINSTEIN_EMAIL,
-              subject: `📦 Factoring Package — Load #${load.loadNumber} | ${(load as any).originCity || "Origin"} → ${(load as any).destCity || "Dest"}`,
+              to: FACTORING_EMAIL,
+              subject: `📦 Factoring Submission — Load #${load.loadNumber} | ${origin} → ${dest}`,
               html: `
-                <h2>Factoring Submission — Load #${load.loadNumber}</h2>
-                <table style="border-collapse:collapse;width:100%;font-family:sans-serif;">
-                  <tr><td style="padding:6px;font-weight:bold;">Driver</td><td style="padding:6px;">${driver.name}</td></tr>
-                  <tr><td style="padding:6px;font-weight:bold;">Route</td><td style="padding:6px;">${(load as any).originCity || ""} → ${(load as any).destCity || ""}</td></tr>
-                  <tr><td style="padding:6px;font-weight:bold;">Rate</td><td style="padding:6px;">$${rate.toLocaleString()}</td></tr>
-                  <tr><td style="padding:6px;font-weight:bold;">Load #</td><td style="padding:6px;">${load.loadNumber}</td></tr>
-                  <tr><td style="padding:6px;font-weight:bold;">Documents</td><td style="padding:6px;">${docs.length} files attached/on file</td></tr>
-                  <tr><td style="padding:6px;font-weight:bold;">Delivered At</td><td style="padding:6px;">${sopProgress.deliveredAt || new Date().toLocaleString()}</td></tr>
+                <h2 style="font-family:sans-serif;">Factoring Submission</h2>
+                <table style="border-collapse:collapse;width:100%;font-family:sans-serif;font-size:14px;">
+                  <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Load #</td><td style="padding:8px 12px;">${load.loadNumber}</td></tr>
+                  <tr><td style="padding:8px 12px;font-weight:bold;">Driver</td><td style="padding:8px 12px;">${driver.name} · ${driver.phone || ""}</td></tr>
+                  <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Route</td><td style="padding:8px 12px;">${origin} → ${dest}</td></tr>
+                  <tr><td style="padding:8px 12px;font-weight:bold;">Rate</td><td style="padding:8px 12px;color:#16a34a;font-weight:bold;">$${Number(rate).toLocaleString()}</td></tr>
+                  <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Delivered</td><td style="padding:8px 12px;">${sopProgress.deliveredAt ? new Date(sopProgress.deliveredAt).toLocaleString() : new Date().toLocaleString()}</td></tr>
+                  <tr><td style="padding:8px 12px;font-weight:bold;">Documents</td><td style="padding:8px 12px;">${docs.length} file(s) on record in TRAQ-IQ</td></tr>
                 </table>
-                <p style="margin-top:16px;color:#666;">
-                  Please submit to factoring: RateCon + BOL + freight photos.<br/>
-                  Documents are stored in TRAQ-IQ under Load #${load.loadNumber}.
+                <p style="font-family:sans-serif;margin-top:16px;color:#374151;">
+                  <strong>Included:</strong> RateCon + BOL + Freight Photos + POD<br/>
+                  All documents stored in TRAQ-IQ under Load #${load.loadNumber}.
                 </p>
-                <p style="color:#999;font-size:12px;">Sent automatically by TRAQ-IQ Load Lifecycle · LAMP Logistics</p>
+                <p style="font-family:sans-serif;color:#9ca3af;font-size:12px;">Submitted automatically by TRAQ-IQ · LAMP Logistics</p>
               `,
             });
 
             sentEinsteinPkg.add(load.id);
             await storage.updateLoad(load.id, {
-              sopProgress: { ...sopProgress, einsteinSubmitted: true, einsteinSubmittedAt: new Date().toISOString() },
+              sopProgress: {
+                ...sopProgress,
+                factoringSubmitted: true,
+                factoringSubmittedAt: new Date().toISOString(),
+              },
             });
-            console.log(`[Lifecycle] 📧 Einstein factoring package sent for load #${load.loadNumber}`);
+            console.log(`[Lifecycle] 📧 Factoring submission sent directly for load #${load.loadNumber}`);
           } catch (e: any) {
-            console.error(`[Lifecycle] Einstein email error:`, e.message);
+            console.error(`[Lifecycle] Factoring email error:`, e.message);
           }
         }
       }

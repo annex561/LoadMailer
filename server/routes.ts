@@ -3871,8 +3871,8 @@ TRAQ IQ Dispatch Team
       const load = await storage.getLoad(req.params.loadId);
       if (!load) return res.status(404).json({ error: 'Load not found' });
 
-      const einsteinEmail = process.env.EINSTEIN_EMAIL || process.env.FACTORING_EMAIL;
-      if (!einsteinEmail) return res.status(400).json({ error: 'EINSTEIN_EMAIL env var not set' });
+      const einsteinEmail = process.env.FACTORING_EMAIL || process.env.EINSTEIN_EMAIL;
+      if (!einsteinEmail) return res.status(400).json({ error: 'FACTORING_EMAIL env var not set in Railway' });
 
       const driver = load.driverId ? await storage.getDriver(load.driverId) : null;
       const rate = (load as any).rate || (load as any).rate_total || 0;
