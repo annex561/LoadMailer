@@ -5,7 +5,7 @@ let scheduledTask: cron.ScheduledTask | null = null;
 let isRunning = false;
 
 export const gmailScheduler = {
-  start(intervalMinutes: number = 5) {
+  start(intervalMinutes: number = 1) {
     if (scheduledTask) {
       console.log('📧 Gmail scheduler already running');
       return;

@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { db } from "../db";
-import { gmailAccounts, loads, activityLog, customers } from "@shared/schema";
+import { gmailAccounts, loads, activityLog, customers, drivers } from "@shared/schema";
 import { eq, and, ilike } from "drizzle-orm";
 import { rateconParser } from "./ratecon-parser";
 import gaDb from "../ga-db";
@@ -304,8 +304,8 @@ export const gmailIngest = {
       
       // Also insert into GA Loads SQLite for inbox visibility
       try {
-        const originParts = (data.origin || "Unknown").split(",").map(s => s.trim());
-        const destParts = (data.destination || "Unknown").split(",").map(s => s.trim());
+        const originParts = (data.origin || "Unknown").split(",").map((s: string) => s.trim());
+        const destParts = (data.destination || "Unknown").split(",").map((s: string) => s.trim());
         const miles = data.miles || 0;
         const rate = data.rate || 0;
         const rpm = miles > 0 ? Math.round((rate / miles) * 100) / 100 : 0;
@@ -350,7 +350,96 @@ export const gmailIngest = {
         console.warn(`      ⚠️ Failed to add to GA Loads: ${gaErr}`);
       }
       
+      // DRIVER RESOLUTION: RateCon arrives AFTER a driver already accepted the load.
+      // 1. Check if the PDF itself contains a driver name (CARRIER CONTACT section).
+      // 2. If not, find the driver in the system who was dispatched this load number.
+      // Do NOT run auto-matching — driver assignment was already decided at dispatch.
+      try {
+        let resolvedDriverId: string | null = null;
+
+        if (data.driverName) {
+          // PDF had driver info — find the driver by name in our system
+          const matchedDriver = await db.query.drivers.findFirst({
+            where: ilike(drivers.name, `%${data.driverName}%`)
+          });
+          if (matchedDriver) {
+            resolvedDriverId = matchedDriver.id;
+            console.log(`      👤 Driver from RateCon PDF: ${matchedDriver.name}`);
+          }
+        }
+
+        if (resolvedDriverId) {
+          await db.update(loads)
+            .set({ driverId: resolvedDriverId, status: 'confirmed' })
+            .where(eq(loads.loadNumber, loadNum));
+          console.log(`      ✅ RateCon load ${loadNum} assigned to driver ${resolvedDriverId}`);
+        } else {
+          console.log(`      ℹ️  RateCon load ${loadNum} created as "booked" — driver will be linked when they confirm via SMS`);
+        }
+      } catch (driverErr) {
+        console.warn(`      ⚠️ Driver resolution failed: ${driverErr}`);
+      }
+
       return 'created';
     }
-  }
+  },
+
+  // ============================================================================
+  // ACCOUNT MANAGEMENT METHODS
+  // ============================================================================
+
+  isConfigured(): boolean {
+    return !!(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET);
+  },
+
+  async scanInbox(): Promise<number> {
+    const results = await this.scanAllAccounts();
+    return results.reduce((sum, r) => sum + r.filesProcessed, 0);
+  },
+
+  async getAccountsForCompany(companyId: string) {
+    return db.select().from(gmailAccounts).where(
+      and(eq(gmailAccounts.companyId, companyId), eq(gmailAccounts.isActive, true))
+    );
+  },
+
+  async testAccount(refreshToken: string): Promise<{ success: boolean; email?: string; error?: string }> {
+    try {
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GMAIL_CLIENT_ID,
+        process.env.GMAIL_CLIENT_SECRET
+      );
+      oauth2Client.setCredentials({ refresh_token: refreshToken });
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      return { success: true, email: profile.data.emailAddress || undefined };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async addAccount(data: { companyId: string; email: string; refreshToken: string }) {
+    const [account] = await db.insert(gmailAccounts).values({
+      companyId: data.companyId,
+      email: data.email,
+      refreshToken: data.refreshToken,
+      isActive: true,
+    }).returning();
+    return account;
+  },
+
+  async updateAccountForCompany(id: string, companyId: string, updates: Partial<{ isActive: boolean; email: string; refreshToken: string }>) {
+    const [updated] = await db.update(gmailAccounts)
+      .set(updates)
+      .where(and(eq(gmailAccounts.id, id), eq(gmailAccounts.companyId, companyId)))
+      .returning();
+    return updated || null;
+  },
+
+  async deleteAccountForCompany(id: string, companyId: string): Promise<boolean> {
+    const result = await db.delete(gmailAccounts)
+      .where(and(eq(gmailAccounts.id, id), eq(gmailAccounts.companyId, companyId)))
+      .returning();
+    return result.length > 0;
+  },
 };

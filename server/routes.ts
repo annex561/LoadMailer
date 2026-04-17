@@ -1076,7 +1076,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   (async () => {
     try {
       const { gmailScheduler } = await import('./services/gmail-scheduler');
-      gmailScheduler.start(5); // Poll every 5 minutes
+      gmailScheduler.start(1); // Poll every 1 minute
     } catch (error) {
       console.error('Failed to start Gmail scheduler:', error);
     }
