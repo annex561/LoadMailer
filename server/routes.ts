@@ -20,7 +20,7 @@ import { RealDATScraper } from "./real-dat-scraper";
 import { DATLoadPoster } from "./dat-load-poster";
 import { insertDriverSchema, insertCustomerSchema, insertLoadSchema, insertEmailTemplateSchema, insertOnboardingTokenSchema, insertDriverLocationSchema, driverOnboardingSchema, type LoadWithRelations, type DriverLocationUpdate, type InsertLoad, insertGeofenceSchema, insertRouteSchema, insertGpsDeviceSchema, insertLoadDocumentSchema, insertTruckSchema, insertVendorSchema, insertFleetInspectionSchema, insertInspectionItemSchema, insertWorkOrderSchema, insertWorkOrderEventSchema, insertBreakdownReportSchema, insertFleetDocumentSchema, insertMaintenancePlanSchema, gmailAccounts, activityLog } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, gte } from "drizzle-orm";
 import { aiCommunicationService } from "./ai-communication-service";
 import { DocumentUploadService } from "./document-upload-service";
 import { ObjectStorageService, objectStorageClient, parseObjectPath } from "./objectStorage";
@@ -1123,6 +1123,55 @@ export async function registerRoutes(app: Express): Promise<void> {
       const count = await gmailIngest.scanInbox();
       res.json({ success: true, filesProcessed: count });
     } catch (error: any) {
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
+  // BACKFILL: Dispatch SMS for every load created today that hasn't been dispatched yet
+  app.post('/api/dispatch/backfill-today', async (req, res) => {
+    try {
+      const { gmailIngest } = await import('./services/gmail');
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const todaysLoads = await db.query.loads.findMany({
+        where: gte(loads.createdAt, startOfDay),
+        with: { driver: true },
+      });
+
+      const summary = {
+        total: todaysLoads.length,
+        dispatched: [] as string[],
+        alreadySent: [] as string[],
+        noDriver: [] as string[],
+        failed: [] as { load: string; reason: string }[],
+      };
+
+      for (const load of todaysLoads) {
+        const loadNum = load.loadNumber;
+        const sop = (load.sopProgress as any) || {};
+        if (sop.dispatchSent) {
+          summary.alreadySent.push(loadNum);
+          continue;
+        }
+        const driver = (load as any).driver;
+        if (!driver?.phone) {
+          summary.noDriver.push(loadNum);
+          continue;
+        }
+        try {
+          await gmailIngest.resolveAndDispatch(loadNum, {
+            driverName: driver.name,
+          });
+          summary.dispatched.push(loadNum);
+        } catch (err: any) {
+          summary.failed.push({ load: loadNum, reason: err?.message || String(err) });
+        }
+      }
+
+      res.json(summary);
+    } catch (error: any) {
+      console.error('Backfill dispatch error:', error);
       res.status(500).json({ error: error.message || String(error) });
     }
   });
