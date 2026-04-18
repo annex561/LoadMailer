@@ -303,10 +303,45 @@ async function runLifecycleCheck(): Promise<void> {
             const origin = (load as any).originCity || (load as any).origin_city || "Origin";
             const dest   = (load as any).destCity   || (load as any).dest_city   || "Destination";
 
+            // Build document links list — factoring company can click each to download
+            const docRows = docs.map((d: any) => `
+              <tr>
+                <td style="padding:6px 12px;">${d.documentType}</td>
+                <td style="padding:6px 12px;">${d.fileName || 'file'}</td>
+                <td style="padding:6px 12px;"><a href="${d.fileUrl}" target="_blank">Download</a></td>
+              </tr>
+            `).join('');
+
+            // Attempt to download Twilio media files and attach them directly
+            const attachments: any[] = [];
+            for (const d of docs) {
+              if (!d.fileUrl) continue;
+              try {
+                const needsAuth = d.fileUrl.includes('api.twilio.com');
+                const fetchOpts: any = {};
+                if (needsAuth && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+                  const creds = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+                  fetchOpts.headers = { Authorization: `Basic ${creds}` };
+                }
+                const response = await fetch(d.fileUrl, fetchOpts);
+                if (response.ok) {
+                  const buf = Buffer.from(await response.arrayBuffer());
+                  attachments.push({
+                    filename: d.fileName || `${d.documentType}-${d.id}.jpg`,
+                    content: buf,
+                    contentType: d.mimeType || 'application/octet-stream',
+                  });
+                }
+              } catch (fetchErr: any) {
+                console.warn(`[Lifecycle] Could not attach ${d.fileName}: ${fetchErr?.message}`);
+              }
+            }
+
             await mailer.sendMail({
               from: process.env.SMTP_USER || "dispatch@traqiq.app",
               to: FACTORING_EMAIL,
               subject: `📦 Factoring Submission — Load #${load.loadNumber} | ${origin} → ${dest}`,
+              attachments,
               html: `
                 <h2 style="font-family:sans-serif;">Factoring Submission</h2>
                 <table style="border-collapse:collapse;width:100%;font-family:sans-serif;font-size:14px;">
@@ -315,13 +350,11 @@ async function runLifecycleCheck(): Promise<void> {
                   <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Route</td><td style="padding:8px 12px;">${origin} → ${dest}</td></tr>
                   <tr><td style="padding:8px 12px;font-weight:bold;">Rate</td><td style="padding:8px 12px;color:#16a34a;font-weight:bold;">$${Number(rate).toLocaleString()}</td></tr>
                   <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Delivered</td><td style="padding:8px 12px;">${sopProgress.deliveredAt ? new Date(sopProgress.deliveredAt).toLocaleString() : new Date().toLocaleString()}</td></tr>
-                  <tr><td style="padding:8px 12px;font-weight:bold;">Documents</td><td style="padding:8px 12px;">${docs.length} file(s) on record in TRAQ-IQ</td></tr>
+                  <tr><td style="padding:8px 12px;font-weight:bold;">Documents</td><td style="padding:8px 12px;">${attachments.length} attached · ${docs.length} total</td></tr>
                 </table>
-                <p style="font-family:sans-serif;margin-top:16px;color:#374151;">
-                  <strong>Included:</strong> RateCon + BOL + Freight Photos + POD<br/>
-                  All documents stored in TRAQ-IQ under Load #${load.loadNumber}.
-                </p>
-                <p style="font-family:sans-serif;color:#9ca3af;font-size:12px;">Submitted automatically by TRAQ-IQ · LAMP Logistics</p>
+                <h3 style="font-family:sans-serif;margin-top:16px;">Document Links</h3>
+                <table style="border-collapse:collapse;font-family:sans-serif;font-size:13px;">${docRows}</table>
+                <p style="font-family:sans-serif;color:#9ca3af;font-size:12px;margin-top:16px;">Submitted automatically by TRAQ-IQ · LAMP Logistics</p>
               `,
             });
 
