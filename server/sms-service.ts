@@ -260,8 +260,7 @@ ${brokerContact}${specialInstructions ? `\n\n📋 SPECIAL INSTRUCTIONS:\n${speci
 ACTIVATE GPS TRACKING NOW:
 ${trackingLink}
 
-============================
-LAMP Logistics SOP: Late delivery = $250 fee. Tracking required at all times during transit. Secure load with (2) load locks. At pickup, send BOL + load securement photos and WAIT for "GO" from Dispatch before leaving the shipper. Verify seal # (if sealed) and report any seal issues immediately. At delivery, send POD and WAIT for "GO" from Dispatch before leaving the receiver. Issues/emergencies: call/text Dispatch. If we can't reach you, we will call your emergency contact and begin repowering; any extra costs/chargebacks will apply.
+LAMP SOP: Tracking ON always. (2) load locks. Pickup: BOL+securement pics, WAIT for GO. Delivery: POD, WAIT for GO. Late = $250. Full SOP: ${baseUrl}/sop
 `.trim();
 
     return this.sendSMS(driver.phone, body);

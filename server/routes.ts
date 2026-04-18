@@ -782,6 +782,58 @@ export async function registerRoutes(app: Express): Promise<void> {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Driver SOP page — linked from dispatch SMS
+  app.get('/sop', (_req, res) => {
+    res.type('html').send(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LAMP Logistics — Driver SOP</title>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; line-height: 1.55; color: #111; background: #fff; }
+  h1 { font-size: 22px; color: #00B5B8; margin-bottom: 4px; }
+  h2 { font-size: 16px; margin-top: 24px; border-bottom: 2px solid #00B5B8; padding-bottom: 4px; }
+  p, li { font-size: 15px; }
+  .warn { background: #fff4e5; border-left: 4px solid #ff9500; padding: 10px 14px; margin: 14px 0; border-radius: 4px; }
+  .contact { background: #f0f7ff; border-left: 4px solid #0066cc; padding: 10px 14px; margin: 14px 0; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>LAMP Logistics — Driver SOP</h1>
+<p style="color:#666;margin-top:0;">Standard operating procedures for every load.</p>
+
+<div class="warn"><strong>Late delivery = $250 fee.</strong> Notify Dispatch immediately if you'll be late.</div>
+
+<h2>While in Transit</h2>
+<ul>
+  <li><strong>GPS tracking must be ON at all times</strong> during transit.</li>
+  <li>Secure load with <strong>(2) load locks</strong> minimum.</li>
+  <li>If we can't reach you, we call your emergency contact and begin repowering. Any extra costs / chargebacks will apply.</li>
+</ul>
+
+<h2>At Pickup</h2>
+<ul>
+  <li>Send <strong>BOL photo</strong> to Dispatch.</li>
+  <li>Send <strong>load securement photos</strong> to Dispatch.</li>
+  <li>Verify seal # if sealed — <strong>report any seal issues immediately</strong>.</li>
+  <li><strong>WAIT for "GO" from Dispatch</strong> before leaving the shipper.</li>
+</ul>
+
+<h2>At Delivery</h2>
+<ul>
+  <li>Send <strong>POD</strong> (signed, stamped) to Dispatch.</li>
+  <li><strong>WAIT for "GO" from Dispatch</strong> before leaving the receiver.</li>
+</ul>
+
+<h2>Issues / Emergencies</h2>
+<div class="contact">Call or text Dispatch directly. Do not leave the shipper/receiver without authorization.</div>
+
+<p style="color:#666;font-size:13px;margin-top:32px;">Reply <strong>YES</strong> to your dispatch SMS to confirm the load.</p>
+</body>
+</html>`);
+  });
+
   // Telegram service health check
   app.get('/api/sms/health', (req, res) => {
     try {
