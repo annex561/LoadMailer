@@ -100,10 +100,21 @@ function regexExtract(pdfText: string): ParsedRateConData {
   const weightMatch = text.match(/(?:Weight|Wt)\s*:?\s*([\d,]+)\s*(?:lbs?|pounds)?/i);
   const weight = weightMatch ? parseInt(weightMatch[1].replace(/,/g, ''), 10) : 0;
 
-  const cityStateRe = /([A-Z][a-zA-Z\.\s]{2,30}),\s*([A-Z]{2})\b/g;
+  // Title-case city (one or more Title-case words) + 2-letter US state code.
+  // Whitelist of real state codes prevents matches like "DEATH, OR" where "OR" happens
+  // to look like a state abbreviation but the prior word is an all-caps commodity/label.
+  // Require Title Case (initial cap + at least one lowercase) so ALL-CAPS tokens don't match.
+  const US_STATE = 'AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC';
+  const cityStateRe = new RegExp(
+    `\\b([A-Z][a-z]+(?:[\\s\\.]+(?:[A-Z][a-z]+|of|the)){0,4}),\\s*(${US_STATE})\\b`,
+    'g'
+  );
   const locations: string[] = [];
   let cm: RegExpExecArray | null;
-  while ((cm = cityStateRe.exec(text)) !== null) locations.push(`${cm[1].trim()}, ${cm[2]}`);
+  while ((cm = cityStateRe.exec(text)) !== null) {
+    const city = cm[1].trim().replace(/\s+/g, ' ');
+    locations.push(`${city}, ${cm[2]}`);
+  }
   const origin = locations[0] || '';
   const destination = locations[locations.length - 1] !== origin ? (locations[locations.length - 1] || '') : (locations[1] || '');
 
