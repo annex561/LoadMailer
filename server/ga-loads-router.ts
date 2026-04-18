@@ -620,6 +620,44 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
 });
 
 // SKIP - Skip/dismiss a load with reason
+// DISPATCH NOW — manual dispatch button on RateCon Inbox row.
+// Safety net for when auto-dispatch missed (parser failure, no driver linked, etc.)
+router.post("/loads/:id/dispatch-now", async (req: Request, res: Response) => {
+  try {
+    const id = String(req.params.id);
+    const { driverId } = req.body || {};
+
+    const row: any = db.prepare(`SELECT * FROM ga_loads WHERE id=?`).get(id);
+    if (!row) return res.status(404).json({ ok: false, error: "Load not found in inbox" });
+    if (!row.load_number) return res.status(400).json({ ok: false, error: "Load has no load_number — cannot dispatch" });
+
+    // If driverId provided, attach it to the Postgres load record before dispatch
+    if (driverId) {
+      await pgDb.update(pgLoads)
+        .set({ driverId, status: 'confirmed' })
+        .where(eq(pgLoads.loadNumber, row.load_number));
+    }
+
+    // Mirror driver assignment into ga_loads
+    if (driverId) {
+      db.prepare(`UPDATE ga_loads SET assigned_driver_id=?, status='dispatched' WHERE id=?`)
+        .run(driverId, id);
+    }
+
+    const { gmailIngest } = await import("./services/gmail");
+    await gmailIngest.resolveAndDispatch(row.load_number, {
+      driverName: row.driver_name || undefined,
+    });
+
+    logActivity(id, "manual_dispatch", "dispatcher", { driverId: driverId || null });
+
+    res.json({ ok: true, id, loadNumber: row.load_number, dispatched: true });
+  } catch (err: any) {
+    console.error("dispatch-now error:", err);
+    res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
+});
+
 router.post("/loads/:id/skip", (req: Request, res: Response) => {
   if (!ENABLE_GA_BOOKING) {
     return res.status(404).json({ ok: false, error: "Booking pipeline disabled" });

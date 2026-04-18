@@ -449,6 +449,25 @@ export default function LoadsInbox() {
     }
   }
 
+  async function dispatchNow(l: GALoad) {
+    if (!window.confirm(`Send dispatch SMS to driver for load #${l.load_number || l.id}?`)) return;
+    try {
+      const res = await fetch(`/api/ga/loads/${encodeURIComponent(l.id)}/dispatch-now`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }).then(x => x.json());
+      if (res.ok) {
+        toast({ title: "Dispatch SMS fired", description: `Load #${res.loadNumber}` });
+      } else {
+        toast({ title: "Dispatch failed", description: res.error || "No driver linked — use Book to assign one first.", variant: "destructive" });
+      }
+      await refresh();
+    } catch (e: any) {
+      toast({ title: "Dispatch error", description: e?.message, variant: "destructive" });
+    }
+  }
+
   const getScoreBadge = (score: number) => {
     if (score >= 80) return <Badge className="bg-green-500 text-white">{score}</Badge>;
     if (score >= 60) return <Badge className="bg-yellow-500 text-black">{score}</Badge>;
@@ -483,8 +502,9 @@ export default function LoadsInbox() {
   const renderActions = (l: GALoad, compact = false) => {
     const isActionable = ["new", "offered", "quoted"].includes(l.status);
     const isBooked = l.status === "booked";
-    
-    if (!isActionable && !isBooked) return null;
+    const canManualDispatch = ["booked", "manual_review", "dispatched"].includes(l.status);
+
+    if (!isActionable && !isBooked && !canManualDispatch) return null;
 
     return (
       <div className="flex gap-1 flex-wrap">
@@ -501,6 +521,12 @@ export default function LoadsInbox() {
               </Button>
             )}
           </>
+        )}
+        {canManualDispatch && (
+          <Button size="sm" variant="outline" className="bg-blue-600/20 hover:bg-blue-600/40 border-blue-500" onClick={() => dispatchNow(l)} title="Send dispatch SMS to assigned driver">
+            <Send className="w-3 h-3 mr-1" />
+            Dispatch
+          </Button>
         )}
         {isBooked && !l.ratecon_path && (
           <Button size="sm" variant="outline" onClick={() => act(l.id, "ratecon/generate")}>
