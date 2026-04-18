@@ -846,6 +846,11 @@ router.post("/loads/:id/package-for-factoring", async (req: Request, res: Respon
 // PIPELINE STATS
 // =============================================
 
+// Deploy sentinel — used to verify Railway picked up latest build
+router.get("/_version", (_req: Request, res: Response) => {
+  res.json({ ok: true, version: "2026-04-18-dispatch-now", hasDispatchNow: true });
+});
+
 router.get("/stats", (req: Request, res: Response) => {
   try {
     const stats = db.prepare(`
