@@ -72,18 +72,113 @@ export interface ParsedRateConData {
   notes?: string;
 }
 
+/**
+ * Regex-based RateCon extractor. Runs as fallback when OpenAI is unavailable.
+ * Covers common broker templates: TQL, CH Robinson, Landstar, Coyote, generic.
+ * Best-effort — fills what it can; missing fields stay empty.
+ */
+function regexExtract(pdfText: string): ParsedRateConData {
+  const text = pdfText.replace(/\s+/g, ' '); // normalize whitespace
+
+  const loadNumberPatterns = [
+    /(?:PO|Load|Confirmation|Order|Reference|Ref|BOL)\s*(?:Number|No\.?|#)?\s*:?\s*([A-Z0-9][A-Z0-9-]{3,20})/i,
+    /#\s*([A-Z0-9]{6,15})/,
+  ];
+  let loadNumber = '';
+  for (const pat of loadNumberPatterns) {
+    const m = text.match(pat);
+    if (m && m[1] && !/^(date|time|phone|fax)$/i.test(m[1])) { loadNumber = m[1].trim(); break; }
+  }
+
+  const rateMatch = text.match(/(?:Rate|Total|Amount|Pay|Line\s*Haul)\s*:?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i)
+    || text.match(/\$\s*([\d,]+\.\d{2})/);
+  const rate = rateMatch ? parseFloat(rateMatch[1].replace(/,/g, '')) : 0;
+
+  const milesMatch = text.match(/(?:Miles|Distance|Total\s*Miles)\s*:?\s*([\d,]+)/i);
+  const miles = milesMatch ? parseInt(milesMatch[1].replace(/,/g, ''), 10) : undefined;
+
+  const weightMatch = text.match(/(?:Weight|Wt)\s*:?\s*([\d,]+)\s*(?:lbs?|pounds)?/i);
+  const weight = weightMatch ? parseInt(weightMatch[1].replace(/,/g, ''), 10) : 0;
+
+  const cityStateRe = /([A-Z][a-zA-Z\.\s]{2,30}),\s*([A-Z]{2})\b/g;
+  const locations: string[] = [];
+  let cm: RegExpExecArray | null;
+  while ((cm = cityStateRe.exec(text)) !== null) locations.push(`${cm[1].trim()}, ${cm[2]}`);
+  const origin = locations[0] || '';
+  const destination = locations[locations.length - 1] !== origin ? (locations[locations.length - 1] || '') : (locations[1] || '');
+
+  const dateRe = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})|(\d{4}-\d{2}-\d{2})/g;
+  const dates: string[] = [];
+  let dm: RegExpExecArray | null;
+  while ((dm = dateRe.exec(text)) !== null) dates.push(dm[0]);
+  const toIso = (d: string): string => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+    const parts = d.split(/[\/\-]/);
+    if (parts.length === 3) {
+      let [mo, day, yr] = parts;
+      if (yr.length === 2) yr = '20' + yr;
+      return `${yr}-${mo.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    return '';
+  };
+  const pickupDate = dates[0] ? toIso(dates[0]) : '';
+  const deliveryDate = dates[1] ? toIso(dates[1]) : pickupDate;
+
+  const brokerMatch = text.match(/(TQL|CH\s*Robinson|Landstar|Coyote|Echo|XPO|JB\s*Hunt|Total\s*Quality\s*Logistics)/i);
+  const brokerName = brokerMatch ? brokerMatch[1].replace(/\s+/g, ' ').trim() : '';
+
+  const phoneMatch = text.match(/\(?(\d{3})\)?[-.\s]?(\d{3})[-.\s]?(\d{4})/);
+  const brokerPhone = phoneMatch ? `${phoneMatch[1]}-${phoneMatch[2]}-${phoneMatch[3]}` : undefined;
+
+  const emailMatch = text.match(/[\w.-]+@[\w.-]+\.\w+/);
+  const brokerEmail = emailMatch ? emailMatch[0] : undefined;
+
+  const rpm = (rate && miles && miles > 0) ? Math.round((rate / miles) * 100) / 100 : undefined;
+
+  console.log(`🔍 Regex fallback parsed: load=${loadNumber || 'none'}, rate=$${rate}, ${origin} → ${destination}`);
+
+  return {
+    loadNumber: loadNumber || `RC-${Date.now()}`,
+    rate,
+    brokerName: brokerName || 'Unknown',
+    brokerPhone,
+    brokerEmail,
+    pickupDate,
+    deliveryDate,
+    origin: origin || 'Unknown',
+    destination: destination || 'Unknown',
+    weight,
+    miles,
+    rpm,
+    notes: '[Parsed by regex fallback — verify fields]',
+  };
+}
+
 export const rateconParser = {
+  regexExtract,
   async parsePdf(fileBuffer: Buffer): Promise<ParsedRateConData> {
     console.log("📄 Extracting text from RateCon...");
 
+    let pdfText = '';
     try {
-      const pdfText = await extractPdfText(fileBuffer);
-
+      pdfText = await extractPdfText(fileBuffer);
       if (!pdfText || pdfText.length < 10) {
         throw new Error("PDF text extraction failed or empty.");
       }
-
       console.log(`📄 Extracted ${pdfText.length} characters`);
+    } catch (extractErr: any) {
+      console.error("❌ PDF extraction failed:", extractErr?.message);
+      return {
+        loadNumber: "MANUAL-REVIEW",
+        brokerName: "Unknown",
+        rate: 0, pickupDate: "", deliveryDate: "",
+        origin: "Unknown", destination: "Unknown",
+        weight: 0, miles: 0, rpm: 0,
+        notes: `PDF extraction failed: ${extractErr?.message || 'unknown'}`,
+      };
+    }
+
+    try {
       console.log("🧠 Analyzing RateCon text...");
 
       const response = await openai.chat.completions.create({
@@ -154,20 +249,27 @@ export const rateconParser = {
 
     } catch (error: any) {
       const errMsg = error?.message || String(error);
-      console.error("❌ Parser Error:", errMsg, error?.stack);
-      return {
-        loadNumber: "MANUAL-REVIEW",
-        brokerName: "Unknown",
-        rate: 0,
-        pickupDate: "",
-        deliveryDate: "",
-        origin: "Unknown",
-        destination: "Unknown",
-        weight: 0,
-        miles: 0,
-        rpm: 0,
-        notes: `Error parsing PDF: ${errMsg}`
-      };
+      const status = error?.status || error?.response?.status;
+      console.error(`❌ OpenAI parser failed (${status || 'no status'}):`, errMsg);
+
+      // Fallback to regex extraction for any OpenAI failure
+      // (429 quota, 5xx, timeout, JSON parse error, etc.)
+      try {
+        console.log("⤵️  Falling back to regex extraction...");
+        const fallback = regexExtract(pdfText);
+        fallback.notes = `${fallback.notes || ''} | OpenAI error: ${errMsg.substring(0, 120)}`;
+        return fallback;
+      } catch (regexErr: any) {
+        console.error("❌ Regex fallback also failed:", regexErr?.message);
+        return {
+          loadNumber: "MANUAL-REVIEW",
+          brokerName: "Unknown",
+          rate: 0, pickupDate: "", deliveryDate: "",
+          origin: "Unknown", destination: "Unknown",
+          weight: 0, miles: 0, rpm: 0,
+          notes: `All parsers failed. OpenAI: ${errMsg}. Regex: ${regexErr?.message}`,
+        };
+      }
     }
   }
 };
