@@ -56,9 +56,40 @@ export class SMSCommunicationService {
       // Do this BEFORE any early-return paths so every inbound message can be persisted.
       const thread = await this.findOrCreateUnifiedThread(driver);
 
+      const normalizedMessage = message.trim().toLowerCase();
+
+      // 🛑 STOP — Twilio handles opt-out automatically at carrier level.
+      // We just acknowledge and log so dispatcher can see it.
+      if (['stop', 'unsubscribe', 'quit', 'cancel', 'end'].includes(normalizedMessage)) {
+        console.log(`🛑 Driver ${driver.name} (${fromPhone}) sent STOP — opted out via Twilio`);
+        // Don't send a reply here — Twilio intercepts STOP and sends its own confirmation.
+        return;
+      }
+
+      // 📍 STATUS — return driver's current active load snapshot
+      if (['status', 'info', 'current', 'where'].includes(normalizedMessage)) {
+        const allLoadsForStatus = await storage.getAllLoads();
+        const activeLoad = allLoadsForStatus
+          .filter(l => l.driverId === driver.id && !['delivered', 'cancelled', 'complete'].includes(l.status || ''))
+          .sort((a, b) => (b.createdAt ? new Date(b.createdAt).getTime() : 0) - (a.createdAt ? new Date(a.createdAt).getTime() : 0))[0];
+
+        if (!activeLoad) {
+          await this.sendSMS(fromPhone, `No active load on file. Standing by for next dispatch.`);
+        } else {
+          const rate = activeLoad.rate ? `$${Number(activeLoad.rate).toLocaleString()}` : 'TBD';
+          await this.sendSMS(fromPhone,
+            `📋 LOAD #${activeLoad.loadNumber}\n` +
+            `Status: ${activeLoad.status || 'unknown'}\n` +
+            `${activeLoad.originCity || 'TBD'} → ${activeLoad.destCity || 'TBD'}\n` +
+            `Pay: ${rate}\n` +
+            `Broker: ${activeLoad.brokerName || 'N/A'} ${activeLoad.brokerPhone || ''}`
+          );
+        }
+        return;
+      }
+
       // 🔐 CHECK FOR LOAD CONFIRMATION RESPONSE
       const confirmationKeywords = ['yes', 'confirm', 'confirmed', 'accept', 'accepted', 'ok', 'okay'];
-      const normalizedMessage = message.trim().toLowerCase();
       const isConfirmationResponse = confirmationKeywords.some(keyword => 
         normalizedMessage === keyword || normalizedMessage.startsWith(keyword + ' ') || normalizedMessage.startsWith(keyword + '!')
       );
@@ -84,9 +115,9 @@ export class SMSCommunicationService {
           // Sort by createdAt descending to get the most recent one
           const allLoads = await storage.getAllLoads();
           const unconfirmedLoads = allLoads
-            .filter(load => 
-              load.driverId === driver.id && 
-              load.status === 'dispatched' && 
+            .filter(load =>
+              load.driverId === driver.id &&
+              ['booked', 'confirmed', 'dispatched', 'assigned', 'pending'].includes(load.status || '') &&
               !load.driverConfirmedAt
             )
             .sort((a, b) => {
