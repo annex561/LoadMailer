@@ -2621,47 +2621,58 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Create onboarding token and send invitation
+  // Accepts { name?, email?, phone?, sendVia: 'sms'|'email' }
+  // SMS-first is the fast path — just name + phone is enough.
   app.post("/api/create-onboarding-token", async (req, res) => {
     try {
-      const { email, sendVia } = req.body;
-      
-      if (!email) {
-        return res.status(400).json({ error: "Email is required" });
+      const { email, phone, name, sendVia } = req.body;
+
+      if (!email && !phone) {
+        return res.status(400).json({ error: "Email or phone is required" });
       }
 
       const { randomUUID } = await import('crypto');
       const tokenValue = randomUUID();
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7-day expiry
 
       const tokenData = await storage.createOnboardingToken({
         token: tokenValue,
-        email,
+        email: email || `pending-${tokenValue.slice(0, 8)}@traqiq.app`,
         expiresAt,
-        isUsed: false
+        isUsed: false,
       });
 
       const onboardingUrl = `${getBaseUrl()}/driver-onboarding?token=${tokenValue}`;
-      
-      // Send invitation based on preference
-      if (sendVia === 'email') {
-        // TODO: Implement email sending
-        console.log(`📧 Would send email to ${email} with link: ${onboardingUrl}`);
-      } else if (sendVia === 'sms') {
-        // TODO: Implement SMS sending
-        console.log(`📱 Would send SMS with link: ${onboardingUrl}`);
+      let smsSent = false;
+      let smsError: string | null = null;
+
+      // SMS path — actually fire the invite
+      if ((sendVia === 'sms' || (!sendVia && phone)) && phone) {
+        const { smsLoadService } = await import('./sms-service');
+        const greeting = name ? `Hi ${name.split(' ')[0]}! ` : '';
+        const body =
+          `${greeting}TRAQ-IQ dispatch here. Tap this link to finish onboarding ` +
+          `(CDL + truck info, 2 minutes): ${onboardingUrl}\n\n` +
+          `Link expires in 7 days. Reply STOP to opt out.`;
+        const result = await smsLoadService.sendSMS(phone, body);
+        smsSent = !!result.success;
+        smsError = result.error || null;
+        if (smsSent) console.log(`📱 Onboarding SMS sent to ${phone}`);
+        else console.warn(`⚠️ Onboarding SMS to ${phone} failed: ${smsError}`);
       }
 
       res.json({
         success: true,
         token: tokenValue,
         onboardingUrl,
-        expiresAt: tokenData.expiresAt
+        expiresAt: tokenData.expiresAt,
+        smsSent,
+        smsError,
       });
-      
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating onboarding token:', error);
-      res.status(500).json({ error: "Failed to create onboarding token" });
+      res.status(500).json({ error: error?.message || "Failed to create onboarding token" });
     }
   });
   
