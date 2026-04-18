@@ -851,6 +851,38 @@ router.get("/_version", (_req: Request, res: Response) => {
   res.json({ ok: true, version: "2026-04-18-dispatch-now", hasDispatchNow: true });
 });
 
+// Backfill load_number on ga_loads rows from raw_json.loadNumber where column is null
+router.post("/loads/backfill-load-number", (_req: Request, res: Response) => {
+  try {
+    const rows: any[] = db.prepare(
+      `SELECT id, raw_json FROM ga_loads WHERE (load_number IS NULL OR load_number = '') AND raw_json IS NOT NULL`
+    ).all();
+
+    const update = db.prepare(`UPDATE ga_loads SET load_number=? WHERE id=?`);
+    const updated: Array<{ id: string; loadNumber: string }> = [];
+    const skipped: string[] = [];
+
+    for (const r of rows) {
+      try {
+        const parsed = JSON.parse(r.raw_json);
+        const ln = String(parsed?.loadNumber || '').replace(/^#/, '').trim();
+        if (ln) {
+          update.run(ln, r.id);
+          updated.push({ id: r.id, loadNumber: ln });
+        } else {
+          skipped.push(r.id);
+        }
+      } catch {
+        skipped.push(r.id);
+      }
+    }
+
+    res.json({ ok: true, scanned: rows.length, updated: updated.length, skipped: skipped.length, samples: updated.slice(0, 10) });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: String(err?.message || err) });
+  }
+});
+
 router.get("/stats", (req: Request, res: Response) => {
   try {
     const stats = db.prepare(`
