@@ -848,7 +848,7 @@ router.post("/loads/:id/package-for-factoring", async (req: Request, res: Respon
 
 // Deploy sentinel — used to verify Railway picked up latest build
 router.get("/_version", (_req: Request, res: Response) => {
-  res.json({ ok: true, version: "2026-04-18-dispatch-now", hasDispatchNow: true });
+  res.json({ ok: true, version: "2026-04-18-sop-page", hasDispatchNow: true, hasSopPage: true });
 });
 
 // Backfill load_number on ga_loads rows from raw_json.loadNumber where column is null
