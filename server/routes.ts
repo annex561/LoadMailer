@@ -1278,6 +1278,20 @@ export async function registerRoutes(app: Express): Promise<void> {
         failed: [] as { load: string; reason: string }[],
       };
 
+      // Pull ga_loads snapshot once so we can cross-reference driver_name for unlinked PG loads
+      const { default: gaDb } = await import('./ga-db');
+      const gaRows: any[] = gaDb.prepare(
+        `SELECT load_number, driver_name, raw_json FROM ga_loads WHERE driver_name IS NOT NULL AND driver_name != '' OR raw_json IS NOT NULL`
+      ).all();
+      const gaByLoadNum = new Map<string, string>();
+      for (const r of gaRows) {
+        let dn = (r.driver_name || '').trim();
+        if (!dn && r.raw_json) {
+          try { dn = (JSON.parse(r.raw_json)?.driverName || '').trim(); } catch {}
+        }
+        if (r.load_number && dn) gaByLoadNum.set(String(r.load_number), dn);
+      }
+
       for (const load of todaysLoads) {
         const loadNum = load.loadNumber;
         const sop = (load.sopProgress as any) || {};
@@ -1286,14 +1300,15 @@ export async function registerRoutes(app: Express): Promise<void> {
           continue;
         }
         const driver = (load as any).driver;
-        if (!driver?.phone) {
+        // If PG has a driver record, use its name; else fall back to ga_loads driver_name
+        // so resolveAndDispatch can do an ilike match against drivers table.
+        const driverName = driver?.name || gaByLoadNum.get(String(loadNum)) || '';
+        if (!driver?.phone && !driverName) {
           summary.noDriver.push(loadNum);
           continue;
         }
         try {
-          await gmailIngest.resolveAndDispatch(loadNum, {
-            driverName: driver.name,
-          });
+          await gmailIngest.resolveAndDispatch(loadNum, { driverName });
           summary.dispatched.push(loadNum);
         } catch (err: any) {
           summary.failed.push({ load: loadNum, reason: err?.message || String(err) });
