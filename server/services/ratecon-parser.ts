@@ -238,6 +238,11 @@ export const rateconParser = {
 
       console.log(`✅ Parsed: Load ${extracted.loadNumber}, Rate $${extracted.rate}, ${extracted.origin} → ${extracted.destination}`);
 
+      try {
+        const { opsMonitor } = await import('../ops-monitor-service');
+        opsMonitor.noteParserRun(true);
+      } catch {}
+
       return {
         loadNumber: extracted.loadNumber || `RC-${Date.now()}`,
         rate: parseFloat(extracted.rate) || 0,
@@ -262,6 +267,11 @@ export const rateconParser = {
       const errMsg = error?.message || String(error);
       const status = error?.status || error?.response?.status;
       console.error(`❌ OpenAI parser failed (${status || 'no status'}):`, errMsg);
+
+      try {
+        const { opsMonitor } = await import('../ops-monitor-service');
+        opsMonitor.noteParserRun(false);
+      } catch {}
 
       // Fallback to regex extraction for any OpenAI failure
       // (429 quota, 5xx, timeout, JSON parse error, etc.)

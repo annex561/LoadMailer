@@ -35,6 +35,10 @@ export const gmailIngest = {
       const result = await this.scanSingleAccount(account);
       results.push(result);
     }
+    try {
+      const { opsMonitor } = await import('../ops-monitor-service');
+      opsMonitor.noteGmailScan();
+    } catch {}
     return results;
   },
 
@@ -56,6 +60,10 @@ export const gmailIngest = {
       const result = await this.scanSingleAccount(account);
       results.push(result);
     }
+    try {
+      const { opsMonitor } = await import('../ops-monitor-service');
+      opsMonitor.noteGmailScan();
+    } catch {}
     return results;
   },
 

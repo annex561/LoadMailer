@@ -734,6 +734,16 @@ async function initializeAllServices() {
       }
     });
 
+    // Ops Monitor — dispatcher alerts on pipeline degradation and stuck loads
+    Promise.resolve().then(async () => {
+      try {
+        const { opsMonitor } = await import('./ops-monitor-service');
+        await opsMonitor.initialize();
+      } catch (error) {
+        console.error('Failed to initialize Ops Monitor:', error);
+      }
+    });
+
     console.log('✅ Background service initialization started');
   } catch (error) {
     console.error('❌ Error starting background services:', error);
