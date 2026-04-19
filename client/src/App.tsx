@@ -36,6 +36,7 @@ import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import SmartLoadMatching from "@/pages/smart-load-matching";
 import PredictionConfidence from "@/pages/prediction-confidence";
 import AdminOverview from "@/pages/admin-overview";
+import OpsMonitor from "@/pages/ops-monitor";
 import SMSStatus from "@/pages/sms-status";
 import DebugToken from "@/pages/debug-token";
 import GoogleSheetsImport from "@/pages/google-sheets-import";
@@ -94,6 +95,8 @@ function Router() {
       <Route path="/smart-load-matching" component={SmartLoadMatching} />
       <Route path="/prediction-confidence" component={PredictionConfidence} />
       <Route path="/admin-overview" component={AdminOverview} />
+      <Route path="/ops" component={OpsMonitor} />
+      <Route path="/ops-monitor" component={OpsMonitor} />
       <Route path="/taskmagic-status" component={TaskMagicStatusPage} />
       <Route path="/dat-scraper" component={DATScraper} />
       <Route path="/google-sheets-import" component={GoogleSheetsImport} />
