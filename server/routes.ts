@@ -1257,6 +1257,45 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // CLEANUP: Archive orphan PG loads (no driverId, no driverName, LB-* auto-generated).
+  // These are stale placeholders from pre-pipeline imports that clutter dashboards but
+  // have no actionable data. Archiving keeps them in the DB but hides them from active views.
+  app.post('/api/loads/archive-orphans', async (req, res) => {
+    try {
+      const dryRun = req.query.dryRun === '1';
+      const { and, isNull, like, ne } = await import('drizzle-orm');
+
+      const orphans = await db.query.loads.findMany({
+        where: and(
+          isNull(loads.driverId),
+          like(loads.loadNumber, 'LB-%'),
+          ne(loads.status, 'archived')
+        ),
+      });
+
+      if (dryRun) {
+        return res.json({
+          dryRun: true,
+          wouldArchive: orphans.length,
+          samples: orphans.slice(0, 10).map(l => ({ loadNumber: l.loadNumber, status: l.status, createdAt: l.createdAt })),
+        });
+      }
+
+      let archived = 0;
+      for (const l of orphans) {
+        await db.update(loads)
+          .set({ status: 'archived' })
+          .where(eq(loads.loadNumber, l.loadNumber));
+        archived++;
+      }
+
+      res.json({ ok: true, archived, total: orphans.length });
+    } catch (error: any) {
+      console.error('Archive orphans error:', error);
+      res.status(500).json({ error: error.message || String(error) });
+    }
+  });
+
   // BACKFILL: Dispatch SMS for every load created today that hasn't been dispatched yet
   app.post('/api/dispatch/backfill-today', async (req, res) => {
     try {
