@@ -24,7 +24,7 @@ interface OpsMonitorState {
 }
 
 class OpsMonitorService {
-  private cronJob: cron.ScheduledTask | null = null;
+  private cronJob: any = null;
   private isRunning = false;
   private alertCooldowns = new Map<string, number>(); // key -> sentAtMs
   private readonly COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
