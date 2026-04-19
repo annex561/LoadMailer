@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 
 interface SettlementLine {
   loadId: string;
@@ -209,12 +210,11 @@ export default function Settlements() {
                             </tbody>
                           </table>
                         </div>
-                        <div className="mt-3 text-xs text-muted-foreground">
-                          Change this driver's pay rule:{" "}
-                          <code>
-                            PATCH /api/drivers/{s.driverId}/pay {"{payType, payRate}"}
-                          </code>
-                        </div>
+                        <PayRuleEditor
+                          driverId={s.driverId}
+                          payType={s.payType}
+                          payRate={s.payRate}
+                        />
                       </CardContent>
                     )}
                   </Card>
@@ -224,6 +224,106 @@ export default function Settlements() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function PayRuleEditor({
+  driverId,
+  payType,
+  payRate,
+}: {
+  driverId: string;
+  payType: string;
+  payRate: number;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [type, setType] = useState(payType);
+  const [rate, setRate] = useState(String(payRate));
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/drivers/${driverId}/pay`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payType: type, payRate: Number(rate) }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Pay rule updated" });
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/settlements"] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed to update",
+        description: String(err?.message || err),
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (!editing) {
+    return (
+      <div className="mt-3">
+        <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+          Edit pay rule
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 flex items-end gap-2 flex-wrap p-3 border rounded bg-muted/30">
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Pay type</label>
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          className="h-9 border rounded px-2 bg-background text-sm"
+        >
+          <option value="percent">% of rate</option>
+          <option value="per_mile">$ per mile</option>
+          <option value="flat">$ flat per load</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">
+          {type === "percent" ? "Percent" : type === "per_mile" ? "Rate per mile" : "Flat amount"}
+        </label>
+        <Input
+          type="number"
+          step="0.01"
+          className="w-32"
+          value={rate}
+          onChange={(e) => setRate(e.target.value)}
+        />
+      </div>
+      <Button
+        size="sm"
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending}
+      >
+        {mutation.isPending ? "Saving…" : "Save"}
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          setEditing(false);
+          setType(payType);
+          setRate(String(payRate));
+        }}
+      >
+        Cancel
+      </Button>
     </div>
   );
 }

@@ -236,6 +236,7 @@ export default function ActiveLoads() {
                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                     <Phone className="w-4 h-4 mr-2" /> Call Driver
                  </Button>
+                 <MarkDeliveredButton load={selectedLoad} />
               </div>
             </div>
 
@@ -614,5 +615,59 @@ function DriverChatWindow({ load }: { load: any }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function MarkDeliveredButton({ load }: { load: any }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const isDelivered = (load?.status || '').toLowerCase() === 'delivered';
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/loads/${load.id}/deliver`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Load marked delivered', description: `${load.loadNumber} closed out.` });
+      queryClient.invalidateQueries({ queryKey: ['/api/loads'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/settlements'] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Failed to mark delivered',
+        description: String(err?.message || err),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  if (isDelivered) {
+    return (
+      <Button size="sm" disabled className="bg-emerald-800 text-white">
+        <CheckCircle2 className="w-4 h-4 mr-2" /> Delivered
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      size="sm"
+      className="bg-indigo-600 hover:bg-indigo-700 text-white"
+      disabled={mutation.isPending}
+      onClick={() => {
+        if (confirm(`Mark load ${load.loadNumber} as delivered?`)) {
+          mutation.mutate();
+        }
+      }}
+    >
+      <CheckCircle2 className="w-4 h-4 mr-2" />
+      {mutation.isPending ? 'Saving…' : 'Mark Delivered'}
+    </Button>
   );
 }

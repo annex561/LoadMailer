@@ -744,6 +744,16 @@ async function initializeAllServices() {
       }
     });
 
+    // Weekly Statements cron — Fri 5pm ET SMS link to each driver
+    Promise.resolve().then(async () => {
+      try {
+        const { statementsCron } = await import('./statements-cron');
+        await statementsCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize Statements cron:', error);
+      }
+    });
+
     console.log('✅ Background service initialization started');
   } catch (error) {
     console.error('❌ Error starting background services:', error);
@@ -855,6 +865,26 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.json({ ok: true, settlement: null, message: 'No delivered loads this week' });
       }
       res.json({ ok: true, settlement });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // Manually fire the weekly statements job (for testing + off-cycle runs)
+  app.post('/api/statements/send-weekly', async (req, res) => {
+    try {
+      const { statementsCron } = await import('./statements-cron');
+      const result = await statementsCron.triggerNow(req.body?.weekStart);
+      res.json({ ok: true, ...result });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  app.get('/api/statements/status', async (_req, res) => {
+    try {
+      const { statementsCron } = await import('./statements-cron');
+      res.json({ ok: true, ...statementsCron.getStatus() });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
     }
@@ -3726,6 +3756,106 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (error) {
       console.error('Error assigning driver:', error);
       res.status(500).json({ error: 'Failed to assign driver' });
+    }
+  });
+
+  // Mark a load delivered — sets deliveredAt + status so settlements can pick it up
+  app.post('/api/loads/:id/deliver', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deliveredAt = req.body?.deliveredAt ? new Date(req.body.deliveredAt) : new Date();
+      const updatedLoad = await storage.updateLoad(id, {
+        status: 'delivered',
+        deliveredAt,
+        lifecycleStatus: 'delivered' as any,
+      });
+      if (!updatedLoad) {
+        return res.status(404).json({ ok: false, error: 'Load not found' });
+      }
+      // Free up the driver
+      if (updatedLoad.driverId) {
+        try {
+          await storage.updateDriver(updatedLoad.driverId, { status: 'available' });
+        } catch (e) {
+          console.warn('Failed to update driver status on deliver:', e);
+        }
+      }
+      res.json({ ok: true, load: updatedLoad });
+    } catch (err: any) {
+      console.error('Error marking delivered:', err);
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // Public weekly statement for a driver (token-gated; no auth required so driver can
+  // open from SMS link). Token comes from drivers.trackingToken.
+  app.get('/statements/:token', async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { drivers } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const { computeSettlementForDriver, fmtYMD } = await import('./settlements-service');
+
+      const [driver] = await db
+        .select()
+        .from(drivers)
+        .where(eq(drivers.trackingToken, req.params.token));
+      if (!driver) return res.status(404).type('html').send('<h1>Statement not found</h1>');
+
+      const weekRef = (req.query.week as string) || fmtYMD(new Date());
+      const settlement = await computeSettlementForDriver(driver.id, weekRef);
+
+      const rows = settlement
+        ? settlement.lines
+            .map(
+              (l) => `<tr>
+  <td>${l.loadNumber}</td>
+  <td>${l.origin} → ${l.destination}</td>
+  <td>${l.deliveredAt ? new Date(l.deliveredAt).toLocaleDateString() : '—'}</td>
+  <td style="text-align:right">$${l.rate.toFixed(2)}</td>
+  <td style="text-align:right">${l.miles || '—'}</td>
+  <td style="text-align:right"><b>$${l.pay.toFixed(2)}</b></td>
+</tr>`,
+            )
+            .join('')
+        : '<tr><td colspan="6" style="text-align:center;color:#666">No delivered loads this week.</td></tr>';
+
+      const totalPay = settlement?.totalPay ?? 0;
+      const totalRev = settlement?.totalRevenue ?? 0;
+      const weekStart = settlement?.weekStart ?? weekRef;
+      const weekEnd = settlement?.weekEnd ?? weekRef;
+
+      res.type('html').send(`<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LAMP — Weekly Statement</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;max-width:720px;margin:0 auto;padding:20px;color:#111;background:#fff}
+  h1{font-size:22px;color:#00B5B8;margin-bottom:4px}
+  .meta{color:#666;font-size:14px}
+  .total{background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:14px 16px;margin:16px 0;display:flex;justify-content:space-between;align-items:center}
+  .total b{font-size:28px;color:#16a34a}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
+  th,td{padding:8px 6px;border-bottom:1px solid #eee;text-align:left}
+  th{background:#fafafa;color:#555;font-weight:600}
+</style></head><body>
+  <h1>LAMP Logistics — Weekly Statement</h1>
+  <div class="meta">${driver.name} · Week of ${weekStart} → ${weekEnd}</div>
+  <div class="meta">Pay rule: ${driver.payType || 'percent'} @ ${driver.payRate ?? 75}${
+        (driver.payType || 'percent') === 'percent' ? '%' : '$'
+      }</div>
+  <div class="total">
+    <div>Total Pay <div style="font-size:12px;color:#666">of $${totalRev.toFixed(2)} revenue</div></div>
+    <b>$${totalPay.toFixed(2)}</b>
+  </div>
+  <table>
+    <thead><tr><th>Load</th><th>Route</th><th>Delivered</th><th style="text-align:right">Rate</th><th style="text-align:right">Miles</th><th style="text-align:right">Pay</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <p style="color:#999;font-size:12px;margin-top:24px">Questions? Text dispatch.</p>
+</body></html>`);
+    } catch (err: any) {
+      console.error('Statement error:', err);
+      res.status(500).type('html').send('<h1>Error loading statement</h1>');
     }
   });
 
