@@ -792,6 +792,31 @@ export async function registerRoutes(app: Express): Promise<void> {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Ops Monitor — snapshot of state
+  app.get('/api/ops/snapshot', async (_req, res) => {
+    try {
+      const { opsMonitor } = await import('./ops-monitor-service');
+      res.json({ ok: true, ...opsMonitor.getSnapshot() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // Ops Monitor — fire a test SMS to the configured alert phone
+  app.post('/api/ops/test-alert', async (_req, res) => {
+    try {
+      const { opsMonitor } = await import('./ops-monitor-service');
+      const phone = opsMonitor.getSnapshot().alertPhone;
+      const result = await smsLoadService.sendSMS(
+        phone,
+        `✅ TRAQ: Ops Monitor alert test — ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}. You're wired up.`
+      );
+      res.json({ ok: result.success, phone, messageSid: result.messageSid, error: result.error });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // Driver SOP page — linked from dispatch SMS
   app.get('/sop', (_req, res) => {
     res.type('html').send(`<!doctype html>
