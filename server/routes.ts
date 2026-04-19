@@ -870,6 +870,95 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // ========== Driver photo uploads (Cloudinary) ==========
+  // Tokenized upload page — SMS link sends driver here
+  app.get('/u/:loadId', async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { loads } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const { renderUploadPage, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
+
+      const load = await db.query.loads.findFirst({ where: eq(loads.id, req.params.loadId) });
+      if (!load) return res.status(404).type('html').send('<h1>Load not found</h1>');
+
+      const qsStages = (req.query.stages as string | undefined) || '';
+      let stages: any[] = qsStages
+        .split(',')
+        .filter(Boolean)
+        .filter((s) =>
+          ['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(s),
+        );
+      if (stages.length === 0) {
+        stages = [...PICKUP_STAGES, ...DELIVERY_STAGES];
+      }
+      res.type('html').send(renderUploadPage(load.id, stages as any, load.loadNumber));
+    } catch (err: any) {
+      console.error('Upload page error:', err);
+      res.status(500).type('html').send('<h1>Error loading page</h1>');
+    }
+  });
+
+  // Multipart photo upload
+  app.post('/api/loads/:id/photos', async (req, res) => {
+    try {
+      const multer = (await import('multer')).default;
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+      upload.single('photo')(req, res, async (err: any) => {
+        if (err) return res.status(400).json({ ok: false, error: err.message });
+        const file = (req as any).file;
+        if (!file) return res.status(400).json({ ok: false, error: 'No file' });
+        const { uploadLoadPhoto } = await import('./load-photos-service');
+        const stage = (req.body.stage || '').toString();
+        if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+          return res.status(400).json({ ok: false, error: 'Invalid stage' });
+        }
+        const result = await uploadLoadPhoto({
+          loadId: req.params.id,
+          stage: stage as any,
+          buffer: file.buffer,
+          mimeType: file.mimetype,
+          originalName: file.originalname,
+          lat: req.body.lat ? Number(req.body.lat) : undefined,
+          lng: req.body.lng ? Number(req.body.lng) : undefined,
+        });
+        if (!result.ok) return res.status(500).json(result);
+        res.json(result);
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // List photos for a load
+  app.get('/api/loads/:id/photos', async (req, res) => {
+    try {
+      const { listLoadPhotos } = await import('./load-photos-service');
+      const result = await listLoadPhotos(req.params.id);
+      res.json({ ok: true, ...result });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // Dispatcher action: SMS the driver an upload link for pickup or delivery photos
+  app.post('/api/loads/:id/photos/request', async (req, res) => {
+    try {
+      const { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
+      const phase = (req.body.phase || '').toString();
+      let stages: any[] = [];
+      if (phase === 'pickup') stages = PICKUP_STAGES;
+      else if (phase === 'delivery') stages = DELIVERY_STAGES;
+      else if (Array.isArray(req.body.stages)) stages = req.body.stages;
+      else return res.status(400).json({ ok: false, error: 'phase must be pickup or delivery' });
+
+      const result = await sendUploadLink(req.params.id, stages, req.body.message);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // Backfill missing tracking tokens for drivers (required for statement SMS links)
   app.post('/api/drivers/backfill-tokens', async (_req, res) => {
     try {

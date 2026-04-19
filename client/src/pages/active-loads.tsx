@@ -236,6 +236,8 @@ export default function ActiveLoads() {
                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                     <Phone className="w-4 h-4 mr-2" /> Call Driver
                  </Button>
+                 <RequestPhotosButton load={selectedLoad} phase="pickup" />
+                 <RequestPhotosButton load={selectedLoad} phase="delivery" />
                  <MarkDeliveredButton load={selectedLoad} />
               </div>
             </div>
@@ -615,6 +617,54 @@ function DriverChatWindow({ load }: { load: any }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function RequestPhotosButton({ load, phase }: { load: any; phase: 'pickup' | 'delivery' }) {
+  const { toast } = useToast();
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/loads/${load.id}/photos/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phase }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: data.ok ? `${phase} photo link sent` : 'Send failed',
+        description: data.ok ? `Driver will receive an SMS for ${phase} photos.` : (data.error || ''),
+        variant: data.ok ? 'default' : 'destructive',
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Failed',
+        description: String(err?.message || err),
+        variant: 'destructive',
+      });
+    },
+  });
+  const label = phase === 'pickup' ? '📸 Pickup Photos' : '📸 Delivery Photos';
+  const cls =
+    phase === 'pickup'
+      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+      : 'bg-purple-600 hover:bg-purple-700 text-white';
+  return (
+    <Button
+      size="sm"
+      className={cls}
+      disabled={mutation.isPending || !load?.driverId}
+      onClick={() => mutation.mutate()}
+      title={!load?.driverId ? 'Assign a driver first' : `Text driver ${phase} upload link`}
+    >
+      {mutation.isPending ? 'Sending…' : label}
+    </Button>
   );
 }
 
