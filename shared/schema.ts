@@ -187,7 +187,11 @@ export const drivers = pgTable("drivers", {
   safetyScore: real("safety_score").default(100.0), // 0-100 safety rating
   
   trackingToken: varchar("tracking_token", { length: 64 }).unique(),
-  
+
+  // Settlement / pay config
+  payType: text("pay_type").default("percent"), // percent, per_mile, flat
+  payRate: real("pay_rate").default(75), // percent => % of load rate; per_mile => $/mile; flat => $/load
+
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_drivers_company_id").on(table.companyId),

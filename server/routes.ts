@@ -817,6 +817,74 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Settlements — weekly driver pay computed from delivered loads
+  app.get('/api/settlements', async (req, res) => {
+    try {
+      const { computeSettlements, fmtYMD, weekRange } = await import('./settlements-service');
+      const weekRef =
+        (req.query.weekStart as string) ||
+        (req.query.week as string) ||
+        fmtYMD(new Date());
+      const { start, end } = weekRange(weekRef);
+      const settlements = await computeSettlements(weekRef);
+      const totalPay = +settlements.reduce((s, x) => s + x.totalPay, 0).toFixed(2);
+      const totalRevenue = +settlements.reduce((s, x) => s + x.totalRevenue, 0).toFixed(2);
+      res.json({
+        ok: true,
+        weekStart: fmtYMD(start),
+        weekEnd: fmtYMD(new Date(end.getTime() - 1)),
+        driverCount: settlements.length,
+        totalPay,
+        totalRevenue,
+        settlements,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  app.get('/api/settlements/:driverId', async (req, res) => {
+    try {
+      const { computeSettlementForDriver, fmtYMD } = await import('./settlements-service');
+      const weekRef =
+        (req.query.weekStart as string) ||
+        (req.query.week as string) ||
+        fmtYMD(new Date());
+      const settlement = await computeSettlementForDriver(req.params.driverId, weekRef);
+      if (!settlement) {
+        return res.json({ ok: true, settlement: null, message: 'No delivered loads this week' });
+      }
+      res.json({ ok: true, settlement });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // Update a driver's pay rule
+  app.patch('/api/drivers/:id/pay', async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { drivers } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const { payType, payRate } = req.body || {};
+      if (!['percent', 'per_mile', 'flat'].includes(payType)) {
+        return res.status(400).json({ ok: false, error: 'payType must be percent|per_mile|flat' });
+      }
+      const rate = Number(payRate);
+      if (!isFinite(rate) || rate < 0) {
+        return res.status(400).json({ ok: false, error: 'payRate must be a non-negative number' });
+      }
+      const [updated] = await db
+        .update(drivers)
+        .set({ payType, payRate: rate })
+        .where(eq(drivers.id, req.params.id))
+        .returning();
+      res.json({ ok: true, driver: updated });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // Driver SOP page — linked from dispatch SMS
   app.get('/sop', (_req, res) => {
     res.type('html').send(`<!doctype html>

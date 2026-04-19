@@ -39,6 +39,8 @@ export async function ensureSchema(): Promise<void> {
     ['maintenance_score', 'REAL DEFAULT 100.0'],
     ['safety_score', 'REAL DEFAULT 100.0'],
     ['tracking_token', 'VARCHAR(64)'],
+    ['pay_type', "TEXT DEFAULT 'percent'"],
+    ['pay_rate', 'REAL DEFAULT 75'],
     ['license_state', 'TEXT'],
     ['license_expiry', 'TEXT'],
     ['state', 'TEXT'],
