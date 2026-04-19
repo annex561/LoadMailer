@@ -14,6 +14,29 @@ interface ScanResult {
   errors: string[];
 }
 
+// In-memory dedup: skip a Gmail message if we've already attempted to parse it
+// in the last 30 min. Prevents hammering OpenAI with the same failed PDF 60×/hour
+// when upsertLoad throws and the email never gets marked read.
+const PARSE_ATTEMPT_CACHE = new Map<string, number>();
+const PARSE_ATTEMPT_TTL_MS = 30 * 60 * 1000;
+function seenRecently(msgId: string): boolean {
+  const last = PARSE_ATTEMPT_CACHE.get(msgId);
+  if (!last) return false;
+  if (Date.now() - last > PARSE_ATTEMPT_TTL_MS) {
+    PARSE_ATTEMPT_CACHE.delete(msgId);
+    return false;
+  }
+  return true;
+}
+function markAttempted(msgId: string): void {
+  PARSE_ATTEMPT_CACHE.set(msgId, Date.now());
+  // Bound memory: purge old entries if we grow too big
+  if (PARSE_ATTEMPT_CACHE.size > 1000) {
+    const cutoff = Date.now() - PARSE_ATTEMPT_TTL_MS;
+    for (const [k, v] of PARSE_ATTEMPT_CACHE) if (v < cutoff) PARSE_ATTEMPT_CACHE.delete(k);
+  }
+}
+
 export const gmailIngest = {
   /**
    * Scan accounts for a specific company
@@ -126,6 +149,13 @@ export const gmailIngest = {
    */
   async processMessage(gmail: any, msgId: string, companyId: string): Promise<{filesProcessed: number, loadsCreated: number, loadsUpdated: number, error?: string}> {
     const result = { filesProcessed: 0, loadsCreated: 0, loadsUpdated: 0, error: undefined as string | undefined };
+
+    // Skip if we've attempted this message in the last 30 min (prevents re-parse loops
+    // when parsing fails and the email never gets marked read).
+    if (seenRecently(msgId)) {
+      return result;
+    }
+    markAttempted(msgId);
 
     try {
       const email = await gmail.users.messages.get({ userId: 'me', id: msgId });
