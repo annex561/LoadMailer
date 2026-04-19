@@ -870,6 +870,23 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Backfill missing tracking tokens for drivers (required for statement SMS links)
+  app.post('/api/drivers/backfill-tokens', async (_req, res) => {
+    try {
+      const { pool } = await import('./db');
+      if (!pool) return res.status(500).json({ ok: false, error: 'No DB pool' });
+      const result = await pool.query(
+        `UPDATE drivers
+         SET tracking_token = replace(gen_random_uuid()::text, '-', '')
+         WHERE tracking_token IS NULL OR tracking_token = ''
+         RETURNING id, name`,
+      );
+      res.json({ ok: true, updated: result.rowCount, drivers: result.rows });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // Manually fire the weekly statements job (for testing + off-cycle runs)
   app.post('/api/statements/send-weekly', async (req, res) => {
     try {

@@ -55,7 +55,15 @@ const menuGroups = [
       { name: "True RPM Calc", href: "/true-rpm-calculator" },
       { name: "Fleet Calculator", href: "/fleet-calculator" },
       { name: "Payments", href: "/payments" },
+      { name: "Driver Settlements", href: "/settlements" },
       { name: "Analytics", href: "/analytics" },
+    ]
+  },
+  {
+    title: "System",
+    icon: <Truck className="w-5 h-5" />,
+    items: [
+      { name: "Ops Monitor", href: "/ops" },
     ]
   },
   {
