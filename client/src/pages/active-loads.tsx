@@ -626,6 +626,61 @@ function DriverChatWindow({ load }: { load: any }) {
   );
 }
 
+function PhotoTile({ loadId, photo, label, onChanged }: { loadId: string; photo: any; label: string; onChanged: () => void }) {
+  const { toast } = useToast();
+  const status = photo.approvalStatus || 'pending';
+  const ring =
+    status === 'approved' ? 'border-green-500'
+    : status === 'rejected' ? 'border-red-500'
+    : 'border-slate-700';
+  const badge =
+    status === 'approved' ? 'bg-green-600/20 text-green-400'
+    : status === 'rejected' ? 'bg-red-600/20 text-red-400'
+    : 'bg-amber-600/20 text-amber-400';
+
+  const mutate = useMutation({
+    mutationFn: async (approvalStatus: 'approved' | 'rejected' | 'pending') => {
+      const res = await fetch(`/api/loads/${loadId}/photos/${photo.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvalStatus }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    },
+    onSuccess: (_d, s) => { toast({ title: `Photo ${s}` }); onChanged(); },
+    onError: (e: any) => toast({ title: 'Update failed', description: String(e?.message || e), variant: 'destructive' }),
+  });
+
+  return (
+    <div className={`block rounded border-2 ${ring} overflow-hidden`}>
+      <a href={photo.fileUrl} target="_blank" rel="noreferrer">
+        <img src={photo.fileUrl} alt={label} className="w-full h-32 object-cover hover:opacity-90" />
+      </a>
+      <div className="flex items-center justify-between px-1.5 py-1 bg-slate-900/80">
+        <span className={`text-[10px] px-1.5 py-0.5 rounded ${badge}`}>{status}</span>
+        <div className="flex gap-1">
+          <button
+            onClick={() => mutate.mutate('approved')}
+            disabled={mutate.isPending || status === 'approved'}
+            className="text-xs px-1.5 py-0.5 rounded bg-green-600/30 hover:bg-green-600/60 text-green-200 disabled:opacity-40"
+            title="Approve"
+          >✓</button>
+          <button
+            onClick={() => mutate.mutate('rejected')}
+            disabled={mutate.isPending || status === 'rejected'}
+            className="text-xs px-1.5 py-0.5 rounded bg-red-600/30 hover:bg-red-600/60 text-red-200 disabled:opacity-40"
+            title="Reject"
+          >✕</button>
+        </div>
+      </div>
+      <div className="text-[10px] text-slate-500 px-1.5 pb-1 truncate">
+        {photo.createdAt ? new Date(photo.createdAt).toLocaleString() : ''}
+      </div>
+    </div>
+  );
+}
+
 function LoadPhotos({ load }: { load: any }) {
   const { data, isLoading, refetch } = useQuery<any>({
     queryKey: [`/api/loads/${load?.id}/photos`, load?.id],
@@ -675,16 +730,7 @@ function LoadPhotos({ load }: { load: any }) {
               {hasAny ? (
                 <div className="grid grid-cols-2 gap-2">
                   {shots.slice(0, 4).map((sh: any) => (
-                    <a key={sh.id} href={sh.fileUrl} target="_blank" rel="noreferrer" className="block">
-                      <img
-                        src={sh.fileUrl}
-                        alt={s.label}
-                        className="w-full h-32 object-cover rounded border border-slate-700 hover:border-slate-500"
-                      />
-                      <div className="text-[10px] text-slate-500 mt-1 truncate">
-                        {sh.createdAt ? new Date(sh.createdAt).toLocaleString() : ''}
-                      </div>
-                    </a>
+                    <PhotoTile key={sh.id} loadId={load.id} photo={sh} label={s.label} onChanged={() => refetch()} />
                   ))}
                 </div>
               ) : (

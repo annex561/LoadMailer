@@ -236,7 +236,18 @@ ${formatDate(load.deliveryDate || load.delivery_dt)}
     }
 
     const baseUrl = process.env.CUSTOM_DOMAIN || 'https://traqiq.app';
-    const trackingLink = `${baseUrl}/driver-tracker?driver=${load.driverId || load.driver_id || ''}&token=${load.trackingToken || load.tracking_token || ''}`;
+    // Tracking token lives on DRIVER, not load. Ensure one exists — without it /driver-tracker can't authenticate.
+    let trackingToken: string = driver.trackingToken || driver.tracking_token || '';
+    if (!trackingToken && driver.id) {
+      try {
+        const { storage } = await import('./storage');
+        const gen = await storage.generateTrackingToken(driver.id);
+        trackingToken = gen?.token || '';
+      } catch (e: any) {
+        console.warn('[SMS] failed to mint tracking token:', e?.message || e);
+      }
+    }
+    const trackingLink = `${baseUrl}/driver-tracker?driver=${driver.id || load.driverId || load.driver_id || ''}&token=${trackingToken}`;
 
     const specialInstructions = load.specialInstructions || load.special_instructions || load.notes || '';
     const brokerContact = load.brokerPhone || load.broker_phone

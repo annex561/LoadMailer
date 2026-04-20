@@ -971,6 +971,69 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Approve / reject a single photo
+  app.patch('/api/loads/:id/photos/:photoId', async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { loadDocuments } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const status = (req.body.approvalStatus || '').toString();
+      if (!['approved', 'rejected', 'pending'].includes(status)) {
+        return res.status(400).json({ ok: false, error: 'approvalStatus must be approved|rejected|pending' });
+      }
+      const patch: any = { approvalStatus: status };
+      if (req.body.notes !== undefined) patch.notes = String(req.body.notes);
+      const [row] = await db.update(loadDocuments).set(patch).where(eq(loadDocuments.id, req.params.photoId)).returning();
+      if (!row) return res.status(404).json({ ok: false, error: 'Photo not found' });
+      res.json({ ok: true, photo: row });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // Driver check-in stages (at_pickup, loaded, at_delivery, unloaded) — timestamped into sopProgress
+  app.post('/api/loads/:id/checkin', async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { loads } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const stage = (req.body.stage || '').toString();
+      const fieldMap: Record<string, string> = {
+        at_pickup: 'atPickupAt',
+        loaded: 'loadedAt',
+        at_delivery: 'atDeliveryAt',
+        unloaded: 'unloadedAt',
+      };
+      const field = fieldMap[stage];
+      if (!field) return res.status(400).json({ ok: false, error: 'Invalid stage' });
+
+      const [l] = await db.select({ id: loads.id, sopProgress: loads.sopProgress, driverId: loads.driverId }).from(loads).where(eq(loads.id, req.params.id));
+      if (!l) return res.status(404).json({ ok: false, error: 'Load not found' });
+      const sop: any = (l.sopProgress as any) || {};
+      sop[field] = new Date().toISOString();
+      await db.update(loads).set({ sopProgress: sop } as any).where(eq(loads.id, req.params.id));
+
+      // Piggyback GPS if provided
+      if (l.driverId && typeof req.body.lat === 'number' && typeof req.body.lng === 'number') {
+        try {
+          const { driverLocations } = await import('@shared/schema');
+          await db.insert(driverLocations).values({
+            driverId: l.driverId,
+            latitude: req.body.lat,
+            longitude: req.body.lng,
+            timestamp: new Date(),
+            loadId: req.params.id,
+            isActive: true,
+            source: 'checkin',
+          } as any);
+        } catch {}
+      }
+      res.json({ ok: true, stage, timestamp: sop[field], sopProgress: sop });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // Dispatcher action: SMS the driver an upload link for pickup or delivery photos
   app.post('/api/loads/:id/photos/request', async (req, res) => {
     try {

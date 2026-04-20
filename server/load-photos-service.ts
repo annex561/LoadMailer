@@ -210,6 +210,13 @@ export function renderUploadPage(
 </head><body>
   <h1>📸 Upload Photos</h1>
   <div class="meta">Load <b>${loadNumber}</b> · LAMP Logistics</div>
+
+  <div class="slot" id="checkin-slot">
+    <h2>📍 Check-In</h2>
+    <div id="checkin-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+    <div class="status" id="checkin-status"></div>
+  </div>
+
   <div id="slots"></div>
   <footer>Photos auto-save. You can close this page when done.</footer>
 
@@ -217,6 +224,53 @@ export function renderUploadPage(
 const LOAD_ID = ${JSON.stringify(loadId)};
 const STAGES = ${stagesJson};
 const root = document.getElementById('slots');
+
+// ---------- Check-In buttons ----------
+const CHECKINS = [
+  { stage: 'at_pickup',   label: '🚚 At Pickup' },
+  { stage: 'loaded',      label: '📦 Loaded' },
+  { stage: 'at_delivery', label: '🏁 At Delivery' },
+  { stage: 'unloaded',    label: '✅ Unloaded' },
+];
+const ciRoot = document.getElementById('checkin-buttons');
+const ciStatus = document.getElementById('checkin-status');
+CHECKINS.forEach((c) => {
+  const b = document.createElement('button');
+  b.textContent = c.label;
+  b.style.cssText = 'background:#334155;color:#f1f5f9;border:1px solid #475569;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer';
+  b.onclick = async () => {
+    b.disabled = true;
+    ciStatus.className = 'status';
+    ciStatus.textContent = 'Sending ' + c.label + '...';
+    try {
+      const coords = await new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+          () => resolve(null),
+          { timeout: 4000, maximumAge: 60000 }
+        );
+      });
+      const body = { stage: c.stage, ...(coords || {}) };
+      const res = await fetch('/api/loads/' + LOAD_ID + '/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      b.style.background = '#14532d';
+      b.style.borderColor = '#22c55e';
+      b.textContent = '✅ ' + c.label;
+      ciStatus.className = 'status ok';
+      ciStatus.textContent = c.label + ' recorded.';
+    } catch (err) {
+      b.disabled = false;
+      ciStatus.className = 'status error';
+      ciStatus.textContent = 'Failed: ' + err.message;
+    }
+  };
+  ciRoot.appendChild(b);
+});
 
 STAGES.forEach((s) => {
   const el = document.createElement('div');
