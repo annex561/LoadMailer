@@ -68,7 +68,7 @@ let isRunning = false;
 
 // ─── Haversine distance calculator ───────────────────────────────────────────
 
-function haversineDistance(
+export function haversineDistance(
   lat1: number, lon1: number,
   lat2: number, lon2: number
 ): number {
@@ -138,7 +138,7 @@ const CITY_COORDS: Record<string, [number, number]> = {
   "kingsport, tn": [36.5484, -82.5618],
 };
 
-function getCityCoords(cityState: string): [number, number] | null {
+export function getCityCoords(cityState: string): [number, number] | null {
   const key = cityState.toLowerCase().trim();
   if (CITY_COORDS[key]) return CITY_COORDS[key];
 

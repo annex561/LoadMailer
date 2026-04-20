@@ -754,6 +754,16 @@ async function initializeAllServices() {
       }
     });
 
+    // Geofence cron — auto-SMS photo upload links when driver enters pickup/delivery radius
+    Promise.resolve().then(async () => {
+      try {
+        const { geofenceCron } = await import('./geofence-cron');
+        await geofenceCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize Geofence cron:', error);
+      }
+    });
+
     console.log('✅ Background service initialization started');
   } catch (error) {
     console.error('❌ Error starting background services:', error);
@@ -865,6 +875,26 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.json({ ok: true, settlement: null, message: 'No delivered loads this week' });
       }
       res.json({ ok: true, settlement });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // Geofence cron — manual trigger + status
+  app.post('/api/geofence/tick', async (_req, res) => {
+    try {
+      const { geofenceCron } = await import('./geofence-cron');
+      const r = await geofenceCron.triggerNow();
+      res.json({ ok: true, ...r });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  app.get('/api/geofence/status', async (_req, res) => {
+    try {
+      const { geofenceCron } = await import('./geofence-cron');
+      res.json({ ok: true, ...geofenceCron.getStatus() });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
     }
