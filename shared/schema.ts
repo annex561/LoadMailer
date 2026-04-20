@@ -190,7 +190,9 @@ export const drivers = pgTable("drivers", {
 
   // Settlement / pay config
   payType: text("pay_type").default("percent"), // percent, per_mile, flat
-  payRate: real("pay_rate").default(75), // percent => % of load rate; per_mile => $/mile; flat => $/load
+  payRate: real("pay_rate").default(80), // percent => % of load rate; per_mile => $/mile; flat => $/load
+  weeklyFuelCost: real("weekly_fuel_cost").default(0), // weekly deduction from driver pay
+  weeklyInsuranceCost: real("weekly_insurance_cost").default(0), // weekly deduction from driver pay
 
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [

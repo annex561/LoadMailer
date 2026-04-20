@@ -61,8 +61,10 @@ class StatementsCron {
       if (!driver?.phone) { skipped++; continue; }
       if (!driver.trackingToken) { skipped++; continue; }
 
-      const link = `${baseUrl}/statements/${driver.trackingToken}?week=${weekStartYMD}`;
-      const body = `💰 LAMP weekly statement: ${s.loadCount} loads, total pay $${s.totalPay.toFixed(2)}. View: ${link}`;
+      // Point driver at simplified bottom-line portal; detailed breakdown linked from there.
+      const link = `${baseUrl}/my-pay/${driver.trackingToken}`;
+      const net = (s.netPay ?? s.totalPay).toFixed(2);
+      const body = `💰 LAMP weekly pay: $${net} take-home (${s.loadCount} loads). View: ${link}`;
 
       try {
         const r = await smsLoadService.sendSMS(driver.phone, body);

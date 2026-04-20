@@ -32,7 +32,11 @@ export interface DriverSettlement {
   weekEnd: string;
   loadCount: number;
   totalRevenue: number;
-  totalPay: number;
+  grossPay: number;          // driver's share before deductions
+  fuelCost: number;          // weekly fuel deduction
+  insuranceCost: number;     // weekly insurance deduction
+  netPay: number;            // grossPay − fuelCost − insuranceCost (bottom line)
+  totalPay: number;          // alias of netPay for backward compat
   lines: SettlementLoadLine[];
 }
 
@@ -103,7 +107,9 @@ export async function computeSettlements(
     if (!driver) continue;
 
     const payType = driver.payType || 'percent';
-    const payRate = driver.payRate ?? 75;
+    const payRate = driver.payRate ?? 80;
+    const fuelCost = +(driver.weeklyFuelCost ?? 0).toFixed(2);
+    const insuranceCost = +(driver.weeklyInsuranceCost ?? 0).toFixed(2);
 
     const lines: SettlementLoadLine[] = driverLoads.map((l) => {
       const rate = l.rate || l.offeredRate || 0;
@@ -126,8 +132,9 @@ export async function computeSettlements(
       };
     });
 
-    const totalPay = +lines.reduce((s, x) => s + x.pay, 0).toFixed(2);
+    const grossPay = +lines.reduce((s, x) => s + x.pay, 0).toFixed(2);
     const totalRevenue = +lines.reduce((s, x) => s + x.rate, 0).toFixed(2);
+    const netPay = +(grossPay - fuelCost - insuranceCost).toFixed(2);
 
     results.push({
       driverId,
@@ -138,7 +145,11 @@ export async function computeSettlements(
       weekEnd: fmtYMD(new Date(end.getTime() - 1)),
       loadCount: lines.length,
       totalRevenue,
-      totalPay,
+      grossPay,
+      fuelCost,
+      insuranceCost,
+      netPay,
+      totalPay: netPay, // bottom line
       lines,
     });
   }

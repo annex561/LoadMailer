@@ -210,10 +210,18 @@ export default function Settlements() {
                             </tbody>
                           </table>
                         </div>
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm p-3 rounded bg-muted/30">
+                          <div><div className="text-xs text-muted-foreground">Gross (share)</div><div className="font-semibold">{currency(s.grossPay ?? s.totalPay)}</div></div>
+                          <div><div className="text-xs text-muted-foreground">− Fuel</div><div className="text-red-400">-{currency(s.fuelCost ?? 0)}</div></div>
+                          <div><div className="text-xs text-muted-foreground">− Insurance</div><div className="text-red-400">-{currency(s.insuranceCost ?? 0)}</div></div>
+                          <div><div className="text-xs text-muted-foreground">Net take-home</div><div className="font-bold text-green-500">{currency(s.netPay ?? s.totalPay)}</div></div>
+                        </div>
                         <PayRuleEditor
                           driverId={s.driverId}
                           payType={s.payType}
                           payRate={s.payRate}
+                          weeklyFuelCost={(s as any).fuelCost ?? 0}
+                          weeklyInsuranceCost={(s as any).insuranceCost ?? 0}
                         />
                       </CardContent>
                     )}
@@ -232,23 +240,34 @@ function PayRuleEditor({
   driverId,
   payType,
   payRate,
+  weeklyFuelCost = 0,
+  weeklyInsuranceCost = 0,
 }: {
   driverId: string;
   payType: string;
   payRate: number;
+  weeklyFuelCost?: number;
+  weeklyInsuranceCost?: number;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [type, setType] = useState(payType);
   const [rate, setRate] = useState(String(payRate));
+  const [fuel, setFuel] = useState(String(weeklyFuelCost));
+  const [insurance, setInsurance] = useState(String(weeklyInsuranceCost));
 
   const mutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/drivers/${driverId}/pay`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ payType: type, payRate: Number(rate) }),
+        body: JSON.stringify({
+          payType: type,
+          payRate: Number(rate),
+          weeklyFuelCost: Number(fuel),
+          weeklyInsuranceCost: Number(insurance),
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -306,6 +325,14 @@ function PayRuleEditor({
           onChange={(e) => setRate(e.target.value)}
         />
       </div>
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Weekly fuel $</label>
+        <Input type="number" step="0.01" className="w-28" value={fuel} onChange={(e) => setFuel(e.target.value)} />
+      </div>
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Weekly insurance $</label>
+        <Input type="number" step="0.01" className="w-28" value={insurance} onChange={(e) => setInsurance(e.target.value)} />
+      </div>
       <Button
         size="sm"
         onClick={() => mutation.mutate()}
@@ -320,6 +347,8 @@ function PayRuleEditor({
           setEditing(false);
           setType(payType);
           setRate(String(payRate));
+          setFuel(String(weeklyFuelCost));
+          setInsurance(String(weeklyInsuranceCost));
         }}
       >
         Cancel

@@ -1095,7 +1095,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const { db } = await import('./db');
       const { drivers } = await import('@shared/schema');
       const { eq } = await import('drizzle-orm');
-      const { payType, payRate } = req.body || {};
+      const { payType, payRate, weeklyFuelCost, weeklyInsuranceCost } = req.body || {};
       if (!['percent', 'per_mile', 'flat'].includes(payType)) {
         return res.status(400).json({ ok: false, error: 'payType must be percent|per_mile|flat' });
       }
@@ -1103,9 +1103,20 @@ export async function registerRoutes(app: Express): Promise<void> {
       if (!isFinite(rate) || rate < 0) {
         return res.status(400).json({ ok: false, error: 'payRate must be a non-negative number' });
       }
+      const patch: any = { payType, payRate: rate };
+      if (weeklyFuelCost !== undefined) {
+        const fuel = Number(weeklyFuelCost);
+        if (!isFinite(fuel) || fuel < 0) return res.status(400).json({ ok: false, error: 'weeklyFuelCost must be a non-negative number' });
+        patch.weeklyFuelCost = fuel;
+      }
+      if (weeklyInsuranceCost !== undefined) {
+        const ins = Number(weeklyInsuranceCost);
+        if (!isFinite(ins) || ins < 0) return res.status(400).json({ ok: false, error: 'weeklyInsuranceCost must be a non-negative number' });
+        patch.weeklyInsuranceCost = ins;
+      }
       const [updated] = await db
         .update(drivers)
-        .set({ payType, payRate: rate })
+        .set(patch)
         .where(eq(drivers.id, req.params.id))
         .returning();
       res.json({ ok: true, driver: updated });
@@ -4019,7 +4030,10 @@ export async function registerRoutes(app: Express): Promise<void> {
             .join('')
         : '<tr><td colspan="6" style="text-align:center;color:#666">No delivered loads this week.</td></tr>';
 
-      const totalPay = settlement?.totalPay ?? 0;
+      const grossPay = settlement?.grossPay ?? 0;
+      const fuelCost = settlement?.fuelCost ?? +(driver.weeklyFuelCost ?? 0);
+      const insuranceCost = settlement?.insuranceCost ?? +(driver.weeklyInsuranceCost ?? 0);
+      const netPay = settlement?.netPay ?? -(fuelCost + insuranceCost);
       const totalRev = settlement?.totalRevenue ?? 0;
       const weekStart = settlement?.weekStart ?? weekRef;
       const weekEnd = settlement?.weekEnd ?? weekRef;
@@ -4033,18 +4047,29 @@ export async function registerRoutes(app: Express): Promise<void> {
   .meta{color:#666;font-size:14px}
   .total{background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:14px 16px;margin:16px 0;display:flex;justify-content:space-between;align-items:center}
   .total b{font-size:28px;color:#16a34a}
+  .breakdown{background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px}
+  .breakdown .row{display:flex;justify-content:space-between;padding:4px 0}
+  .breakdown .row.total-row{border-top:1px solid #e5e7eb;margin-top:6px;padding-top:8px;font-weight:700}
+  .breakdown .ded{color:#dc2626}
   table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
   th,td{padding:8px 6px;border-bottom:1px solid #eee;text-align:left}
   th{background:#fafafa;color:#555;font-weight:600}
 </style></head><body>
   <h1>LAMP Logistics — Weekly Statement</h1>
   <div class="meta">${driver.name} · Week of ${weekStart} → ${weekEnd}</div>
-  <div class="meta">Pay rule: ${driver.payType || 'percent'} @ ${driver.payRate ?? 75}${
+  <div class="meta">Pay rule: ${driver.payType || 'percent'} @ ${driver.payRate ?? 80}${
         (driver.payType || 'percent') === 'percent' ? '%' : '$'
       }</div>
+  <div class="breakdown">
+    <div class="row"><span>Gross revenue</span><span>$${totalRev.toFixed(2)}</span></div>
+    <div class="row"><span>Your share (${driver.payRate ?? 80}${(driver.payType || 'percent') === 'percent' ? '%' : ''})</span><span>$${grossPay.toFixed(2)}</span></div>
+    <div class="row ded"><span>− Fuel</span><span>-$${fuelCost.toFixed(2)}</span></div>
+    <div class="row ded"><span>− Insurance</span><span>-$${insuranceCost.toFixed(2)}</span></div>
+    <div class="row total-row"><span>Net take-home</span><span>$${netPay.toFixed(2)}</span></div>
+  </div>
   <div class="total">
-    <div>Total Pay <div style="font-size:12px;color:#666">of $${totalRev.toFixed(2)} revenue</div></div>
-    <b>$${totalPay.toFixed(2)}</b>
+    <div>You get paid</div>
+    <b>$${netPay.toFixed(2)}</b>
   </div>
   <table>
     <thead><tr><th>Load</th><th>Route</th><th>Delivered</th><th style="text-align:right">Rate</th><th style="text-align:right">Miles</th><th style="text-align:right">Pay</th></tr></thead>
@@ -4055,6 +4080,96 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (err: any) {
       console.error('Statement error:', err);
       res.status(500).type('html').send('<h1>Error loading statement</h1>');
+    }
+  });
+
+  // Driver-facing simplified pay portal — JUST the bottom line number
+  app.get('/my-pay/:token', async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { drivers } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const { computeSettlementForDriver, fmtYMD, weekRange } = await import('./settlements-service');
+
+      const [driver] = await db.select().from(drivers).where(eq(drivers.trackingToken, req.params.token));
+      if (!driver) return res.status(404).type('html').send('<h1>Not found</h1>');
+
+      // Current week + last 3 weeks
+      const now = new Date();
+      const weeksBack = 4;
+      const weekCards: Array<{ label: string; net: number; gross: number; loads: number; weekStart: string }> = [];
+      for (let i = 0; i < weeksBack; i++) {
+        const ref = new Date(now);
+        ref.setUTCDate(now.getUTCDate() - i * 7);
+        const s = await computeSettlementForDriver(driver.id, fmtYMD(ref));
+        const { start } = weekRange(fmtYMD(ref));
+        const ws = fmtYMD(start);
+        // Even if no loads, show deduction-affected net
+        const fuel = +(driver.weeklyFuelCost ?? 0);
+        const ins = +(driver.weeklyInsuranceCost ?? 0);
+        weekCards.push({
+          label: i === 0 ? 'This week' : i === 1 ? 'Last week' : `${i} weeks ago`,
+          net: s?.netPay ?? -(fuel + ins),
+          gross: s?.grossPay ?? 0,
+          loads: s?.loadCount ?? 0,
+          weekStart: ws,
+        });
+      }
+
+      const current = weekCards[0];
+      const cards = weekCards
+        .slice(1)
+        .map(
+          (w) => `
+        <a class="card" href="/statements/${driver.trackingToken}?week=${w.weekStart}">
+          <div class="card-label">${w.label}</div>
+          <div class="card-sub">${w.loads} load${w.loads === 1 ? '' : 's'} · wk ${w.weekStart}</div>
+          <div class="card-amt">$${w.net.toFixed(2)}</div>
+        </a>`,
+        )
+        .join('');
+
+      res.type('html').send(`<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>My Pay — ${driver.name}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,system-ui,sans-serif;max-width:500px;margin:0 auto;padding:20px;background:#0f172a;color:#f1f5f9;min-height:100vh}
+  h1{font-size:18px;color:#94a3b8;margin:4px 0 2px;font-weight:500}
+  .name{color:#22d3ee;font-size:22px;font-weight:600;margin-bottom:24px}
+  .hero{background:linear-gradient(135deg,#064e3b,#065f46);border:2px solid #22c55e;border-radius:16px;padding:28px 20px;text-align:center;margin-bottom:20px}
+  .hero .lbl{color:#a7f3d0;font-size:14px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
+  .hero .amt{font-size:52px;font-weight:800;color:#fff;letter-spacing:-1px}
+  .hero .sub{color:#a7f3d0;font-size:13px;margin-top:8px}
+  .history{color:#94a3b8;font-size:13px;margin:20px 0 10px;text-transform:uppercase;letter-spacing:.5px}
+  .card{display:flex;justify-content:space-between;align-items:center;background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:8px;text-decoration:none;color:inherit}
+  .card:active{background:#334155}
+  .card-label{font-weight:600;color:#e2e8f0}
+  .card-sub{color:#64748b;font-size:12px;margin-top:2px}
+  .card-amt{font-size:18px;font-weight:700;color:#4ade80}
+  .card > div:first-child{flex:1}
+  .detail-link{display:block;text-align:center;color:#22d3ee;font-size:14px;margin-top:16px;text-decoration:none}
+  footer{text-align:center;color:#64748b;font-size:12px;margin-top:28px}
+</style></head><body>
+  <h1>My Pay</h1>
+  <div class="name">${driver.name}</div>
+
+  <div class="hero">
+    <div class="lbl">This week's take-home</div>
+    <div class="amt">$${current.net.toFixed(2)}</div>
+    <div class="sub">${current.loads} load${current.loads === 1 ? '' : 's'} delivered · wk ${current.weekStart}</div>
+  </div>
+
+  <a class="detail-link" href="/statements/${driver.trackingToken}?week=${current.weekStart}">See full breakdown →</a>
+
+  <div class="history">Past weeks</div>
+  ${cards}
+
+  <footer>LAMP Logistics · Pay = (your % of load) − fuel − insurance</footer>
+</body></html>`);
+    } catch (err: any) {
+      console.error('My-pay error:', err);
+      res.status(500).type('html').send('<h1>Error loading pay page</h1>');
     }
   });
 
