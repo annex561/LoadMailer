@@ -256,6 +256,9 @@ export default function ActiveLoads() {
                     <TabsTrigger value="map" className="data-[state=active]:border-b-2 data-[state=active]:border-indigo-500 data-[state=active]:text-indigo-400 rounded-none h-full px-0 bg-transparent text-slate-400">
                       <MapPin className="w-4 h-4 mr-2" /> Live Map
                     </TabsTrigger>
+                    <TabsTrigger value="photos" className="data-[state=active]:border-b-2 data-[state=active]:border-amber-500 data-[state=active]:text-amber-400 rounded-none h-full px-0 bg-transparent text-slate-400">
+                      <Image className="w-4 h-4 mr-2" /> Photos
+                    </TabsTrigger>
                   </TabsList>
                 </div>
 
@@ -270,6 +273,9 @@ export default function ActiveLoads() {
                   </TabsContent>
                   <TabsContent value="map" className="h-full m-0">
                     <LiveMap load={selectedLoad} />
+                  </TabsContent>
+                  <TabsContent value="photos" className="h-full m-0 p-6 overflow-y-auto">
+                    <LoadPhotos load={selectedLoad} />
                   </TabsContent>
                 </div>
               </Tabs>
@@ -615,6 +621,78 @@ function DriverChatWindow({ load }: { load: any }) {
             <Send className="w-5 h-5" />
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function LoadPhotos({ load }: { load: any }) {
+  const { data, isLoading, refetch } = useQuery<any>({
+    queryKey: [`/api/loads/${load?.id}/photos`, load?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/loads/${load.id}/photos`);
+      return res.json();
+    },
+    refetchInterval: 10000,
+    enabled: !!load?.id,
+  });
+
+  const stages: Array<{ key: string; label: string; color: string }> = [
+    { key: 'pickup_bol', label: 'Pickup BOL', color: 'border-amber-500/40' },
+    { key: 'pickup_securement', label: 'Securement / Tie-Down', color: 'border-amber-500/40' },
+    { key: 'delivery_pod', label: 'Delivery POD', color: 'border-purple-500/40' },
+    { key: 'delivery_signed_bol', label: 'Signed BOL', color: 'border-purple-500/40' },
+  ];
+
+  const byStage: Record<string, any[]> = (data?.byStage as any) || {};
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-100">Load Photos</h2>
+          <p className="text-sm text-slate-400">
+            Driver uploads appear here automatically. Geofence triggers the SMS at 2mi from pickup/delivery.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>Refresh</Button>
+      </div>
+
+      {isLoading && <div className="text-slate-400">Loading…</div>}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {stages.map((s) => {
+          const shots = byStage[s.key] || [];
+          const hasAny = shots.length > 0;
+          return (
+            <div key={s.key} className={`rounded-lg border ${s.color} ${hasAny ? 'bg-slate-900/60' : 'bg-slate-900/30'} p-4`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-medium text-slate-100">
+                  {hasAny ? '✅ ' : '⬜ '}{s.label}
+                </div>
+                <div className="text-xs text-slate-500">{shots.length} photo{shots.length === 1 ? '' : 's'}</div>
+              </div>
+              {hasAny ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {shots.slice(0, 4).map((sh: any) => (
+                    <a key={sh.id} href={sh.fileUrl} target="_blank" rel="noreferrer" className="block">
+                      <img
+                        src={sh.fileUrl}
+                        alt={s.label}
+                        className="w-full h-32 object-cover rounded border border-slate-700 hover:border-slate-500"
+                      />
+                      <div className="text-[10px] text-slate-500 mt-1 truncate">
+                        {sh.createdAt ? new Date(sh.createdAt).toLocaleString() : ''}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500 italic">No photo uploaded yet.</div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -5,7 +5,7 @@
 
 import { v2 as cloudinary } from 'cloudinary';
 import { db } from './db';
-import { loadDocuments, loads, drivers } from '@shared/schema';
+import { loadDocuments, loads, drivers, driverLocations } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { smsLoadService } from './sms-service';
 
@@ -99,6 +99,24 @@ export async function uploadLoadPhoto(
     } else {
       // Still record the upload even without a driver; use first driver_id NOT NULL hack
       console.warn(`[load-photos] no driverId for load ${p.loadId}, skipping doc row`);
+    }
+
+    // Piggyback: record a driver_locations row if GPS was supplied. Feeds the
+    // geofence cron so we know where the driver is between uploads too.
+    if (driverId && typeof p.lat === 'number' && typeof p.lng === 'number') {
+      try {
+        await db.insert(driverLocations).values({
+          driverId,
+          latitude: p.lat,
+          longitude: p.lng,
+          timestamp: new Date(),
+          loadId: p.loadId,
+          isActive: true,
+          source: 'photo-upload',
+        } as any);
+      } catch (locErr: any) {
+        console.warn('[load-photos] driverLocations insert failed:', locErr?.message || locErr);
+      }
     }
 
     return { ok: true, url: result.secure_url, docId: docId || '' };

@@ -8,7 +8,8 @@ import cron from 'node-cron';
 import { db } from './db';
 import { loads, driverLocations } from '@shared/schema';
 import { and, isNotNull, isNull, eq, desc } from 'drizzle-orm';
-import { haversineDistance, getCityCoords } from './auto-load-matcher';
+import { haversineDistance } from './auto-load-matcher';
+import { geocode } from './geocoder';
 import { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES } from './load-photos-service';
 
 const MILES_THRESHOLD = 2;
@@ -75,8 +76,8 @@ class GeofenceCron {
         const deliveryKey = [load.destCity, load.destState].filter(Boolean).join(', ').toLowerCase()
           || String(load.deliveryAddress || '').toLowerCase();
 
-        const pickup = getCityCoords(pickupKey);
-        const delivery = getCityCoords(deliveryKey);
+        const pickup = await geocode(pickupKey);
+        const delivery = await geocode(deliveryKey);
 
         // Pickup check
         if (!pickupDone && pickup) {
