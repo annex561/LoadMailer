@@ -230,8 +230,26 @@ async function runMatcher(): Promise<void> {
       let bestDriver: any = null;
       let bestDistance = Infinity;
 
+      // Parse destination state for per-driver preferred-states filter
+      const destStr = String(load.destination || load.delivery || '').toUpperCase();
+      const destStateMatch = destStr.match(/,\s*([A-Z]{2})\b/) || destStr.match(/\b([A-Z]{2})\b\s*$/);
+      const destState = destStateMatch ? destStateMatch[1] : '';
+
       if (pickupCoords && availableDrivers.length > 0) {
         for (const driver of availableDrivers) {
+          // Per-driver preference filters
+          // 1) Preferred destinations (states): empty/null = anywhere
+          const prefs: string[] = Array.isArray((driver as any).preferredDestinations)
+            ? (driver as any).preferredDestinations.map((s: string) => String(s).toUpperCase())
+            : [];
+          if (prefs.length > 0 && destState && !prefs.includes(destState)) {
+            continue; // driver doesn't want this destination
+          }
+          // 2) Effective deadhead limit — use driver's personal setting, fall back to criteria default
+          const driverMaxDeadhead = Number.isFinite((driver as any).maxDeadheadMiles)
+            ? Number((driver as any).maxDeadheadMiles)
+            : criteria.maxDeadheadMiles;
+
           // Priority 1: live GPS ping
           const loc = driverLocations.find(l => l.driverId === driver.id);
           let driverLat: number | null = null;
@@ -260,8 +278,8 @@ async function runMatcher(): Promise<void> {
             pickupCoords[0], pickupCoords[1]
           );
 
-          // Only match if driver is actually within deadhead limit
-          if (dist <= criteria.maxDeadheadMiles && dist < bestDistance) {
+          // Only match if driver is actually within THEIR personal deadhead limit
+          if (dist <= driverMaxDeadhead && dist < bestDistance) {
             bestDistance = dist;
             bestDriver = { ...driver, _locationSource: locationSource };
           }

@@ -194,6 +194,15 @@ export const drivers = pgTable("drivers", {
   weeklyFuelCost: real("weekly_fuel_cost").default(0), // weekly deduction from driver pay
   weeklyInsuranceCost: real("weekly_insurance_cost").default(0), // weekly deduction from driver pay
 
+  // Driver preferences — used by auto-load-matcher to filter what they see
+  vehicleType: text("vehicle_type").default("pickup_gooseneck"), // See VEHICLE_TYPES in server/driver-portal.ts
+  trailerLength: integer("trailer_length"), // feet, optional
+  maxDeadheadMiles: integer("max_deadhead_miles").default(150), // how far driver will deadhead to pickup
+  preferredDestinations: text("preferred_destinations").array().default(sql`ARRAY[]::text[]`), // e.g. ['GA','FL','TN'] — empty = anywhere
+  homeBase: text("home_base"), // "City, ST" driver wants to end up near
+  emergencyContact: text("emergency_contact"), // "Name / 555-1234"
+  address: text("address"), // street address
+
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_drivers_company_id").on(table.companyId),

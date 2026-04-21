@@ -4083,6 +4083,91 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // =================== DRIVER PORTAL (mobile) ===================
+  // Tokenized driver pages — auth = drivers.trackingToken.
+  app.get('/driver/:token', async (req, res) => {
+    try {
+      const { renderHome } = await import('./driver-portal');
+      res.type('html').send(await renderHome(req.params.token));
+    } catch (err: any) {
+      console.error('driver home error:', err);
+      res.status(500).type('html').send('<h1>Error</h1>');
+    }
+  });
+  app.get('/driver/:token/loads', async (req, res) => {
+    try {
+      const { renderLoadsList } = await import('./driver-portal');
+      res.type('html').send(await renderLoadsList(req.params.token));
+    } catch (err: any) {
+      res.status(500).type('html').send('<h1>Error</h1>');
+    }
+  });
+  app.get('/driver/:token/loads/:loadId', async (req, res) => {
+    try {
+      const { renderLoadDetail } = await import('./driver-portal');
+      res.type('html').send(await renderLoadDetail(req.params.token, req.params.loadId));
+    } catch (err: any) {
+      res.status(500).type('html').send('<h1>Error</h1>');
+    }
+  });
+  app.get('/driver/:token/profile', async (req, res) => {
+    try {
+      const { renderProfile } = await import('./driver-portal');
+      res.type('html').send(await renderProfile(req.params.token));
+    } catch (err: any) {
+      res.status(500).type('html').send('<h1>Error</h1>');
+    }
+  });
+
+  // Driver self-update: only non-sensitive fields, token-gated
+  app.patch('/api/drivers/self/:token', async (req, res) => {
+    try {
+      const { driverFromToken, SELF_EDITABLE_FIELDS, VEHICLE_TYPES } = await import('./driver-portal');
+      const { db } = await import('./db');
+      const { drivers } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+
+      const driver = await driverFromToken(req.params.token);
+      if (!driver) return res.status(404).json({ ok: false, error: 'Invalid token' });
+
+      const body = req.body || {};
+      const patch: any = {};
+      for (const key of SELF_EDITABLE_FIELDS) {
+        if (!(key in body)) continue;
+        const v = (body as any)[key];
+
+        if (key === 'vehicleType' && v && !VEHICLE_TYPES.find((t) => t.value === v)) {
+          return res.status(400).json({ ok: false, error: `Invalid vehicleType "${v}"` });
+        }
+        if (key === 'maxDeadheadMiles') {
+          const n = Number(v);
+          if (!isFinite(n) || n < 0 || n > 2000) return res.status(400).json({ ok: false, error: 'maxDeadheadMiles must be 0-2000' });
+          patch[key] = Math.round(n);
+          continue;
+        }
+        if (key === 'trailerLength') {
+          if (v === '' || v === null || v === undefined) { patch[key] = null; continue; }
+          const n = Number(v);
+          if (!isFinite(n) || n < 0 || n > 80) return res.status(400).json({ ok: false, error: 'trailerLength must be 0-80' });
+          patch[key] = Math.round(n);
+          continue;
+        }
+        if (key === 'preferredDestinations') {
+          if (!Array.isArray(v)) return res.status(400).json({ ok: false, error: 'preferredDestinations must be array' });
+          patch[key] = v.map((s: any) => String(s).trim().toUpperCase()).filter(Boolean).slice(0, 20);
+          continue;
+        }
+        patch[key] = v === '' ? null : v;
+      }
+
+      const [updated] = await db.update(drivers).set(patch).where(eq(drivers.id, driver.id)).returning();
+      res.json({ ok: true, driver: updated });
+    } catch (err: any) {
+      console.error('driver self-update:', err);
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // Driver-facing simplified pay portal — JUST the bottom line number
   app.get('/my-pay/:token', async (req, res) => {
     try {
