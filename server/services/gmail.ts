@@ -14,11 +14,13 @@ interface ScanResult {
   errors: string[];
 }
 
-// In-memory dedup: skip a Gmail message if we've already attempted to parse it
-// in the last 30 min. Prevents hammering OpenAI with the same failed PDF 60×/hour
-// when upsertLoad throws and the email never gets marked read.
+// In-memory dedup: skip a Gmail message if we've already attempted to parse it.
+// Bumped to 24h because the scanner now includes READ emails (newer_than:2d), so
+// without a longer TTL we'd re-parse the same messages every scan cycle (26×/hr).
+// upsertLoad still dedupes by loadNumber, so the worst case from an expired cache
+// entry is one wasted OpenAI call.
 const PARSE_ATTEMPT_CACHE = new Map<string, number>();
-const PARSE_ATTEMPT_TTL_MS = 30 * 60 * 1000;
+const PARSE_ATTEMPT_TTL_MS = 24 * 60 * 60 * 1000;
 function seenRecently(msgId: string): boolean {
   const last = PARSE_ATTEMPT_CACHE.get(msgId);
   if (!last) return false;
@@ -111,11 +113,16 @@ export const gmailIngest = {
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      const q = queryOverride || 'is:unread';
+      // Default query now pulls BOTH unread AND recently-read emails from the last 2 days.
+      // Previously `is:unread` alone — which meant if the dispatcher opened the broker
+      // email in Gmail before the scanner saw it, the load was silently skipped forever.
+      // Dedup: in-memory 24h cache (below) prevents re-parsing the same message,
+      // and upsertLoad dedupes by loadNumber so no duplicate load rows.
+      const q = queryOverride || '(newer_than:2d) has:attachment';
       const res = await gmail.users.messages.list({
         userId: 'me',
         q,
-        maxResults,
+        maxResults: Math.max(maxResults, 25),
       });
 
       const messages = res.data.messages || [];
