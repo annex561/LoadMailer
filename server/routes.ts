@@ -4119,6 +4119,28 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // =================== DRIVER SELF-ONBOARDING ===================
+  // Public link a dispatcher shares with a new driver. Form submit creates
+  // the driver row, mints a trackingToken, and drops them into their portal.
+  app.get('/onboard', async (req, res) => {
+    try {
+      const { handleOnboardGet } = await import('./driver-onboard');
+      await handleOnboardGet(req, res);
+    } catch (err: any) {
+      console.error('onboard GET error:', err);
+      res.status(500).type('html').send('<h1>Error</h1>');
+    }
+  });
+  app.post('/onboard', async (req, res) => {
+    try {
+      const { handleOnboardPost } = await import('./driver-onboard');
+      await handleOnboardPost(req, res);
+    } catch (err: any) {
+      console.error('onboard POST error:', err);
+      res.status(500).type('html').send('<h1>Error creating account — text dispatch and we\'ll get you set up.</h1>');
+    }
+  });
+
   // Driver self-update: only non-sensitive fields, token-gated
   app.patch('/api/drivers/self/:token', async (req, res) => {
     try {
