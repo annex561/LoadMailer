@@ -124,8 +124,9 @@ export function layout({
   h2{font-size:15px;margin:18px 0 8px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
   .topbar{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .back{background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:6px 10px;border-radius:8px;font-size:14px}
-  .card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;margin-bottom:10px}
+  .card{display:block;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;margin-bottom:10px;color:inherit;text-decoration:none}
   .card.emph{background:linear-gradient(135deg,#0c4a6e,#0369a1);border-color:#38bdf8}
+  .topbar h1{font-size:22px;font-weight:700;color:#22d3ee;margin:0}
   .row{display:flex;justify-content:space-between;gap:12px;align-items:center}
   .muted{color:#94a3b8;font-size:13px}
   .big{font-size:26px;font-weight:800;color:#4ade80}
