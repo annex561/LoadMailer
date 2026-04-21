@@ -17,6 +17,48 @@ interface DriverMatch {
   distance: number;
 }
 
+/**
+ * Appends "👤 My Dashboard: <link>" to outbound SMS when the recipient is a
+ * registered driver and the body doesn't already contain a personal portal URL.
+ * This is the single source of truth so every driver-bound SMS carries a
+ * one-tap link back to their dashboard.
+ *
+ * The footer is skipped when:
+ *   - recipient phone doesn't match any driver row
+ *   - driver has no trackingToken (one will be auto-minted at dispatch time)
+ *   - body already contains /driver/ /my-pay/ /u/ or /statements/ — avoids
+ *     doubling up when the calling code constructed its own portal link.
+ */
+async function appendDriverPortalFooter(phone: string, body: string): Promise<string> {
+  try {
+    if (!phone || !body) return body;
+    if (/\/(driver|my-pay|u|statements)\//.test(body)) return body;
+
+    // Normalize phone to E.164-ish so it matches however we stored it
+    const digits = phone.replace(/\D/g, '');
+    const e164 = phone.startsWith('+') ? phone : `+1${digits}`;
+
+    const { db } = await import('./db');
+    const { drivers } = await import('@shared/schema');
+    const { or, eq } = await import('drizzle-orm');
+
+    const [driver] = await db
+      .select()
+      .from(drivers)
+      .where(or(eq(drivers.phone, phone), eq(drivers.phone, e164), eq(drivers.phone, digits)))
+      .limit(1);
+
+    if (!driver || !driver.trackingToken) return body;
+
+    const baseUrl = process.env.CUSTOM_DOMAIN || process.env.PUBLIC_URL || 'https://traqiq.app';
+    const normalizedBase = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
+    return `${body}\n\n👤 My Dashboard: ${normalizedBase}/driver/${driver.trackingToken}`;
+  } catch (err) {
+    // Footer is best-effort; never break message delivery.
+    return body;
+  }
+}
+
 export class SMSLoadService {
   private isConfigured = false;
   private isRunning = false;
@@ -57,8 +99,12 @@ export class SMSLoadService {
   async sendSMS(toOrParams: string | { to: string, body: string }, bodyParam?: string): Promise<{ success: boolean, error?: string, messageSid?: string }> {
     // Handle both calling patterns: sendSMS(to, body) or sendSMS({ to, body })
     const to = typeof toOrParams === 'string' ? toOrParams : toOrParams.to;
-    const body = typeof toOrParams === 'string' ? bodyParam! : toOrParams.body;
-    
+    let body = typeof toOrParams === 'string' ? bodyParam! : toOrParams.body;
+
+    // Auto-append driver portal footer when the recipient is a known driver.
+    // Dedup: skip if the message already links to /driver/ /my-pay/ /u/ /statements.
+    body = await appendDriverPortalFooter(to, body);
+
     if (!this.isConfigured || !this.twilioClient) {
       console.log(`[SMS NOT CONFIGURED] Would send to ${to}: ${body}`);
       return { success: false, error: 'SMS service not configured' };

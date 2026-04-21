@@ -848,7 +848,7 @@ router.post("/loads/:id/package-for-factoring", async (req: Request, res: Respon
 
 // Deploy sentinel — used to verify Railway picked up latest build
 router.get("/_version", (_req: Request, res: Response) => {
-  res.json({ ok: true, version: "2026-04-20-driver-portal", hasDispatchNow: true, hasSopPage: true, hasOpsMonitor: true, hasParseDedup: true, hasOpsUI: true, hasSettlements: true, hasMarkDelivered: true, hasStatementsCron: true, hasTokenBackfill: true, hasDriverPhotos: true, hasGeofence: true, hasNominatim: true, hasPhotoTab: true, hasDispatchTrackingLink: true, hasPhotoApproval: true, hasDriverCheckin: true, hasFuelInsuranceDeductions: true, hasMyPayPortal: true, hasDriverPortal: true, hasDriverPreferences: true });
+  res.json({ ok: true, version: "2026-04-20-sms-footer", hasDispatchNow: true, hasSopPage: true, hasOpsMonitor: true, hasParseDedup: true, hasOpsUI: true, hasSettlements: true, hasMarkDelivered: true, hasStatementsCron: true, hasTokenBackfill: true, hasDriverPhotos: true, hasGeofence: true, hasNominatim: true, hasPhotoTab: true, hasDispatchTrackingLink: true, hasPhotoApproval: true, hasDriverCheckin: true, hasFuelInsuranceDeductions: true, hasMyPayPortal: true, hasDriverPortal: true, hasDriverPreferences: true, hasSmsPortalFooter: true });
 });
 
 // Backfill load_number on ga_loads rows from raw_json.loadNumber where column is null
