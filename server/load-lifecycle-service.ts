@@ -112,6 +112,7 @@ const sentPickupReqs   = new Set<string>(); // loadId
 const sentDeliveryReqs = new Set<string>(); // loadId
 const sentEinsteinPkg  = new Set<string>(); // loadId
 const sentThankYou     = new Set<string>(); // loadId
+const completedLoads   = new Set<string>(); // loadId — Phase 5C in-memory guard
 
 // ─── SMS helper (uses Twilio via existing service) ────────────────────────────
 
@@ -406,6 +407,82 @@ async function runLifecycleCheck(): Promise<void> {
           } catch (e: any) {
             console.error(`[Lifecycle] Thank-you email error:`, e.message);
           }
+        }
+      }
+
+      // ── PHASE 5C: Auto-invoice + auto-complete + driver stats ──
+      // Once factoring email has gone out and load is delivered, close the loop:
+      //   1. Backfill load.podPath from loadDocuments (POD upload doesn't set this column)
+      //   2. Try invoicingService.packageForFactoring() — creates arInvoices + collectionsItems + activityLog
+      //      (fails gracefully if companyId or rateconPath missing — completion still proceeds)
+      //   3. Set status="completed", record sopProgress.completedAt
+      //   4. Increment driver totalLoads / completedLoads / totalRevenue (mirrors manual path in routes.ts:3863)
+      // Idempotent: skips if sopProgress.completedAt already set OR loadId in in-memory set.
+      if (
+        load.status === "delivered" &&
+        sopProgress.factoringSubmitted &&
+        !sopProgress.completedAt &&
+        !completedLoads.has(load.id)
+      ) {
+        try {
+          // Step 1: backfill podPath from loadDocuments if missing
+          const allDocs = await storage.getDocumentsByLoad?.(load.id) || [];
+          const updates: any = {};
+          if (!(load as any).podPath) {
+            const podDoc = allDocs.find((d: any) =>
+              d.documentType === "pod" || d.documentType === "delivery_bol"
+            );
+            if (podDoc?.fileUrl) updates.podPath = podDoc.fileUrl;
+          }
+          if (Object.keys(updates).length > 0) {
+            await storage.updateLoad(load.id, updates);
+          }
+
+          // Step 2: try to create invoice (graceful fail — don't block completion)
+          let invoiceResult: any = null;
+          let invoiceError: string | null = null;
+          try {
+            const { invoicingService } = await import("./invoicing-service");
+            invoiceResult = await invoicingService.packageForFactoring(load.id, "system-lifecycle");
+            console.log(`[Lifecycle] 🧾 Invoice ${invoiceResult.invoice.invoiceNumber} created for load #${load.loadNumber}`);
+          } catch (invErr: any) {
+            invoiceError = invErr?.message || String(invErr);
+            console.warn(`[Lifecycle] ⚠️  Invoice creation skipped for load #${load.loadNumber}: ${invoiceError}`);
+          }
+
+          // Step 3: mark load completed
+          const completedAt = new Date().toISOString();
+          await storage.updateLoad(load.id, {
+            status: "completed",
+            sopProgress: {
+              ...sopProgress,
+              completedAt,
+              ...(invoiceResult ? { invoiceCreated: true, invoiceId: invoiceResult.invoice.id, invoiceNumber: invoiceResult.invoice.invoiceNumber } : {}),
+              ...(invoiceError ? { invoiceError } : {}),
+            },
+          });
+
+          // Step 4: bump driver stats (mirrors routes.ts:3863 manual path)
+          if (driver) {
+            try {
+              const totalLoads     = (driver.totalLoads     || 0) + 1;
+              const completedCount = (driver.completedLoads || 0) + 1;
+              const totalRevenue   = (driver.totalRevenue   || 0) + ((load as any).rate || 0);
+              await storage.updateDriver(driver.id, {
+                totalLoads,
+                completedLoads: completedCount,
+                totalRevenue,
+              });
+              console.log(`[Lifecycle] 📊 Driver stats: ${driver.name} → ${completedCount} loads, $${totalRevenue} revenue`);
+            } catch (statsErr: any) {
+              console.error(`[Lifecycle] Driver stats update failed:`, statsErr?.message);
+            }
+          }
+
+          completedLoads.add(load.id);
+          console.log(`[Lifecycle] ✅ Load #${load.loadNumber} auto-completed${invoiceResult ? ` (invoice ${invoiceResult.invoice.invoiceNumber})` : ' (no invoice — see warning)'}`);
+        } catch (e: any) {
+          console.error(`[Lifecycle] Phase 5C error for load #${load.loadNumber}:`, e?.message);
         }
       }
     }
