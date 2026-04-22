@@ -263,6 +263,12 @@ export const gmailIngest = {
    * 4. UPSERT: Handles Creating AND Merging
    */
   async upsertLoad(data: any, companyId: string, filename: string): Promise<'created' | 'updated' | 'skipped'> {
+    // Resolve companyId against the companies table. Some historical gmail_accounts
+    // rows stored "default" or a stale UUID for companyId; using that as a FK on
+    // customers/loads causes every new-load insert to crash. Fall back to the first
+    // real company row (in practice: comp-traqiq-001).
+    companyId = await this.resolveCompanyId(companyId);
+
     // Validate
     const loadNum = data.loadNumber;
     if (!loadNum || loadNum === "MANUAL-REVIEW" || loadNum === "PENDING" || loadNum === "PARSER-ERROR") {
@@ -486,6 +492,40 @@ export const gmailIngest = {
 
       return 'created';
     }
+  },
+
+  /**
+   * Normalize a companyId before inserting load/customer rows that FK to it.
+   * Accepts: real UUID (passed through) | "default"/empty/missing (fallback).
+   * Fallback: first real company row, cached in-process.
+   */
+  async resolveCompanyId(input: string | null | undefined): Promise<string> {
+    const candidate = (input || '').trim();
+    if (candidate && candidate !== 'default') {
+      // Verify it exists — avoid FK errors from stale values
+      try {
+        const { sql: rawSql } = await import('drizzle-orm');
+        const rows: any = await db.execute(rawSql`SELECT id FROM companies WHERE id = ${candidate} LIMIT 1`);
+        const list = (rows as any).rows || rows;
+        if (Array.isArray(list) && list.length > 0) return candidate;
+      } catch {}
+    }
+    // Fallback — use (cached) first real company
+    if ((this as any)._fallbackCompanyId) return (this as any)._fallbackCompanyId;
+    try {
+      const { sql: rawSql } = await import('drizzle-orm');
+      const rows: any = await db.execute(rawSql`SELECT id FROM companies ORDER BY created_at ASC NULLS LAST LIMIT 1`);
+      const list = (rows as any).rows || rows;
+      if (Array.isArray(list) && list.length > 0 && list[0].id) {
+        (this as any)._fallbackCompanyId = list[0].id;
+        console.warn(`[GMAIL] companyId "${input}" invalid — falling back to ${list[0].id}`);
+        return list[0].id;
+      }
+    } catch (err) {
+      console.error('[GMAIL] resolveCompanyId query failed:', err);
+    }
+    // Last-resort hardcoded default (matches the tenant for this project)
+    return 'comp-traqiq-001';
   },
 
   /**
