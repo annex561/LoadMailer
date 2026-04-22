@@ -529,10 +529,34 @@ export const gmailIngest = {
   },
 
   /**
+   * Does a parsed load look real enough to act on? We were spamming the
+   * dispatcher every time the PDF parser produced garbage (e.g. loadNumber
+   * RC-<timestamp>, origin/dest "Unknown", rate $0). Rule: must have a real
+   * loadNumber (not the timestamp fallback) AND a non-zero rate AND a
+   * resolvable origin and destination that isn't literal "Unknown"/"TBD".
+   */
+  isRealLoad(load: any): boolean {
+    if (!load) return false;
+    const ln = String(load.loadNumber || '');
+    if (/^RC-\d{10,}$/.test(ln)) return false; // timestamp fallback
+    const rate = Number(load.rate) || 0;
+    if (rate <= 0) return false;
+    const bad = (v: any) => !v || /^(unknown|tbd|n\/?a)$/i.test(String(v).trim());
+    if (bad(load.originCity) || bad(load.destCity)) return false;
+    return true;
+  },
+
+  /**
    * Resolve driver + send dispatch SMS (called from both create and update paths).
    * Never throws — logs failures and falls back to notifying the dispatcher.
+   *
+   * Dispatcher-alert SMS are gated by ENABLE_DISPATCHER_ALERT_SMS (default off)
+   * after a 2026-04-22 spam incident where the parser produced skeleton loads
+   * and each one fired a "no driver linked" SMS. Real driver-dispatch SMS still
+   * fire when a load is real AND a driver is linked.
    */
   async resolveAndDispatch(loadNum: string, data: any): Promise<void> {
+    const dispatcherAlertsOn = process.env.ENABLE_DISPATCHER_ALERT_SMS === 'true';
     try {
       // 1. If PDF gave us a driver name, try to attach it to the load
       if (data.driverName) {
@@ -563,11 +587,14 @@ export const gmailIngest = {
       const driverToDispatch = (savedLoad as any).driver;
       const { smsLoadService } = await import('../sms-service');
 
-      // 3. No driver linked → notify dispatcher so nothing is silently dropped
+      // 3. No driver linked → only notify dispatcher if (a) alerts are explicitly
+      // enabled AND (b) the load looks real. Otherwise just log and move on so a
+      // bad parse doesn't spam the dispatcher's phone.
       if (!driverToDispatch?.phone) {
-        console.log(`      ℹ️  No driver on load ${loadNum} — notifying dispatcher`);
+        const real = this.isRealLoad(savedLoad);
+        console.log(`      ℹ️  No driver on load ${loadNum} (real=${real}, alertsOn=${dispatcherAlertsOn}) — skipping SMS`);
         const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER || process.env.DISPATCHER_PHONE;
-        if (dispatcherPhone) {
+        if (dispatcherAlertsOn && real && dispatcherPhone) {
           await smsLoadService.sendSMS(
             dispatcherPhone,
             `⚠️ RateCon received for load #${loadNum} but no driver is linked. ` +
@@ -575,6 +602,12 @@ export const gmailIngest = {
             `Rate: $${savedLoad.rate || 0}. Assign a driver to dispatch.`
           );
         }
+        return;
+      }
+
+      // Also guard against dispatching a garbage load to a real driver.
+      if (!this.isRealLoad(savedLoad)) {
+        console.log(`      ⏭️  Load ${loadNum} failed realness check — not dispatching (rate=${savedLoad.rate}, origin=${savedLoad.originCity}, dest=${savedLoad.destCity})`);
         return;
       }
 
@@ -603,7 +636,7 @@ export const gmailIngest = {
       } else {
         console.error(`      ❌ Dispatch SMS FAILED for load ${loadNum}: ${dispatchResult?.error}`);
         const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER || process.env.DISPATCHER_PHONE;
-        if (dispatcherPhone) {
+        if (dispatcherAlertsOn && dispatcherPhone) {
           await smsLoadService.sendSMS(
             dispatcherPhone,
             `❌ Failed to SMS driver ${driverToDispatch.name} for load #${loadNum}: ${dispatchResult?.error || 'unknown error'}`
@@ -614,7 +647,7 @@ export const gmailIngest = {
       console.error(`      ❌ resolveAndDispatch error for load ${loadNum}:`, err);
       try {
         const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER || process.env.DISPATCHER_PHONE;
-        if (dispatcherPhone) {
+        if (dispatcherAlertsOn && dispatcherPhone) {
           const { smsLoadService } = await import('../sms-service');
           await smsLoadService.sendSMS(
             dispatcherPhone,
