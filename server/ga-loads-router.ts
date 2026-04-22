@@ -848,7 +848,7 @@ router.post("/loads/:id/package-for-factoring", async (req: Request, res: Respon
 
 // Deploy sentinel — used to verify Railway picked up latest build
 router.get("/_version", (_req: Request, res: Response) => {
-  res.json({ ok: true, version: "2026-04-22-parser-garbage-guard", hasDispatchNow: true, hasSopPage: true, hasOpsMonitor: true, hasParseDedup: true, hasOpsUI: true, hasSettlements: true, hasMarkDelivered: true, hasStatementsCron: true, hasTokenBackfill: true, hasDriverPhotos: true, hasGeofence: true, hasNominatim: true, hasPhotoTab: true, hasDispatchTrackingLink: true, hasPhotoApproval: true, hasDriverCheckin: true, hasFuelInsuranceDeductions: true, hasMyPayPortal: true, hasDriverPortal: true, hasDriverPreferences: true, hasSmsPortalFooter: true, hasDriverOnboarding: true, hasLazyRoutes: true });
+  res.json({ ok: true, version: "2026-04-22-cleanup-pg-first", hasDispatchNow: true, hasSopPage: true, hasOpsMonitor: true, hasParseDedup: true, hasOpsUI: true, hasSettlements: true, hasMarkDelivered: true, hasStatementsCron: true, hasTokenBackfill: true, hasDriverPhotos: true, hasGeofence: true, hasNominatim: true, hasPhotoTab: true, hasDispatchTrackingLink: true, hasPhotoApproval: true, hasDriverCheckin: true, hasFuelInsuranceDeductions: true, hasMyPayPortal: true, hasDriverPortal: true, hasDriverPreferences: true, hasSmsPortalFooter: true, hasDriverOnboarding: true, hasLazyRoutes: true });
 });
 
 // Backfill load_number on ga_loads rows from raw_json.loadNumber where column is null
@@ -889,27 +889,24 @@ router.post("/loads/backfill-load-number", (_req: Request, res: Response) => {
 // Safe to re-run; idempotent.
 router.post("/loads/cleanup-garbage", async (_req: Request, res: Response) => {
   try {
-    const gaRows: any[] = db.prepare(
-      `SELECT id, load_number FROM ga_loads
-       WHERE load_number LIKE 'RC-%'
-         AND (origin_city IS NULL OR origin_city IN ('', 'Unknown'))
-         AND (dest_city   IS NULL OR dest_city   IN ('', 'Unknown'))
-         AND (rate_total IS NULL OR rate_total = 0)`
-    ).all();
+    // Postgres is source of truth. Find RC-<timestamp> rows with Unknown/empty
+    // origin+dest AND rate 0. Delete them. Mirror the delete into ga_loads.
+    const { and, eq: dEq, or, isNull, sql } = await import('drizzle-orm');
 
-    const loadNumbers = Array.from(
-      new Set(
-        gaRows
-          .map(r => String(r.load_number || ''))
-          .filter(n => /^RC-\d{10,}$/.test(n))
-      )
-    );
+    const pgRows: any[] = await pgDb
+      .select({ id: pgLoads.id, loadNumber: pgLoads.loadNumber })
+      .from(pgLoads)
+      .where(
+        and(
+          sql`${pgLoads.loadNumber} ~ '^RC-[0-9]{10,}$'`,
+          or(isNull(pgLoads.pickupAddress), dEq(pgLoads.pickupAddress, 'Unknown'), dEq(pgLoads.pickupAddress, '')),
+          or(isNull(pgLoads.deliveryAddress), dEq(pgLoads.deliveryAddress, 'Unknown'), dEq(pgLoads.deliveryAddress, '')),
+          or(isNull(pgLoads.rate), dEq(pgLoads.rate, 0)),
+        )
+      );
 
-    const gaDelete = db.prepare(`DELETE FROM ga_loads WHERE id = ?`);
-    let gaDeleted = 0;
-    for (const r of gaRows) { gaDelete.run(r.id); gaDeleted++; }
+    const loadNumbers = Array.from(new Set(pgRows.map((r: any) => String(r.loadNumber)).filter(Boolean)));
 
-    // Postgres side — use Drizzle
     let pgDeleted = 0;
     if (loadNumbers.length > 0) {
       const { inArray } = await import('drizzle-orm');
@@ -920,7 +917,18 @@ router.post("/loads/cleanup-garbage", async (_req: Request, res: Response) => {
       pgDeleted = Array.isArray(result) ? result.length : 0;
     }
 
-    res.json({ ok: true, gaDeleted, pgDeleted, loadNumbers });
+    // Also scrub ga_loads mirror rows if any remain.
+    let gaDeleted = 0;
+    if (loadNumbers.length > 0) {
+      const placeholders = loadNumbers.map(() => '?').join(',');
+      const gaStmt = db.prepare(
+        `DELETE FROM ga_loads WHERE load_number IN (${placeholders})`
+      );
+      const info = gaStmt.run(...loadNumbers);
+      gaDeleted = Number(info.changes || 0);
+    }
+
+    res.json({ ok: true, pgDeleted, gaDeleted, count: loadNumbers.length, samples: loadNumbers.slice(0, 10) });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: String(err?.message || err) });
   }
