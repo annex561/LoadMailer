@@ -384,8 +384,8 @@ app.use((req, res, next) => {
         (async () => {
           try {
             const { gmailScheduler } = await import('./services/gmail-scheduler');
-            gmailScheduler.start(1);
-            log('✅ Gmail RateCon scanner started — scanning inbox every 1 minute');
+            gmailScheduler.start(3);
+            log('✅ Gmail RateCon scanner started — scanning inbox every 3 minutes');
           } catch (error: any) {
             log(`⚠️ Gmail scanner failed to start: ${error.message || error}`);
           }

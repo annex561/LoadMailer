@@ -115,16 +115,16 @@ export const gmailIngest = {
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      // Default query now pulls BOTH unread AND recently-read emails from the last 2 days.
-      // Previously `is:unread` alone — which meant if the dispatcher opened the broker
-      // email in Gmail before the scanner saw it, the load was silently skipped forever.
-      // Dedup: in-memory 24h cache (below) prevents re-parsing the same message,
-      // and upsertLoad dedupes by loadNumber so no duplicate load rows.
+      // Default query pulls BOTH unread AND recently-read emails from the last 2 days
+      // so dispatcher-opened emails still get processed. The 24h dedup cache prevents
+      // re-parsing, so the expensive call (messages.get) only fires once per message.
+      // maxResults capped at 15: higher values blocked the event loop because we do 15
+      // sequential Gmail API round-trips + PDF parses on the main thread.
       const q = queryOverride || '(newer_than:2d) has:attachment';
       const res = await gmail.users.messages.list({
         userId: 'me',
         q,
-        maxResults: Math.max(maxResults, 25),
+        maxResults: Math.min(maxResults, 15),
       });
 
       const messages = res.data.messages || [];

@@ -374,10 +374,12 @@ export const autoLoadMatcher = {
     // Clear any stale matches from previous runs
     hotLoads.clear();
 
-    // Run immediately, then every 30 seconds — loads come in fast, timing is everything
+    // Run immediately, then every 2 minutes. Previously 30s, but that collided with
+    // the gmail scanner + lifecycle service and spiked event-loop latency on the API
+    // process. 2min is plenty fast — loads still get matched before drivers see them.
     runMatcher();
-    matcherInterval = setInterval(runMatcher, 30 * 1000);
-    console.log("[AutoMatcher] Started — scanning every 30 seconds");
+    matcherInterval = setInterval(runMatcher, 2 * 60 * 1000);
+    console.log("[AutoMatcher] Started — scanning every 2 minutes");
   },
 
   stop() {
