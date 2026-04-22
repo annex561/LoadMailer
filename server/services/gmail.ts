@@ -276,6 +276,20 @@ export const gmailIngest = {
       return 'skipped';
     }
 
+    // Reject garbage parses: if the parser fell back to RC-<timestamp> AND
+    // produced no usable origin/dest/rate, don't persist a skeleton row.
+    // It only clutters the inbox and was triggering alert SMS spam.
+    const isFallbackNumber = /^RC-\d{10,}$/.test(loadNum);
+    const origin = String(data.origin || '').trim();
+    const dest = String(data.destination || '').trim();
+    const rate = Number(data.rate) || 0;
+    const noOrigin = !origin || /^(unknown|tbd|n\/?a)$/i.test(origin);
+    const noDest = !dest || /^(unknown|tbd|n\/?a)$/i.test(dest);
+    if (isFallbackNumber && rate <= 0 && noOrigin && noDest) {
+      console.log(`      🗑  Skipping empty parse (${filename}) — no loadNumber, origin, dest, or rate.`);
+      return 'skipped';
+    }
+
     // Helper to safely convert to Date object
     const toDate = (val: any): Date => {
       if (!val) return new Date();
