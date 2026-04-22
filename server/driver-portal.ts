@@ -96,6 +96,7 @@ export function layout({
   body,
   showBack = false,
   backHref,
+  driverId,
 }: {
   title: string;
   token: string;
@@ -103,6 +104,7 @@ export function layout({
   body: string;
   showBack?: boolean;
   backHref?: string;
+  driverId?: string;
 }): string {
   const tab = (key: string, label: string, icon: string, href: string) => `
     <a href="${href}" class="tab ${active === key ? 'active' : ''}">
@@ -126,10 +128,12 @@ export function layout({
   .back{background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:6px 10px;border-radius:8px;font-size:14px}
   .card{display:block;background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;margin-bottom:10px;color:inherit;text-decoration:none}
   .card.emph{background:linear-gradient(135deg,#0c4a6e,#0369a1);border-color:#38bdf8}
+  .card.success-emph{background:linear-gradient(135deg,#064e3b,#065f46);border-color:#22c55e}
   .topbar h1{font-size:22px;font-weight:700;color:#22d3ee;margin:0}
   .row{display:flex;justify-content:space-between;gap:12px;align-items:center}
   .muted{color:#94a3b8;font-size:13px}
   .big{font-size:26px;font-weight:800;color:#4ade80}
+  .pay-breakdown{font-size:12px;color:#bae6fd;margin-top:6px;font-weight:500;letter-spacing:.2px}
   .btn{display:inline-block;background:#0ea5e9;color:white;padding:10px 14px;border-radius:8px;font-weight:600;font-size:14px;border:0;cursor:pointer;text-align:center}
   .btn:active{background:#0369a1}
   .btn.secondary{background:#334155;color:#e2e8f0;border:1px solid #475569}
@@ -149,6 +153,11 @@ export function layout({
   label{display:block;font-size:12px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-top:12px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+  .qa-tile{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:18px 10px;text-align:center;color:#e2e8f0;text-decoration:none;display:block}
+  .qa-tile:active{background:#334155;border-color:#475569}
+  .qa-tile .qa-ico{font-size:26px;line-height:1;margin-bottom:6px}
+  .qa-tile .qa-lbl{font-size:13px;font-weight:600;letter-spacing:.2px}
   .pill-opt{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 4px;text-align:center;font-size:13px;font-weight:600;cursor:pointer}
   .pill-opt.on{background:#164e63;border-color:#22d3ee;color:#e0f2fe}
   .status{font-size:13px;margin-top:8px}
@@ -159,11 +168,20 @@ export function layout({
   .tab.active{color:#22d3ee}
   .tab-ico{font-size:20px;line-height:1}
   .tab-lbl{margin-top:2px}
+  .dot{width:10px;height:10px;border-radius:50%;background:#475569;display:inline-block;flex-shrink:0;box-shadow:0 0 0 0 rgba(74,222,128,0.6)}
+  .dot.on{background:#4ade80;animation:pulse 2.4s infinite}
+  .dot.stale{background:#fbbf24}
+  .dot.off{background:#475569}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,0.5)}70%{box-shadow:0 0 0 8px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+  .trk-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px}
+  .trk-row{display:flex;align-items:center;gap:10px}
+  .trk-meta{font-size:12px;color:#94a3b8;margin-top:6px;line-height:1.4}
 </style>
 </head><body>
   <div class="topbar">
     ${showBack ? `<a class="back" href="${backHref || `/driver/${token}`}">← Back</a>` : ''}
     <h1 style="flex:1;margin:0">${title}</h1>
+    ${driverId ? `<a href="/driver/${token}/profile" id="trk-dot" class="dot off" title="Tracking off — tap to enable" style="margin-right:2px"></a>` : ''}
   </div>
   ${body}
   <div class="tabbar">
@@ -172,7 +190,72 @@ export function layout({
     ${tab('pay',     'Pay',     '💰', `/my-pay/${token}`)}
     ${tab('profile', 'Profile', '👤', `/driver/${token}/profile`)}
   </div>
+  ${driverId ? trackingScript(driverId, token) : ''}
 </body></html>`;
+}
+
+// Background tracking — when driver enables it from Profile, this script keeps
+// pushing GPS to /api/driver-location/update every ~60s while the page is open.
+// Status is mirrored in localStorage so the dot indicator stays consistent across pages.
+function trackingScript(driverId: string, token: string): string {
+  return `<script>
+(function(){
+  var DRIVER_ID = ${JSON.stringify(driverId)};
+  var TOKEN = ${JSON.stringify(token)};
+  var MIN_INTERVAL = 60000; // throttle to 1/min (server allows 120/hr)
+  var lastSent = 0;
+  var watchId = null;
+  var dot = document.getElementById('trk-dot');
+
+  function refreshDot(){
+    if (!dot) return;
+    var on = localStorage.getItem('trk_on') === '1';
+    var lastMs = parseInt(localStorage.getItem('trk_last_ms') || '0', 10);
+    var ageS = lastMs ? Math.round((Date.now() - lastMs)/1000) : null;
+    if (!on) { dot.className = 'dot off'; dot.title = 'Tracking off — tap to enable'; return; }
+    if (ageS !== null && ageS < 90) { dot.className = 'dot on'; dot.title = 'Tracking · ping ' + ageS + 's ago'; }
+    else { dot.className = 'dot stale'; dot.title = 'Tracking enabled but no recent ping' + (ageS !== null ? ' (' + ageS + 's)' : ''); }
+  }
+
+  function send(pos){
+    if (Date.now() - lastSent < MIN_INTERVAL) return;
+    lastSent = Date.now();
+    var c = pos.coords;
+    // NOTE: gpsLocationUpdateSchema requires timestamp as ISO string (or omit) — never a number.
+    fetch('/api/driver-location/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        driverId: DRIVER_ID, trackingToken: TOKEN,
+        lat: c.latitude, lon: c.longitude,
+        accuracy: c.accuracy, altitude: c.altitude,
+        speed: c.speed, heading: c.heading,
+        timestamp: new Date().toISOString(),
+      }),
+    }).then(function(r){
+      if (r.ok) { localStorage.setItem('trk_last_ms', String(Date.now())); refreshDot(); }
+      else { r.text().then(function(t){ console.warn('GPS push rejected', r.status, t); }); }
+    }).catch(function(e){ console.warn('GPS push error', e); });
+  }
+
+  function start(){
+    if (!navigator.geolocation || watchId !== null) return;
+    watchId = navigator.geolocation.watchPosition(send, function(){}, {
+      enableHighAccuracy: true, maximumAge: 30000, timeout: 60000,
+    });
+  }
+  function stop(){
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  }
+
+  if (localStorage.getItem('trk_on') === '1') start();
+  refreshDot();
+  setInterval(refreshDot, 5000);
+
+  // Expose so Profile page toggle can drive it
+  window.__traqiqTracking = { start: start, stop: stop, refreshDot: refreshDot };
+})();
+</script>`;
 }
 
 function fmtMoney(n: number) { return `$${(n || 0).toFixed(2)}`; }
@@ -207,8 +290,17 @@ export async function renderHome(token: string): Promise<string> {
 
   // This week pay
   const settlement = await computeSettlementForDriver(driver.id, fmtYMD(new Date()));
-  const net = settlement?.netPay ?? -((driver.weeklyFuelCost || 0) + (driver.weeklyInsuranceCost || 0));
+  const fuel = +(driver.weeklyFuelCost || 0);
+  const ins = +(driver.weeklyInsuranceCost || 0);
+  const gross = settlement?.grossPay ?? 0;
+  const net = settlement?.netPay ?? -(fuel + ins);
+  const deductions = fuel + ins;
   const { start } = weekRange(fmtYMD(new Date()));
+
+  // When net is negative or zero, show the breakdown so drivers see *why*
+  const breakdown = net <= 0
+    ? `<div class="pay-breakdown">${fmtMoney(gross)} earned − ${fmtMoney(deductions)} deductions</div>`
+    : `<div class="pay-breakdown">${fmtMoney(gross)} earned − ${fmtMoney(deductions)} deductions = take-home</div>`;
 
   const activeCards = active.length ? active.map((l: any) => `
     <a class="card" href="/driver/${token}/loads/${l.id}">
@@ -229,18 +321,30 @@ export async function renderHome(token: string): Promise<string> {
     <a class="card emph" href="/my-pay/${token}">
       <div class="muted" style="color:#bae6fd">This week's take-home</div>
       <div class="big" style="color:#fff">${fmtMoney(net)}</div>
-      <div class="muted" style="color:#bae6fd">Week of ${fmtYMD(start)} · tap for details</div>
+      ${breakdown}
+      <div class="muted" style="color:#bae6fd;margin-top:6px">Week of ${fmtYMD(start)} · tap for details</div>
     </a>
 
     <h2>Active Loads</h2>
     ${activeCards}
 
     <h2>Quick Actions</h2>
-    <a class="btn block secondary" href="/driver/${token}/loads">📋 All My Loads</a>
-    <a class="btn block secondary" href="/driver/${token}/profile">👤 Edit Profile & Preferences</a>
-    <a class="btn block secondary" href="/sop">📖 LAMP SOP</a>
+    <div class="qa-grid">
+      <a class="qa-tile" href="/driver/${token}/loads">
+        <div class="qa-ico">📋</div><div class="qa-lbl">All My Loads</div>
+      </a>
+      <a class="qa-tile" href="/driver/${token}/profile">
+        <div class="qa-ico">👤</div><div class="qa-lbl">Profile</div>
+      </a>
+      <a class="qa-tile" href="/driver/${token}/sop">
+        <div class="qa-ico">📖</div><div class="qa-lbl">LAMP SOP</div>
+      </a>
+      <a class="qa-tile" href="/driver/${token}/profile#tracking">
+        <div class="qa-ico">📍</div><div class="qa-lbl">Location</div>
+      </a>
+    </div>
   `;
-  return layout({ title: 'My Dashboard', token, active: 'home', body });
+  return layout({ title: 'My Dashboard', token, active: 'home', body, driverId: driver.id });
 }
 
 // ---------------------------------------------------------------------------
@@ -274,7 +378,7 @@ export async function renderLoadsList(token: string): Promise<string> {
     ${past.length ? `<h2>Past (${past.length})</h2>${past.map(renderItem).join('')}` : ''}
     ${rows.length === 0 ? '<div class="card"><div class="muted">No loads yet.</div></div>' : ''}
   `;
-  return layout({ title: 'My Loads', token, active: 'loads', body });
+  return layout({ title: 'My Loads', token, active: 'loads', body, driverId: driver.id });
 }
 
 // ---------------------------------------------------------------------------
@@ -361,7 +465,7 @@ export async function renderLoadDetail(token: string, loadId: string): Promise<s
       📷 Upload Photos / Check In
     </a>
   `;
-  return layout({ title: `Load ${load.loadNumber}`, token, active: 'loads', showBack: true, backHref: `/driver/${token}/loads`, body });
+  return layout({ title: `Load ${load.loadNumber}`, token, active: 'loads', showBack: true, backHref: `/driver/${token}/loads`, body, driverId: driver.id });
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +496,21 @@ export async function renderProfile(token: string, flash?: string): Promise<stri
 
   const body = `
     ${flash ? `<div class="card" style="border-color:#22c55e;background:#14532d33;color:#86efac">${escapeHtml(flash)}</div>` : ''}
+
+    <h2 id="tracking" style="margin-top:0">Location Tracking</h2>
+    <div class="trk-card">
+      <div class="trk-row">
+        <span id="trk-state-dot" class="dot off"></span>
+        <div style="flex:1">
+          <div id="trk-state-label" style="font-weight:600">Off</div>
+          <div id="trk-state-meta" class="trk-meta">Dispatch can't see your location.</div>
+        </div>
+        <button type="button" id="trk-toggle" class="btn success" style="min-width:96px">Turn ON</button>
+      </div>
+      <div class="trk-meta" style="margin-top:10px">
+        Sends your GPS to dispatch every minute while this page is open. Allow location when your browser asks. For best results, add this site to your home screen.
+      </div>
+    </div>
 
     <form id="pf" class="card">
       <h2 style="margin-top:0">Contact</h2>
@@ -465,6 +584,82 @@ const status = document.getElementById('pf-status');
 const dhInput = document.getElementById('dh-input');
 const dhPills = document.getElementById('dh-pills');
 
+// --- Location tracking toggle ---
+(function(){
+  var btn = document.getElementById('trk-toggle');
+  var dot = document.getElementById('trk-state-dot');
+  var lbl = document.getElementById('trk-state-label');
+  var meta = document.getElementById('trk-state-meta');
+
+  function paint(){
+    var on = localStorage.getItem('trk_on') === '1';
+    var lastMs = parseInt(localStorage.getItem('trk_last_ms') || '0', 10);
+    var ageS = lastMs ? Math.round((Date.now() - lastMs)/1000) : null;
+    if (!on) {
+      dot.className = 'dot off';
+      lbl.textContent = 'Off';
+      meta.textContent = "Dispatch can't see your location.";
+      btn.textContent = 'Turn ON'; btn.className = 'btn success';
+    } else if (ageS !== null && ageS < 90) {
+      dot.className = 'dot on';
+      lbl.textContent = 'Tracking';
+      meta.textContent = 'Last ping ' + ageS + 's ago';
+      btn.textContent = 'Pause'; btn.className = 'btn secondary';
+    } else {
+      dot.className = 'dot stale';
+      lbl.textContent = 'Tracking (waiting for signal)';
+      meta.textContent = ageS !== null ? 'Last ping ' + ageS + 's ago' : 'No ping yet — keep this page open';
+      btn.textContent = 'Pause'; btn.className = 'btn secondary';
+    }
+  }
+
+  btn.addEventListener('click', function(){
+    var on = localStorage.getItem('trk_on') === '1';
+    if (on) {
+      localStorage.setItem('trk_on', '0');
+      if (window.__traqiqTracking) window.__traqiqTracking.stop();
+      paint();
+      if (window.__traqiqTracking) window.__traqiqTracking.refreshDot();
+      return;
+    }
+    if (!navigator.geolocation) {
+      alert('Your browser does not support GPS. Use a modern mobile browser (Safari, Chrome).');
+      return;
+    }
+    // Capture a position up-front so the user (a) sees the permission prompt immediately
+    // and (b) gets a green dot right away — don't wait for watchPosition's first fire.
+    navigator.geolocation.getCurrentPosition(function(pos){
+      localStorage.setItem('trk_on', '1');
+      var c = pos.coords;
+      fetch('/api/driver-location/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driverId: ${JSON.stringify(driver.id)}, trackingToken: TOKEN,
+          lat: c.latitude, lon: c.longitude,
+          accuracy: c.accuracy, altitude: c.altitude,
+          speed: c.speed, heading: c.heading,
+          timestamp: new Date().toISOString(),
+        }),
+      }).then(function(r){
+        if (r.ok) localStorage.setItem('trk_last_ms', String(Date.now()));
+        else r.text().then(function(t){ console.warn('Initial GPS push rejected', r.status, t); });
+        if (window.__traqiqTracking) { window.__traqiqTracking.start(); window.__traqiqTracking.refreshDot(); }
+        paint();
+      }).catch(function(){
+        // Even if the first POST fails, still start the watcher — it'll retry on next coord change
+        if (window.__traqiqTracking) { window.__traqiqTracking.start(); window.__traqiqTracking.refreshDot(); }
+        paint();
+      });
+    }, function(err){
+      alert('Location permission denied. Enable it in your browser settings to share your location with dispatch.');
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  });
+
+  paint();
+  setInterval(paint, 5000);
+})();
+
 dhPills.addEventListener('click', (e) => {
   const pill = e.target.closest('.pill-opt'); if (!pill) return;
   dhPills.querySelectorAll('.pill-opt').forEach(p => p.classList.remove('on'));
@@ -507,5 +702,105 @@ form.addEventListener('submit', async (e) => {
 });
 </script>
   `;
-  return layout({ title: 'My Profile', token, active: 'profile', body });
+  return layout({ title: 'My Profile', token, active: 'profile', body, driverId: driver.id });
+}
+
+// ---------------------------------------------------------------------------
+// Page: Pay (token-authenticated, with bottom tab nav)
+// ---------------------------------------------------------------------------
+export async function renderPay(token: string): Promise<string> {
+  const driver = await driverFromToken(token);
+  if (!driver) return layout({ title: 'Not Found', token, active: 'pay', body: '<p>Invalid driver link.</p>' });
+
+  const now = new Date();
+  const weeksBack = 4;
+  const weekCards: Array<{ label: string; net: number; gross: number; loads: number; weekStart: string; deductions: number }> = [];
+  for (let i = 0; i < weeksBack; i++) {
+    const ref = new Date(now);
+    ref.setUTCDate(now.getUTCDate() - i * 7);
+    const s = await computeSettlementForDriver(driver.id, fmtYMD(ref));
+    const { start } = weekRange(fmtYMD(ref));
+    const fuel = +(driver.weeklyFuelCost ?? 0);
+    const ins = +(driver.weeklyInsuranceCost ?? 0);
+    weekCards.push({
+      label: i === 0 ? 'This week' : i === 1 ? 'Last week' : `${i} weeks ago`,
+      net: s?.netPay ?? -(fuel + ins),
+      gross: s?.grossPay ?? 0,
+      deductions: fuel + ins,
+      loads: s?.loadCount ?? 0,
+      weekStart: fmtYMD(start),
+    });
+  }
+  const current = weekCards[0];
+
+  const past = weekCards.slice(1).map((w) => `
+    <a class="card" href="/statements/${token}?week=${w.weekStart}">
+      <div class="row">
+        <div>
+          <div style="font-weight:600">${w.label}</div>
+          <div class="muted" style="margin-top:2px">${w.loads} load${w.loads === 1 ? '' : 's'} · wk ${w.weekStart}</div>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:${w.net >= 0 ? '#4ade80' : '#f87171'}">${fmtMoney(w.net)}</div>
+      </div>
+    </a>`).join('');
+
+  const body = `
+    <a class="card success-emph" href="/statements/${token}?week=${current.weekStart}" style="text-align:center;padding:22px 16px">
+      <div class="muted" style="color:#a7f3d0;text-transform:uppercase;letter-spacing:.5px;font-size:12px">This week's take-home</div>
+      <div style="font-size:46px;font-weight:800;color:#fff;letter-spacing:-1px;margin:6px 0">${fmtMoney(current.net)}</div>
+      <div class="pay-breakdown" style="color:#a7f3d0">${fmtMoney(current.gross)} earned − ${fmtMoney(current.deductions)} deductions</div>
+      <div class="muted" style="color:#a7f3d0;margin-top:6px">${current.loads} load${current.loads === 1 ? '' : 's'} delivered · wk ${current.weekStart}</div>
+    </a>
+
+    <a class="btn block" href="/statements/${token}?week=${current.weekStart}" style="margin-bottom:12px">See full breakdown →</a>
+
+    <h2>Past weeks</h2>
+    ${past || '<div class="card"><div class="muted">No prior weeks yet.</div></div>'}
+
+    <div class="muted" style="text-align:center;margin-top:18px;font-size:12px">Pay = (your % of load) − fuel − insurance</div>
+  `;
+  return layout({ title: 'My Pay', token, active: 'pay', body, driverId: driver.id });
+}
+
+// ---------------------------------------------------------------------------
+// Page: SOP (token-authenticated wrapper around the static SOP body)
+// ---------------------------------------------------------------------------
+export async function renderSop(token: string): Promise<string> {
+  const driver = await driverFromToken(token);
+  if (!driver) return layout({ title: 'Not Found', token, active: 'home', body: '<p>Invalid driver link.</p>' });
+
+  const body = `
+    <div class="card">
+      <h2 style="margin-top:0;color:#22d3ee;text-transform:none;letter-spacing:0;font-size:16px">L · A · M · P</h2>
+      <p class="muted" style="margin:6px 0 0">Locate the load · Accept the dispatch · Move the freight · Prove delivery.</p>
+    </div>
+
+    <h2>1 — Locate</h2>
+    <div class="card">
+      Open <b>All My Loads</b> and tap your dispatched load. Read the rate, miles, pickup window, and any special instructions. If anything is unclear, text dispatch <b>before</b> you roll.
+    </div>
+
+    <h2>2 — Accept</h2>
+    <div class="card">
+      Reply <b>YES</b> to the dispatch SMS to confirm. We'll send you the broker's rate confirmation. Make sure your <b>Location Tracking</b> is ON so dispatch can see you in transit.
+    </div>
+
+    <h2>3 — Move</h2>
+    <div class="card">
+      <div class="row" style="padding:4px 0"><span>📍 At pickup</span><span class="muted">tap the load → "Upload Photos / Check In"</span></div>
+      <div class="row" style="padding:4px 0;border-top:1px solid #334155"><span>📦 BOL signed</span><span class="muted">photo of signed BOL</span></div>
+      <div class="row" style="padding:4px 0;border-top:1px solid #334155"><span>🔒 Securement</span><span class="muted">photo of straps / load locked</span></div>
+      <div class="row" style="padding:4px 0;border-top:1px solid #334155"><span>🚚 In transit</span><span class="muted">tracking pings every 60 sec</span></div>
+    </div>
+
+    <h2>4 — Prove</h2>
+    <div class="card">
+      <div class="row" style="padding:4px 0"><span>🏁 At delivery</span><span class="muted">check in</span></div>
+      <div class="row" style="padding:4px 0;border-top:1px solid #334155"><span>✅ Unloaded</span><span class="muted">POD photo (signed)</span></div>
+      <div class="row" style="padding:4px 0;border-top:1px solid #334155"><span>💰 Pay</span><span class="muted">posts to your Pay tab next cycle</span></div>
+    </div>
+
+    <a class="btn block secondary" href="/sop" style="margin-top:14px">Open printable version</a>
+  `;
+  return layout({ title: 'LAMP SOP', token, active: 'home', showBack: true, backHref: `/driver/${token}`, body, driverId: driver.id });
 }
