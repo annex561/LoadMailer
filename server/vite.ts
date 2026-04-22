@@ -76,7 +76,19 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // Hashed assets (JS/CSS with fingerprints in filename) can be cached for 1 year
+  app.use(
+    express.static(distPath, {
+      maxAge: "1y",
+      immutable: true,
+      setHeaders(res, filePath) {
+        // index.html must never be cached so users always get fresh deploys
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        }
+      },
+    })
+  );
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {

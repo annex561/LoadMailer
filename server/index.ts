@@ -1,9 +1,13 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
+import compression from "compression";
 import { registerRoutes, createHTTPServer } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+// Gzip/Brotli compression — must be first middleware (biggest perf win)
+app.use(compression());
 
 // CRITICAL: Stripe webhook route MUST be registered BEFORE express.json()
 // The webhook needs raw Buffer, not parsed JSON
