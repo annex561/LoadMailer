@@ -21,6 +21,7 @@ interface OpsMonitorState {
   lastGmailScanAt: Date | null;
   lastParserSuccessAt: Date | null;
   recentParserRuns: Array<{ at: Date; success: boolean }>;
+  recentEventLoopLagMs: number[]; // samples from setInterval drift (last hour)
 }
 
 class OpsMonitorService {
@@ -32,7 +33,9 @@ class OpsMonitorService {
     lastGmailScanAt: null,
     lastParserSuccessAt: null,
     recentParserRuns: [],
+    recentEventLoopLagMs: [],
   };
+  private lagSamplerInterval: NodeJS.Timeout | null = null;
 
   private get alertPhone(): string {
     return process.env.DISPATCHER_ALERT_PHONE || '+12058614115';
@@ -56,14 +59,40 @@ class OpsMonitorService {
   }
 
   getSnapshot() {
+    const lag = this.state.recentEventLoopLagMs;
+    const p95 = lag.length ? [...lag].sort((a, b) => a - b)[Math.floor(lag.length * 0.95)] : 0;
+    const avg = lag.length ? Math.round(lag.reduce((s, n) => s + n, 0) / lag.length) : 0;
     return {
       gmailLastScan: this.state.lastGmailScanAt,
       parserLastSuccess: this.state.lastParserSuccessAt,
       parserRunsLastHour: this.state.recentParserRuns.length,
       parserFailureRatePct: this.computeParserFailureRate(),
+      eventLoopLagAvgMs: avg,
+      eventLoopLagP95Ms: p95,
+      eventLoopSamples: lag.length,
       alertPhone: this.alertPhone,
       activeCooldowns: Array.from(this.alertCooldowns.keys()),
     };
+  }
+
+  // Sample event-loop lag: setInterval promises "in 1000ms", so the delta beyond
+  // 1000ms is how long the loop was blocked. Healthy: <50ms. Bad: >500ms.
+  private startLagSampler(): void {
+    if (this.lagSamplerInterval) return;
+    const SAMPLE_INTERVAL_MS = 1000;
+    let expected = Date.now() + SAMPLE_INTERVAL_MS;
+    this.lagSamplerInterval = setInterval(() => {
+      const now = Date.now();
+      const lag = Math.max(0, now - expected);
+      this.state.recentEventLoopLagMs.push(lag);
+      // Keep last hour of samples (3600 at 1s cadence)
+      if (this.state.recentEventLoopLagMs.length > 3600) {
+        this.state.recentEventLoopLagMs.shift();
+      }
+      expected = now + SAMPLE_INTERVAL_MS;
+    }, SAMPLE_INTERVAL_MS);
+    // Unref so this interval doesn't block process exit
+    (this.lagSamplerInterval as any).unref?.();
   }
 
   private computeParserFailureRate(): number {
@@ -76,6 +105,7 @@ class OpsMonitorService {
   async initialize(): Promise<void> {
     if (this.isRunning) return;
     console.log('🛰️ Starting Ops Monitor Service...');
+    this.startLagSampler();
     this.cronJob = cron.schedule('*/5 * * * *', async () => {
       try {
         await this.runChecks();
@@ -95,7 +125,24 @@ class OpsMonitorService {
       this.checkGmailStalled(),
       this.checkParserHealth(),
       this.checkSilentDrivers(),
+      this.checkEventLoopLag(),
     ]);
+  }
+
+  // 5) Event-loop latency check. If p95 > 500ms over recent samples, the API will
+  // feel laggy to users. Alert once per hour so a new heavy scheduler can't silently
+  // tank the site again like the 30s auto-matcher + 1-min gmail scan did on 04-22.
+  private async checkEventLoopLag(): Promise<void> {
+    const lag = this.state.recentEventLoopLagMs;
+    if (lag.length < 60) return; // need at least ~1 min of samples
+    const sorted = [...lag].sort((a, b) => a - b);
+    const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    const THRESHOLD_MS = 500;
+    if (p95 < THRESHOLD_MS) return;
+    await this.maybeAlert(
+      'event-loop-lag',
+      `🐌 TRAQ: event-loop lag p95 ${p95}ms (threshold ${THRESHOLD_MS}ms). API will feel slow. Check background schedulers.`
+    );
   }
 
   // 1) Dispatch SMS sent but driver hasn't replied YES (initialSms flag in sopProgress) after 30 min
