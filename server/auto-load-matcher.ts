@@ -51,7 +51,7 @@ export interface HotLoad {
 const DEFAULT_CRITERIA: DispatchCriteria = {
   minRPM: 1.80,
   minMiles: 100,
-  maxDeadheadMiles: 200,
+  maxDeadheadMiles: 150,
   preferredOriginStates: ["TN", "GA", "FL", "AL", "NC", "SC", "MS", "KY"],
   preferredDestStates: ["TN", "GA", "FL", "AL", "NC", "SC", "MS", "KY", "OH", "TX"],
   equipmentTypes: ["dry_van", "box_truck", "sprinter_van", "van", "flatbed"],
@@ -245,10 +245,13 @@ async function runMatcher(): Promise<void> {
           if (prefs.length > 0 && destState && !prefs.includes(destState)) {
             continue; // driver doesn't want this destination
           }
-          // 2) Effective deadhead limit — use driver's personal setting, fall back to criteria default
-          const driverMaxDeadhead = Number.isFinite((driver as any).maxDeadheadMiles)
+          // 2) Effective deadhead limit — use driver's personal setting, fall back to criteria default.
+          // Hard cap at 150mi (system-wide max) so any legacy 200mi values stored on driver rows are clamped.
+          const HARD_CAP = 150;
+          const driverPref = Number.isFinite((driver as any).maxDeadheadMiles)
             ? Number((driver as any).maxDeadheadMiles)
             : criteria.maxDeadheadMiles;
+          const driverMaxDeadhead = Math.min(driverPref, HARD_CAP);
 
           // Priority 1: live GPS ping
           const loc = driverLocations.find(l => l.driverId === driver.id);

@@ -53,7 +53,8 @@ export const VEHICLE_TYPES: VehicleTypeEntry[] = [
   { value: 'car_hauler_enc',    label: 'Car Hauler (Enclosed)',   category: 'semi' },
 ];
 
-export const DEADHEAD_PRESETS = [50, 75, 100, 150, 200];
+export const DEADHEAD_PRESETS = [50, 75, 100, 125, 150];
+export const MAX_DEADHEAD_MILES = 150;
 
 // Fields a driver is allowed to edit about themselves
 export const SELF_EDITABLE_FIELDS = [

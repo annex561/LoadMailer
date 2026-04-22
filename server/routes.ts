@@ -4171,7 +4171,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         }
         if (key === 'maxDeadheadMiles') {
           const n = Number(v);
-          if (!isFinite(n) || n < 0 || n > 2000) return res.status(400).json({ ok: false, error: 'maxDeadheadMiles must be 0-2000' });
+          if (!isFinite(n) || n < 0 || n > 150) return res.status(400).json({ ok: false, error: 'maxDeadheadMiles must be 0-150 (system max)' });
           patch[key] = Math.round(n);
           continue;
         }
