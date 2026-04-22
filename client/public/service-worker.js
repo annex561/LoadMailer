@@ -1,4 +1,4 @@
-const CACHE_NAME = 'traq-iq-v4';
+const CACHE_NAME = 'traq-iq-v5';
 const STATIC_CACHE_URLS = [
   '/icon-192.png',
   '/icon-512.png',

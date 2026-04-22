@@ -1,71 +1,82 @@
 import { Switch, Route } from "wouter";
+import { lazy, Suspense } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/use-user";
+
+// Eager: critical for first paint (landing, auth, shell)
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import AuthPage from "@/pages/auth-page";
-import Loads from "@/pages/loads";
-import DATLoads from "@/pages/dat-loads";
-import ManualLoadEntry from "@/pages/manual-load-entry";
-import DATLogin from "@/pages/dat-login";
-import TelegramDispatching from "@/pages/telegram-dispatching";
-import SMSDispatching from "@/pages/sms-dispatching";
-import Contacts from "@/pages/contacts";
-import Templates from "@/pages/templates";
-import DriverManagement from "@/pages/driver-management";
-import DriverOnboarding from "@/pages/driver-onboarding";
-import SimpleDriverRegistration from "@/pages/simple-driver-registration";
-import DriverDashboard from "@/pages/driver-dashboard";
-import MobileDriverDashboard from "@/pages/mobile-driver-dashboard";
-import DriverProfile from "@/pages/driver-profile";
-import PaymentWorkflow from "@/pages/payment-workflow";
-import ScraperManagement from "@/pages/scraper-management";
-import DispatcherDashboard from "@/pages/dispatcher-dashboard";
 import LoadOpsDashboard from "@/pages/loadops-dashboard";
-import DispatcherVehicleDashboard from "@/pages/dispatcher-vehicle-dashboard";
-import LoadMailerControl from "@/pages/loadmailer-control";
-import { MoodTracker } from "@/pages/mood-tracker";
-import GPSTracking from "@/pages/gps-tracking";
-import PredictiveMaintenance from "@/pages/predictive-maintenance";
-import { TaskMagicStatusPage } from "@/pages/taskmagic-status";
-import DATScraper from "@/pages/DATScraper";
-import AnalyticsDashboard from "@/pages/analytics-dashboard";
-import SmartLoadMatching from "@/pages/smart-load-matching";
-import PredictionConfidence from "@/pages/prediction-confidence";
-import AdminOverview from "@/pages/admin-overview";
-import OpsMonitor from "@/pages/ops-monitor";
-import Settlements from "@/pages/settlements";
-import SMSStatus from "@/pages/sms-status";
-import DebugToken from "@/pages/debug-token";
-import GoogleSheetsImport from "@/pages/google-sheets-import";
-import TwilioSettings from "@/pages/twilio-settings";
-import UnifiedMessaging from "@/pages/unified-messaging";
-import DriverTracker from "@/pages/driver-tracker";
-import DocumentManagement from "@/pages/document-management";
-import ManualDispatch from "@/pages/manual-dispatch";
-import FleetDashboard from "@/pages/fleet-dashboard";
-import FleetTrucks from "@/pages/fleet-trucks";
-import FleetWorkOrders from "@/pages/fleet-work-orders";
-import FleetInspections from "@/pages/fleet-inspections";
-import FleetVendors from "@/pages/fleet-vendors";
-import LoadsInbox from "@/pages/loads-inbox";
-import ActiveLoads from "@/pages/active-loads";
-import ItemsPage from "@/pages/items";
-import LoadDetailsPage from "@/pages/load-details";
-import GmailSettings from "@/pages/gmail-settings";
-import DriverLoadView from "@/pages/driver-load-view";
-import TrueRPMCalculator from "@/pages/true-rpm-calculator";
 
-import Sidebar from "@/components/sidebar";
-import Header from "@/components/header";
+// Lazy: everything else. These pages are large and most users only hit
+// a handful per session, so we avoid shipping them in the initial bundle.
+const Loads = lazy(() => import("@/pages/loads"));
+const DATLoads = lazy(() => import("@/pages/dat-loads"));
+const ManualLoadEntry = lazy(() => import("@/pages/manual-load-entry"));
+const DATLogin = lazy(() => import("@/pages/dat-login"));
+const TelegramDispatching = lazy(() => import("@/pages/telegram-dispatching"));
+const SMSDispatching = lazy(() => import("@/pages/sms-dispatching"));
+const Contacts = lazy(() => import("@/pages/contacts"));
+const Templates = lazy(() => import("@/pages/templates"));
+const DriverManagement = lazy(() => import("@/pages/driver-management"));
+const DriverOnboarding = lazy(() => import("@/pages/driver-onboarding"));
+const SimpleDriverRegistration = lazy(() => import("@/pages/simple-driver-registration"));
+const MobileDriverDashboard = lazy(() => import("@/pages/mobile-driver-dashboard"));
+const PaymentWorkflow = lazy(() => import("@/pages/payment-workflow"));
+const ScraperManagement = lazy(() => import("@/pages/scraper-management"));
+const DispatcherDashboard = lazy(() => import("@/pages/dispatcher-dashboard"));
+const DispatcherVehicleDashboard = lazy(() => import("@/pages/dispatcher-vehicle-dashboard"));
+const LoadMailerControl = lazy(() => import("@/pages/loadmailer-control"));
+const MoodTracker = lazy(() => import("@/pages/mood-tracker").then(m => ({ default: m.MoodTracker })));
+const GPSTracking = lazy(() => import("@/pages/gps-tracking"));
+const PredictiveMaintenance = lazy(() => import("@/pages/predictive-maintenance"));
+const TaskMagicStatusPage = lazy(() => import("@/pages/taskmagic-status").then(m => ({ default: m.TaskMagicStatusPage })));
+const DATScraper = lazy(() => import("@/pages/DATScraper"));
+const AnalyticsDashboard = lazy(() => import("@/pages/analytics-dashboard"));
+const SmartLoadMatching = lazy(() => import("@/pages/smart-load-matching"));
+const PredictionConfidence = lazy(() => import("@/pages/prediction-confidence"));
+const AdminOverview = lazy(() => import("@/pages/admin-overview"));
+const OpsMonitor = lazy(() => import("@/pages/ops-monitor"));
+const Settlements = lazy(() => import("@/pages/settlements"));
+const GoogleSheetsImport = lazy(() => import("@/pages/google-sheets-import"));
+const DriverTracker = lazy(() => import("@/pages/driver-tracker"));
+const ManualDispatch = lazy(() => import("@/pages/manual-dispatch"));
+const FleetDashboard = lazy(() => import("@/pages/fleet-dashboard"));
+const FleetTrucks = lazy(() => import("@/pages/fleet-trucks"));
+const FleetWorkOrders = lazy(() => import("@/pages/fleet-work-orders"));
+const FleetInspections = lazy(() => import("@/pages/fleet-inspections"));
+const FleetVendors = lazy(() => import("@/pages/fleet-vendors"));
+const LoadsInbox = lazy(() => import("@/pages/loads-inbox"));
+const ActiveLoads = lazy(() => import("@/pages/active-loads"));
+const ItemsPage = lazy(() => import("@/pages/items"));
+const LoadDetailsPage = lazy(() => import("@/pages/load-details"));
+const GmailSettings = lazy(() => import("@/pages/gmail-settings"));
+const DriverLoadView = lazy(() => import("@/pages/driver-load-view"));
+const TrueRPMCalculator = lazy(() => import("@/pages/true-rpm-calculator"));
+
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { NewLoadWatcher } from "@/components/watchers/new-load-watcher";
 
-
+function RouteFallback() {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: '60vh',
+      color: '#6b7280',
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '14px',
+    }}>
+      Loading…
+    </div>
+  );
+}
 
 function Router() {
   return (
@@ -126,33 +137,35 @@ function App() {
       <TooltipProvider>
         <AuthProvider>
           <NewLoadWatcher />
-          <Switch>
-            {/* Auth page - no sidebar/header */}
-            <Route path="/auth" component={AuthPage} />
-            
-            {/* Standalone driver pages without sidebar/header - for driver self-service only */}
-            <Route path="/driver-onboarding" component={DriverOnboarding} />
-            <Route path="/simple-registration" component={SimpleDriverRegistration} />
-            <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
-            <Route path="/driver-dashboard">
-              <ErrorBoundary>
-                <MobileDriverDashboard />
-              </ErrorBoundary>
-            </Route>
-            <Route path="/mobile-driver-dashboard">
-              <ErrorBoundary>
-                <MobileDriverDashboard />
-              </ErrorBoundary>
-            </Route>
-            <Route path="/driver/load/:id" component={DriverLoadView} />
-            <Route path="/driver/tracking/:id" component={DriverTracker} />
-            <Route path="/driver-tracker" component={DriverTracker} />
-            
-            {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
-            <Route>
-              <LoadOpsDashboard />
-            </Route>
-          </Switch>
+          <Suspense fallback={<RouteFallback />}>
+            <Switch>
+              {/* Auth page - no sidebar/header */}
+              <Route path="/auth" component={AuthPage} />
+
+              {/* Standalone driver pages without sidebar/header - for driver self-service only */}
+              <Route path="/driver-onboarding" component={DriverOnboarding} />
+              <Route path="/simple-registration" component={SimpleDriverRegistration} />
+              <Route path="/simple-driver-registration" component={SimpleDriverRegistration} />
+              <Route path="/driver-dashboard">
+                <ErrorBoundary>
+                  <MobileDriverDashboard />
+                </ErrorBoundary>
+              </Route>
+              <Route path="/mobile-driver-dashboard">
+                <ErrorBoundary>
+                  <MobileDriverDashboard />
+                </ErrorBoundary>
+              </Route>
+              <Route path="/driver/load/:id" component={DriverLoadView} />
+              <Route path="/driver/tracking/:id" component={DriverTracker} />
+              <Route path="/driver-tracker" component={DriverTracker} />
+
+              {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
+              <Route>
+                <LoadOpsDashboard />
+              </Route>
+            </Switch>
+          </Suspense>
           <DATVerificationDialog />
           <Toaster />
         </AuthProvider>

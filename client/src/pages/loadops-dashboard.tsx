@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation, Link } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
@@ -41,52 +41,55 @@ import { cn } from '@/lib/utils';
 import { SidebarNav } from '@/components/sidebar';
 
 // Import page components
+// Eager: the default view of this dashboard. Everything else is lazy so the
+// initial JS bundle stays small (was ~935KB pulling in every page).
 import Dashboard from './dashboard';
-import Loads from './loads';
-import DatLoads from './dat-loads';
-import ManualLoadEntry from './manual-load-entry';
-import ManualDispatch from './manual-dispatch';
-import GoogleSheetsImport from './google-sheets-import';
-import DriverManagement from './driver-management';
-import DriverOnboarding from './driver-onboarding';
-import SimpleDriverRegistration from './simple-driver-registration';
-import Contacts from './contacts';
-import SmsDispatching from './sms-dispatching';
-import LoadmailerControl from './loadmailer-control';
-import TelegramDispatching from './telegram-dispatching';
-import Templates from './templates';
-import SmartLoadMatching from './smart-load-matching';
-import AnalyticsDashboard from './analytics-dashboard';
-import PredictiveMaintenancePage from './predictive-maintenance';
-import GPSTracking from './gps-tracking';
-import PaymentWorkflow from './payment-workflow';
-import PredictionConfidence from './prediction-confidence';
-import { MoodTracker } from './mood-tracker';
-import ScraperManagement from './scraper-management';
-import SmsStatus from './sms-status';
-import DebugToken from './debug-token';
-import DriverDashboard from './driver-dashboard';
-import DispatcherDashboard from './dispatcher-dashboard';
-import DispatcherVehicleDashboard from './dispatcher-vehicle-dashboard';
-import DocumentManagement from './document-management';
-import { TaskMagicStatusPage } from './taskmagic-status';
-import DATScraper from './DATScraper';
-import DatLogin from './dat-login';
-import AdminOverview from './admin-overview';
-import CommunicationDashboard from './communication-dashboard';
-import AICommunicationInsights from './ai-communication-insights';
-import FleetCalculator from './fleet-calculator';
-import TrueRPMCalculator from './true-rpm-calculator';
-import UnifiedMessaging from './unified-messaging';
 import NotFound from './not-found';
-import FleetDashboard from './fleet-dashboard';
-import FleetTrucks from './fleet-trucks';
-import FleetWorkOrders from './fleet-work-orders';
-import FleetInspections from './fleet-inspections';
-import FleetVendors from './fleet-vendors';
-import LoadsInbox from './loads-inbox';
-import ActiveLoads from './active-loads';
-import ItemsPage from './items';
+
+const Loads = lazy(() => import('./loads'));
+const DatLoads = lazy(() => import('./dat-loads'));
+const ManualLoadEntry = lazy(() => import('./manual-load-entry'));
+const ManualDispatch = lazy(() => import('./manual-dispatch'));
+const GoogleSheetsImport = lazy(() => import('./google-sheets-import'));
+const DriverManagement = lazy(() => import('./driver-management'));
+const DriverOnboarding = lazy(() => import('./driver-onboarding'));
+const SimpleDriverRegistration = lazy(() => import('./simple-driver-registration'));
+const Contacts = lazy(() => import('./contacts'));
+const SmsDispatching = lazy(() => import('./sms-dispatching'));
+const LoadmailerControl = lazy(() => import('./loadmailer-control'));
+const TelegramDispatching = lazy(() => import('./telegram-dispatching'));
+const Templates = lazy(() => import('./templates'));
+const SmartLoadMatching = lazy(() => import('./smart-load-matching'));
+const AnalyticsDashboard = lazy(() => import('./analytics-dashboard'));
+const PredictiveMaintenancePage = lazy(() => import('./predictive-maintenance'));
+const GPSTracking = lazy(() => import('./gps-tracking'));
+const PaymentWorkflow = lazy(() => import('./payment-workflow'));
+const PredictionConfidence = lazy(() => import('./prediction-confidence'));
+const MoodTracker = lazy(() => import('./mood-tracker').then(m => ({ default: m.MoodTracker })));
+const ScraperManagement = lazy(() => import('./scraper-management'));
+const SmsStatus = lazy(() => import('./sms-status'));
+const DebugToken = lazy(() => import('./debug-token'));
+const DriverDashboard = lazy(() => import('./driver-dashboard'));
+const DispatcherDashboard = lazy(() => import('./dispatcher-dashboard'));
+const DispatcherVehicleDashboard = lazy(() => import('./dispatcher-vehicle-dashboard'));
+const DocumentManagement = lazy(() => import('./document-management'));
+const TaskMagicStatusPage = lazy(() => import('./taskmagic-status').then(m => ({ default: m.TaskMagicStatusPage })));
+const DATScraper = lazy(() => import('./DATScraper'));
+const DatLogin = lazy(() => import('./dat-login'));
+const AdminOverview = lazy(() => import('./admin-overview'));
+const CommunicationDashboard = lazy(() => import('./communication-dashboard'));
+const AICommunicationInsights = lazy(() => import('./ai-communication-insights'));
+const FleetCalculator = lazy(() => import('./fleet-calculator'));
+const TrueRPMCalculator = lazy(() => import('./true-rpm-calculator'));
+const UnifiedMessaging = lazy(() => import('./unified-messaging'));
+const FleetDashboard = lazy(() => import('./fleet-dashboard'));
+const FleetTrucks = lazy(() => import('./fleet-trucks'));
+const FleetWorkOrders = lazy(() => import('./fleet-work-orders'));
+const FleetInspections = lazy(() => import('./fleet-inspections'));
+const FleetVendors = lazy(() => import('./fleet-vendors'));
+const LoadsInbox = lazy(() => import('./loads-inbox'));
+const ActiveLoads = lazy(() => import('./active-loads'));
+const ItemsPage = lazy(() => import('./items'));
 import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
@@ -1061,7 +1064,9 @@ export default function LoadOpsDashboard() {
 
         {/* Page Content */}
         <main className={cn("flex-1 overflow-auto bg-background", (location === '/' || location === '/loadops-dashboard') ? "p-6" : "")}>
-          {renderContent()}
+          <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+            {renderContent()}
+          </Suspense>
         </main>
       </div>
     </div>
