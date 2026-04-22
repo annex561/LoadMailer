@@ -12,6 +12,7 @@ interface ScanResult {
   loadsCreated: number;
   loadsUpdated: number;
   errors: string[];
+  messagesSeen?: Array<{ id: string; subject?: string; attachmentsFound?: number; filesProcessed: number; loadsCreated: number; skipped?: boolean; error?: string }>;
 }
 
 // In-memory dedup: skip a Gmail message if we've already attempted to parse it.
@@ -95,13 +96,14 @@ export const gmailIngest = {
   /**
    * 2. ACCOUNT SCAN: Finds unread emails with attachments
    */
-  async scanSingleAccount(account: typeof gmailAccounts.$inferSelect, queryOverride?: string, maxResults: number = 10): Promise<ScanResult> {
+  async scanSingleAccount(account: typeof gmailAccounts.$inferSelect, queryOverride?: string, maxResults: number = 10, bypassCache: boolean = false): Promise<ScanResult> {
     const result: ScanResult = {
       account: account.email,
       filesProcessed: 0,
       loadsCreated: 0,
       loadsUpdated: 0,
-      errors: []
+      errors: [],
+      messagesSeen: []
     };
 
     try {
@@ -129,12 +131,21 @@ export const gmailIngest = {
       console.log(`   🔎 Found ${messages.length} emails (q="${q}").`);
 
       for (const msg of messages) {
-        const msgResult = await this.processMessage(gmail, msg.id!, account.companyId);
+        const msgResult = await this.processMessage(gmail, msg.id!, account.companyId, bypassCache);
         result.filesProcessed += msgResult.filesProcessed;
         result.loadsCreated += msgResult.loadsCreated;
         result.loadsUpdated += msgResult.loadsUpdated;
+        result.messagesSeen!.push({
+          id: msg.id!,
+          subject: msgResult.subject,
+          attachmentsFound: msgResult.attachmentsFound,
+          filesProcessed: msgResult.filesProcessed,
+          loadsCreated: msgResult.loadsCreated,
+          skipped: !msgResult.subject && !msgResult.error,  // skipped by dedup cache
+          error: msgResult.error,
+        });
         if (msgResult.error) {
-          result.errors.push(msgResult.error);
+          result.errors.push(`${msgResult.subject || msg.id}: ${msgResult.error}`);
         }
       }
 
@@ -154,25 +165,29 @@ export const gmailIngest = {
   /**
    * 3. PROCESS EMAIL: Deep-dives for PDFs
    */
-  async processMessage(gmail: any, msgId: string, companyId: string): Promise<{filesProcessed: number, loadsCreated: number, loadsUpdated: number, error?: string}> {
-    const result = { filesProcessed: 0, loadsCreated: 0, loadsUpdated: 0, error: undefined as string | undefined };
+  async processMessage(gmail: any, msgId: string, companyId: string, bypassCache: boolean = false): Promise<{filesProcessed: number, loadsCreated: number, loadsUpdated: number, error?: string, subject?: string, attachmentsFound?: number}> {
+    const result = { filesProcessed: 0, loadsCreated: 0, loadsUpdated: 0, error: undefined as string | undefined, subject: undefined as string | undefined, attachmentsFound: 0 };
 
-    // Skip if we've attempted this message in the last 30 min (prevents re-parse loops
-    // when parsing fails and the email never gets marked read).
-    if (seenRecently(msgId)) {
+    // Skip if we've attempted this message in the last 24h — unless the caller
+    // explicitly bypasses (manual force-rescan when a message got stuck).
+    if (!bypassCache && seenRecently(msgId)) {
+      console.log(`   ⏭️  [${msgId}] Skipped: seen recently (24h dedup).`);
       return result;
     }
+    if (bypassCache) PARSE_ATTEMPT_CACHE.delete(msgId);
     markAttempted(msgId);
 
     try {
       const email = await gmail.users.messages.get({ userId: 'me', id: msgId });
       const subject = email.data.payload?.headers?.find((h: any) => h.name === 'Subject')?.value || "Unknown Subject";
-      
+      result.subject = subject;
+
       console.log(`   📨 Processing: "${subject}"`);
 
       // A. RECURSIVE ATTACHMENT FINDER
       const attachments = this.findAttachmentsRecursively(email.data.payload);
-      
+      result.attachmentsFound = attachments.length;
+
       if (attachments.length === 0) {
         console.log("      ⚠️ No PDF attachments found. Marking read.");
         await gmail.users.messages.batchModify({ userId: 'me', ids: [msgId], removeLabelIds: ['UNREAD'] });
@@ -201,7 +216,9 @@ export const gmailIngest = {
           if (upsertResult === 'updated') result.loadsUpdated++;
 
         } catch (parseError: any) {
-          console.error(`      ❌ Failed to parse ${att.filename}:`, parseError);
+          const msg = `${att.filename}: ${parseError?.message || String(parseError)}`;
+          console.error(`      ❌ Failed to parse ${msg}`);
+          result.error = (result.error ? result.error + ' | ' : '') + msg;
         }
       }
 
@@ -585,12 +602,12 @@ export const gmailIngest = {
    * Force-rescan all connected accounts with a custom Gmail query
    * (ignores is:unread so already-read RateCons still get processed).
    */
-  async forceRescan(query: string = 'has:attachment filename:pdf newer_than:7d', maxResults: number = 50): Promise<ScanResult[]> {
-    console.log(`🔁 [GMAIL] Force rescan with q="${query}"`);
+  async forceRescan(query: string = 'has:attachment filename:pdf newer_than:7d', maxResults: number = 50, bypassCache: boolean = true): Promise<ScanResult[]> {
+    console.log(`🔁 [GMAIL] Force rescan with q="${query}" bypassCache=${bypassCache}`);
     const accounts = await db.select().from(gmailAccounts).where(eq(gmailAccounts.isActive, true));
     const results: ScanResult[] = [];
     for (const account of accounts) {
-      const r = await this.scanSingleAccount(account, query, maxResults);
+      const r = await this.scanSingleAccount(account, query, maxResults, bypassCache);
       results.push(r);
     }
     return results;
