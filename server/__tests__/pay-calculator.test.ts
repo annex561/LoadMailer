@@ -54,9 +54,9 @@ describe("calculatePay", () => {
       deductFactoringEnabled: true,
       deductFactoringPct: 3.0,
     });
-    expect(r.netPay).toBe(712.5 - 21.375); // 3% of 712.50 = 21.375
+    expect(r.netPay).toBe(691.12); // 3% of 712.50 = 21.38 (rounded), net = 691.12
     const factoring = r.deductions.find((d) => d.label.includes("Factoring"));
-    expect(factoring?.amount).toBeCloseTo(-21.375, 2);
+    expect(factoring?.amount).toBe(-21.38);
   });
 
   it("dispatch fee + factoring stack", () => {
@@ -67,8 +67,8 @@ describe("calculatePay", () => {
       deductDispatchEnabled: true,
       deductDispatchPct: 5.0,
     });
-    // Deductions are % of gross pay (not load rate)
-    expect(r.netPay).toBeCloseTo(712.5 - 21.375 - 35.625, 2);
+    // Deductions are % of gross pay (not load rate), each rounded to cents
+    expect(r.netPay).toBe(655.49); // 712.50 - 21.38 - 35.63
     expect(r.deductions).toHaveLength(2);
   });
 

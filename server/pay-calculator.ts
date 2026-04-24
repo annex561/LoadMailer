@@ -78,23 +78,23 @@ export function calculatePay(load: PayLoadInput, d: PayDriverInput): PayResult {
   if (d.deductFactoringEnabled && d.deductFactoringPct > 0) {
     deductions.push({
       label: `Factoring fee (${d.deductFactoringPct}%)`,
-      amount: -(gross * (d.deductFactoringPct / 100)),
+      amount: -round2(gross * (d.deductFactoringPct / 100)),
     });
   }
   if (d.deductDispatchEnabled && d.deductDispatchPct > 0) {
     deductions.push({
       label: `Dispatch fee (${d.deductDispatchPct}%)`,
-      amount: -(gross * (d.deductDispatchPct / 100)),
+      amount: -round2(gross * (d.deductDispatchPct / 100)),
     });
   }
   if (d.deductFuelAdvanceEnabled && d.deductFuelAdvanceAmount > 0) {
     deductions.push({
       label: "Fuel advance",
-      amount: -d.deductFuelAdvanceAmount,
+      amount: -round2(d.deductFuelAdvanceAmount),
     });
   }
 
-  const netPay = gross + deductions.reduce((s, x) => s + x.amount, 0);
+  const netPay = round2(gross + deductions.reduce((s, x) => s + x.amount, 0));
 
   const recurringDeductions: PayLineItem[] = [];
   if (d.deductTrailerRentEnabled && (d.deductTrailerRentWeekly ?? 0) > 0) {
