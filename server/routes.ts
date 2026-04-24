@@ -1125,6 +1125,38 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // PATCH /api/drivers/:id/pay-rules — update driver pay config
+  app.patch("/api/drivers/:id/pay-rules", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      // Whitelist pay-related fields only
+      const allowed = [
+        "payType", "payRate", "payRateDeadhead",
+        "deductFactoringEnabled", "deductFactoringPct",
+        "deductDispatchEnabled", "deductDispatchPct",
+        "deductFuelAdvanceEnabled", "deductFuelAdvanceAmount",
+        "deductTrailerRentEnabled", "deductTrailerRentWeekly",
+        "deductInsuranceEnabled", "deductInsuranceWeekly",
+        "deductEldEnabled", "deductEldMonthly",
+        "deductOccAccEnabled", "deductOccAccWeekly",
+      ];
+      const payload: Record<string, unknown> = {};
+      for (const key of allowed) {
+        if (key in updates) payload[key] = updates[key];
+      }
+      const { db } = await import("./db");
+      const { drivers } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [updated] = await db.update(drivers).set(payload).where(eq(drivers.id, id)).returning();
+      if (!updated) return res.status(404).json({ error: "Driver not found" });
+      res.json(updated);
+    } catch (err: any) {
+      console.error("[pay-rules] update failed:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Driver SOP page — linked from dispatch SMS
   app.get('/sop', (_req, res) => {
     res.type('html').send(`<!doctype html>
