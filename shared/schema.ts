@@ -190,9 +190,30 @@ export const drivers = pgTable("drivers", {
 
   // Settlement / pay config
   payType: text("pay_type").default("percent"), // percent, per_mile, flat
-  payRate: real("pay_rate").default(80), // percent => % of load rate; per_mile => $/mile; flat => $/load
-  weeklyFuelCost: real("weekly_fuel_cost").default(0), // weekly deduction from driver pay
-  weeklyInsuranceCost: real("weekly_insurance_cost").default(0), // weekly deduction from driver pay
+  payRate: real("pay_rate").default(80),               // percent => 0-100; per_mile => loaded $/mi; flat => $/load
+  payRateDeadhead: real("pay_rate_deadhead").default(0), // per_mile only: $/mi for deadhead; 0 if not applicable
+
+  // Per-load deductions (applied on every load)
+  deductFactoringEnabled: boolean("deduct_factoring_enabled").notNull().default(false),
+  deductFactoringPct: real("deduct_factoring_pct").default(3.0),    // % of gross
+  deductDispatchEnabled: boolean("deduct_dispatch_enabled").notNull().default(false),
+  deductDispatchPct: real("deduct_dispatch_pct").default(5.0),      // % of gross
+  deductFuelAdvanceEnabled: boolean("deduct_fuel_advance_enabled").notNull().default(false),
+  deductFuelAdvanceAmount: real("deduct_fuel_advance_amount").default(0),   // $ per load
+
+  // Weekly / recurring deductions (shown on statement, not per-load net)
+  deductTrailerRentEnabled: boolean("deduct_trailer_rent_enabled").notNull().default(false),
+  deductTrailerRentWeekly: real("deduct_trailer_rent_weekly").default(0),
+  deductInsuranceEnabled: boolean("deduct_insurance_enabled").notNull().default(false),
+  deductInsuranceWeekly: real("deduct_insurance_weekly").default(0),
+  deductEldEnabled: boolean("deduct_eld_enabled").notNull().default(false),
+  deductEldMonthly: real("deduct_eld_monthly").default(0),
+  deductOccAccEnabled: boolean("deduct_occ_acc_enabled").notNull().default(false),
+  deductOccAccWeekly: real("deduct_occ_acc_weekly").default(0),
+
+  // Legacy (keep for backward compat; prefer new fields above)
+  weeklyFuelCost: real("weekly_fuel_cost").default(0),
+  weeklyInsuranceCost: real("weekly_insurance_cost").default(0),
 
   // Driver preferences — used by auto-load-matcher to filter what they see
   vehicleType: text("vehicle_type").default("pickup_gooseneck"), // See VEHICLE_TYPES in server/driver-portal.ts
@@ -200,7 +221,6 @@ export const drivers = pgTable("drivers", {
   maxDeadheadMiles: integer("max_deadhead_miles").default(150), // how far driver will deadhead to pickup
   preferredDestinations: text("preferred_destinations").array().default(sql`ARRAY[]::text[]`), // e.g. ['GA','FL','TN'] — empty = anywhere
   homeBase: text("home_base"), // "City, ST" driver wants to end up near
-  emergencyContact: text("emergency_contact"), // "Name / 555-1234"
   address: text("address"), // street address
 
   createdAt: timestamp("created_at").defaultNow(),
