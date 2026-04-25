@@ -32,10 +32,10 @@ export class SMSCommunicationService {
 
   // Handle incoming SMS messages from drivers (will be called by webhook)
   async handleIncomingSMS(
-    fromPhone: string, 
-    message: string, 
-    smsId: string, 
-    mediaUrls: string[] = [], 
+    fromPhone: string,
+    message: string,
+    smsId: string,
+    mediaUrls: string[] = [],
     mediaTypes: string[] = []
   ): Promise<void> {
     try {
@@ -43,7 +43,63 @@ export class SMSCommunicationService {
       if (mediaUrls.length > 0) {
         console.log(`📎 With ${mediaUrls.length} media attachment(s)`);
       }
-      
+
+      // Check if this is a dispatch confirmation response
+      const body = (message ?? "").trim().toUpperCase();
+
+      if (body === "YES" || body === "NO" || body === "Y" || body === "N") {
+        const { db } = await import("./db");
+        const { loads, drivers: driversTable } = await import("@shared/schema");
+        const { eq, and, desc, or } = await import("drizzle-orm");
+        // Find most recent pending confirmation for this driver
+        const [drv] = await db
+          .select()
+          .from(driversTable)
+          .where(or(eq(driversTable.phone, fromPhone), eq(driversTable.phoneNumber, fromPhone)))
+          .limit(1);
+        if (drv) {
+          const [pending] = await db
+            .select()
+            .from(loads)
+            .where(and(eq(loads.driverId, drv.id), eq(loads.confirmationStatus, "pending")))
+            .orderBy(desc(loads.createdAt))
+            .limit(1);
+          if (pending) {
+            const accepted = body === "YES" || body === "Y";
+            await db
+              .update(loads)
+              .set({
+                confirmationStatus: accepted ? "accepted" : "declined",
+                confirmationRespondedAt: new Date(),
+                status: accepted ? "assigned" : "cancelled",
+              })
+              .where(eq(loads.id, pending.id));
+            // reply to driver (gated by SMS_ENABLED)
+            const reply = accepted
+              ? `Load #${pending.loadNumber} confirmed. Safe travels.`
+              : `Load #${pending.loadNumber} declined. Dispatcher notified.`;
+            const SMS_ENABLED = process.env.SMS_ENABLED === "true";
+            if (SMS_ENABLED) {
+              const { smsService } = await import("./sms-service");
+              await smsService.sendSMS(fromPhone, reply);
+            } else {
+              console.log(`[sms-reply:DRY-RUN] would SMS ${fromPhone}:\n${reply}`);
+            }
+            // If declined, notify admin
+            if (!accepted) {
+              const { notifyAdminReviewNeeded } = await import("./ratecon-admin-alerts");
+              notifyAdminReviewNeeded({
+                companyId: pending.companyId ?? null,
+                intakeId: pending.id,
+                broker: pending.brokerName ?? "Unknown",
+                reason: `Driver ${drv.name} declined load ${pending.loadNumber}`,
+              });
+            }
+            return; // handled — don't fall through to other intent routing
+          }
+        }
+      }
+
       // Find driver by phone number
       const driver = await this.findDriverByPhone(fromPhone);
       if (!driver) {
