@@ -85,6 +85,20 @@ export async function parseIntake(intakeId: string, pdfBuffer: Buffer) {
       })
       .where(eq(rateconIntake.id, intakeId));
 
+    if (status === "in_review") {
+      const { notifyAdminReviewNeeded } = await import("./ratecon-admin-alerts");
+      const [intakeRow] = await db
+        .select({ companyId: rateconIntake.companyId })
+        .from(rateconIntake)
+        .where(eq(rateconIntake.id, intakeId));
+      notifyAdminReviewNeeded({
+        companyId: intakeRow?.companyId ?? null,
+        intakeId,
+        broker: parsed.broker.value,
+        reason: reviewReason ?? "unknown",
+      }).catch((e) => console.error("[parseIntake] alert failed:", e.message));
+    }
+
     return { ok: true as const, parsed, status, validation };
   } catch (err: any) {
     await db
