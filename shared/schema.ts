@@ -327,6 +327,58 @@ export const loads = pgTable("loads", {
 ]);
 
 // ============================================================================
+// RATECON INTAKE - universal queue for all incoming ratecons
+// ============================================================================
+
+export const rateconIntake = pgTable("ratecon_intake", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+
+  // Source tracking
+  sourceType: text("source_type").notNull(), // "email" | "upload" | "manual"
+  sourceEmailMessageId: text("source_email_message_id"), // Gmail message id if email
+  sourceFilename: text("source_filename"),
+  sourceUploadedBy: varchar("source_uploaded_by"), // user id if upload/manual
+
+  // Raw artifact storage
+  pdfPath: text("pdf_path"),             // where the original PDF is stored
+  rawEmailText: text("raw_email_text"),  // for email-without-PDF cases
+
+  // Parsed output (full JSON blob from parser, including per-field confidence)
+  parsedJson: jsonb("parsed_json"),
+  parsedAt: timestamp("parsed_at"),
+  parserModel: text("parser_model"), // e.g. "gpt-4o-2024-08-06"
+  parseError: text("parse_error"),
+
+  // Validator output
+  validatorsPassedAt: timestamp("validators_passed_at"),
+  validatorFailures: jsonb("validator_failures"), // array of { field, reason }
+
+  // Lifecycle
+  status: text("status").notNull().default("pending"),
+  // "pending" -> "parsed" -> ("auto_dispatched" | "in_review") -> ("approved" | "rejected") -> "dispatched"
+  reviewReason: text("review_reason"), // why it went to review (summary of validator failures + low-confidence fields)
+  reviewedBy: varchar("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+
+  // Link to finalized load once dispatched
+  loadId: varchar("load_id"),
+
+  // Driver assignment
+  matchedDriverId: varchar("matched_driver_id"),
+  matchedDriverConfidence: real("matched_driver_confidence"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_ratecon_intake_status").on(table.status),
+  index("idx_ratecon_intake_company").on(table.companyId),
+]);
+
+export type RateconIntake = typeof rateconIntake.$inferSelect;
+export type InsertRateconIntake = typeof rateconIntake.$inferInsert;
+
+// ============================================================================
 // REVENUE LOOP TABLES - AR Invoices, Collections, Activity Log
 // ============================================================================
 
