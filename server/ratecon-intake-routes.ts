@@ -78,10 +78,54 @@ export function registerRateconIntakeRoutes(app: Express) {
     }
   });
 
+  // GET /api/ratecon-intake/review-queue
+  app.get("/api/ratecon-intake/review-queue", async (_req, res) => {
+    const rows = await db
+      .select()
+      .from(rateconIntake)
+      .where(eq(rateconIntake.status, "in_review"))
+      .orderBy(desc(rateconIntake.createdAt))
+      .limit(100);
+    res.json(rows);
+  });
+
   // GET /api/ratecon-intake/:id
   app.get("/api/ratecon-intake/:id", async (req, res) => {
     const [row] = await db.select().from(rateconIntake).where(eq(rateconIntake.id, req.params.id));
     if (!row) return res.status(404).json({ error: "not found" });
     res.json(row);
+  });
+
+  // PATCH /api/ratecon-intake/:id — edit parsed fields (dispatcher inline edits)
+  app.patch("/api/ratecon-intake/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { parsedJson, matchedDriverId } = req.body;
+      const updates: Record<string, unknown> = { updatedAt: new Date() };
+      if (parsedJson) updates.parsedJson = parsedJson;
+      if (matchedDriverId !== undefined) {
+        updates.matchedDriverId = matchedDriverId;
+        updates.matchedDriverConfidence = 1.0; // human-assigned = certain
+      }
+      const [updated] = await db
+        .update(rateconIntake)
+        .set(updates)
+        .where(eq(rateconIntake.id, id))
+        .returning();
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/ratecon-intake/:id/reject
+  app.post("/api/ratecon-intake/:id/reject", async (req, res) => {
+    const userId = (req as any).user?.id ?? null;
+    const [updated] = await db
+      .update(rateconIntake)
+      .set({ status: "rejected", reviewedBy: userId, reviewedAt: new Date(), updatedAt: new Date() })
+      .where(eq(rateconIntake.id, req.params.id))
+      .returning();
+    res.json(updated);
   });
 }
