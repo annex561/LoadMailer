@@ -3,6 +3,7 @@ import { createServer } from "http";
 import compression from "compression";
 import { registerRoutes, createHTTPServer } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { startRateconEscalationCron } from "./ratecon-escalation-cron";
 
 const app = express();
 
@@ -418,8 +419,18 @@ app.use((req, res, next) => {
         })();
       }, 2500);
 
+      // 2.75 RateCon Escalation Cron (30-minute escalation for unacknowledged dispatches)
+      setTimeout(() => {
+        try {
+          startRateconEscalationCron();
+          log('✅ RateCon Escalation Cron started — checking every 5 minutes for stale loads');
+        } catch (error: any) {
+          log(`⚠️ RateCon Escalation Cron failed to start: ${error.message || error}`);
+        }
+      }, 2750);
+
       // Tennessee load simulation REMOVED — real loads only from Google Sheets + DAT
-      
+
       log('✅ Background services scheduled to start independently after server deployment');
     }
     
