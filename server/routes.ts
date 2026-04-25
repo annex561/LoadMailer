@@ -44,6 +44,7 @@ import { randomUUID } from "crypto";
 import gaLoadsRouter from "./ga-loads-router";
 import traqiqSopRoutes from "./traqiq-sop-routes";
 import driverSMSUploadRoutes from "./driver-sms-upload-routes";
+import { registerRateconIntakeRoutes } from "./ratecon-intake-routes";
 import twilio from "twilio";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -792,6 +793,9 @@ export async function registerRoutes(app: Express): Promise<void> {
     '/api/loads/:loadId/init-communications',
   ], isAuthenticated);
   console.log('✅ Protected communication and AI endpoints from unauthorized access');
+
+  // Ratecon intake routes (PDF upload + manual entry)
+  registerRateconIntakeRoutes(app);
 
   // Add authentication routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {

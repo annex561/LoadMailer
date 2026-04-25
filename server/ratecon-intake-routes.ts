@@ -1,0 +1,87 @@
+import type { Express } from "express";
+import multer from "multer";
+import { enqueueRatecon, parseIntake } from "./ratecon-intake-service";
+import { db } from "./db";
+import { rateconIntake } from "@shared/schema";
+import { desc, eq } from "drizzle-orm";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max
+});
+
+export function registerRateconIntakeRoutes(app: Express) {
+  // POST /api/ratecon-intake/upload — PDF drag-and-drop
+  app.post("/api/ratecon-intake/upload", upload.single("pdf"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "PDF required" });
+      const companyId = (req as any).user?.companyId ?? null;
+      const userId = (req as any).user?.id ?? null;
+      const intake = await enqueueRatecon({
+        sourceType: "upload",
+        companyId,
+        pdfBuffer: req.file.buffer,
+        sourceFilename: req.file.originalname,
+        sourceUploadedBy: userId,
+      });
+      // Fire-and-forget parse (don't block the request)
+      parseIntake(intake.id, req.file.buffer).catch((e) =>
+        console.error("[intake-upload] parse failed:", e.message),
+      );
+      res.json({ intakeId: intake.id, status: "queued" });
+    } catch (err: any) {
+      console.error("[intake-upload]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/ratecon-intake/manual — typed-in manual entry
+  app.post("/api/ratecon-intake/manual", async (req, res) => {
+    try {
+      const companyId = (req as any).user?.companyId ?? null;
+      const userId = (req as any).user?.id ?? null;
+      const intake = await enqueueRatecon({
+        sourceType: "manual",
+        companyId,
+        sourceUploadedBy: userId,
+      });
+      // Manual entry skips parser, puts directly into in_review with user-provided fields
+      await db
+        .update(rateconIntake)
+        .set({
+          parsedJson: req.body,
+          parsedAt: new Date(),
+          parserModel: "manual",
+          status: "in_review",
+          reviewReason: "Manual entry — review before dispatch",
+          updatedAt: new Date(),
+        })
+        .where(eq(rateconIntake.id, intake.id));
+      res.json({ intakeId: intake.id, status: "in_review" });
+    } catch (err: any) {
+      console.error("[intake-manual]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/ratecon-intake — list recent (for dashboard)
+  app.get("/api/ratecon-intake", async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const qb = db.select().from(rateconIntake);
+      const rows = status
+        ? await qb.where(eq(rateconIntake.status, status)).orderBy(desc(rateconIntake.createdAt)).limit(50)
+        : await qb.orderBy(desc(rateconIntake.createdAt)).limit(50);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/ratecon-intake/:id
+  app.get("/api/ratecon-intake/:id", async (req, res) => {
+    const [row] = await db.select().from(rateconIntake).where(eq(rateconIntake.id, req.params.id));
+    if (!row) return res.status(404).json({ error: "not found" });
+    res.json(row);
+  });
+}
