@@ -3,6 +3,7 @@ import { rateconIntake, loads, drivers, customers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { PayDriverInput, PayLoadInput } from "./pay-calculator";
+import { calculatePay } from "./pay-calculator";
 
 export interface DispatchOutcome {
   ok: boolean;
@@ -130,4 +131,49 @@ export function computeLoadPayInput(parsed: any): PayLoadInput {
     loadedMiles: totalMiles,
     deadheadMiles: 0,
   };
+}
+
+const SMS_ENABLED = process.env.SMS_ENABLED === "true";
+
+export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string }> {
+  const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
+  if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
+  const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
+  if (!driver) return { ok: false, error: "Driver not found" };
+  const phone = (driver as any).phoneNumber ?? (driver as any).phone;
+  if (!phone) return { ok: false, error: "Driver has no phone" };
+
+  const payInput = computeLoadPayInput({
+    rate: { value: load.rate ?? 0 },
+    miles: { value: load.miles ?? 0 },
+  });
+  const pay = calculatePay(payInput, driverProfileToPayInput(driver));
+
+  const url = `https://traqiqs.io/l/${load.confirmationToken}`;
+  const pickupDateStr = load.pickupDate instanceof Date
+    ? load.pickupDate.toLocaleDateString()
+    : new Date(load.pickupDate).toLocaleDateString();
+  const deliveryDateStr = load.deliveryDate instanceof Date
+    ? load.deliveryDate.toLocaleDateString()
+    : new Date(load.deliveryDate).toLocaleDateString();
+
+  const body =
+    `TRAQ-IQ Dispatch\n` +
+    `New load #${load.loadNumber}\n\n` +
+    `📍 PICKUP\n${load.originCity}, ${load.originState}\n` +
+    `${pickupDateStr} @ ${load.pickupTime}\n\n` +
+    `📍 DROP\n${load.destCity}, ${load.destState}\n` +
+    `${deliveryDateStr} @ ${load.deliveryTime}\n\n` +
+    `💰 NET PAY: $${pay.netPay.toFixed(2)}\n\n` +
+    `Details & confirm: ${url}\n\n` +
+    `Reply YES to accept · NO to decline`;
+
+  if (!SMS_ENABLED) {
+    console.log(`[dispatch-sms:DRY-RUN] would SMS ${phone} for load ${load.loadNumber}:\n${body}`);
+    return { ok: true };
+  }
+
+  const { smsService } = await import("./sms-service");
+  await smsService.sendSMS(phone, body);
+  return { ok: true };
 }

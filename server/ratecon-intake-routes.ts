@@ -128,4 +128,22 @@ export function registerRateconIntakeRoutes(app: Express) {
       .returning();
     res.json(updated);
   });
+
+  app.post("/api/ratecon-intake/:id/approve-and-dispatch", async (req, res) => {
+    try {
+      const userId = (req as any).user?.id ?? null;
+      const { dispatchFromIntake, sendDispatchSms } = await import("./ratecon-dispatch-service");
+      const outcome = await dispatchFromIntake(req.params.id);
+      if (!outcome.ok) return res.status(400).json({ error: outcome.error });
+      await db
+        .update(rateconIntake)
+        .set({ reviewedBy: userId, reviewedAt: new Date() })
+        .where(eq(rateconIntake.id, req.params.id));
+      const smsResult = await sendDispatchSms(outcome.loadId!);
+      res.json({ ...outcome, sms: smsResult });
+    } catch (err: any) {
+      console.error("[approve-and-dispatch]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
 }

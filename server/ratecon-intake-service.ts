@@ -99,6 +99,28 @@ export async function parseIntake(intakeId: string, pdfBuffer: Buffer) {
       }).catch((e) => console.error("[parseIntake] alert failed:", e.message));
     }
 
+    if (status === "parsed") {
+      const { dispatchFromIntake, sendDispatchSms } = await import("./ratecon-dispatch-service");
+      const outcome = await dispatchFromIntake(intakeId);
+      if (outcome.ok && outcome.loadId) {
+        await sendDispatchSms(outcome.loadId);
+        await db
+          .update(rateconIntake)
+          .set({ status: "auto_dispatched", updatedAt: new Date() })
+          .where(eq(rateconIntake.id, intakeId));
+      } else {
+        // fallback: bump to review
+        await db
+          .update(rateconIntake)
+          .set({
+            status: "in_review",
+            reviewReason: `Auto-dispatch failed: ${outcome.error}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(rateconIntake.id, intakeId));
+      }
+    }
+
     return { ok: true as const, parsed, status, validation };
   } catch (err: any) {
     await db
