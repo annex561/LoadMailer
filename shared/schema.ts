@@ -301,6 +301,9 @@ export const loads = pgTable("loads", {
   bookedAt: timestamp("booked_at"),
   deliveredAt: timestamp("delivered_at"),
   rateconPath: text("ratecon_path"),
+  confirmationToken: varchar("confirmation_token", { length: 32 }).unique(),
+  confirmationStatus: text("confirmation_status").default("pending"), // pending, accepted, declined
+  confirmationRespondedAt: timestamp("confirmation_responded_at"),
   podPath: text("pod_path"),
   overrideReason: text("override_reason"),
   
