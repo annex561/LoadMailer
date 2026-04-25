@@ -190,9 +190,30 @@ export const drivers = pgTable("drivers", {
 
   // Settlement / pay config
   payType: text("pay_type").default("percent"), // percent, per_mile, flat
-  payRate: real("pay_rate").default(80), // percent => % of load rate; per_mile => $/mile; flat => $/load
-  weeklyFuelCost: real("weekly_fuel_cost").default(0), // weekly deduction from driver pay
-  weeklyInsuranceCost: real("weekly_insurance_cost").default(0), // weekly deduction from driver pay
+  payRate: real("pay_rate").default(80),               // percent => 0-100; per_mile => loaded $/mi; flat => $/load
+  payRateDeadhead: real("pay_rate_deadhead").default(0), // per_mile only: $/mi for deadhead; 0 if not applicable
+
+  // Per-load deductions (applied on every load)
+  deductFactoringEnabled: boolean("deduct_factoring_enabled").notNull().default(false),
+  deductFactoringPct: real("deduct_factoring_pct").default(3.0),    // % of gross
+  deductDispatchEnabled: boolean("deduct_dispatch_enabled").notNull().default(false),
+  deductDispatchPct: real("deduct_dispatch_pct").default(5.0),      // % of gross
+  deductFuelAdvanceEnabled: boolean("deduct_fuel_advance_enabled").notNull().default(false),
+  deductFuelAdvanceAmount: real("deduct_fuel_advance_amount").default(0),   // $ per load
+
+  // Weekly / recurring deductions (shown on statement, not per-load net)
+  deductTrailerRentEnabled: boolean("deduct_trailer_rent_enabled").notNull().default(false),
+  deductTrailerRentWeekly: real("deduct_trailer_rent_weekly").default(0),
+  deductInsuranceEnabled: boolean("deduct_insurance_enabled").notNull().default(false),
+  deductInsuranceWeekly: real("deduct_insurance_weekly").default(0),
+  deductEldEnabled: boolean("deduct_eld_enabled").notNull().default(false),
+  deductEldMonthly: real("deduct_eld_monthly").default(0),
+  deductOccAccEnabled: boolean("deduct_occ_acc_enabled").notNull().default(false),
+  deductOccAccWeekly: real("deduct_occ_acc_weekly").default(0),
+
+  // Legacy (keep for backward compat; prefer new fields above)
+  weeklyFuelCost: real("weekly_fuel_cost").default(0),
+  weeklyInsuranceCost: real("weekly_insurance_cost").default(0),
 
   // Driver preferences — used by auto-load-matcher to filter what they see
   vehicleType: text("vehicle_type").default("pickup_gooseneck"), // See VEHICLE_TYPES in server/driver-portal.ts
@@ -200,7 +221,6 @@ export const drivers = pgTable("drivers", {
   maxDeadheadMiles: integer("max_deadhead_miles").default(150), // how far driver will deadhead to pickup
   preferredDestinations: text("preferred_destinations").array().default(sql`ARRAY[]::text[]`), // e.g. ['GA','FL','TN'] — empty = anywhere
   homeBase: text("home_base"), // "City, ST" driver wants to end up near
-  emergencyContact: text("emergency_contact"), // "Name / 555-1234"
   address: text("address"), // street address
 
   createdAt: timestamp("created_at").defaultNow(),
@@ -281,6 +301,9 @@ export const loads = pgTable("loads", {
   bookedAt: timestamp("booked_at"),
   deliveredAt: timestamp("delivered_at"),
   rateconPath: text("ratecon_path"),
+  confirmationToken: varchar("confirmation_token", { length: 32 }).unique(),
+  confirmationStatus: text("confirmation_status").default("pending"), // pending, accepted, declined
+  confirmationRespondedAt: timestamp("confirmation_responded_at"),
   podPath: text("pod_path"),
   overrideReason: text("override_reason"),
   
@@ -305,6 +328,58 @@ export const loads = pgTable("loads", {
     name: "loads_driver_company_fk"
   }),
 ]);
+
+// ============================================================================
+// RATECON INTAKE - universal queue for all incoming ratecons
+// ============================================================================
+
+export const rateconIntake = pgTable("ratecon_intake", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+
+  // Source tracking
+  sourceType: text("source_type").notNull(), // "email" | "upload" | "manual"
+  sourceEmailMessageId: text("source_email_message_id"), // Gmail message id if email
+  sourceFilename: text("source_filename"),
+  sourceUploadedBy: varchar("source_uploaded_by"), // user id if upload/manual
+
+  // Raw artifact storage
+  pdfPath: text("pdf_path"),             // where the original PDF is stored
+  rawEmailText: text("raw_email_text"),  // for email-without-PDF cases
+
+  // Parsed output (full JSON blob from parser, including per-field confidence)
+  parsedJson: jsonb("parsed_json"),
+  parsedAt: timestamp("parsed_at"),
+  parserModel: text("parser_model"), // e.g. "gpt-4o-2024-08-06"
+  parseError: text("parse_error"),
+
+  // Validator output
+  validatorsPassedAt: timestamp("validators_passed_at"),
+  validatorFailures: jsonb("validator_failures"), // array of { field, reason }
+
+  // Lifecycle
+  status: text("status").notNull().default("pending"),
+  // "pending" -> "parsed" -> ("auto_dispatched" | "in_review") -> ("approved" | "rejected") -> "dispatched"
+  reviewReason: text("review_reason"), // why it went to review (summary of validator failures + low-confidence fields)
+  reviewedBy: varchar("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+
+  // Link to finalized load once dispatched
+  loadId: varchar("load_id"),
+
+  // Driver assignment
+  matchedDriverId: varchar("matched_driver_id"),
+  matchedDriverConfidence: real("matched_driver_confidence"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_ratecon_intake_status").on(table.status),
+  index("idx_ratecon_intake_company").on(table.companyId),
+]);
+
+export type RateconIntake = typeof rateconIntake.$inferSelect;
+export type InsertRateconIntake = typeof rateconIntake.$inferInsert;
 
 // ============================================================================
 // REVENUE LOOP TABLES - AR Invoices, Collections, Activity Log

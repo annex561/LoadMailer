@@ -57,6 +57,9 @@ const LoadDetailsPage = lazy(() => import("@/pages/load-details"));
 const GmailSettings = lazy(() => import("@/pages/gmail-settings"));
 const DriverLoadView = lazy(() => import("@/pages/driver-load-view"));
 const TrueRPMCalculator = lazy(() => import("@/pages/true-rpm-calculator"));
+const RateconUploadPage = lazy(() => import("@/pages/ratecon-upload"));
+const ReviewQueuePage = lazy(() => import("@/pages/review-queue"));
+const DriverConfirmPage = lazy(() => import("@/pages/driver-confirm"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -125,6 +128,8 @@ function Router() {
       <Route path="/items" component={ItemsPage} />
       <Route path="/gmail-settings" component={GmailSettings} />
       <Route path="/true-rpm-calculator" component={TrueRPMCalculator} />
+      <Route path="/ratecon-upload" component={RateconUploadPage} />
+      <Route path="/review-queue" component={ReviewQueuePage} />
       <Route path="/loads/:id" component={LoadDetailsPage} />
       <Route component={NotFound} />
     </Switch>
@@ -159,6 +164,9 @@ function App() {
               <Route path="/driver/load/:id" component={DriverLoadView} />
               <Route path="/driver/tracking/:id" component={DriverTracker} />
               <Route path="/driver-tracker" component={DriverTracker} />
+
+              {/* Driver confirmation — tokenized link from SMS, no login required */}
+              <Route path="/l/:token" component={DriverConfirmPage} />
 
               {/* All other routes (admin pages) use LoadOps dashboard layout with sidebar */}
               <Route>

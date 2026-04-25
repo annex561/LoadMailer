@@ -5,6 +5,7 @@ import { db } from "./db";
 import { loads, activityLog } from "@shared/schema";
 import { rateConParser, ParsedRateCon } from "./ratecon-parser";
 import { getGmailClient, isGmailConfigured } from "./gmail-client";
+import { enqueueRatecon, parseIntake } from "./ratecon-intake-service";
 
 interface EmailAttachment {
   filename: string;
@@ -98,23 +99,59 @@ export class EmailIngestionService {
     };
 
     const attachments = await this.getAttachments(gmail, messageId, email.data.payload);
-    
-    for (const attachment of attachments) {
-      if (attachment.mimeType === 'application/pdf' || attachment.filename?.toLowerCase().endsWith('.pdf')) {
-        console.log(`[EmailIngestion] Processing PDF: ${attachment.filename}`);
-        
+
+    // --- NEW INTAKE ROUTING ---
+    // Instead of direct db.insert(loads), route all ratecons through the intake queue.
+    if (attachments.length > 0) {
+      const pdfAttachment = attachments.find((a) => a.mimeType === "application/pdf");
+      if (pdfAttachment) {
+        const intake = await enqueueRatecon({
+          sourceType: "email",
+          companyId,
+          pdfBuffer: pdfAttachment.data,
+          sourceEmailMessageId: messageId,
+          sourceFilename: pdfAttachment.filename,
+        });
+        parseIntake(intake.id, pdfAttachment.data).catch((e) =>
+          console.error("[email-ingestion] parse failed:", e.message),
+        );
+
         try {
-          const loadDetails = await rateConParser.parse(attachment.data);
-          result.loadDetails = loadDetails;
-          
-          await this.createLoadFromParsedData(companyId, loadDetails, undefined, messageId);
-        } catch (parseErr: any) {
-          console.error(`[EmailIngestion] Parse error for ${attachment.filename}:`, parseErr.message);
-          result.status = 'failed';
-          result.error = parseErr.message;
+          await gmail.users.messages.modify({
+            userId: 'me',
+            id: messageId,
+            requestBody: { removeLabelIds: ['UNREAD'] }
+          });
+        } catch (markErr: any) {
+          console.warn(`[EmailIngestion] Could not mark email as read:`, markErr.message);
         }
+
+        return { messageId, subject, from, date, status: "processed" as const };
       }
     }
+
+    // No PDF — enqueue as text-only for review
+    await enqueueRatecon({
+      sourceType: "email",
+      companyId,
+      sourceEmailMessageId: messageId,
+    });
+
+    // --- OLD DIRECT-INSERT PATH (commented out, kept for reference) ---
+    // for (const attachment of attachments) {
+    //   if (attachment.mimeType === 'application/pdf' || attachment.filename?.toLowerCase().endsWith('.pdf')) {
+    //     console.log(`[EmailIngestion] Processing PDF: ${attachment.filename}`);
+    //     try {
+    //       const loadDetails = await rateConParser.parse(attachment.data);
+    //       result.loadDetails = loadDetails;
+    //       await this.createLoadFromParsedData(companyId, loadDetails, undefined, messageId);
+    //     } catch (parseErr: any) {
+    //       console.error(`[EmailIngestion] Parse error for ${attachment.filename}:`, parseErr.message);
+    //       result.status = 'failed';
+    //       result.error = parseErr.message;
+    //     }
+    //   }
+    // }
 
     try {
       await gmail.users.messages.modify({
@@ -126,7 +163,7 @@ export class EmailIngestionService {
       console.warn(`[EmailIngestion] Could not mark email as read:`, markErr.message);
     }
 
-    return result;
+    return { messageId, subject, from, date, status: "processed" as const };
   }
 
   async createLoadFromParsedData(

@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EQUIPMENT_TYPES } from '@shared/equipment-types';
 import { User, MessageCircle, Truck, Phone, Mail, MapPin, Save, CheckCircle } from 'lucide-react';
 import type { Driver } from '@shared/schema';
+import { DriverPayRulesForm, DriverPayRules } from "@/components/driver-pay-rules-form";
 
 const driverProfileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -441,6 +442,40 @@ export default function DriverProfile() {
               />
             </CardContent>
           </Card>
+
+          {/* Pay & Deductions */}
+          {driver && (
+            <DriverPayRulesForm
+              initial={{
+                payType: (driver.payType ?? "percent") as DriverPayRules["payType"],
+                payRate: driver.payRate ?? 0,
+                payRateDeadhead: driver.payRateDeadhead ?? 0,
+                deductFactoringEnabled: driver.deductFactoringEnabled ?? false,
+                deductFactoringPct: driver.deductFactoringPct ?? 3,
+                deductDispatchEnabled: driver.deductDispatchEnabled ?? false,
+                deductDispatchPct: driver.deductDispatchPct ?? 5,
+                deductFuelAdvanceEnabled: driver.deductFuelAdvanceEnabled ?? false,
+                deductFuelAdvanceAmount: driver.deductFuelAdvanceAmount ?? 0,
+                deductTrailerRentEnabled: driver.deductTrailerRentEnabled ?? false,
+                deductTrailerRentWeekly: driver.deductTrailerRentWeekly ?? 0,
+                deductInsuranceEnabled: driver.deductInsuranceEnabled ?? false,
+                deductInsuranceWeekly: driver.deductInsuranceWeekly ?? 0,
+                deductEldEnabled: driver.deductEldEnabled ?? false,
+                deductEldMonthly: driver.deductEldMonthly ?? 0,
+                deductOccAccEnabled: driver.deductOccAccEnabled ?? false,
+                deductOccAccWeekly: driver.deductOccAccWeekly ?? 0,
+              }}
+              onSave={async (rules) => {
+                const res = await fetch(`/api/drivers/${driver.id}/pay-rules`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(rules),
+                });
+                if (!res.ok) throw new Error("Save failed");
+                window.location.reload();
+              }}
+            />
+          )}
 
           {/* Save Button */}
           <div className="flex justify-end">

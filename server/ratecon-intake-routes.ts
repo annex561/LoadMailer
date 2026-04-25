@@ -1,0 +1,149 @@
+import type { Express } from "express";
+import multer from "multer";
+import { enqueueRatecon, parseIntake } from "./ratecon-intake-service";
+import { db } from "./db";
+import { rateconIntake } from "@shared/schema";
+import { desc, eq } from "drizzle-orm";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB max
+});
+
+export function registerRateconIntakeRoutes(app: Express) {
+  // POST /api/ratecon-intake/upload — PDF drag-and-drop
+  app.post("/api/ratecon-intake/upload", upload.single("pdf"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "PDF required" });
+      const companyId = (req as any).user?.companyId ?? null;
+      const userId = (req as any).user?.id ?? null;
+      const intake = await enqueueRatecon({
+        sourceType: "upload",
+        companyId,
+        pdfBuffer: req.file.buffer,
+        sourceFilename: req.file.originalname,
+        sourceUploadedBy: userId,
+      });
+      // Fire-and-forget parse (don't block the request)
+      parseIntake(intake.id, req.file.buffer).catch((e) =>
+        console.error("[intake-upload] parse failed:", e.message),
+      );
+      res.json({ intakeId: intake.id, status: "queued" });
+    } catch (err: any) {
+      console.error("[intake-upload]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/ratecon-intake/manual — typed-in manual entry
+  app.post("/api/ratecon-intake/manual", async (req, res) => {
+    try {
+      const companyId = (req as any).user?.companyId ?? null;
+      const userId = (req as any).user?.id ?? null;
+      const intake = await enqueueRatecon({
+        sourceType: "manual",
+        companyId,
+        sourceUploadedBy: userId,
+      });
+      // Manual entry skips parser, puts directly into in_review with user-provided fields
+      await db
+        .update(rateconIntake)
+        .set({
+          parsedJson: req.body,
+          parsedAt: new Date(),
+          parserModel: "manual",
+          status: "in_review",
+          reviewReason: "Manual entry — review before dispatch",
+          updatedAt: new Date(),
+        })
+        .where(eq(rateconIntake.id, intake.id));
+      res.json({ intakeId: intake.id, status: "in_review" });
+    } catch (err: any) {
+      console.error("[intake-manual]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/ratecon-intake — list recent (for dashboard)
+  app.get("/api/ratecon-intake", async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const qb = db.select().from(rateconIntake);
+      const rows = status
+        ? await qb.where(eq(rateconIntake.status, status)).orderBy(desc(rateconIntake.createdAt)).limit(50)
+        : await qb.orderBy(desc(rateconIntake.createdAt)).limit(50);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/ratecon-intake/review-queue
+  app.get("/api/ratecon-intake/review-queue", async (_req, res) => {
+    const rows = await db
+      .select()
+      .from(rateconIntake)
+      .where(eq(rateconIntake.status, "in_review"))
+      .orderBy(desc(rateconIntake.createdAt))
+      .limit(100);
+    res.json(rows);
+  });
+
+  // GET /api/ratecon-intake/:id
+  app.get("/api/ratecon-intake/:id", async (req, res) => {
+    const [row] = await db.select().from(rateconIntake).where(eq(rateconIntake.id, req.params.id));
+    if (!row) return res.status(404).json({ error: "not found" });
+    res.json(row);
+  });
+
+  // PATCH /api/ratecon-intake/:id — edit parsed fields (dispatcher inline edits)
+  app.patch("/api/ratecon-intake/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { parsedJson, matchedDriverId } = req.body;
+      const updates: Record<string, unknown> = { updatedAt: new Date() };
+      if (parsedJson) updates.parsedJson = parsedJson;
+      if (matchedDriverId !== undefined) {
+        updates.matchedDriverId = matchedDriverId;
+        updates.matchedDriverConfidence = 1.0; // human-assigned = certain
+      }
+      const [updated] = await db
+        .update(rateconIntake)
+        .set(updates)
+        .where(eq(rateconIntake.id, id))
+        .returning();
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/ratecon-intake/:id/reject
+  app.post("/api/ratecon-intake/:id/reject", async (req, res) => {
+    const userId = (req as any).user?.id ?? null;
+    const [updated] = await db
+      .update(rateconIntake)
+      .set({ status: "rejected", reviewedBy: userId, reviewedAt: new Date(), updatedAt: new Date() })
+      .where(eq(rateconIntake.id, req.params.id))
+      .returning();
+    res.json(updated);
+  });
+
+  app.post("/api/ratecon-intake/:id/approve-and-dispatch", async (req, res) => {
+    try {
+      const userId = (req as any).user?.id ?? null;
+      const { dispatchFromIntake, sendDispatchSms } = await import("./ratecon-dispatch-service");
+      const outcome = await dispatchFromIntake(req.params.id);
+      if (!outcome.ok) return res.status(400).json({ error: outcome.error });
+      await db
+        .update(rateconIntake)
+        .set({ reviewedBy: userId, reviewedAt: new Date() })
+        .where(eq(rateconIntake.id, req.params.id));
+      const smsResult = await sendDispatchSms(outcome.loadId!);
+      res.json({ ...outcome, sms: smsResult });
+    } catch (err: any) {
+      console.error("[approve-and-dispatch]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+}

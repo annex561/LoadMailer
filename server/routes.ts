@@ -44,6 +44,8 @@ import { randomUUID } from "crypto";
 import gaLoadsRouter from "./ga-loads-router";
 import traqiqSopRoutes from "./traqiq-sop-routes";
 import driverSMSUploadRoutes from "./driver-sms-upload-routes";
+import { registerRateconIntakeRoutes } from "./ratecon-intake-routes";
+import { registerDriverConfirmationRoutes } from "./driver-confirmation-routes";
 import twilio from "twilio";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -793,6 +795,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   ], isAuthenticated);
   console.log('✅ Protected communication and AI endpoints from unauthorized access');
 
+  // Ratecon intake routes (PDF upload + manual entry)
+  registerRateconIntakeRoutes(app);
+  registerDriverConfirmationRoutes(app);
+
   // Add authentication routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
@@ -1122,6 +1128,38 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.json({ ok: true, driver: updated });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // PATCH /api/drivers/:id/pay-rules — update driver pay config
+  app.patch("/api/drivers/:id/pay-rules", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      // Whitelist pay-related fields only
+      const allowed = [
+        "payType", "payRate", "payRateDeadhead",
+        "deductFactoringEnabled", "deductFactoringPct",
+        "deductDispatchEnabled", "deductDispatchPct",
+        "deductFuelAdvanceEnabled", "deductFuelAdvanceAmount",
+        "deductTrailerRentEnabled", "deductTrailerRentWeekly",
+        "deductInsuranceEnabled", "deductInsuranceWeekly",
+        "deductEldEnabled", "deductEldMonthly",
+        "deductOccAccEnabled", "deductOccAccWeekly",
+      ];
+      const payload: Record<string, unknown> = {};
+      for (const key of allowed) {
+        if (key in updates) payload[key] = updates[key];
+      }
+      const { db } = await import("./db");
+      const { drivers } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [updated] = await db.update(drivers).set(payload).where(eq(drivers.id, id)).returning();
+      if (!updated) return res.status(404).json({ error: "Driver not found" });
+      res.json(updated);
+    } catch (err: any) {
+      console.error("[pay-rules] update failed:", err);
+      res.status(500).json({ error: err.message });
     }
   });
 
