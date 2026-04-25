@@ -57,6 +57,7 @@ const LoadDetailsPage = lazy(() => import("@/pages/load-details"));
 const GmailSettings = lazy(() => import("@/pages/gmail-settings"));
 const DriverLoadView = lazy(() => import("@/pages/driver-load-view"));
 const TrueRPMCalculator = lazy(() => import("@/pages/true-rpm-calculator"));
+const RateconUploadPage = lazy(() => import("@/pages/ratecon-upload"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -125,6 +126,7 @@ function Router() {
       <Route path="/items" component={ItemsPage} />
       <Route path="/gmail-settings" component={GmailSettings} />
       <Route path="/true-rpm-calculator" component={TrueRPMCalculator} />
+      <Route path="/ratecon-upload" component={RateconUploadPage} />
       <Route path="/loads/:id" component={LoadDetailsPage} />
       <Route component={NotFound} />
     </Switch>
