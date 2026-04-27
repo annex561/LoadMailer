@@ -60,6 +60,29 @@ export async function ensureSchema(): Promise<void> {
     ['telegram_id', 'TEXT'],
     ['telegram_username', 'TEXT'],
     ['enable_telegram_notifications', 'BOOLEAN NOT NULL DEFAULT false'],
+    // Universal Ratecon Intake — pay rule + deduction toggles (PR #1)
+    ['pay_rate_deadhead', 'REAL DEFAULT 0'],
+    ['deduct_factoring_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
+    ['deduct_factoring_pct', 'REAL DEFAULT 3.0'],
+    ['deduct_dispatch_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
+    ['deduct_dispatch_pct', 'REAL DEFAULT 5.0'],
+    ['deduct_fuel_advance_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
+    ['deduct_fuel_advance_amount', 'REAL DEFAULT 0'],
+    ['deduct_trailer_rent_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
+    ['deduct_trailer_rent_weekly', 'REAL DEFAULT 0'],
+    ['deduct_insurance_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
+    ['deduct_insurance_weekly', 'REAL DEFAULT 0'],
+    ['deduct_eld_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
+    ['deduct_eld_monthly', 'REAL DEFAULT 0'],
+    ['deduct_occ_acc_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
+    ['deduct_occ_acc_weekly', 'REAL DEFAULT 0'],
+  ];
+
+  // Universal Ratecon Intake — loads.confirmation_* columns (PR #1)
+  const loadsColumns: [string, string][] = [
+    ['confirmation_token', 'VARCHAR(32)'],
+    ['confirmation_status', "TEXT DEFAULT 'pending'"],
+    ['confirmation_responded_at', 'TIMESTAMP'],
   ];
 
   try {
@@ -83,7 +106,56 @@ export async function ensureSchema(): Promise<void> {
     try { await pool.query(`ALTER TABLE drivers ADD CONSTRAINT drivers_phone_number_unique UNIQUE (phone_number)`); } catch (_) {}
     try { await pool.query(`ALTER TABLE drivers ADD CONSTRAINT drivers_tracking_token_unique UNIQUE (tracking_token)`); } catch (_) {}
 
-    log(`✅ Schema migration done (${ok}/${columns.length} columns)`);
+    // Loads confirmation columns
+    let loadsOk = 0;
+    for (const [col, def] of loadsColumns) {
+      try {
+        await pool.query(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS ${col} ${def}`);
+        loadsOk++;
+      } catch (e: any) {
+        if (!e.message?.includes('already exists')) {
+          log(`⚠️ loads.${col}: ${e.message}`);
+        }
+      }
+    }
+    try { await pool.query(`ALTER TABLE loads ADD CONSTRAINT loads_confirmation_token_unique UNIQUE (confirmation_token)`); } catch (_) {}
+
+    // ratecon_intake table (Universal Ratecon Intake PR #1)
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS ratecon_intake (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+          company_id VARCHAR,
+          source_type TEXT NOT NULL,
+          source_email_message_id TEXT,
+          source_filename TEXT,
+          source_uploaded_by VARCHAR,
+          pdf_path TEXT,
+          raw_email_text TEXT,
+          parsed_json JSONB,
+          parsed_at TIMESTAMP,
+          parser_model TEXT,
+          parse_error TEXT,
+          validators_passed_at TIMESTAMP,
+          validator_failures JSONB,
+          status TEXT NOT NULL DEFAULT 'pending',
+          review_reason TEXT,
+          reviewed_by VARCHAR,
+          reviewed_at TIMESTAMP,
+          load_id VARCHAR,
+          matched_driver_id VARCHAR,
+          matched_driver_confidence REAL,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_ratecon_intake_status ON ratecon_intake(status)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_ratecon_intake_company ON ratecon_intake(company_id)`);
+    } catch (e: any) {
+      log(`⚠️ ratecon_intake table: ${e.message}`);
+    }
+
+    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake created)`);
   } catch (err: any) {
     log(`⚠️ ensureSchema error: ${err.message}`);
   }
