@@ -69,10 +69,15 @@ export async function parseIntake(intakeId: string, pdfBuffer: Buffer) {
       status = "parsed"; // ready for auto-dispatch (Milestone 4 picks this up)
     }
 
+    // Strip rawText before persisting — it can contain non-UTF8 control chars
+    // from scanned/corrupt PDFs that break Postgres JSONB writes. The parser
+    // returns it for in-memory diagnostics only.
+    const { rawText: _rawText, ...parsedForDb } = parsed;
+
     await db
       .update(rateconIntake)
       .set({
-        parsedJson: parsed as unknown as Record<string, unknown>,
+        parsedJson: parsedForDb as unknown as Record<string, unknown>,
         parsedAt: new Date(),
         parserModel: parsed.model,
         validatorFailures: validation.failures as unknown as Record<string, unknown>[],

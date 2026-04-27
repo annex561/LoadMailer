@@ -115,12 +115,19 @@ export const gmailIngest = {
 
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-      // Default query pulls BOTH unread AND recently-read emails from the last 2 days
-      // so dispatcher-opened emails still get processed. The 24h dedup cache prevents
-      // re-parsing, so the expensive call (messages.get) only fires once per message.
+      // Default query pulls recently-arrived emails (last 2 days) that have a PDF
+      // attachment AND look like a rate confirmation. The subject filter is critical —
+      // without it we process every PDF in the inbox (receipts, contracts, statements,
+      // etc.) and waste OpenAI calls + clutter the review queue with non-ratecons.
+      // The 24h dedup cache prevents re-parsing, so messages.get fires once per email.
       // maxResults capped at 15: higher values blocked the event loop because we do 15
       // sequential Gmail API round-trips + PDF parses on the main thread.
-      const q = queryOverride || '(newer_than:2d) has:attachment';
+      const q =
+        queryOverride ||
+        '(newer_than:2d) has:attachment filename:pdf ' +
+          '(subject:"rate confirmation" OR subject:ratecon OR subject:"rate con" ' +
+          'OR subject:"load confirmation" OR subject:"load tender" OR subject:"carrier rate" ' +
+          'OR subject:"setup" OR subject:dispatch)';
       const res = await gmail.users.messages.list({
         userId: 'me',
         q,
