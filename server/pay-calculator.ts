@@ -32,11 +32,11 @@ export interface PayLineItem {
 }
 
 export interface PayResult {
-  grossPay: number;                 // driver's pre-deduction share
-  lineItems: PayLineItem[];          // how grossPay was computed
-  deductions: PayLineItem[];         // per-load deductions FROM driver pay (negative amounts)
-  netPay: number;                    // grossPay + sum(deductions) — what driver takes home
-  recurringDeductions: PayLineItem[];// weekly/monthly — informational only
+  grossPay: number;                  // driver's pre-deduction share
+  lineItems: PayLineItem[];           // how grossPay was computed
+  deductions: PayLineItem[];          // per-load deductions FROM driver pay
+  netPay: number;                     // grossPay + sum(deductions) — what driver takes home
+  recurringDeductions: PayLineItem[]; // weekly/monthly statement items, NOT in netPay
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -45,27 +45,22 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * Compute the driver's pre-deduction share for this load.
  *
  * Pay rules:
- * - "percent": the configured payRate is the COMPANY's commission %.
- *              Driver gets (gross_load × (100 - payRate)/100).
- *              Example: $900 load with 20% company commission → driver share = $720.
- * - "per_mile": payRate is $/mile to driver. Optional payRateDeadhead for empty miles.
- * - "flat": payRate is the flat $ amount the driver gets per load.
+ * - "percent":  payRate is the DRIVER's percentage of gross load.
+ *               Driver gross = grossLoad × payRate/100.
+ *               Example: $900 load, payRate=80 → driver gross $720.
+ *               (The remaining 20% = company commission.)
+ * - "per_mile": payRate is $/mile to driver (with optional payRateDeadhead).
+ * - "flat":     payRate is the flat $ the driver gets per load.
  */
 function computeGross(
   load: PayLoadInput,
   d: PayDriverInput,
 ): { gross: number; items: PayLineItem[] } {
   if (d.payType === "percent") {
-    const driverPct = 100 - d.payRate;
-    const gross = round2(load.rate * (driverPct / 100));
+    const gross = round2(load.rate * (d.payRate / 100));
     return {
       gross,
-      items: [
-        {
-          label: `Driver share (${driverPct}% of $${load.rate.toFixed(2)} after ${d.payRate}% company commission)`,
-          amount: gross,
-        },
-      ],
+      items: [{ label: `Driver share (${d.payRate}% of $${load.rate.toFixed(2)})`, amount: gross }],
     };
   }
   if (d.payType === "per_mile") {
@@ -93,19 +88,21 @@ function computeGross(
 export function calculatePay(load: PayLoadInput, d: PayDriverInput): PayResult {
   const { gross, items } = computeGross(load, d);
 
-  // Per-load deductions FROM driver pay. Factoring and dispatch are calculated
-  // as % of GROSS LOAD RATE (not driver pay) — this matches how factoring
-  // companies and dispatchers actually charge.
+  // Per-load deductions FROM driver pay. Factoring + dispatch are calculated as
+  // % of GROSS LOAD RATE (not driver's share) — this matches how factoring
+  // companies and dispatchers actually charge, and the user's verified math:
+  //   $900 (gross) - $180 (20% co) - $27 (3% factoring) - $45 (5% dispatch) = $648
+  // Equivalent: driver share $720 - $27 - $45 = $648.
   const deductions: PayLineItem[] = [];
   if (d.deductFactoringEnabled && d.deductFactoringPct > 0) {
     deductions.push({
-      label: `Factoring fee (${d.deductFactoringPct}% of gross load)`,
+      label: `Factoring fee (${d.deductFactoringPct}% of $${load.rate.toFixed(2)})`,
       amount: -round2(load.rate * (d.deductFactoringPct / 100)),
     });
   }
   if (d.deductDispatchEnabled && d.deductDispatchPct > 0) {
     deductions.push({
-      label: `Dispatch fee (${d.deductDispatchPct}% of gross load)`,
+      label: `Dispatch fee (${d.deductDispatchPct}% of $${load.rate.toFixed(2)})`,
       amount: -round2(load.rate * (d.deductDispatchPct / 100)),
     });
   }
@@ -118,7 +115,6 @@ export function calculatePay(load: PayLoadInput, d: PayDriverInput): PayResult {
 
   const netPay = round2(gross + deductions.reduce((s, x) => s + x.amount, 0));
 
-  // Recurring (weekly/monthly): shown on driver statement, NOT subtracted from per-load net.
   const recurringDeductions: PayLineItem[] = [];
   if (d.deductTrailerRentEnabled && (d.deductTrailerRentWeekly ?? 0) > 0) {
     recurringDeductions.push({ label: "Trailer rent (weekly)", amount: -round2(d.deductTrailerRentWeekly!) });
