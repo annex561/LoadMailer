@@ -149,7 +149,8 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
   });
   const pay = calculatePay(payInput, driverProfileToPayInput(driver));
 
-  const url = `https://traqiqs.io/l/${load.confirmationToken}`;
+  const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+  const url = `${baseUrl}/l/${load.confirmationToken}`;
   const pickupDateStr = load.pickupDate instanceof Date
     ? load.pickupDate.toLocaleDateString()
     : new Date(load.pickupDate).toLocaleDateString();
