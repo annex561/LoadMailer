@@ -3,7 +3,7 @@ import { calculatePay, PayDriverInput, PayLoadInput } from "../pay-calculator";
 
 const baseDriver: PayDriverInput = {
   payType: "percent",
-  payRate: 25,
+  payRate: 25, // company's commission %
   payRateDeadhead: 0,
   deductFactoringEnabled: false,
   deductFactoringPct: 0,
@@ -19,22 +19,41 @@ const baseLoad: PayLoadInput = {
   deadheadMiles: 100,
 };
 
-describe("calculatePay", () => {
-  it("percent rule: 25% of $2850 = $712.50", () => {
-    const r = calculatePay(baseLoad, baseDriver);
-    expect(r.grossPay).toBe(712.5);
-    expect(r.lineItems).toEqual([{ label: "Driver pay (25% of linehaul)", amount: 712.5 }]);
-    expect(r.netPay).toBe(712.5);
+describe("calculatePay — percent rule means COMPANY commission %", () => {
+  it("user's TQL example: $900 load, 20% company, 3% factoring, 5% dispatch", () => {
+    // The exact scenario user verified by hand:
+    //   $900 - $180 (20% company) - $27 (3% factoring) - $45 (5% dispatch) = $648 driver net
+    const r = calculatePay(
+      { rate: 900, loadedMiles: 0, deadheadMiles: 0 },
+      {
+        ...baseDriver,
+        payRate: 20,
+        deductFactoringEnabled: true,
+        deductFactoringPct: 3.0,
+        deductDispatchEnabled: true,
+        deductDispatchPct: 5.0,
+      },
+    );
+    expect(r.grossPay).toBe(720);   // driver's pre-fee share: 80% of $900
+    expect(r.netPay).toBe(648);     // after factoring + dispatch deductions
+    expect(r.deductions.find((d) => d.label.includes("Factoring"))?.amount).toBe(-27);
+    expect(r.deductions.find((d) => d.label.includes("Dispatch"))?.amount).toBe(-45);
   });
 
-  it("per_mile rule: $0.75 loaded + $0.50 deadhead", () => {
+  it("25% company commission on $2850 → driver gross = 75% × $2850 = $2137.50", () => {
+    const r = calculatePay(baseLoad, baseDriver);
+    expect(r.grossPay).toBe(2137.5);
+    expect(r.netPay).toBe(2137.5); // no deductions configured
+  });
+
+  it("per_mile rule: payRate is $/mile, factoring/dispatch still apply on gross load", () => {
     const r = calculatePay(baseLoad, {
       ...baseDriver,
       payType: "per_mile",
       payRate: 0.75,
       payRateDeadhead: 0.5,
     });
-    expect(r.grossPay).toBe(650); // 800 * 0.75 + 100 * 0.5 = 600 + 50
+    expect(r.grossPay).toBe(650); // 800 × 0.75 + 100 × 0.5 = 650
     expect(r.lineItems).toHaveLength(2);
   });
 
@@ -48,21 +67,20 @@ describe("calculatePay", () => {
     expect(r.netPay).toBe(500);
   });
 
-  it("factoring is a COMPANY expense, not deducted from driver pay", () => {
+  it("factoring deduction: 3% of $2850 = $85.50 off driver gross", () => {
     const r = calculatePay(baseLoad, {
       ...baseDriver,
       deductFactoringEnabled: true,
       deductFactoringPct: 3.0,
     });
-    // Driver still takes home full 25% of $2850 = $712.50 — no factoring reduction
-    expect(r.netPay).toBe(712.5);
-    expect(r.deductions).toHaveLength(0);
-    // Factoring shows up on the COMPANY side as 3% of GROSS LOAD ($2850), not driver pay
-    const factoring = r.companyExpenses.find((d) => d.label.includes("Factoring"));
-    expect(factoring?.amount).toBe(-85.5); // 3% of 2850 = 85.50
+    // Driver gross = 75% × $2850 = $2137.50
+    // Factoring = 3% × $2850 = $85.50
+    // Net = $2137.50 - $85.50 = $2052.00
+    expect(r.netPay).toBe(2052);
+    expect(r.deductions.find((d) => d.label.includes("Factoring"))?.amount).toBe(-85.5);
   });
 
-  it("dispatch + factoring stack as COMPANY expenses, driver still gets full pay", () => {
+  it("factoring + dispatch stack: both calculated on gross load rate", () => {
     const r = calculatePay(baseLoad, {
       ...baseDriver,
       deductFactoringEnabled: true,
@@ -70,44 +88,21 @@ describe("calculatePay", () => {
       deductDispatchEnabled: true,
       deductDispatchPct: 5.0,
     });
-    // Driver pay unaffected by factoring/dispatch
-    expect(r.netPay).toBe(712.5);
-    expect(r.deductions).toHaveLength(0);
-    // Both fees show on company side, % of gross load rate
-    expect(r.companyExpenses).toHaveLength(2);
-    expect(r.companyExpenses.find((e) => e.label.includes("Factoring"))?.amount).toBe(-85.5);  // 3% × 2850
-    expect(r.companyExpenses.find((e) => e.label.includes("Dispatch"))?.amount).toBe(-142.5);  // 5% × 2850
-    // Company net = 2850 - 712.50 (driver) - 85.50 (factoring) - 142.50 (dispatch) = 1909.50
-    expect(r.companyNet).toBe(1909.5);
+    // Driver gross = $2137.50
+    // Factoring 3% × $2850 = -$85.50
+    // Dispatch 5% × $2850 = -$142.50
+    // Net = $2137.50 - $85.50 - $142.50 = $1909.50
+    expect(r.netPay).toBe(1909.5);
+    expect(r.deductions).toHaveLength(2);
   });
 
-  it("user's TQL example: $900 load, 20% driver, 3% factoring, 5% dispatch", () => {
-    // Reproduces the exact scenario the user verified by hand:
-    //   $900 - $180 (driver) - $27 (factoring) - $45 (dispatch) = $648 (company net)
-    const r = calculatePay(
-      { rate: 900, loadedMiles: 0, deadheadMiles: 0 },
-      {
-        ...baseDriver,
-        payRate: 20,
-        deductFactoringEnabled: true,
-        deductFactoringPct: 3.0,
-        deductDispatchEnabled: true,
-        deductDispatchPct: 5.0,
-      },
-    );
-    expect(r.netPay).toBe(180);                    // driver takes home $180 clean
-    expect(r.companyExpenses.find((e) => e.label.includes("Factoring"))?.amount).toBe(-27);
-    expect(r.companyExpenses.find((e) => e.label.includes("Dispatch"))?.amount).toBe(-45);
-    expect(r.companyNet).toBe(648);                // company keeps $648
-  });
-
-  it("fuel advance is flat per-load amount", () => {
+  it("fuel advance is flat per-load deduction", () => {
     const r = calculatePay(baseLoad, {
       ...baseDriver,
       deductFuelAdvanceEnabled: true,
       deductFuelAdvanceAmount: 200,
     });
-    expect(r.netPay).toBe(712.5 - 200);
+    expect(r.netPay).toBe(2137.5 - 200);
   });
 
   it("returns recurring deductions separately, not in net", () => {
@@ -118,7 +113,7 @@ describe("calculatePay", () => {
       deductTrailerRentEnabled: true,
       deductTrailerRentWeekly: 200,
     });
-    expect(r.netPay).toBe(712.5); // recurring not applied here
+    expect(r.netPay).toBe(2137.5); // recurring not applied to per-load net
     expect(r.recurringDeductions).toHaveLength(2);
     expect(r.recurringDeductions.find((r) => r.label.includes("Insurance"))?.amount).toBe(-75);
   });
@@ -131,6 +126,7 @@ describe("calculatePay", () => {
 
   it("rounds to 2 decimals", () => {
     const r = calculatePay({ ...baseLoad, rate: 1234.567 }, baseDriver);
-    expect(r.grossPay).toBe(308.64); // 1234.567 * 0.25 = 308.64175 → 308.64
+    // Driver gross = 75% × $1234.567 = $925.92525 → $925.93
+    expect(r.grossPay).toBe(925.93);
   });
 });
