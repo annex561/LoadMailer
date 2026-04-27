@@ -122,12 +122,24 @@ export const gmailIngest = {
       // The 24h dedup cache prevents re-parsing, so messages.get fires once per email.
       // maxResults capped at 15: higher values blocked the event loop because we do 15
       // sequential Gmail API round-trips + PDF parses on the main thread.
+      // Match real-world broker email patterns. Common subjects we've seen:
+      //   "Rate Confirmation - Load #..."         → rate, confirmation
+      //   "Carrier Rate Confirmation"             → carrier, rate, confirmation
+      //   "TQL PO# 36529625 | Driver/Carrier..."  → PO, carrier
+      //   "Load Tender 12345"                     → load, tender
+      //   "Recon" / "Ratecon" / "RC#..."          → recon, ratecon, RC
+      //   "Dispatch Sheet"                        → dispatch
+      //   "BOL for Load 9999"                     → BOL, load
+      //   "Setup Packet for John Smith"           → setup
+      // We OR them broadly. Non-ratecon PDFs that slip through still go through
+      // the parser, but the validators flag them with "broker missing" / "rate
+      // null" warnings and they end up in review queue (rejectable in one click).
       const q =
         queryOverride ||
         '(newer_than:2d) has:attachment filename:pdf ' +
-          '(subject:"rate confirmation" OR subject:ratecon OR subject:"rate con" ' +
-          'OR subject:"load confirmation" OR subject:"load tender" OR subject:"carrier rate" ' +
-          'OR subject:"setup" OR subject:dispatch)';
+          '(subject:rate OR subject:ratecon OR subject:recon OR subject:confirmation ' +
+          'OR subject:tender OR subject:dispatch OR subject:load OR subject:setup ' +
+          'OR subject:carrier OR subject:PO OR subject:BOL OR subject:haul)';
       const res = await gmail.users.messages.list({
         userId: 'me',
         q,
