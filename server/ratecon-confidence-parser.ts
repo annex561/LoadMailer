@@ -1,6 +1,58 @@
 import OpenAI from "openai";
+import PDFParser from "pdf2json";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "not-configured" });
+
+function safeDecodeURI(str: string): string {
+  try {
+    return decodeURIComponent(str);
+  } catch {
+    try {
+      return decodeURIComponent(str.replace(/%(?![0-9A-Fa-f]{2})/g, "%25"));
+    } catch {
+      return str;
+    }
+  }
+}
+
+/**
+ * Extract text content from a PDF using pdf2json. Returns "" if extraction fails
+ * (e.g. scanned-image PDFs with no text layer — OCR would be needed for those).
+ */
+async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
+  return new Promise((resolve) => {
+    const pdfParser = new PDFParser();
+    pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+      try {
+        let fullText = "";
+        if (pdfData.Pages) {
+          for (const page of pdfData.Pages) {
+            if (page.Texts) {
+              for (const t of page.Texts) {
+                if (t.R) {
+                  for (const run of t.R) {
+                    if (run.T) fullText += safeDecodeURI(run.T) + " ";
+                  }
+                }
+                fullText += "\n";
+              }
+            }
+            fullText += "\n--- PAGE BREAK ---\n";
+          }
+        }
+        resolve(fullText.trim());
+      } catch {
+        resolve("");
+      }
+    });
+    pdfParser.on("pdfParser_dataError", () => resolve(""));
+    try {
+      pdfParser.parseBuffer(pdfBuffer);
+    } catch {
+      resolve("");
+    }
+  });
+}
 
 export interface FieldWithConfidence<T> {
   value: T;
@@ -74,7 +126,15 @@ Confidence rules — BE HONEST:
 Return ONLY raw JSON. No prose, no markdown fences.`;
 
 export async function parseRatecon(pdfBuffer: Buffer): Promise<ParsedRateconV2> {
-  const base64 = pdfBuffer.toString("base64");
+  // Step 1: extract text from PDF (works for digital PDFs; returns "" for scanned-image PDFs)
+  const pdfText = await extractPdfText(pdfBuffer);
+  if (!pdfText || pdfText.length < 20) {
+    throw new Error(
+      "Could not extract text from PDF. This may be a scanned/image-only PDF — OCR not yet supported.",
+    );
+  }
+
+  // Step 2: send extracted text to GPT-4o for structured extraction with confidence scores
   const model = "gpt-4o";
   const resp = await openai.chat.completions.create({
     model,
@@ -82,10 +142,7 @@ export async function parseRatecon(pdfBuffer: Buffer): Promise<ParsedRateconV2> 
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
-        content: [
-          { type: "text", text: "Extract the rate confirmation details:" },
-          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } },
-        ],
+        content: `Extract the rate confirmation details from the following text. The text was extracted from a PDF, so layout cues like columns may be flattened — use surrounding context to disambiguate.\n\n--- BEGIN RATECON TEXT ---\n${pdfText}\n--- END RATECON TEXT ---`,
       },
     ],
     response_format: { type: "json_object" },
@@ -93,8 +150,8 @@ export async function parseRatecon(pdfBuffer: Buffer): Promise<ParsedRateconV2> 
 
   const content = resp.choices[0]?.message?.content;
   if (!content) throw new Error("OpenAI returned empty response");
-  const parsed = JSON.parse(content) as Omit<ParsedRateconV2, "model">;
-  return { ...parsed, model };
+  const parsed = JSON.parse(content) as Omit<ParsedRateconV2, "model" | "rawText">;
+  return { ...parsed, model, rawText: pdfText };
 }
 
 /**
