@@ -90,6 +90,10 @@ const FleetVendors = lazy(() => import('./fleet-vendors'));
 const LoadsInbox = lazy(() => import('./loads-inbox'));
 const ActiveLoads = lazy(() => import('./active-loads'));
 const ItemsPage = lazy(() => import('./items'));
+const RateconUpload = lazy(() => import('./ratecon-upload'));
+const ReviewQueue = lazy(() => import('./review-queue'));
+const Settlements = lazy(() => import('./settlements'));
+const DriverProfile = lazy(() => import('./driver-profile'));
 import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
@@ -637,6 +641,16 @@ export default function LoadOpsDashboard() {
         return <ActiveLoads />;
       case '/items':
         return <ItemsPage />;
+      // Universal Ratecon Intake (PR #1)
+      case '/ratecon-upload':
+        return <RateconUpload />;
+      case '/review-queue':
+        return <ReviewQueue />;
+      // Pre-existing pages that were broken by missing route entries
+      case '/settlements':
+        return <Settlements />;
+      case '/driver-profile':
+        return <DriverProfile />;
       default:
         return <NotFound />;
     }
