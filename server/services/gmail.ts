@@ -196,6 +196,12 @@ export const gmailIngest = {
 
       console.log(`      📄 Found ${attachments.length} PDFs. Parsing...`);
 
+      // Universal Ratecon Intake (PR #1): every PDF flows through the new pipeline.
+      // - enqueueRatecon writes a row to ratecon_intake
+      // - parseIntake runs the confidence-aware parser + validators + driver matching
+      // - clean parses auto-dispatch; flagged ones land in the review queue
+      const { enqueueRatecon, parseIntake } = await import("../ratecon-intake-service");
+
       for (const att of attachments) {
         try {
           // B. DOWNLOAD
@@ -206,18 +212,35 @@ export const gmailIngest = {
           if (!attachmentData.data.data) continue;
           const buffer = Buffer.from(attachmentData.data.data, 'base64');
 
-          // C. PARSE
-          const extractedData = await rateconParser.parsePdf(buffer);
-          
-          // D. UPSERT (Merge or Create)
-          const upsertResult = await this.upsertLoad(extractedData, companyId, att.filename || "unknown.pdf");
+          // C. ENQUEUE → universal intake pipeline
+          const intake = await enqueueRatecon({
+            sourceType: "email",
+            companyId: await this.resolveCompanyId(companyId),
+            pdfBuffer: buffer,
+            sourceEmailMessageId: msgId,
+            sourceFilename: att.filename || "unknown.pdf",
+          });
+
+          // D. PARSE — runs AI + validators + driver matcher; routes to review queue or auto-dispatch
+          const parseResult = await parseIntake(intake.id, buffer);
+
           result.filesProcessed++;
-          if (upsertResult === 'created') result.loadsCreated++;
-          if (upsertResult === 'updated') result.loadsUpdated++;
+          if (parseResult.ok) {
+            // 'parsed' status means it auto-dispatched; 'in_review' means flagged for human
+            if (parseResult.status === "parsed" || parseResult.status === "auto_dispatched") {
+              result.loadsCreated++;
+            } else {
+              // Counts as processed but lives in review queue, not loads
+              console.log(`      ⚠️ Intake ${intake.id} sent to review queue: ${parseResult.validation?.failures.length ?? 0} validator failures`);
+            }
+          } else {
+            console.error(`      ❌ Parser error on ${att.filename}: ${parseResult.error}`);
+            result.error = (result.error ? result.error + ' | ' : '') + `${att.filename}: ${parseResult.error}`;
+          }
 
         } catch (parseError: any) {
           const msg = `${att.filename}: ${parseError?.message || String(parseError)}`;
-          console.error(`      ❌ Failed to parse ${msg}`);
+          console.error(`      ❌ Failed to enqueue ${msg}`);
           result.error = (result.error ? result.error + ' | ' : '') + msg;
         }
       }

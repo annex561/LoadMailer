@@ -9,10 +9,13 @@ export interface IntakeRow {
   createdAt: string;
   parsedJson: any;
   reviewReason: string | null;
+  parseError?: string | null;
   matchedDriverId: string | null;
   matchedDriverConfidence: number | null;
   validatorFailures: Array<{ field: string; reason: string; severity: string }>;
   pdfPath: string | null;
+  sourceType?: string;
+  sourceFilename?: string | null;
 }
 
 interface Props {
@@ -41,6 +44,15 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
     }
   };
 
+  const sourceLabel =
+    row.sourceType === "email"
+      ? `📧 Email${row.sourceFilename ? ` · ${row.sourceFilename}` : ""}`
+      : row.sourceType === "upload"
+        ? `📤 Upload${row.sourceFilename ? ` · ${row.sourceFilename}` : ""}`
+        : row.sourceType === "manual"
+          ? "✏️ Manual entry"
+          : "";
+
   return (
     <Card className="mb-4" data-testid={`review-row-${row.id}`}>
       <CardContent className="p-4 space-y-3">
@@ -48,11 +60,38 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
           <div>
             <Badge variant="destructive">{parsed.broker?.value ?? "Unknown"}</Badge>{" "}
             <span className="font-mono text-sm">{parsed.loadNumber?.value}</span>
+            {sourceLabel && (
+              <span className="text-xs text-muted-foreground ml-2">{sourceLabel}</span>
+            )}
           </div>
           <div className="text-xs text-muted-foreground">
             {new Date(row.createdAt).toLocaleString()}
           </div>
         </div>
+
+        {/* Why this landed in the review queue */}
+        {(row.parseError || row.reviewReason) && (
+          <div
+            className={`rounded-md border p-3 text-sm ${
+              row.parseError
+                ? "border-red-500/40 bg-red-500/5 text-red-300"
+                : "border-amber-500/40 bg-amber-500/5 text-amber-300"
+            }`}
+            data-testid={`review-reason-${row.id}`}
+          >
+            <div className="font-medium mb-1">
+              {row.parseError ? "❌ Parser failed" : "⚠️ Needs review"}
+            </div>
+            <div className="text-xs whitespace-pre-wrap">
+              {row.parseError ?? row.reviewReason}
+            </div>
+            {row.parseError && (
+              <div className="text-xs mt-2 opacity-75">
+                Common cause: <code>OPENAI_API_KEY</code> missing or invalid in server env. Check Railway → Variables.
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
