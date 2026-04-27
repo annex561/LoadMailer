@@ -16,11 +16,12 @@ export async function notifyAdminReviewNeeded(params: {
       .from(users)
       .where(eq(users.role, "admin"));
 
+    const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
     const body =
       `[TRAQ-IQ] Ratecon needs review\n` +
       `Broker: ${params.broker}\n` +
       `Reason: ${params.reason}\n` +
-      `Open: https://traqiqs.io/review-queue`;
+      `Open: ${baseUrl}/review-queue`;
 
     for (const admin of admins) {
       // users table has no phone column — skip SMS for this admin
