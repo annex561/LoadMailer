@@ -48,18 +48,21 @@ describe("calculatePay", () => {
     expect(r.netPay).toBe(500);
   });
 
-  it("factoring deduction subtracts from gross", () => {
+  it("factoring is a COMPANY expense, not deducted from driver pay", () => {
     const r = calculatePay(baseLoad, {
       ...baseDriver,
       deductFactoringEnabled: true,
       deductFactoringPct: 3.0,
     });
-    expect(r.netPay).toBe(691.12); // 3% of 712.50 = 21.38 (rounded), net = 691.12
-    const factoring = r.deductions.find((d) => d.label.includes("Factoring"));
-    expect(factoring?.amount).toBe(-21.38);
+    // Driver still takes home full 25% of $2850 = $712.50 — no factoring reduction
+    expect(r.netPay).toBe(712.5);
+    expect(r.deductions).toHaveLength(0);
+    // Factoring shows up on the COMPANY side as 3% of GROSS LOAD ($2850), not driver pay
+    const factoring = r.companyExpenses.find((d) => d.label.includes("Factoring"));
+    expect(factoring?.amount).toBe(-85.5); // 3% of 2850 = 85.50
   });
 
-  it("dispatch fee + factoring stack", () => {
+  it("dispatch + factoring stack as COMPANY expenses, driver still gets full pay", () => {
     const r = calculatePay(baseLoad, {
       ...baseDriver,
       deductFactoringEnabled: true,
@@ -67,9 +70,35 @@ describe("calculatePay", () => {
       deductDispatchEnabled: true,
       deductDispatchPct: 5.0,
     });
-    // Deductions are % of gross pay (not load rate), each rounded to cents
-    expect(r.netPay).toBe(655.49); // 712.50 - 21.38 - 35.63
-    expect(r.deductions).toHaveLength(2);
+    // Driver pay unaffected by factoring/dispatch
+    expect(r.netPay).toBe(712.5);
+    expect(r.deductions).toHaveLength(0);
+    // Both fees show on company side, % of gross load rate
+    expect(r.companyExpenses).toHaveLength(2);
+    expect(r.companyExpenses.find((e) => e.label.includes("Factoring"))?.amount).toBe(-85.5);  // 3% × 2850
+    expect(r.companyExpenses.find((e) => e.label.includes("Dispatch"))?.amount).toBe(-142.5);  // 5% × 2850
+    // Company net = 2850 - 712.50 (driver) - 85.50 (factoring) - 142.50 (dispatch) = 1909.50
+    expect(r.companyNet).toBe(1909.5);
+  });
+
+  it("user's TQL example: $900 load, 20% driver, 3% factoring, 5% dispatch", () => {
+    // Reproduces the exact scenario the user verified by hand:
+    //   $900 - $180 (driver) - $27 (factoring) - $45 (dispatch) = $648 (company net)
+    const r = calculatePay(
+      { rate: 900, loadedMiles: 0, deadheadMiles: 0 },
+      {
+        ...baseDriver,
+        payRate: 20,
+        deductFactoringEnabled: true,
+        deductFactoringPct: 3.0,
+        deductDispatchEnabled: true,
+        deductDispatchPct: 5.0,
+      },
+    );
+    expect(r.netPay).toBe(180);                    // driver takes home $180 clean
+    expect(r.companyExpenses.find((e) => e.label.includes("Factoring"))?.amount).toBe(-27);
+    expect(r.companyExpenses.find((e) => e.label.includes("Dispatch"))?.amount).toBe(-45);
+    expect(r.companyNet).toBe(648);                // company keeps $648
   });
 
   it("fuel advance is flat per-load amount", () => {
