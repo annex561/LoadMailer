@@ -206,24 +206,19 @@ export async function sendDriverNextStepSms(
   const phone = (driver as any).phoneNumber ?? (driver as any).phone;
   if (!phone) return { ok: false, error: "Driver has no phone" };
 
-  const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
-  const url = `${baseUrl}/l/${load.confirmationToken}`;
-
+  // SMS-only flow — no URLs (carrier filter avoidance). Driver replies
+  // keywords (PICKED UP / DELIVERED) or sends BOL/POD photos via MMS.
   let body = "";
   if (step === "accepted") {
     body =
       `Load ${load.loadNumber} confirmed.\n\n` +
-      `When picked up, upload BOL or reply PICKED UP.\n\n` +
-      `Live tracking and pay: ${url}`;
+      `At pickup: send BOL photo or reply PICKED UP.`;
   } else if (step === "picked-up") {
     body =
       `Load ${load.loadNumber} marked PICKED UP.\n\n` +
-      `Drive safe. At delivery, upload POD or reply DELIVERED.\n\n` +
-      `Tracking: ${url}`;
+      `Drive safe. At delivery: send POD photo or reply DELIVERED.`;
   } else if (step === "delivered") {
-    body =
-      `Load ${load.loadNumber} marked DELIVERED.\n\n` +
-      `Settlement and pay statement: ${url}`;
+    body = `Load ${load.loadNumber} marked DELIVERED. Pay statement coming on your weekly settlement.`;
   }
 
   const { smsService } = await import("./sms-service");
@@ -304,8 +299,12 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       `💰 NET PAY: $${pay.netPay.toFixed(2)}\n\n` +
       `Details & confirm: ${url}\n\n` +
       `Reply YES to accept · NO to decline`
-    : // CARRIER-FRIENDLY TEMPLATE — short single-link, no pricing, no emojis.
-      // Pay breakdown lives on the dashboard (driver sees it after clicking link).
+    : // SMS-ONLY TEMPLATE — no URLs, no emojis, no pricing.
+      // Driver journey is 100% via SMS keywords + MMS photos:
+      //   YES / NO       → accept / decline
+      //   PICKED UP      → mark in-transit (also: send BOL photo)
+      //   DELIVERED      → mark delivered (also: send POD photo)
+      // Pay statement comes weekly. Avoids carrier filter (Twilio 30007).
       `TRAQ IQ Dispatch\n` +
       `Load ${load.loadNumber}` +
       (load.brokerName ? ` from ${load.brokerName}` : "") +
@@ -316,7 +315,6 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       `${deliveryDateStr} ${load.deliveryTime}\n\n` +
       commodityLine +
       specialLine +
-      `View load and pay: ${url}\n\n` +
       `Reply YES to accept or NO to decline.`;
 
   console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
