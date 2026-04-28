@@ -134,12 +134,21 @@ export const gmailIngest = {
       // We OR them broadly. Non-ratecon PDFs that slip through still go through
       // the parser, but the validators flag them with "broker missing" / "rate
       // null" warnings and they end up in review queue (rejectable in one click).
+      // Two flavors of broker email we want to catch:
+      //   1. PDF-attached: rate confirmation, BOL, etc. — has a PDF attachment
+      //   2. Link-only: TQL Driver/Carrier Information Sheet — no attachment,
+      //      just a tokenized link. We follow the link to fetch the PDF.
       const q =
         queryOverride ||
-        '(newer_than:2d) has:attachment filename:pdf ' +
-          '(subject:rate OR subject:ratecon OR subject:recon OR subject:confirmation ' +
-          'OR subject:tender OR subject:dispatch OR subject:load OR subject:setup ' +
-          'OR subject:carrier OR subject:PO OR subject:BOL OR subject:haul)';
+        '(newer_than:2d) (' +
+          '(has:attachment filename:pdf ' +
+            '(subject:rate OR subject:ratecon OR subject:recon OR subject:confirmation ' +
+            'OR subject:tender OR subject:dispatch OR subject:load OR subject:setup ' +
+            'OR subject:carrier OR subject:PO OR subject:BOL OR subject:haul))' +
+          ' OR ' +
+          '(subject:"driver/carrier information" OR subject:"driver information sheet" ' +
+            'OR subject:"carrier information sheet")' +
+        ')';
       const res = await gmail.users.messages.list({
         userId: 'me',
         q,
@@ -207,9 +216,60 @@ export const gmailIngest = {
       const attachments = this.findAttachmentsRecursively(email.data.payload);
       result.attachmentsFound = attachments.length;
 
+      const { enqueueRatecon, parseIntake } = await import("../ratecon-intake-service");
+
+      // ---- LINK-ONLY EMAILS (e.g. TQL Driver/Carrier Information Sheet) ----
+      // These have no PDF attached — just a tokenized link. Follow the link
+      // and fetch the PDF, then process it like any other attachment.
       if (attachments.length === 0) {
-        console.log("      ⚠️ No PDF attachments found. Marking read.");
+        const subjectLower = subject.toLowerCase();
+        const looksLikeDriverSheet =
+          subjectLower.includes("driver/carrier") ||
+          subjectLower.includes("driver information") ||
+          subjectLower.includes("carrier information sheet") ||
+          subjectLower.includes("driver sheet");
+
+        if (!looksLikeDriverSheet) {
+          console.log("      ⚠️ No PDF attachments and not a driver-sheet email. Marking read.");
+          await gmail.users.messages.batchModify({ userId: 'me', ids: [msgId], removeLabelIds: ['UNREAD'] });
+          return result;
+        }
+
+        console.log("      🔗 Driver-sheet email detected — extracting link...");
+        const { extractEmailBody, extractTqlDriverSheetLink, fetchPdfFromTqlLink } = await import(
+          "./tql-link-fetcher"
+        );
+        const body = extractEmailBody(email.data.payload);
+        const link = extractTqlDriverSheetLink(body);
+
+        if (!link) {
+          console.warn("      ❌ No TQL link found in email body. Marking read.");
+          await gmail.users.messages.batchModify({ userId: 'me', ids: [msgId], removeLabelIds: ['UNREAD'] });
+          return result;
+        }
+
+        const pdfBuffer = await fetchPdfFromTqlLink(link);
+        if (!pdfBuffer) {
+          console.warn("      ❌ Couldn't fetch PDF from TQL link. Leaving email unread for retry.");
+          result.error = `TQL link follow failed for ${msgId}`;
+          return result;
+        }
+
+        // Treat the fetched PDF as if it had been attached
+        const intake = await enqueueRatecon({
+          sourceType: "email",
+          companyId: await this.resolveCompanyId(companyId),
+          pdfBuffer,
+          sourceEmailMessageId: msgId,
+          sourceFilename: "TQL-Driver-Sheet.pdf",
+        });
+        const parseResult = await parseIntake(intake.id, pdfBuffer);
+        result.filesProcessed++;
+        if (parseResult.ok && (parseResult.status === "parsed" || parseResult.status === "auto_dispatched")) {
+          result.loadsCreated++;
+        }
         await gmail.users.messages.batchModify({ userId: 'me', ids: [msgId], removeLabelIds: ['UNREAD'] });
+        console.log("      ✅ TQL driver sheet fetched and queued.");
         return result;
       }
 
@@ -219,7 +279,6 @@ export const gmailIngest = {
       // - enqueueRatecon writes a row to ratecon_intake
       // - parseIntake runs the confidence-aware parser + validators + driver matching
       // - clean parses auto-dispatch; flagged ones land in the review queue
-      const { enqueueRatecon, parseIntake } = await import("../ratecon-intake-service");
 
       for (const att of attachments) {
         try {
