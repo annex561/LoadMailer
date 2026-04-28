@@ -83,6 +83,10 @@ export async function ensureSchema(): Promise<void> {
     ['confirmation_token', 'VARCHAR(32)'],
     ['confirmation_status', "TEXT DEFAULT 'pending'"],
     ['confirmation_responded_at', 'TIMESTAMP'],
+    // BOL/POD upload tracking (Phase 2)
+    ['bol_path', 'TEXT'],
+    ['bol_uploaded_at', 'TIMESTAMP'],
+    ['pod_uploaded_at', 'TIMESTAMP'],
   ];
 
   try {
