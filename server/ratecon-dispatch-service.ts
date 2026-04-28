@@ -74,6 +74,22 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
   // legacy email scanner created it before the universal intake pipeline took
   // over), UPDATE it with the new dispatch metadata instead of failing on the
   // unique constraint.
+  // Build address string without duplicating city/state if the parsed street
+  // address already contains them (e.g. "8040 N. Virginia St Ste 102, Reno, NV
+  // 89506" should not become "...Reno, NV 89506, Reno, NV").
+  const buildAddress = (a: { address?: string | null; city?: string | null; state?: string | null }) => {
+    const street = (a.address ?? "").trim();
+    const city = (a.city ?? "").trim();
+    const state = (a.state ?? "").trim();
+    const cityState = [city, state].filter(Boolean).join(", ");
+    if (!street) return cityState;
+    const lower = street.toLowerCase();
+    const cityIn = !city || lower.includes(city.toLowerCase());
+    const stateIn = !state || lower.includes(state.toLowerCase());
+    if (cityIn && stateIn) return street;
+    return cityState ? `${street}, ${cityState}` : street;
+  };
+
   const loadValues = {
     // Use the canonical companyId (driver's, possibly back-filled) so the
     // loads → drivers FK is satisfied. Fall back to intake's companyId.
@@ -82,10 +98,10 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
     customerId,
     driverId: driver.id,
     description: parsed.commodity?.value ?? "General freight",
-    pickupAddress: `${parsed.pickup.address ?? ""} ${parsed.pickup.city}, ${parsed.pickup.state}`.trim(),
+    pickupAddress: buildAddress(parsed.pickup ?? {}),
     pickupDate,
     pickupTime: parsed.pickup.time,
-    deliveryAddress: `${parsed.drop.address ?? ""} ${parsed.drop.city}, ${parsed.drop.state}`.trim(),
+    deliveryAddress: buildAddress(parsed.drop ?? {}),
     deliveryDate,
     deliveryTime: parsed.drop.time,
     specialInstructions: parsed.specialInstructions?.value ?? null,
