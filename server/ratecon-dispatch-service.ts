@@ -184,13 +184,35 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
     ? load.deliveryDate.toLocaleDateString()
     : new Date(load.deliveryDate).toLocaleDateString();
 
+  // Prefer the full street address (e.g. "8040 N. VIRGINIA ST Ste 102, Reno, NV 89506")
+  // over just city/state. Fall back to city/state if address wasn't extracted.
+  const pickupLine =
+    load.pickupAddress && load.pickupAddress.trim().length > 0
+      ? load.pickupAddress
+      : `${load.originCity ?? ""}, ${load.originState ?? ""}`.trim().replace(/^,\s*/, "");
+  const dropLine =
+    load.deliveryAddress && load.deliveryAddress.trim().length > 0
+      ? load.deliveryAddress
+      : `${load.destCity ?? ""}, ${load.destState ?? ""}`.trim().replace(/^,\s*/, "");
+
+  const commodityLine = load.description && load.description !== "General freight"
+    ? `📦 ${load.description}\n`
+    : "";
+  const specialLine = load.specialInstructions
+    ? `⚠️ ${load.specialInstructions}\n\n`
+    : "";
+
   const body =
     `TRAQ-IQ Dispatch\n` +
-    `New load #${load.loadNumber}\n\n` +
-    `📍 PICKUP\n${load.originCity}, ${load.originState}\n` +
+    `New load #${load.loadNumber}` +
+    (load.brokerName ? ` (${load.brokerName})` : "") +
+    `\n\n` +
+    `📍 PICKUP\n${pickupLine}\n` +
     `${pickupDateStr} @ ${load.pickupTime}\n\n` +
-    `📍 DROP\n${load.destCity}, ${load.destState}\n` +
+    `📍 DROP\n${dropLine}\n` +
     `${deliveryDateStr} @ ${load.deliveryTime}\n\n` +
+    commodityLine +
+    specialLine +
     `💰 NET PAY: $${pay.netPay.toFixed(2)}\n\n` +
     `Details & confirm: ${url}\n\n` +
     `Reply YES to accept · NO to decline`;
