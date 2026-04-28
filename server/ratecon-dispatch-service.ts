@@ -73,8 +73,10 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
       status: "assigned",
       equipmentType: (parsed.equipmentType?.value ?? "dry_van").replace(/\s+/g, "_").toLowerCase(),
       rate: parsed.rate?.value ?? 0,
-      miles: parsed.miles?.value ?? null,
-      weight: parsed.weightLbs?.value ?? null,
+      // Use undefined (not null) for nullable int columns — Drizzle skips
+      // undefined fields entirely, but can mishandle null → empty string for ints.
+      miles: typeof parsed.miles?.value === "number" ? parsed.miles.value : undefined,
+      weight: typeof parsed.weightLbs?.value === "number" ? parsed.weightLbs.value : undefined,
       brokerName: parsed.broker?.value ?? null,
       assignedDriverName: driver.name,
       sourceBoard: intake.sourceType === "email" ? "email" : "manual",

@@ -34,19 +34,43 @@ export default function ReviewQueuePage() {
             row={r}
             drivers={drivers}
             onSave={async (patch) => {
-              await fetch(`/api/ratecon-intake/${r.id}`, {
+              const res = await fetch(`/api/ratecon-intake/${r.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(patch),
               });
+              if (!res.ok) {
+                const errorBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+                alert(`Save failed:\n${errorBody.error || "Unknown error"}`);
+                return;
+              }
+              alert("✅ Saved");
               load();
             }}
             onApprove={async () => {
-              await fetch(`/api/ratecon-intake/${r.id}/approve-and-dispatch`, { method: "POST" });
+              const res = await fetch(`/api/ratecon-intake/${r.id}/approve-and-dispatch`, { method: "POST" });
+              if (!res.ok) {
+                const errorBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+                alert(`Dispatch failed:\n\n${errorBody.error || "Unknown error"}`);
+                return;
+              }
+              const result = await res.json().catch(() => ({}));
+              const smsOk = result?.sms?.ok;
+              const smsErr = result?.sms?.error;
+              alert(
+                smsOk
+                  ? `✅ Dispatched — driver SMS sent.\nLoad ${(result.loadId || "").slice(0, 8)}`
+                  : `Load created (${(result.loadId || "").slice(0, 8)}) but SMS failed:\n${smsErr || "unknown"}`,
+              );
               load();
             }}
             onReject={async () => {
-              await fetch(`/api/ratecon-intake/${r.id}/reject`, { method: "POST" });
+              const res = await fetch(`/api/ratecon-intake/${r.id}/reject`, { method: "POST" });
+              if (!res.ok) {
+                const errorBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+                alert(`Reject failed:\n${errorBody.error || "Unknown error"}`);
+                return;
+              }
               load();
             }}
           />

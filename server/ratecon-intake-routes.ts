@@ -142,8 +142,13 @@ export function registerRateconIntakeRoutes(app: Express) {
       const smsResult = await sendDispatchSms(outcome.loadId!);
       res.json({ ...outcome, sms: smsResult });
     } catch (err: any) {
+      // Surface the Postgres detail (the underlying root cause that Drizzle
+      // wraps but doesn't expose by default in `err.message`).
+      const pgDetail = err?.cause?.detail || err?.detail || err?.cause?.message;
+      const msg = pgDetail ? `${err.message} — ${pgDetail}` : err.message;
       console.error("[approve-and-dispatch]", err);
-      res.status(500).json({ error: err.message });
+      console.error("[approve-and-dispatch] cause:", err?.cause);
+      res.status(500).json({ error: msg });
     }
   });
 }
