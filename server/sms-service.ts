@@ -96,14 +96,22 @@ export class SMSLoadService {
     console.log('✅ SMS Load Dispatcher ready');
   }
 
-  async sendSMS(toOrParams: string | { to: string, body: string }, bodyParam?: string): Promise<{ success: boolean, error?: string, messageSid?: string }> {
-    // Handle both calling patterns: sendSMS(to, body) or sendSMS({ to, body })
+  async sendSMS(
+    toOrParams: string | { to: string, body: string, skipFooter?: boolean },
+    bodyParam?: string,
+  ): Promise<{ success: boolean, error?: string, messageSid?: string }> {
+    // Handle both calling patterns: sendSMS(to, body) or sendSMS({ to, body, skipFooter? })
     const to = typeof toOrParams === 'string' ? toOrParams : toOrParams.to;
     let body = typeof toOrParams === 'string' ? bodyParam! : toOrParams.body;
+    const skipFooter = typeof toOrParams === 'object' && !!toOrParams.skipFooter;
 
     // Auto-append driver portal footer when the recipient is a known driver.
     // Dedup: skip if the message already links to /driver/ /my-pay/ /u/ /statements.
-    body = await appendDriverPortalFooter(to, body);
+    // Also skip when the caller opts out (e.g. dispatch SMS uses a carrier-friendly
+    // minimal template and a URL would trigger Twilio error 30007).
+    if (!skipFooter) {
+      body = await appendDriverPortalFooter(to, body);
+    }
 
     if (!this.isConfigured || !this.twilioClient) {
       console.log(`[SMS NOT CONFIGURED] Would send to ${to}: ${body}`);

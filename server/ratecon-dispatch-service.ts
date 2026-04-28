@@ -261,7 +261,11 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
     // smsService.sendSMS returns { success, error?, messageSid? } — does NOT throw.
     // Without this check, a failed Twilio call (rejected number, unconfigured creds,
     // trial-mode restrictions, etc.) would be reported as ✅ sent.
-    const result = await smsService.sendSMS(phone, body);
+    // Use object form with skipFooter to bypass appendDriverPortalFooter — that
+    // auto-appends "👤 My Dashboard: https://traqiq.app/driver/<token>" which
+    // adds an emoji + URL to every driver SMS and was triggering carrier filter
+    // (Twilio 30007). Once A2P 10DLC is approved, we can re-enable it.
+    const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
     if (!result.success) {
       console.error(`[dispatch-sms] ❌ ${result.error || "unknown SMS failure"}`);
       return { ok: false, error: result.error || "SMS send failed (no error returned)", phone };
