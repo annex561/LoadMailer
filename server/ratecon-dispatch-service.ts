@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { rateconIntake, loads, drivers, customers } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { PayDriverInput, PayLoadInput } from "./pay-calculator";
 import { calculatePay } from "./pay-calculator";
@@ -55,40 +55,62 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
   const pickupDate = new Date(`${parsed.pickup.date}T${parsed.pickup.time}:00`);
   const deliveryDate = new Date(`${parsed.drop.date}T${parsed.drop.time}:00`);
 
-  const [load] = await db
-    .insert(loads)
-    .values({
-      companyId: intake.companyId,
-      loadNumber,
-      customerId,
-      driverId: driver.id,
-      description: parsed.commodity?.value ?? "General freight",
-      pickupAddress: `${parsed.pickup.address ?? ""} ${parsed.pickup.city}, ${parsed.pickup.state}`.trim(),
-      pickupDate,
-      pickupTime: parsed.pickup.time,
-      deliveryAddress: `${parsed.drop.address ?? ""} ${parsed.drop.city}, ${parsed.drop.state}`.trim(),
-      deliveryDate,
-      deliveryTime: parsed.drop.time,
-      specialInstructions: parsed.specialInstructions?.value ?? null,
-      status: "assigned",
-      equipmentType: (parsed.equipmentType?.value ?? "dry_van").replace(/\s+/g, "_").toLowerCase(),
-      rate: parsed.rate?.value ?? 0,
-      // Use undefined (not null) for nullable int columns — Drizzle skips
-      // undefined fields entirely, but can mishandle null → empty string for ints.
-      miles: typeof parsed.miles?.value === "number" ? parsed.miles.value : undefined,
-      weight: typeof parsed.weightLbs?.value === "number" ? parsed.weightLbs.value : undefined,
-      brokerName: parsed.broker?.value ?? null,
-      assignedDriverName: driver.name,
-      sourceBoard: intake.sourceType === "email" ? "email" : "manual",
-      originCity: parsed.pickup.city,
-      originState: parsed.pickup.state,
-      destCity: parsed.drop.city,
-      destState: parsed.drop.state,
-      offeredRate: parsed.rate?.value ?? 0,
-      confirmationToken,
-      confirmationStatus: "pending",
-    })
-    .returning();
+  // Idempotent insert: if a load with this loadNumber already exists (e.g. the
+  // legacy email scanner created it before the universal intake pipeline took
+  // over), UPDATE it with the new dispatch metadata instead of failing on the
+  // unique constraint.
+  const loadValues = {
+    companyId: intake.companyId,
+    loadNumber,
+    customerId,
+    driverId: driver.id,
+    description: parsed.commodity?.value ?? "General freight",
+    pickupAddress: `${parsed.pickup.address ?? ""} ${parsed.pickup.city}, ${parsed.pickup.state}`.trim(),
+    pickupDate,
+    pickupTime: parsed.pickup.time,
+    deliveryAddress: `${parsed.drop.address ?? ""} ${parsed.drop.city}, ${parsed.drop.state}`.trim(),
+    deliveryDate,
+    deliveryTime: parsed.drop.time,
+    specialInstructions: parsed.specialInstructions?.value ?? null,
+    status: "assigned",
+    equipmentType: (parsed.equipmentType?.value ?? "dry_van").replace(/\s+/g, "_").toLowerCase(),
+    rate: parsed.rate?.value ?? 0,
+    miles: typeof parsed.miles?.value === "number" ? parsed.miles.value : undefined,
+    weight: typeof parsed.weightLbs?.value === "number" ? parsed.weightLbs.value : undefined,
+    brokerName: parsed.broker?.value ?? null,
+    assignedDriverName: driver.name,
+    sourceBoard: intake.sourceType === "email" ? "email" : "manual",
+    originCity: parsed.pickup.city,
+    originState: parsed.pickup.state,
+    destCity: parsed.drop.city,
+    destState: parsed.drop.state,
+    offeredRate: parsed.rate?.value ?? 0,
+    confirmationToken,
+    confirmationStatus: "pending" as const,
+  };
+
+  const [existing] = await db
+    .select()
+    .from(loads)
+    .where(eq(loads.loadNumber, loadNumber))
+    .limit(1);
+
+  let load: typeof loads.$inferSelect;
+  if (existing) {
+    // Update the legacy/duplicate load with the new dispatch info
+    const [updated] = await db
+      .update(loads)
+      .set({
+        ...loadValues,
+        updatedAt: new Date(),
+      })
+      .where(eq(loads.id, existing.id))
+      .returning();
+    load = updated;
+  } else {
+    const [inserted] = await db.insert(loads).values(loadValues).returning();
+    load = inserted;
+  }
 
   // Update intake
   await db
