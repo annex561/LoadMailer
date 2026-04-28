@@ -21,6 +21,20 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
   const [driver] = await db.select().from(drivers).where(eq(drivers.id, intake.matchedDriverId));
   if (!driver) return { ok: false, error: "Driver not found" };
 
+  // FK consistency: loads table has a composite FK (driver_id, company_id) →
+  // drivers (id, company_id). If the driver was created without a companyId,
+  // back-fill it from the intake so the FK is valid. Use the driver's
+  // companyId (or back-filled) as the canonical company for this load.
+  let canonicalCompanyId: string | null = driver.companyId ?? null;
+  if (!canonicalCompanyId && intake.companyId) {
+    await db
+      .update(drivers)
+      .set({ companyId: intake.companyId })
+      .where(eq(drivers.id, driver.id));
+    canonicalCompanyId = intake.companyId;
+    console.log(`[dispatch] back-filled driver ${driver.id} companyId → ${intake.companyId}`);
+  }
+
   const parsed = intake.parsedJson as any;
   const confirmationToken = nanoid(24);
 
@@ -60,7 +74,9 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
   // over), UPDATE it with the new dispatch metadata instead of failing on the
   // unique constraint.
   const loadValues = {
-    companyId: intake.companyId,
+    // Use the canonical companyId (driver's, possibly back-filled) so the
+    // loads → drivers FK is satisfied. Fall back to intake's companyId.
+    companyId: canonicalCompanyId ?? intake.companyId,
     loadNumber,
     customerId,
     driverId: driver.id,
