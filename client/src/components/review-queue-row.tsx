@@ -95,8 +95,17 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium">Pickup</label>
-            <div className="flex gap-1">
+            <label className="text-xs font-medium">📍 Pickup</label>
+            <Input
+              value={parsed.pickup?.address ?? ""}
+              onChange={(e) =>
+                setEdited({ ...edited, pickup: { ...edited.pickup, address: e.target.value } })
+              }
+              placeholder="Full street address"
+              className="font-medium"
+              data-testid={`pickup-address-${row.id}`}
+            />
+            <div className="flex gap-1 mt-1">
               <Input
                 value={parsed.pickup?.city ?? ""}
                 onChange={(e) =>
@@ -135,8 +144,17 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
           </div>
 
           <div>
-            <label className="text-xs font-medium">Drop</label>
-            <div className="flex gap-1">
+            <label className="text-xs font-medium">📍 Drop</label>
+            <Input
+              value={parsed.drop?.address ?? ""}
+              onChange={(e) =>
+                setEdited({ ...edited, drop: { ...edited.drop, address: e.target.value } })
+              }
+              placeholder="Full street address"
+              className="font-medium"
+              data-testid={`drop-address-${row.id}`}
+            />
+            <div className="flex gap-1 mt-1">
               <Input
                 value={parsed.drop?.city ?? ""}
                 onChange={(e) =>
@@ -174,6 +192,23 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
             ))}
           </div>
         </div>
+
+        {(parsed.commodity?.value || parsed.specialInstructions?.value) && (
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {parsed.commodity?.value && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Commodity</label>
+                <div className="text-foreground">{parsed.commodity.value}</div>
+              </div>
+            )}
+            {parsed.specialInstructions?.value && (
+              <div className="col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">⚠️ Special Instructions</label>
+                <div className="text-amber-300 font-medium">{parsed.specialInstructions.value}</div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
