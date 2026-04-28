@@ -195,7 +195,7 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
             <select
               value={driverId}
               onChange={(e) => setDriverId(e.target.value)}
-              className="w-full border rounded p-2"
+              className="w-full border border-input rounded p-2 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               data-testid={`select-driver-${row.id}`}
             >
               <option value="">— select —</option>

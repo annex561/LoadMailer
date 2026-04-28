@@ -133,8 +133,10 @@ export function computeLoadPayInput(parsed: any): PayLoadInput {
   };
 }
 
-const SMS_ENABLED = process.env.SMS_ENABLED === "true";
-
+// Driver dispatch SMS always fires when called — "Approve & Dispatch" is an
+// explicit user action, so there's no point gating it behind an env var.
+// (Admin alerts and YES/NO replies remain gated by SMS_ENABLED to prevent
+// noise during testing — only the explicit dispatch action sends real SMS.)
 export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string }> {
   const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
   if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
@@ -169,12 +171,14 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
     `Details & confirm: ${url}\n\n` +
     `Reply YES to accept · NO to decline`;
 
-  if (!SMS_ENABLED) {
-    console.log(`[dispatch-sms:DRY-RUN] would SMS ${phone} for load ${load.loadNumber}:\n${body}`);
-    return { ok: true };
-  }
-
+  console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
   const { smsService } = await import("./sms-service");
-  await smsService.sendSMS(phone, body);
-  return { ok: true };
+  try {
+    await smsService.sendSMS(phone, body);
+    console.log(`[dispatch-sms] ✅ sent to ${phone}`);
+    return { ok: true };
+  } catch (err: any) {
+    console.error(`[dispatch-sms] ❌ Twilio send failed: ${err.message}`);
+    return { ok: false, error: `Twilio: ${err.message}` };
+  }
 }
