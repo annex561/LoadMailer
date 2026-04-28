@@ -129,6 +129,40 @@ export function registerRateconIntakeRoutes(app: Express) {
     res.json(updated);
   });
 
+  // POST /api/ratecon-intake/reject-duplicates
+  // Rejects every in_review row whose parsed loadNumber matches the given one,
+  // EXCEPT the keepIntakeId (the row the dispatcher wants to keep). One-click
+  // cleanup for piles of duplicate rate-cons.
+  app.post("/api/ratecon-intake/reject-duplicates", async (req, res) => {
+    try {
+      const { loadNumber, keepIntakeId } = req.body || {};
+      if (!loadNumber || typeof loadNumber !== "string") {
+        return res.status(400).json({ error: "loadNumber is required" });
+      }
+      const userId = (req as any).user?.id ?? null;
+      const { sql } = await import("drizzle-orm");
+      const result = await db.execute(sql`
+        UPDATE ratecon_intake
+        SET status = 'rejected',
+            review_reason = COALESCE(review_reason, '') || ' | Bulk-rejected as duplicate of load ${sql.raw(`'${loadNumber.replace(/'/g, "''")}'`)}',
+            reviewed_by = ${userId},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE
+          status = 'in_review'
+          AND parsed_json->'loadNumber'->>'value' = ${loadNumber}
+          ${keepIntakeId ? sql`AND id != ${keepIntakeId}` : sql``}
+        RETURNING id
+      `);
+      const rejected = (result as any).rows ?? result;
+      const count = Array.isArray(rejected) ? rejected.length : 0;
+      res.json({ ok: true, rejectedCount: count });
+    } catch (err: any) {
+      console.error("[reject-duplicates]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/ratecon-intake/:id/approve-and-dispatch", async (req, res) => {
     try {
       const userId = (req as any).user?.id ?? null;
