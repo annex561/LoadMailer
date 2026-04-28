@@ -8,6 +8,7 @@ import { calculatePay } from "./pay-calculator";
 export interface DispatchOutcome {
   ok: boolean;
   loadId?: string;
+  loadNumber?: string;
   confirmationToken?: string;
   error?: string;
 }
@@ -122,7 +123,7 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
     })
     .where(eq(rateconIntake.id, intakeId));
 
-  return { ok: true, loadId: load.id, confirmationToken };
+  return { ok: true, loadId: load.id, loadNumber: load.loadNumber, confirmationToken };
 }
 
 export function driverProfileToPayInput(driver: any): PayDriverInput {
@@ -220,11 +221,18 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
   console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
   const { smsService } = await import("./sms-service");
   try {
-    await smsService.sendSMS(phone, body);
-    console.log(`[dispatch-sms] ✅ sent to ${phone}`);
+    // smsService.sendSMS returns { success, error?, messageSid? } — does NOT throw.
+    // Without this check, a failed Twilio call (rejected number, unconfigured creds,
+    // trial-mode restrictions, etc.) would be reported as ✅ sent.
+    const result = await smsService.sendSMS(phone, body);
+    if (!result.success) {
+      console.error(`[dispatch-sms] ❌ ${result.error || "unknown SMS failure"}`);
+      return { ok: false, error: result.error || "SMS send failed (no error returned)" };
+    }
+    console.log(`[dispatch-sms] ✅ sent to ${phone} (SID: ${result.messageSid})`);
     return { ok: true };
   } catch (err: any) {
-    console.error(`[dispatch-sms] ❌ Twilio send failed: ${err.message}`);
+    console.error(`[dispatch-sms] ❌ Twilio send threw: ${err.message}`);
     return { ok: false, error: `Twilio: ${err.message}` };
   }
 }
