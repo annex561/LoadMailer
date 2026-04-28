@@ -132,6 +132,19 @@ export function registerRateconIntakeRoutes(app: Express) {
   app.post("/api/ratecon-intake/:id/approve-and-dispatch", async (req, res) => {
     try {
       const userId = (req as any).user?.id ?? null;
+      // If client sent a driverId in the body, persist it first so that
+      // the user doesn't need to click Save before clicking Approve & Dispatch.
+      const driverIdFromBody: string | null | undefined = req.body?.driverId;
+      if (driverIdFromBody !== undefined) {
+        await db
+          .update(rateconIntake)
+          .set({
+            matchedDriverId: driverIdFromBody || null,
+            matchedDriverConfidence: driverIdFromBody ? 1.0 : 0,
+            updatedAt: new Date(),
+          })
+          .where(eq(rateconIntake.id, req.params.id));
+      }
       const { dispatchFromIntake, sendDispatchSms } = await import("./ratecon-dispatch-service");
       const outcome = await dispatchFromIntake(req.params.id);
       if (!outcome.ok) return res.status(400).json({ error: outcome.error });
