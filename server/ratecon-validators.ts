@@ -32,20 +32,39 @@ export function runValidators(p: ParsedRateconV2, opts: Opts = {}): ValidatorRes
 
   const failures: ValidatorFailure[] = [];
 
-  // Pickup date range
+  // Pickup date range — compare by calendar DATE only (no time/timezone math).
+  // Previous bug: comparing millisecond timestamps would say "tomorrow" was
+  // "in the past" because the server's UTC clock was already a few hours
+  // into the next calendar day relative to the pickup date string.
   const pickupDate = new Date(`${p.pickup.date}T00:00:00`);
-  const dayMs = 24 * 60 * 60 * 1000;
-  const daysDiff = Math.floor((pickupDate.getTime() - today.getTime()) / dayMs);
   if (isNaN(pickupDate.getTime())) {
     failures.push({ field: "pickup", reason: "Pickup date could not be parsed", severity: "error" });
-  } else if (daysDiff < 0) {
-    failures.push({ field: "pickup", reason: `Pickup date ${p.pickup.date} is in the past`, severity: "error" });
-  } else if (daysDiff > daysMax) {
-    failures.push({
-      field: "pickup",
-      reason: `Pickup date is too far out (${daysDiff} days)`,
-      severity: "warning",
-    });
+  } else {
+    // Use UTC midnight of each date for a stable day-level diff.
+    const pickupUtcMidnight = Date.UTC(
+      pickupDate.getFullYear(),
+      pickupDate.getMonth(),
+      pickupDate.getDate(),
+    );
+    const todayUtcMidnight = Date.UTC(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    );
+    const daysDiff = Math.round((pickupUtcMidnight - todayUtcMidnight) / (24 * 60 * 60 * 1000));
+    if (daysDiff < 0) {
+      failures.push({
+        field: "pickup",
+        reason: `Pickup date ${p.pickup.date} is in the past`,
+        severity: "error",
+      });
+    } else if (daysDiff > daysMax) {
+      failures.push({
+        field: "pickup",
+        reason: `Pickup date is too far out (${daysDiff} days)`,
+        severity: "warning",
+      });
+    }
   }
 
   // Confidence thresholds
