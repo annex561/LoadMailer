@@ -163,16 +163,11 @@ export default function ReviewQueuePage() {
                   const result = await res.json().catch(() => ({}));
                   const smsOk = result?.sms?.ok;
                   const smsErr = result?.sms?.error;
+                  const loadLabel = `Load #${result.loadNumber || (result.loadId || "").slice(0, 8)}`;
                   alert(
                     smsOk
-                      ? `✅ Dispatched — driver SMS sent.\nLoad ${(result.loadId || "").slice(
-                          0,
-                          8,
-                        )}`
-                      : `Load created (${(result.loadId || "").slice(
-                          0,
-                          8,
-                        )}) but SMS failed:\n${smsErr || "unknown"}`,
+                      ? `✅ Dispatched — driver SMS sent.\n${loadLabel}`
+                      : `❌ ${loadLabel} created but SMS FAILED:\n\n${smsErr || "unknown"}\n\nThe load is in the system; contact the driver another way until SMS is fixed.`,
                   );
                   load();
                 }}
