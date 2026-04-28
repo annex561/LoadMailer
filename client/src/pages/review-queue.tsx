@@ -47,8 +47,12 @@ export default function ReviewQueuePage() {
               alert("✅ Saved");
               load();
             }}
-            onApprove={async () => {
-              const res = await fetch(`/api/ratecon-intake/${r.id}/approve-and-dispatch`, { method: "POST" });
+            onApprove={async (driverId) => {
+              const res = await fetch(`/api/ratecon-intake/${r.id}/approve-and-dispatch`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ driverId }),
+              });
               if (!res.ok) {
                 const errorBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
                 alert(`Dispatch failed:\n\n${errorBody.error || "Unknown error"}`);

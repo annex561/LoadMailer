@@ -22,7 +22,7 @@ interface Props {
   row: IntakeRow;
   drivers: Array<{ id: string; name: string }>;
   onSave: (patch: Partial<IntakeRow>) => Promise<void>;
-  onApprove: () => Promise<void>;
+  onApprove: (driverId: string | null) => Promise<void>;
   onReject: () => Promise<void>;
 }
 
@@ -218,7 +218,7 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
           <Button variant="destructive" onClick={onReject}>
             Reject
           </Button>
-          <Button onClick={onApprove} data-testid={`btn-approve-${row.id}`}>
+          <Button onClick={() => onApprove(driverId || null)} data-testid={`btn-approve-${row.id}`}>
             Approve & Dispatch
           </Button>
         </div>
