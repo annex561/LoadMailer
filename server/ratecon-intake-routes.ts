@@ -129,6 +129,46 @@ export function registerRateconIntakeRoutes(app: Express) {
     res.json(updated);
   });
 
+  // POST /api/ratecon-intake/reject-junk
+  // One-click cleanup: rejects every in_review row where the parser couldn't
+  // extract anything useful — non-ratecon PDFs (receipts, contracts, marketing
+  // material) that snuck past the Gmail filter, or PDFs that broke the parser.
+  // Match conditions:
+  //   - parseError IS NOT NULL (parser threw), OR
+  //   - parsed_json IS NULL, OR
+  //   - both broker.value AND loadNumber.value are missing/empty
+  app.post("/api/ratecon-intake/reject-junk", async (req, res) => {
+    try {
+      const userId = (req as any).user?.id ?? null;
+      const { sql } = await import("drizzle-orm");
+      const result = await db.execute(sql`
+        UPDATE ratecon_intake
+        SET status = 'rejected',
+            review_reason = COALESCE(review_reason, '') || ' | Bulk-rejected as junk (no broker or load #)',
+            reviewed_by = ${userId},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE
+          status = 'in_review'
+          AND (
+            parse_error IS NOT NULL
+            OR parsed_json IS NULL
+            OR (
+              COALESCE(parsed_json->'broker'->>'value', '') = ''
+              AND COALESCE(parsed_json->'loadNumber'->>'value', '') = ''
+            )
+          )
+        RETURNING id
+      `);
+      const rejected = (result as any).rows ?? result;
+      const count = Array.isArray(rejected) ? rejected.length : 0;
+      res.json({ ok: true, rejectedCount: count });
+    } catch (err: any) {
+      console.error("[reject-junk]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /api/ratecon-intake/reject-duplicates
   // Smart-keep: finds all in_review rows for the given loadNumber, picks the
   // one with the most data filled in (full street addresses present), merges
