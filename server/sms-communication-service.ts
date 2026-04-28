@@ -44,61 +44,15 @@ export class SMSCommunicationService {
         console.log(`📎 With ${mediaUrls.length} media attachment(s)`);
       }
 
-      // Check if this is a dispatch confirmation response
+      // ---- Dispatch keyword router (carrier-friendly, no URLs) ----
+      // Handles the SMS-only driver flow:
+      //   YES / Y / NO / N         → accept/decline a pending dispatch
+      //   PICKED UP / PU / PICKED  → mark current load in_transit
+      //   DELIVERED / DEL / POD    → mark current load delivered + send pay summary
+      //   PHOTO (with MMS)         → save attachment as BOL or POD by load stage
       const body = (message ?? "").trim().toUpperCase();
-
-      if (body === "YES" || body === "NO" || body === "Y" || body === "N") {
-        const { db } = await import("./db");
-        const { loads, drivers: driversTable } = await import("@shared/schema");
-        const { eq, and, desc, or } = await import("drizzle-orm");
-        // Find most recent pending confirmation for this driver
-        const [drv] = await db
-          .select()
-          .from(driversTable)
-          .where(or(eq(driversTable.phone, fromPhone), eq(driversTable.phoneNumber, fromPhone)))
-          .limit(1);
-        if (drv) {
-          const [pending] = await db
-            .select()
-            .from(loads)
-            .where(and(eq(loads.driverId, drv.id), eq(loads.confirmationStatus, "pending")))
-            .orderBy(desc(loads.createdAt))
-            .limit(1);
-          if (pending) {
-            const accepted = body === "YES" || body === "Y";
-            await db
-              .update(loads)
-              .set({
-                confirmationStatus: accepted ? "accepted" : "declined",
-                confirmationRespondedAt: new Date(),
-                status: accepted ? "assigned" : "cancelled",
-              })
-              .where(eq(loads.id, pending.id));
-            // reply to driver (gated by SMS_ENABLED)
-            const reply = accepted
-              ? `Load #${pending.loadNumber} confirmed. Safe travels.`
-              : `Load #${pending.loadNumber} declined. Dispatcher notified.`;
-            const SMS_ENABLED = process.env.SMS_ENABLED === "true";
-            if (SMS_ENABLED) {
-              const { smsService } = await import("./sms-service");
-              await smsService.sendSMS(fromPhone, reply);
-            } else {
-              console.log(`[sms-reply:DRY-RUN] would SMS ${fromPhone}:\n${reply}`);
-            }
-            // If declined, notify admin
-            if (!accepted) {
-              const { notifyAdminReviewNeeded } = await import("./ratecon-admin-alerts");
-              notifyAdminReviewNeeded({
-                companyId: pending.companyId ?? null,
-                intakeId: pending.id,
-                broker: pending.brokerName ?? "Unknown",
-                reason: `Driver ${drv.name} declined load ${pending.loadNumber}`,
-              });
-            }
-            return; // handled — don't fall through to other intent routing
-          }
-        }
-      }
+      const handled = await this.handleDispatchKeyword(fromPhone, body, mediaUrls, mediaTypes);
+      if (handled) return;
 
       // Find driver by phone number
       const driver = await this.findDriverByPhone(fromPhone);
@@ -779,6 +733,194 @@ export class SMSCommunicationService {
 
   get serviceRunning(): boolean {
     return this.isRunning;
+  }
+
+  /**
+   * SMS-only dispatch keyword router.
+   * Driver journey via SMS, no URL clicks needed:
+   *   Get dispatch SMS → reply YES → at pickup, reply "PICKED UP" or send BOL photo
+   *   → at delivery, reply "DELIVERED" or send POD photo → receive final pay summary.
+   *
+   * Returns true if the message was handled (caller should NOT fall through).
+   */
+  private async handleDispatchKeyword(
+    fromPhone: string,
+    body: string,
+    mediaUrls: string[],
+    mediaTypes: string[],
+  ): Promise<boolean> {
+    const { db } = await import("./db");
+    const { loads, drivers: driversTable } = await import("@shared/schema");
+    const { eq, and, desc, or, inArray } = await import("drizzle-orm");
+
+    // Find the driver by phone (matches either field)
+    const [drv] = await db
+      .select()
+      .from(driversTable)
+      .where(or(eq(driversTable.phone, fromPhone), eq(driversTable.phoneNumber, fromPhone)))
+      .limit(1);
+    if (!drv) return false;
+
+    const sendReply = async (text: string) => {
+      const { smsService } = await import("./sms-service");
+      const result = await smsService.sendSMS({ to: fromPhone, body: text, skipFooter: true });
+      if (!result.success) {
+        console.error(`[sms-reply] failed: ${result.error}`);
+      }
+    };
+
+    // ---- YES / NO: accept or decline a pending dispatch ----
+    if (["YES", "Y", "NO", "N"].includes(body)) {
+      const [pending] = await db
+        .select()
+        .from(loads)
+        .where(and(eq(loads.driverId, drv.id), eq(loads.confirmationStatus, "pending")))
+        .orderBy(desc(loads.createdAt))
+        .limit(1);
+      if (!pending) return false;
+      const accepted = body === "YES" || body === "Y";
+      await db
+        .update(loads)
+        .set({
+          confirmationStatus: accepted ? "accepted" : "declined",
+          confirmationRespondedAt: new Date(),
+          status: accepted ? "assigned" : "cancelled",
+        })
+        .where(eq(loads.id, pending.id));
+      await sendReply(
+        accepted
+          ? `Load ${pending.loadNumber} confirmed. Reply PICKED UP when loaded, DELIVERED when offloaded. Send a photo of BOL/POD anytime to attach to this load.`
+          : `Load ${pending.loadNumber} declined. Dispatcher notified.`,
+      );
+      if (!accepted) {
+        const { notifyAdminReviewNeeded } = await import("./ratecon-admin-alerts");
+        notifyAdminReviewNeeded({
+          companyId: pending.companyId ?? null,
+          intakeId: pending.id,
+          broker: pending.brokerName ?? "Unknown",
+          reason: `Driver ${drv.name} declined load ${pending.loadNumber}`,
+        }).catch(() => {});
+      }
+      return true;
+    }
+
+    // ---- PICKED UP / PU / PICKED ----
+    if (["PICKED UP", "PU", "PICKED", "PICKEDUP"].includes(body)) {
+      const [active] = await db
+        .select()
+        .from(loads)
+        .where(and(eq(loads.driverId, drv.id), eq(loads.status, "assigned")))
+        .orderBy(desc(loads.createdAt))
+        .limit(1);
+      if (!active) {
+        await sendReply("No active load found to mark as picked up. Are you accepting a dispatch first?");
+        return true;
+      }
+      await db
+        .update(loads)
+        .set({ status: "in_transit", bookedAt: new Date(), updatedAt: new Date() })
+        .where(eq(loads.id, active.id));
+      await sendReply(
+        `Load ${active.loadNumber} marked PICKED UP. Drive safe. Reply DELIVERED when offloaded, or send a photo of the BOL anytime.`,
+      );
+      return true;
+    }
+
+    // ---- DELIVERED / DEL / POD ----
+    if (["DELIVERED", "DEL", "POD", "DELIVERY"].includes(body)) {
+      const [active] = await db
+        .select()
+        .from(loads)
+        .where(
+          and(
+            eq(loads.driverId, drv.id),
+            inArray(loads.status, ["assigned", "in_transit"]),
+          ),
+        )
+        .orderBy(desc(loads.createdAt))
+        .limit(1);
+      if (!active) {
+        await sendReply("No active load found to mark as delivered.");
+        return true;
+      }
+      await db
+        .update(loads)
+        .set({ status: "delivered", deliveredAt: new Date(), updatedAt: new Date() })
+        .where(eq(loads.id, active.id));
+
+      // Compute and send final pay summary
+      try {
+        const { calculatePay } = await import("./pay-calculator");
+        const { driverProfileToPayInput, computeLoadPayInput } = await import(
+          "./ratecon-dispatch-service"
+        );
+        const pay = calculatePay(
+          computeLoadPayInput({
+            rate: { value: active.rate ?? 0 },
+            miles: { value: active.miles ?? 0 },
+          }),
+          driverProfileToPayInput(drv),
+        );
+        const lines = [
+          `Load ${active.loadNumber} marked DELIVERED. Thank you.`,
+          ``,
+          `Pay summary for this load:`,
+          ...pay.lineItems.map((li) => `  ${li.label}: $${li.amount.toFixed(2)}`),
+          ...pay.deductions.map((d) => `  ${d.label}: $${d.amount.toFixed(2)}`),
+          `  -----`,
+          `  Net this load: $${pay.netPay.toFixed(2)}`,
+        ];
+        if (pay.recurringDeductions.length > 0) {
+          lines.push(``, `Weekly deductions (on next statement):`);
+          for (const r of pay.recurringDeductions) {
+            lines.push(`  ${r.label}: $${r.amount.toFixed(2)}`);
+          }
+        }
+        await sendReply(lines.join("\n"));
+      } catch (err: any) {
+        console.error("[sms-pay-summary] failed:", err.message);
+        await sendReply(`Load ${active.loadNumber} marked DELIVERED. (Could not compute pay summary — dispatcher will follow up.)`);
+      }
+      return true;
+    }
+
+    // ---- MMS photo: attach to current load as BOL or POD ----
+    if (mediaUrls.length > 0 && mediaTypes.some((t) => (t || "").startsWith("image/"))) {
+      const [active] = await db
+        .select()
+        .from(loads)
+        .where(
+          and(
+            eq(loads.driverId, drv.id),
+            inArray(loads.status, ["assigned", "in_transit", "delivered"]),
+          ),
+        )
+        .orderBy(desc(loads.createdAt))
+        .limit(1);
+      if (!active) {
+        await sendReply("Photo received but no active load found to attach it to. Confirm a dispatch first by replying YES.");
+        return true;
+      }
+      const imageUrl = mediaUrls[0];
+      // If load is in_transit (or just picked up), this is the BOL.
+      // If load is already delivered (or status is anything else), it's the POD.
+      const isBol = active.status === "assigned" || active.status === "in_transit";
+      const updates: Record<string, unknown> = { updatedAt: new Date() };
+      if (isBol) {
+        updates.rateconPath = imageUrl; // reuse rateconPath for BOL until BOL column added
+      } else {
+        updates.podPath = imageUrl;
+      }
+      await db.update(loads).set(updates).where(eq(loads.id, active.id));
+      await sendReply(
+        isBol
+          ? `BOL received for load ${active.loadNumber}. Drive safe.`
+          : `POD received for load ${active.loadNumber}. Thank you.`,
+      );
+      return true;
+    }
+
+    return false;
   }
 }
 
