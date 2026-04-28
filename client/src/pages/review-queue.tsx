@@ -80,6 +80,24 @@ export default function ReviewQueuePage() {
     load();
   };
 
+  const rejectJunk = async () => {
+    if (
+      !confirm(
+        "Reject every row in the queue where the parser couldn't extract a broker or load number? (Non-ratecon PDFs, receipts, parser failures, etc.) This will leave only real ratecons.",
+      )
+    )
+      return;
+    const res = await fetch("/api/ratecon-intake/reject-junk", { method: "POST" });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      alert(`Cleanup failed:\n${e.error}`);
+      return;
+    }
+    const { rejectedCount } = await res.json();
+    alert(`✅ Rejected ${rejectedCount} junk row(s).`);
+    load();
+  };
+
   return (
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center justify-between mb-4 gap-4">
@@ -90,14 +108,24 @@ export default function ReviewQueuePage() {
             {filteredRows.length !== rows.length ? ` of ${rows.length}` : ""})
           </span>
         </h1>
-        <Input
-          type="text"
-          placeholder="Search by load #, broker, city, or filename…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
-          data-testid="input-review-search"
-        />
+        <div className="flex gap-2 items-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={rejectJunk}
+            data-testid="btn-reject-junk"
+          >
+            🧹 Clean junk
+          </Button>
+          <Input
+            type="text"
+            placeholder="Search by load #, broker, city, or filename…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm"
+            data-testid="input-review-search"
+          />
+        </div>
       </div>
 
       {filteredRows.length === 0 ? (
