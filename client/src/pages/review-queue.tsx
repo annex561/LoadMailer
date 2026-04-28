@@ -161,14 +161,29 @@ export default function ReviewQueuePage() {
                     return;
                   }
                   const result = await res.json().catch(() => ({}));
-                  const smsOk = result?.sms?.ok;
-                  const smsErr = result?.sms?.error;
+                  const sms = result?.sms || {};
                   const loadLabel = `Load #${result.loadNumber || (result.loadId || "").slice(0, 8)}`;
-                  alert(
-                    smsOk
-                      ? `✅ Dispatched — driver SMS sent.\n${loadLabel}`
-                      : `❌ ${loadLabel} created but SMS FAILED:\n\n${smsErr || "unknown"}\n\nThe load is in the system; contact the driver another way until SMS is fixed.`,
-                  );
+                  if (sms.ok) {
+                    alert(
+                      `✅ ${loadLabel}\n` +
+                        `Twilio accepted SMS to ${sms.phone || "driver"}\n` +
+                        `Message SID: ${sms.messageSid || "(none returned)"}\n\n` +
+                        `If the SMS doesn't arrive in 30 sec:\n` +
+                        `1. Twilio Console → Monitor → Logs → Messaging\n` +
+                        `2. Look up SID ${sms.messageSid || ""} → status (queued/sent/delivered/failed/undelivered)\n` +
+                        `3. Common reasons SMS doesn't arrive even though Twilio accepted:\n` +
+                        `   • Trial-mode account: destination number not verified\n` +
+                        `   • A2P 10DLC not registered (US carriers silently drop)\n` +
+                        `   • Carrier filtering / blocked content`,
+                    );
+                  } else {
+                    alert(
+                      `❌ ${loadLabel} created but SMS FAILED:\n\n` +
+                        `${sms.error || "unknown"}\n\n` +
+                        `Driver phone: ${sms.phone || "?"}\n` +
+                        `The load is in the system; contact the driver another way.`,
+                    );
+                  }
                   load();
                 }}
                 onReject={async () => {
