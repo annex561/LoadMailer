@@ -52,27 +52,31 @@ export default function ReviewQueuePage() {
     return counts;
   }, [rows]);
 
-  const rejectDuplicates = async (loadNumber: string, keepIntakeId: string) => {
+  const rejectDuplicates = async (loadNumber: string) => {
+    const total = dupCountByLoadNum[loadNumber] ?? 1;
     if (
       !confirm(
-        `Reject all OTHER review-queue rows with load # ${loadNumber}? (Keeps this row, rejects ${
-          (dupCountByLoadNum[loadNumber] ?? 1) - 1
-        } duplicates.)`,
+        `Combine all ${total} rows for load # ${loadNumber} into ONE row?\n\n` +
+          `Server will pick the row with the most complete data (full street addresses, special instructions, etc.) and merge any unique fields from the others into it. Other ${total - 1} duplicates get rejected.`,
       )
     )
       return;
     const res = await fetch("/api/ratecon-intake/reject-duplicates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ loadNumber, keepIntakeId }),
+      body: JSON.stringify({ loadNumber }),
     });
     if (!res.ok) {
       const e = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
       alert(`Bulk reject failed:\n${e.error}`);
       return;
     }
-    const { rejectedCount } = await res.json();
-    alert(`✅ Rejected ${rejectedCount} duplicate(s) of load ${loadNumber}.`);
+    const { rejectedCount, keptIntakeId } = await res.json();
+    alert(
+      `✅ Combined ${total} rows of load ${loadNumber} into one.\n` +
+        `Kept: ${(keptIntakeId || "").slice(0, 8)}\n` +
+        `Rejected: ${rejectedCount} duplicate(s)`,
+    );
     load();
   };
 
@@ -114,10 +118,10 @@ export default function ReviewQueuePage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => rejectDuplicates(ln, r.id)}
-                    data-testid={`btn-reject-duplicates-${r.id}`}
+                    onClick={() => rejectDuplicates(ln)}
+                    data-testid={`btn-merge-duplicates-${r.id}`}
                   >
-                    Reject other {dupCount - 1}
+                    Combine into one
                   </Button>
                 </div>
               )}
