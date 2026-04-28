@@ -188,6 +188,10 @@ export const drivers = pgTable("drivers", {
   
   trackingToken: varchar("tracking_token", { length: 64 }).unique(),
 
+  // Daily HOS (Hours of Service) check — driver flips on/off duty via daily SMS
+  isOnDuty: boolean("is_on_duty").notNull().default(false),
+  lastHosCheckAt: timestamp("last_hos_check_at"),
+
   // Settlement / pay config
   payType: text("pay_type").default("percent"), // percent, per_mile, flat
   payRate: real("pay_rate").default(80),               // percent => 0-100; per_mile => loaded $/mi; flat => $/load

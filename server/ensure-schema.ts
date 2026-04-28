@@ -76,6 +76,9 @@ export async function ensureSchema(): Promise<void> {
     ['deduct_eld_monthly', 'REAL DEFAULT 0'],
     ['deduct_occ_acc_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
     ['deduct_occ_acc_weekly', 'REAL DEFAULT 0'],
+    // Daily HOS check
+    ['is_on_duty', 'BOOLEAN NOT NULL DEFAULT false'],
+    ['last_hos_check_at', 'TIMESTAMP'],
   ];
 
   // Universal Ratecon Intake — loads.confirmation_* columns (PR #1)

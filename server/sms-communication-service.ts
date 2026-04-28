@@ -769,6 +769,27 @@ export class SMSCommunicationService {
       }
     };
 
+    // ---- ON / OFF: daily HOS (Hours of Service) duty status ----
+    if (["ON", "ON DUTY", "ONDUTY", "OFF", "OFF DUTY", "OFFDUTY"].includes(body)) {
+      const onDuty = body.startsWith("ON");
+      await db
+        .update(driversTable)
+        .set({ isOnDuty: onDuty, lastHosCheckAt: new Date() })
+        .where(eq(driversTable.id, drv.id));
+      if (onDuty) {
+        const baseUrl = process.env.PUBLIC_BASE_URL || process.env.APP_URL || "https://traqiq.app";
+        const trackingUrl = drv.trackingToken ? `${baseUrl}/driver/${drv.trackingToken}` : null;
+        await sendReply(
+          trackingUrl
+            ? `On duty. Keep your TRAQ IQ tracker open: ${trackingUrl}`
+            : `On duty. Drive safe — dispatch will reach you here.`,
+        );
+      } else {
+        await sendReply(`Off duty noted. Have a good one — reply ON when you're back.`);
+      }
+      return true;
+    }
+
     // ---- YES / NO: accept or decline a pending dispatch ----
     if (["YES", "Y", "NO", "N"].includes(body)) {
       const [pending] = await db
