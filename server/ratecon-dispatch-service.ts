@@ -201,8 +201,6 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
     ? load.deliveryDate.toLocaleDateString()
     : new Date(load.deliveryDate).toLocaleDateString();
 
-  // Prefer the full street address (e.g. "8040 N. VIRGINIA ST Ste 102, Reno, NV 89506")
-  // over just city/state. Fall back to city/state if address wasn't extracted.
   const pickupLine =
     load.pickupAddress && load.pickupAddress.trim().length > 0
       ? load.pickupAddress
@@ -212,27 +210,50 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       ? load.deliveryAddress
       : `${load.destCity ?? ""}, ${load.destState ?? ""}`.trim().replace(/^,\s*/, "");
 
+  // SMS body. Two templates — set SMS_FULL_BODY=true in env to use the full
+  // version (emojis, URL, pricing). Default is the carrier-friendly minimal
+  // version because Twilio error 30007 (carrier filter) was blocking the rich
+  // template in production. Carriers (T-Mobile/AT&T/Verizon) tend to filter:
+  //   - Unfamiliar / unregistered URLs
+  //   - Pricing patterns
+  //   - Emojis combined with links + pay info
+  // Once A2P 10DLC registration is approved, flip SMS_FULL_BODY=true.
+  const useFullBody = process.env.SMS_FULL_BODY === "true";
+
   const commodityLine = load.description && load.description !== "General freight"
-    ? `📦 ${load.description}\n`
+    ? `${useFullBody ? "📦 " : ""}${load.description}\n`
     : "";
   const specialLine = load.specialInstructions
-    ? `⚠️ ${load.specialInstructions}\n\n`
+    ? `${useFullBody ? "⚠️ " : "NOTE: "}${load.specialInstructions}\n\n`
     : "";
 
-  const body =
-    `TRAQ-IQ Dispatch\n` +
-    `New load #${load.loadNumber}` +
-    (load.brokerName ? ` (${load.brokerName})` : "") +
-    `\n\n` +
-    `📍 PICKUP\n${pickupLine}\n` +
-    `${pickupDateStr} @ ${load.pickupTime}\n\n` +
-    `📍 DROP\n${dropLine}\n` +
-    `${deliveryDateStr} @ ${load.deliveryTime}\n\n` +
-    commodityLine +
-    specialLine +
-    `💰 NET PAY: $${pay.netPay.toFixed(2)}\n\n` +
-    `Details & confirm: ${url}\n\n` +
-    `Reply YES to accept · NO to decline`;
+  const body = useFullBody
+    ? // FULL TEMPLATE — emojis + URL + price (use after A2P 10DLC approved)
+      `TRAQ-IQ Dispatch\n` +
+      `New load #${load.loadNumber}` +
+      (load.brokerName ? ` (${load.brokerName})` : "") +
+      `\n\n` +
+      `📍 PICKUP\n${pickupLine}\n` +
+      `${pickupDateStr} @ ${load.pickupTime}\n\n` +
+      `📍 DROP\n${dropLine}\n` +
+      `${deliveryDateStr} @ ${load.deliveryTime}\n\n` +
+      commodityLine +
+      specialLine +
+      `💰 NET PAY: $${pay.netPay.toFixed(2)}\n\n` +
+      `Details & confirm: ${url}\n\n` +
+      `Reply YES to accept · NO to decline`
+    : // CARRIER-FRIENDLY TEMPLATE — plain text, no URL, no price, no emojis
+      `TRAQ IQ Dispatch\n` +
+      `Load ${load.loadNumber}` +
+      (load.brokerName ? ` from ${load.brokerName}` : "") +
+      `\n\n` +
+      `Pickup: ${pickupLine}\n` +
+      `${pickupDateStr} ${load.pickupTime}\n\n` +
+      `Delivery: ${dropLine}\n` +
+      `${deliveryDateStr} ${load.deliveryTime}\n\n` +
+      commodityLine +
+      specialLine +
+      `Reply YES to accept or NO to decline.`;
 
   console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
   const { smsService } = await import("./sms-service");
