@@ -304,7 +304,10 @@ export const loads = pgTable("loads", {
   confirmationToken: varchar("confirmation_token", { length: 32 }).unique(),
   confirmationStatus: text("confirmation_status").default("pending"), // pending, accepted, declined
   confirmationRespondedAt: timestamp("confirmation_responded_at"),
+  bolPath: text("bol_path"),
+  bolUploadedAt: timestamp("bol_uploaded_at"),
   podPath: text("pod_path"),
+  podUploadedAt: timestamp("pod_uploaded_at"),
   overrideReason: text("override_reason"),
   
   // EV SOP Checklist Fields

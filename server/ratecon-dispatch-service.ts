@@ -190,6 +190,52 @@ export function computeLoadPayInput(parsed: any): PayLoadInput {
   };
 }
 
+/**
+ * Send a short follow-up SMS to the driver at a load lifecycle transition.
+ * Used after Accept (web or SMS) → tells driver next step + link to dashboard.
+ * Carrier-friendly: minimal text + single short URL only.
+ */
+export async function sendDriverNextStepSms(
+  loadId: string,
+  step: "accepted" | "picked-up" | "delivered",
+): Promise<{ ok: boolean; error?: string; messageSid?: string }> {
+  const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
+  if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
+  const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
+  if (!driver) return { ok: false, error: "Driver not found" };
+  const phone = (driver as any).phoneNumber ?? (driver as any).phone;
+  if (!phone) return { ok: false, error: "Driver has no phone" };
+
+  const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+  const url = `${baseUrl}/l/${load.confirmationToken}`;
+
+  let body = "";
+  if (step === "accepted") {
+    body =
+      `Load ${load.loadNumber} confirmed.\n\n` +
+      `When picked up, upload BOL or reply PICKED UP.\n\n` +
+      `Live tracking and pay: ${url}`;
+  } else if (step === "picked-up") {
+    body =
+      `Load ${load.loadNumber} marked PICKED UP.\n\n` +
+      `Drive safe. At delivery, upload POD or reply DELIVERED.\n\n` +
+      `Tracking: ${url}`;
+  } else if (step === "delivered") {
+    body =
+      `Load ${load.loadNumber} marked DELIVERED.\n\n` +
+      `Settlement and pay statement: ${url}`;
+  }
+
+  const { smsService } = await import("./sms-service");
+  const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
+  if (!result.success) {
+    console.error(`[next-step-sms] ❌ ${result.error}`);
+    return { ok: false, error: result.error };
+  }
+  console.log(`[next-step-sms] ✅ ${step} sent to ${phone} (SID: ${result.messageSid})`);
+  return { ok: true, messageSid: result.messageSid };
+}
+
 // Driver dispatch SMS always fires when called — "Approve & Dispatch" is an
 // explicit user action, so there's no point gating it behind an env var.
 // (Admin alerts and YES/NO replies remain gated by SMS_ENABLED to prevent
@@ -258,7 +304,8 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       `💰 NET PAY: $${pay.netPay.toFixed(2)}\n\n` +
       `Details & confirm: ${url}\n\n` +
       `Reply YES to accept · NO to decline`
-    : // CARRIER-FRIENDLY TEMPLATE — plain text, no URL, no price, no emojis
+    : // CARRIER-FRIENDLY TEMPLATE — short single-link, no pricing, no emojis.
+      // Pay breakdown lives on the dashboard (driver sees it after clicking link).
       `TRAQ IQ Dispatch\n` +
       `Load ${load.loadNumber}` +
       (load.brokerName ? ` from ${load.brokerName}` : "") +
@@ -269,6 +316,7 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       `${deliveryDateStr} ${load.deliveryTime}\n\n` +
       commodityLine +
       specialLine +
+      `View load and pay: ${url}\n\n` +
       `Reply YES to accept or NO to decline.`;
 
   console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
