@@ -178,7 +178,7 @@ export function computeLoadPayInput(parsed: any): PayLoadInput {
 // explicit user action, so there's no point gating it behind an env var.
 // (Admin alerts and YES/NO replies remain gated by SMS_ENABLED to prevent
 // noise during testing — only the explicit dispatch action sends real SMS.)
-export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string; messageSid?: string; phone?: string }> {
   const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
   if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
   const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
@@ -243,12 +243,12 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
     const result = await smsService.sendSMS(phone, body);
     if (!result.success) {
       console.error(`[dispatch-sms] ❌ ${result.error || "unknown SMS failure"}`);
-      return { ok: false, error: result.error || "SMS send failed (no error returned)" };
+      return { ok: false, error: result.error || "SMS send failed (no error returned)", phone };
     }
     console.log(`[dispatch-sms] ✅ sent to ${phone} (SID: ${result.messageSid})`);
-    return { ok: true };
+    return { ok: true, messageSid: result.messageSid, phone };
   } catch (err: any) {
     console.error(`[dispatch-sms] ❌ Twilio send threw: ${err.message}`);
-    return { ok: false, error: `Twilio: ${err.message}` };
+    return { ok: false, error: `Twilio: ${err.message}`, phone };
   }
 }
