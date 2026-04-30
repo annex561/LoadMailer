@@ -710,12 +710,21 @@ export const gmailIngest = {
         console.log(`      ℹ️  No driver on load ${loadNum} (real=${real}, alertsOn=${dispatcherAlertsOn}) — skipping SMS`);
         const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER || process.env.DISPATCHER_PHONE;
         if (dispatcherAlertsOn && real && dispatcherPhone) {
-          await smsLoadService.sendSMS(
-            dispatcherPhone,
-            `⚠️ RateCon received for load #${loadNum} but no driver is linked. ` +
-            `Origin: ${savedLoad.originCity || 'TBD'} → ${savedLoad.destCity || 'TBD'}. ` +
-            `Rate: $${savedLoad.rate || 0}. Assign a driver to dispatch.`
-          );
+          // Admin alert — link goes to the load detail page so dispatcher can
+          // open it and assign a driver. skipFooter:true keeps the auto-appended
+          // driver-dashboard footer off this admin-bound message (the footer
+          // assumes the recipient is the driver, which is wrong here).
+          const baseUrl = process.env.CUSTOM_DOMAIN || 'https://traqiq.app';
+          const normalizedBase = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
+          await smsLoadService.sendSMS({
+            to: dispatcherPhone,
+            body:
+              `⚠️ RateCon received for load #${loadNum} but no driver is linked. ` +
+              `Origin: ${savedLoad.originCity || 'TBD'} → ${savedLoad.destCity || 'TBD'}. ` +
+              `Rate: $${savedLoad.rate || 0}. Assign a driver to dispatch.\n\n` +
+              `📋 Open load: ${normalizedBase}/loads/${savedLoad.id}`,
+            skipFooter: true,
+          });
         }
         return;
       }
@@ -752,10 +761,16 @@ export const gmailIngest = {
         console.error(`      ❌ Dispatch SMS FAILED for load ${loadNum}: ${dispatchResult?.error}`);
         const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER || process.env.DISPATCHER_PHONE;
         if (dispatcherAlertsOn && dispatcherPhone) {
-          await smsLoadService.sendSMS(
-            dispatcherPhone,
-            `❌ Failed to SMS driver ${driverToDispatch.name} for load #${loadNum}: ${dispatchResult?.error || 'unknown error'}`
-          );
+          const baseUrl = process.env.CUSTOM_DOMAIN || 'https://traqiq.app';
+          const normalizedBase = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
+          await smsLoadService.sendSMS({
+            to: dispatcherPhone,
+            body:
+              `❌ Failed to SMS driver ${driverToDispatch.name} for load #${loadNum}: ` +
+              `${dispatchResult?.error || 'unknown error'}\n\n` +
+              `📋 Open load: ${normalizedBase}/loads/${savedLoad.id}`,
+            skipFooter: true,
+          });
         }
       }
     } catch (err: any) {
@@ -764,10 +779,11 @@ export const gmailIngest = {
         const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER || process.env.DISPATCHER_PHONE;
         if (dispatcherAlertsOn && dispatcherPhone) {
           const { smsLoadService } = await import('../sms-service');
-          await smsLoadService.sendSMS(
-            dispatcherPhone,
-            `❌ Dispatch automation error for load #${loadNum}: ${err?.message || err}`
-          );
+          await smsLoadService.sendSMS({
+            to: dispatcherPhone,
+            body: `❌ Dispatch automation error for load #${loadNum}: ${err?.message || err}`,
+            skipFooter: true,
+          });
         }
       } catch {}
     }

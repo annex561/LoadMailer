@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
 import {
   Loader2,
@@ -16,12 +16,23 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-export default function LoadDetailsPage() {
+interface LoadDetailsPageProps {
+  /** Optional explicit id, used when this page is rendered outside a wouter Route
+   *  (e.g. from the loadops-dashboard renderContent switch). When omitted, the
+   *  id is read from useParams and then from the location pathname as fallback. */
+  id?: string;
+}
+
+export default function LoadDetailsPage({ id: idProp }: LoadDetailsPageProps = {}) {
   const params = useParams<{ id: string }>();
+  const [location] = useLocation();
+  // Resolve id from (1) explicit prop (2) wouter useParams (3) /loads/<id> path
+  const fallbackFromPath = location.match(/^\/loads\/([^/]+)$/)?.[1];
+  const id = idProp ?? params.id ?? fallbackFromPath;
 
   const { data: load, isLoading, error } = useQuery<any>({
-    queryKey: [`/api/loads/${params.id}`],
-    enabled: !!params.id,
+    queryKey: [`/api/loads/${id}`],
+    enabled: !!id,
   });
 
   if (isLoading) {

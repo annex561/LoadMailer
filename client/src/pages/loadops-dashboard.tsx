@@ -97,6 +97,7 @@ const Settlements = lazy(() => import('./settlements'));
 const DriverProfile = lazy(() => import('./driver-profile'));
 const UsersAdmin = lazy(() => import('./users'));
 const GmailSettings = lazy(() => import('./gmail-settings'));
+const LoadDetailsPage = lazy(() => import('./load-details'));
 import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
@@ -663,6 +664,13 @@ export default function LoadOpsDashboard() {
       case '/gmail-settings':
         return <RequireRole roles={["admin"]}><GmailSettings /></RequireRole>;
       default:
+        // Pattern routes (must be after the string-equality cases above).
+        // /loads/<id> — load detail page (linked from "New Load Detected" toast,
+        // /api/loads listing rows, dispatch admin alerts, etc.)
+        const loadDetailMatch = location.match(/^\/loads\/([^/]+)$/);
+        if (loadDetailMatch) {
+          return <LoadDetailsPage id={loadDetailMatch[1]} />;
+        }
         return <NotFound />;
     }
   };

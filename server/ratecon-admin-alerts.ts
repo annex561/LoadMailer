@@ -38,8 +38,11 @@ export async function notifyAdminReviewNeeded(params: {
         continue;
       }
 
+      // skipFooter:true — this is an admin alert, not a driver-bound message,
+      // so the auto-appended "👤 My Dashboard: …" footer is irrelevant and
+      // misleading (it would point the admin to a driver dashboard).
       const { smsService } = await import("./sms-service");
-      await smsService.sendSMS(phone, body);
+      await smsService.sendSMS({ to: phone, body, skipFooter: true });
     }
   } catch (err: any) {
     console.error("[admin-alerts] send failed:", err.message);
