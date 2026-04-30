@@ -206,13 +206,11 @@ export async function sendDriverNextStepSms(
   const phone = (driver as any).phoneNumber ?? (driver as any).phone;
   if (!phone) return { ok: false, error: "Driver has no phone" };
 
-  // Two templates, gated by SMS_FULL_BODY env var.
-  //   SMS_FULL_BODY=true  → rich template w/ emojis + URLs (post-10DLC)
-  //   default             → SMS-only / keyword-driven (pre-10DLC carrier filter avoidance)
-  // The URL routes to /l/<token> where the driver lands on a tokenized page
-  // that adapts to the current step — at "accepted" it shows the BOL upload
-  // button; at "picked-up" it shows POD upload; at "delivered" it shows pay.
-  const useFullBody = process.env.SMS_FULL_BODY === "true";
+  // Post-10DLC: URLs in dispatch SMS are the default. To temporarily fall
+  // back to the keyword-only template (e.g. if Twilio delivery degrades),
+  // set SMS_MINIMAL=true. Old SMS_FULL_BODY=true is still honored for
+  // backwards compatibility but is no longer required.
+  const useFullBody = process.env.SMS_MINIMAL !== "true";
   const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
   const url = `${baseUrl}/l/${load.confirmationToken}`;
 
@@ -289,15 +287,12 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       ? load.deliveryAddress
       : `${load.destCity ?? ""}, ${load.destState ?? ""}`.trim().replace(/^,\s*/, "");
 
-  // SMS body. Two templates — set SMS_FULL_BODY=true in env to use the full
-  // version (emojis, URL, pricing). Default is the carrier-friendly minimal
-  // version because Twilio error 30007 (carrier filter) was blocking the rich
-  // template in production. Carriers (T-Mobile/AT&T/Verizon) tend to filter:
-  //   - Unfamiliar / unregistered URLs
-  //   - Pricing patterns
-  //   - Emojis combined with links + pay info
-  // Once A2P 10DLC registration is approved, flip SMS_FULL_BODY=true.
-  const useFullBody = process.env.SMS_FULL_BODY === "true";
+  // Post-10DLC: rich template with emojis, URL, and pricing is the default.
+  // To fall back to the carrier-friendly minimal version (no URLs), set
+  // SMS_MINIMAL=true. This was the pre-10DLC default to avoid Twilio error
+  // 30007 (carrier filter), but is no longer needed now that the campaign
+  // CMce36c... is verified.
+  const useFullBody = process.env.SMS_MINIMAL !== "true";
 
   const commodityLine = load.description && load.description !== "General freight"
     ? `${useFullBody ? "📦 " : ""}${load.description}\n`
