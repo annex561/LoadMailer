@@ -251,26 +251,17 @@ export async function sendDriverNextStepSms(
   return { ok: true, messageSid: result.messageSid };
 }
 
-// Driver dispatch SMS always fires when called — "Approve & Dispatch" is an
-// explicit user action, so there's no point gating it behind an env var.
-// (Admin alerts and YES/NO replies remain gated by SMS_ENABLED to prevent
-// noise during testing — only the explicit dispatch action sends real SMS.)
-export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string; messageSid?: string; phone?: string }> {
-  const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
-  if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
-  const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
-  if (!driver) return { ok: false, error: "Driver not found" };
-  const phone = (driver as any).phoneNumber ?? (driver as any).phone;
-  if (!phone) return { ok: false, error: "Driver has no phone" };
-
-  const payInput = computeLoadPayInput({
-    rate: { value: load.rate ?? 0 },
-    miles: { value: load.miles ?? 0 },
-  });
-  const pay = calculatePay(payInput, driverProfileToPayInput(driver));
-
+/**
+ * Build the dispatch SMS body for a given load + driver. Pure function
+ * (no DB, no SMS send) so it can be exercised by the admin "Test Dispatch"
+ * page to preview the exact message a driver will receive.
+ *
+ * Matches the body that sendDispatchSms() sends. SMS_MINIMAL=true env var
+ * flips to the legacy keyword-only template.
+ */
+export function buildDispatchSmsBody(load: any, driver: any): { body: string; url: string } {
   const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
-  const url = `${baseUrl}/l/${load.confirmationToken}`;
+  const url = `${baseUrl}/l/${load.confirmationToken ?? "test-token"}`;
   const pickupDateStr = load.pickupDate instanceof Date
     ? load.pickupDate.toLocaleDateString()
     : new Date(load.pickupDate).toLocaleDateString();
@@ -287,12 +278,12 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       ? load.deliveryAddress
       : `${load.destCity ?? ""}, ${load.destState ?? ""}`.trim().replace(/^,\s*/, "");
 
-  // Post-10DLC: rich template with emojis, URL, and pricing is the default.
-  // To fall back to the carrier-friendly minimal version (no URLs), set
-  // SMS_MINIMAL=true. This was the pre-10DLC default to avoid Twilio error
-  // 30007 (carrier filter), but is no longer needed now that the campaign
-  // CMce36c... is verified.
   const useFullBody = process.env.SMS_MINIMAL !== "true";
+  const payInput = computeLoadPayInput({
+    rate: { value: load.rate ?? 0 },
+    miles: { value: load.miles ?? 0 },
+  });
+  const pay = calculatePay(payInput, driverProfileToPayInput(driver));
 
   const commodityLine = load.description && load.description !== "General freight"
     ? `${useFullBody ? "📦 " : ""}${load.description}\n`
@@ -302,8 +293,7 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
     : "";
 
   const body = useFullBody
-    ? // FULL TEMPLATE — emojis + URL + price (use after A2P 10DLC approved)
-      `TRAQ-IQ Dispatch\n` +
+    ? `TRAQ-IQ Dispatch\n` +
       `New load #${load.loadNumber}` +
       (load.brokerName ? ` (${load.brokerName})` : "") +
       `\n\n` +
@@ -316,13 +306,7 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       `💰 NET PAY: $${pay.netPay.toFixed(2)}\n\n` +
       `Details & confirm: ${url}\n\n` +
       `Reply YES to accept · NO to decline`
-    : // SMS-ONLY TEMPLATE — no URLs, no emojis, no pricing.
-      // Driver journey is 100% via SMS keywords + MMS photos:
-      //   YES / NO       → accept / decline
-      //   PICKED UP      → mark in-transit (also: send BOL photo)
-      //   DELIVERED      → mark delivered (also: send POD photo)
-      // Pay statement comes weekly. Avoids carrier filter (Twilio 30007).
-      `TRAQ IQ Dispatch\n` +
+    : `TRAQ IQ Dispatch\n` +
       `Load ${load.loadNumber}` +
       (load.brokerName ? ` from ${load.brokerName}` : "") +
       `\n\n` +
@@ -333,6 +317,26 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       commodityLine +
       specialLine +
       `Reply YES to accept or NO to decline.`;
+
+  return { body, url };
+}
+
+// Driver dispatch SMS always fires when called — "Approve & Dispatch" is an
+// explicit user action, so there's no point gating it behind an env var.
+// (Admin alerts and YES/NO replies remain gated by SMS_ENABLED to prevent
+// noise during testing — only the explicit dispatch action sends real SMS.)
+export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string; messageSid?: string; phone?: string }> {
+  const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
+  if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
+  const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
+  if (!driver) return { ok: false, error: "Driver not found" };
+  const phone = (driver as any).phoneNumber ?? (driver as any).phone;
+  if (!phone) return { ok: false, error: "Driver has no phone" };
+
+  // Reuse the shared body-builder so the admin "Test Dispatch" page renders
+  // the exact same SMS that real drivers receive.
+  const useFullBody = process.env.SMS_MINIMAL !== "true";
+  const { body } = buildDispatchSmsBody(load, driver);
 
   console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
   const { smsService, withBrandAndOptOut } = await import("./sms-service");

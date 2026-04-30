@@ -33,6 +33,7 @@ import { smsLoadService } from './sms-service';
 import { smsCommunicationService } from './sms-communication-service';
 import { setupAuth, isAuthenticated, requireRole } from "./auth";
 import { registerUserRoutes } from "./routes/users";
+import { registerTestDispatchRoutes } from "./routes/test-dispatch";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';
@@ -816,6 +817,8 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   // User management endpoints (admin-only via prefix guard above)
   registerUserRoutes(app);
+  // Admin "Test Dispatch SMS" tooling (each route declares requireRole('admin') itself)
+  registerTestDispatchRoutes(app);
 
   // Ratecon intake routes (PDF upload + manual entry)
   registerRateconIntakeRoutes(app);
