@@ -163,6 +163,11 @@ export const drivers = pgTable("drivers", {
   phoneNumber: text("phone_number").unique(),
   city: text("city"),
   enableSmsNotifications: boolean("enable_sms_notifications").notNull().default(false),
+  // A2P 10DLC compliance: timestamped consent + opt-out audit trail required by TCR.
+  smsConsentAt: timestamp("sms_consent_at"),
+  smsConsentSource: text("sms_consent_source"), // "onboarding_form" | "verbal_recorded" | "imported_legacy" | etc.
+  smsConsentIp: text("sms_consent_ip"), // IP at time of consent (for audit)
+  smsOptedOutAt: timestamp("sms_opted_out_at"),
   // Mood tracking
   currentMood: text("current_mood").default("😐"), // emoji representing current mood
   moodUpdatedAt: timestamp("mood_updated_at"),

@@ -60,6 +60,9 @@ const TrueRPMCalculator = lazy(() => import("@/pages/true-rpm-calculator"));
 const RateconUploadPage = lazy(() => import("@/pages/ratecon-upload"));
 const ReviewQueuePage = lazy(() => import("@/pages/review-queue"));
 const DriverConfirmPage = lazy(() => import("@/pages/driver-confirm"));
+// Public legal pages — required for A2P 10DLC TCR campaign approval.
+const PrivacyPolicy = lazy(() => import("@/pages/privacy"));
+const TermsOfService = lazy(() => import("@/pages/terms"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -146,6 +149,10 @@ function App() {
             <Switch>
               {/* Auth page - no sidebar/header */}
               <Route path="/auth" component={AuthPage} />
+
+              {/* Public legal pages — must be reachable without login (TCR requirement) */}
+              <Route path="/privacy" component={PrivacyPolicy} />
+              <Route path="/terms" component={TermsOfService} />
 
               {/* Standalone driver pages without sidebar/header - for driver self-service only */}
               <Route path="/driver-onboarding" component={DriverOnboarding} />

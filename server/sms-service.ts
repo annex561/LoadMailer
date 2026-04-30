@@ -29,6 +29,48 @@ interface DriverMatch {
  *   - body already contains /driver/ /my-pay/ /u/ or /statements/ — avoids
  *     doubling up when the calling code constructed its own portal link.
  */
+/**
+ * A2P 10DLC compliance: refuse to send to a driver who has previously replied STOP.
+ * Returns the driver row if the recipient is a known opted-out driver, otherwise null.
+ * Looks up by phone in any of the three formats we store (+E164, raw digits, original).
+ */
+async function findOptedOutDriver(phone: string): Promise<{ id: string; smsOptedOutAt: Date | null } | null> {
+  try {
+    if (!phone) return null;
+    const digits = phone.replace(/\D/g, '');
+    const e164 = phone.startsWith('+') ? phone : `+1${digits}`;
+    const { db } = await import('./db');
+    const { drivers } = await import('@shared/schema');
+    const { or, eq } = await import('drizzle-orm');
+    const [d] = await db
+      .select({ id: drivers.id, smsOptedOutAt: drivers.smsOptedOutAt })
+      .from(drivers)
+      .where(or(eq(drivers.phone, phone), eq(drivers.phone, e164), eq(drivers.phone, digits)))
+      .limit(1);
+    if (d?.smsOptedOutAt) return d;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A2P 10DLC compliance: standardize first-touch / marketing-flavored SMS with the
+ * required brand identifier and opt-out language. Idempotent — won't double up
+ * if the brand or STOP suffix is already present.
+ */
+export function withBrandAndOptOut(body: string, opts: { includeStopSuffix?: boolean } = {}): string {
+  const { includeStopSuffix = true } = opts;
+  let out = body.trim();
+  if (!/^TRAQ[- ]?IQ[:\s]/i.test(out)) {
+    out = `TRAQ-IQ: ${out}`;
+  }
+  if (includeStopSuffix && !/reply\s+stop/i.test(out)) {
+    out = `${out}\nReply STOP to opt out, HELP for help.`;
+  }
+  return out;
+}
+
 async function appendDriverPortalFooter(phone: string, body: string): Promise<string> {
   try {
     if (!phone || !body) return body;
@@ -104,6 +146,14 @@ export class SMSLoadService {
     const to = typeof toOrParams === 'string' ? toOrParams : toOrParams.to;
     let body = typeof toOrParams === 'string' ? bodyParam! : toOrParams.body;
     const skipFooter = typeof toOrParams === 'object' && !!toOrParams.skipFooter;
+
+    // A2P 10DLC: never send to a driver who has replied STOP. This is a hard guard
+    // — Twilio also enforces this, but we double-check to keep our audit clean.
+    const optedOut = await findOptedOutDriver(to);
+    if (optedOut) {
+      console.log(`🛑 SMS blocked — driver ${optedOut.id} opted out at ${optedOut.smsOptedOutAt?.toISOString()}`);
+      return { success: false, error: 'Recipient has opted out (STOP)' };
+    }
 
     // Auto-append driver portal footer when the recipient is a known driver.
     // Dedup: skip if the message already links to /driver/ /my-pay/ /u/ /statements.

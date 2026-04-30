@@ -51,9 +51,12 @@ interface OnboardingData {
   // Preferences
   preferredLanes: string[];
   avoidAreas: string[];
-  
+
   // Authentication
   confirmPassword: string;
+
+  // A2P 10DLC SMS consent — required for compliant outbound messaging.
+  smsConsent: boolean;
 }
 
 const US_STATES = [
@@ -96,7 +99,8 @@ export default function DriverOnboarding() {
     accountNumber: '',
     preferredLanes: [],
     avoidAreas: [],
-    confirmPassword: 'password123'
+    confirmPassword: 'password123',
+    smsConsent: false,
   });
 
   const [, setLocation] = useLocation();
@@ -230,8 +234,8 @@ export default function DriverOnboarding() {
                formData.loadType && formData.maxLength > 0 && formData.maxWeight > 0;
       case 3: // Insurance & Banking
         return formData.insuranceProvider && formData.bankName && formData.routingNumber;
-      case 4: // Preferences
-        return true; // Optional step
+      case 4: // Preferences + SMS consent
+        return formData.smsConsent === true; // SMS consent is required (A2P 10DLC).
       default:
         return true;
     }
@@ -589,6 +593,40 @@ export default function DriverOnboarding() {
                 className="bg-white border border-gray-300"
                 data-testid="textarea-avoid-areas"
               />
+            </div>
+
+            {/* A2P 10DLC SMS consent — required by The Campaign Registry. */}
+            <div className="mt-6 pt-6 border-t">
+              <h4 className="font-medium mb-3">SMS Consent (required)</h4>
+              <label className="flex items-start gap-3 cursor-pointer p-4 rounded-md border bg-slate-50 hover:bg-slate-100 transition">
+                <input
+                  type="checkbox"
+                  checked={formData.smsConsent}
+                  onChange={(e) => updateFormData('smsConsent', e.target.checked)}
+                  className="mt-1 w-4 h-4"
+                  data-testid="checkbox-sms-consent"
+                  required
+                />
+                <span className="text-sm text-slate-800">
+                  I agree to receive SMS messages from <strong>TRAQ-IQ</strong> for load offers,
+                  dispatch coordination, GPS tracking requests, document uploads, and account
+                  notifications. Message frequency varies. Message and data rates may apply.
+                  Reply <strong>STOP</strong> to cancel, <strong>HELP</strong> for help. See our{' '}
+                  <a href="/privacy" target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                    Privacy Policy
+                  </a>{' '}
+                  and{' '}
+                  <a href="/terms" target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                    Terms of Service
+                  </a>.
+                </span>
+              </label>
+              {!formData.smsConsent && (
+                <p className="text-xs text-slate-500 mt-2">
+                  You must agree to SMS notifications to complete onboarding — TRAQ-IQ uses SMS
+                  for all dispatch and load communication.
+                </p>
+              )}
             </div>
           </div>
         );

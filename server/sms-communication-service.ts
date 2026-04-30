@@ -68,11 +68,43 @@ export class SMSCommunicationService {
 
       const normalizedMessage = message.trim().toLowerCase();
 
-      // 🛑 STOP — Twilio handles opt-out automatically at carrier level.
-      // We just acknowledge and log so dispatcher can see it.
+      // 🛑 STOP — Twilio handles the carrier-level opt-out + confirmation reply.
+      // We persist it to drivers.smsOptedOutAt so our own send path (sms-service.ts)
+      // refuses to message this driver going forward, and so we have a TCR audit trail.
       if (['stop', 'unsubscribe', 'quit', 'cancel', 'end'].includes(normalizedMessage)) {
         console.log(`🛑 Driver ${driver.name} (${fromPhone}) sent STOP — opted out via Twilio`);
+        try {
+          const { db } = await import('./db');
+          const { drivers } = await import('@shared/schema');
+          const { eq } = await import('drizzle-orm');
+          await db
+            .update(drivers)
+            .set({ smsOptedOutAt: new Date(), enableSmsNotifications: false })
+            .where(eq(drivers.id, driver.id));
+          console.log(`✅ Driver ${driver.name} marked opted-out in DB`);
+        } catch (err) {
+          console.error(`Failed to persist opt-out for driver ${driver.id}:`, err);
+        }
         // Don't send a reply here — Twilio intercepts STOP and sends its own confirmation.
+        return;
+      }
+
+      // 🔄 START / UNSTOP — driver wants to re-subscribe. Twilio handles the
+      // carrier-level resubscribe; we mirror that in our DB so sends resume.
+      if (['start', 'unstop', 'yes resume', 'resume'].includes(normalizedMessage)) {
+        console.log(`✅ Driver ${driver.name} (${fromPhone}) sent START — resubscribing`);
+        try {
+          const { db } = await import('./db');
+          const { drivers } = await import('@shared/schema');
+          const { eq } = await import('drizzle-orm');
+          await db
+            .update(drivers)
+            .set({ smsOptedOutAt: null, enableSmsNotifications: true, smsConsentAt: new Date(), smsConsentSource: 'sms_resubscribe' })
+            .where(eq(drivers.id, driver.id));
+        } catch (err) {
+          console.error(`Failed to persist re-subscribe for driver ${driver.id}:`, err);
+        }
+        // Twilio sends its own confirmation; no reply needed.
         return;
       }
 

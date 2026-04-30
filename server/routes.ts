@@ -31,7 +31,8 @@ import { datScraperService as puppeteerDATService } from './dat-puppeteer-scrape
 import { googleSheetsService } from './google-sheets-service';
 import { smsLoadService } from './sms-service';
 import { smsCommunicationService } from './sms-communication-service';
-import { setupAuth, isAuthenticated } from "./auth";
+import { setupAuth, isAuthenticated, requireRole } from "./auth";
+import { registerUserRoutes } from "./routes/users";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';
@@ -795,6 +796,27 @@ export async function registerRoutes(app: Express): Promise<void> {
   ], isAuthenticated);
   console.log('✅ Protected communication and AI endpoints from unauthorized access');
 
+  // Admin-only API surface — prefix guards run before route handlers below.
+  // Dispatchers should not reach billing, integrations, fleet config, scheduler control,
+  // dispatch criteria mutation, or user management.
+  app.use([
+    '/api/gmail',
+    '/api/stripe',
+    '/api/fleet',
+    '/api/google-sheets-import',
+    '/api/ingest/scheduler',
+    '/api/users',
+  ], requireRole('admin'));
+  // /api/dispatch-criteria: GET allowed for dispatchers, mutations admin-only.
+  app.use('/api/dispatch-criteria', (req, res, next) => {
+    if (req.method === 'GET') return isAuthenticated(req, res, next);
+    return requireRole('admin')(req, res, next);
+  });
+  console.log('🔒 Admin-only route prefixes guarded');
+
+  // User management endpoints (admin-only via prefix guard above)
+  registerUserRoutes(app);
+
   // Ratecon intake routes (PDF upload + manual entry)
   registerRateconIntakeRoutes(app);
   registerDriverConfirmationRoutes(app);
@@ -802,9 +824,13 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Add authentication routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const sessionUser = req.user;
+      const userId = sessionUser?.id ?? sessionUser?.claims?.sub;
+      if (!userId) return res.status(401).json({ message: "Unauthorized" });
       const user = await storage.getUser(userId);
-      res.json(user);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      const { password: _pw, ...safe } = user as any;
+      res.json(safe);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -1059,7 +1085,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Backfill missing tracking tokens for drivers (required for statement SMS links)
-  app.post('/api/drivers/backfill-tokens', async (_req, res) => {
+  app.post('/api/drivers/backfill-tokens', requireRole('admin'), async (_req, res) => {
     try {
       const { pool } = await import('./db');
       if (!pool) return res.status(500).json({ ok: false, error: 'No DB pool' });
@@ -1076,7 +1102,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Manually fire the weekly statements job (for testing + off-cycle runs)
-  app.post('/api/statements/send-weekly', async (req, res) => {
+  app.post('/api/statements/send-weekly', requireRole('admin', 'finance'), async (req, res) => {
     try {
       const { statementsCron } = await import('./statements-cron');
       const result = await statementsCron.triggerNow(req.body?.weekStart);
@@ -3015,19 +3041,28 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.post("/api/driver-onboarding", async (req, res) => {
     try {
       const { token, ...driverData } = req.body;
-      
+
       let tokenData = null;
-      
+
       // Validate token if provided (token is optional)
       if (token) {
         tokenData = await storage.getOnboardingToken(token);
-        
+
         if (!tokenData || tokenData.isUsed || new Date() > new Date(tokenData.expiresAt)) {
           return res.status(400).json({ error: "Invalid or expired token" });
         }
       }
 
+      // A2P 10DLC: SMS consent is required to onboard. Reject without it.
+      if (!driverData.smsConsent) {
+        return res.status(400).json({
+          error: "SMS consent required",
+          message: "Driver must agree to receive SMS messages to complete onboarding (A2P 10DLC compliance).",
+        });
+      }
+
       // Prepare driver data
+      const consentIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || null;
       const driverRecord = {
         name: driverData.name,
         email: driverData.email || (tokenData?.email),
@@ -3045,7 +3080,11 @@ export async function registerRoutes(app: Express): Promise<void> {
         status: 'available' as const,
         enableSmsNotifications: true,
         enableTelegramNotifications: false,
-        isOnboarded: true
+        isOnboarded: true,
+        // A2P 10DLC consent audit trail
+        smsConsentAt: new Date(),
+        smsConsentSource: 'onboarding_form',
+        smsConsentIp: consentIp,
       };
 
       // Check for duplicates
