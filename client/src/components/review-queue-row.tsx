@@ -97,7 +97,7 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
           <div>
             <label className="text-xs font-medium">📍 Pickup</label>
             <Input
-              value={parsed.pickup?.address ?? ""}
+              value={edited.pickup?.address ?? ""}
               onChange={(e) =>
                 setEdited({ ...edited, pickup: { ...edited.pickup, address: e.target.value } })
               }
@@ -107,14 +107,14 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
             />
             <div className="flex gap-1 mt-1">
               <Input
-                value={parsed.pickup?.city ?? ""}
+                value={edited.pickup?.city ?? ""}
                 onChange={(e) =>
                   setEdited({ ...edited, pickup: { ...edited.pickup, city: e.target.value } })
                 }
                 placeholder="City"
               />
               <Input
-                value={parsed.pickup?.state ?? ""}
+                value={edited.pickup?.state ?? ""}
                 onChange={(e) =>
                   setEdited({ ...edited, pickup: { ...edited.pickup, state: e.target.value } })
                 }
@@ -125,14 +125,14 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
             <div className="flex gap-1 mt-1">
               <Input
                 type="date"
-                value={parsed.pickup?.date ?? ""}
+                value={edited.pickup?.date ?? ""}
                 onChange={(e) =>
                   setEdited({ ...edited, pickup: { ...edited.pickup, date: e.target.value } })
                 }
               />
               <Input
                 type="time"
-                value={parsed.pickup?.time ?? ""}
+                value={edited.pickup?.time ?? ""}
                 onChange={(e) =>
                   setEdited({ ...edited, pickup: { ...edited.pickup, time: e.target.value } })
                 }
@@ -146,7 +146,7 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
           <div>
             <label className="text-xs font-medium">📍 Drop</label>
             <Input
-              value={parsed.drop?.address ?? ""}
+              value={edited.drop?.address ?? ""}
               onChange={(e) =>
                 setEdited({ ...edited, drop: { ...edited.drop, address: e.target.value } })
               }
@@ -156,14 +156,14 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
             />
             <div className="flex gap-1 mt-1">
               <Input
-                value={parsed.drop?.city ?? ""}
+                value={edited.drop?.city ?? ""}
                 onChange={(e) =>
                   setEdited({ ...edited, drop: { ...edited.drop, city: e.target.value } })
                 }
                 placeholder="City"
               />
               <Input
-                value={parsed.drop?.state ?? ""}
+                value={edited.drop?.state ?? ""}
                 onChange={(e) =>
                   setEdited({ ...edited, drop: { ...edited.drop, state: e.target.value } })
                 }
@@ -174,14 +174,14 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
             <div className="flex gap-1 mt-1">
               <Input
                 type="date"
-                value={parsed.drop?.date ?? ""}
+                value={edited.drop?.date ?? ""}
                 onChange={(e) =>
                   setEdited({ ...edited, drop: { ...edited.drop, date: e.target.value } })
                 }
               />
               <Input
                 type="time"
-                value={parsed.drop?.time ?? ""}
+                value={edited.drop?.time ?? ""}
                 onChange={(e) =>
                   setEdited({ ...edited, drop: { ...edited.drop, time: e.target.value } })
                 }
@@ -215,7 +215,7 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
             <label className="text-xs font-medium">Rate</label>
             <Input
               type="number"
-              value={parsed.rate?.value ?? ""}
+              value={edited.rate?.value ?? ""}
               onChange={(e) =>
                 setEdited({ ...edited, rate: { ...edited.rate, value: Number(e.target.value) } })
               }
