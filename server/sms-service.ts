@@ -76,27 +76,50 @@ async function appendDriverPortalFooter(phone: string, body: string): Promise<st
     if (!phone || !body) return body;
     if (/\/(driver|my-pay|u|statements)\//.test(body)) return body;
 
-    // Normalize phone to E.164-ish so it matches however we stored it
+    // Normalize phone to all 3 forms we might have stored.
     const digits = phone.replace(/\D/g, '');
-    const e164 = phone.startsWith('+') ? phone : `+1${digits}`;
+    const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+    const e164 = phone.startsWith('+') ? phone : `+1${last10}`;
 
     const { db } = await import('./db');
     const { drivers } = await import('@shared/schema');
     const { or, eq } = await import('drizzle-orm');
 
+    // Check BOTH columns (phone and phoneNumber) in all 3 normalized forms.
+    // Drivers have been imported through multiple onboarding paths over time
+    // and the phone may be stored without +1, with +1, or in either column.
     const [driver] = await db
       .select()
       .from(drivers)
-      .where(or(eq(drivers.phone, phone), eq(drivers.phone, e164), eq(drivers.phone, digits)))
+      .where(
+        or(
+          eq(drivers.phone, phone),
+          eq(drivers.phone, e164),
+          eq(drivers.phone, digits),
+          eq(drivers.phone, last10),
+          eq(drivers.phoneNumber, phone),
+          eq(drivers.phoneNumber, e164),
+          eq(drivers.phoneNumber, digits),
+          eq(drivers.phoneNumber, last10),
+        ),
+      )
       .limit(1);
 
-    if (!driver || !driver.trackingToken) return body;
+    if (!driver) {
+      console.log(`[footer] no driver row for phone ${phone} (tried ${e164}, ${digits}, ${last10}) — skipping dashboard footer`);
+      return body;
+    }
+    if (!driver.trackingToken) {
+      console.log(`[footer] driver ${driver.id} has no trackingToken — skipping dashboard footer`);
+      return body;
+    }
 
     const baseUrl = process.env.CUSTOM_DOMAIN || process.env.PUBLIC_URL || 'https://traqiq.app';
     const normalizedBase = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
     return `${body}\n\n👤 My Dashboard: ${normalizedBase}/driver/${driver.trackingToken}`;
   } catch (err) {
     // Footer is best-effort; never break message delivery.
+    console.error('[footer] error:', err);
     return body;
   }
 }

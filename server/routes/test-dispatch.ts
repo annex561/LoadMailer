@@ -1,9 +1,9 @@
 import type { Express } from "express";
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { drivers, loads } from "@shared/schema";
 import { requireRole } from "../auth";
-import {
-  buildDispatchSmsBody,
-  driverProfileToPayInput,
-} from "../ratecon-dispatch-service";
+import { buildDispatchSmsBody } from "../ratecon-dispatch-service";
 
 /**
  * Admin-only "Test Dispatch SMS" tooling.
@@ -94,10 +94,94 @@ export function registerTestDispatchRoutes(app: Express) {
       const load = defaultLoad(overrides);
       const driver = defaultDriver(overrides);
       const { body, url } = buildDispatchSmsBody(load, driver);
-      res.json({ ok: true, body, url, load, driver });
+      // Append the same footer the send path appends, so the preview
+      // matches what a driver actually receives.
+      const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+      const normalizedBase = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`;
+      const { withBrandAndOptOut } = await import("../sms-service");
+      const finalBody = withBrandAndOptOut(`${body}\n\n👤 My Dashboard: ${normalizedBase}/driver/test-driver-token`);
+      res.json({ ok: true, body: finalBody, url, load, driver });
     } catch (err: any) {
       console.error("[test-dispatch:preview]", err);
       res.status(500).json({ ok: false, error: err?.message ?? "preview failed" });
+    }
+  });
+
+  // Send a test dispatch SMS using a REAL load's data (broker, addresses,
+  // dates, real confirmationToken) but redirect the message to a chosen
+  // phone instead of the load's actual driver. Lets the admin verify the
+  // exact end-to-end SMS — including a clickable /l/<token> link that
+  // resolves to a real load — without messaging the real driver.
+  app.post("/api/admin/test-dispatch/from-load/:loadId", requireRole("admin"), async (req, res) => {
+    try {
+      const { loadId } = req.params;
+      const phone = (req.body?.phone ?? "").toString().trim();
+      if (!phone) {
+        return res.status(400).json({ ok: false, error: "phone is required" });
+      }
+
+      const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
+      if (!load) return res.status(404).json({ ok: false, error: "Load not found" });
+
+      // Use the load's real driver if one is assigned (so NET PAY is computed
+      // with the actual pay terms). Otherwise fall back to a sensible default
+      // so the SMS still renders.
+      let driver: any = null;
+      if (load.driverId) {
+        const [d] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
+        driver = d;
+      }
+      if (!driver) {
+        driver = {
+          name: "Test Driver",
+          payType: "percent",
+          payRate: 80,
+          payRateDeadhead: 0,
+          deductFactoringEnabled: false,
+          deductFactoringPct: 0,
+          deductDispatchEnabled: false,
+          deductDispatchPct: 0,
+          deductFuelAdvanceEnabled: false,
+          deductFuelAdvanceAmount: 0,
+        };
+      }
+
+      const { body, url } = buildDispatchSmsBody(load, driver);
+      const { smsService, withBrandAndOptOut } = await import("../sms-service");
+
+      // Manually append the "👤 My Dashboard" footer using the load's
+      // assigned driver token (or a synthetic one if no driver assigned),
+      // because the auto-footer in sms-service.ts only fires when the
+      // recipient phone matches a registered driver — not the case for
+      // a test send to the admin's phone.
+      const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+      const normalizedBase = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`;
+      const dashboardToken = (driver as any).trackingToken ?? "test-driver-token";
+      const bodyWithFooter = `${body}\n\n👤 My Dashboard: ${normalizedBase}/driver/${dashboardToken}`;
+      const finalBody = withBrandAndOptOut(bodyWithFooter);
+
+      const result = await smsService.sendSMS({
+        to: phone,
+        body: finalBody,
+        // skipFooter:true — we just appended it manually above, so don't
+        // let the auto-footer logic also run (would dedup but better safe).
+        skipFooter: true,
+      });
+      console.log(
+        `[test-dispatch:from-load] loadId=${loadId} loadNum=${load.loadNumber} -> ${phone} ok=${result.success} sid=${result.messageSid ?? "-"} (real driver phone bypassed)`
+      );
+      res.json({
+        ok: result.success,
+        error: result.error,
+        messageSid: result.messageSid,
+        body: finalBody,
+        url,
+        load: { id: load.id, loadNumber: load.loadNumber, brokerName: load.brokerName, confirmationToken: load.confirmationToken },
+        driver: { name: (driver as any).name, payType: (driver as any).payType, payRate: (driver as any).payRate },
+      });
+    } catch (err: any) {
+      console.error("[test-dispatch:from-load]", err);
+      res.status(500).json({ ok: false, error: err?.message ?? "send failed" });
     }
   });
 
@@ -116,13 +200,18 @@ export function registerTestDispatchRoutes(app: Express) {
       const { body, url } = buildDispatchSmsBody(load, driver);
 
       const { smsService, withBrandAndOptOut } = await import("../sms-service");
-      const finalBody = withBrandAndOptOut(body);
-      // skipFooter:false so the test phone receives the same "👤 My Dashboard"
-      // footer a real driver would (when the phone is registered in drivers).
+      // Manually append the dashboard footer with a demo token so the test
+      // phone (which is typically not a registered driver) still sees the
+      // footer shape. The auto-footer in sms-service.ts only fires when the
+      // recipient phone matches a row in the drivers table.
+      const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+      const normalizedBase = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`;
+      const bodyWithFooter = `${body}\n\n👤 My Dashboard: ${normalizedBase}/driver/test-driver-token`;
+      const finalBody = withBrandAndOptOut(bodyWithFooter);
       const result = await smsService.sendSMS({
         to: overrides.phone,
         body: finalBody,
-        skipFooter: false,
+        skipFooter: true,
       });
       console.log(
         `[test-dispatch:send] phone=${overrides.phone} loadNumber=${load.loadNumber} ok=${result.success} sid=${result.messageSid ?? "-"}`
