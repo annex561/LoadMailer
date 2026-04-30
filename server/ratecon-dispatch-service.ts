@@ -206,23 +206,45 @@ export async function sendDriverNextStepSms(
   const phone = (driver as any).phoneNumber ?? (driver as any).phone;
   if (!phone) return { ok: false, error: "Driver has no phone" };
 
-  // SMS-only flow — no URLs (carrier filter avoidance). Driver replies
-  // keywords (PICKED UP / DELIVERED) or sends BOL/POD photos via MMS.
+  // Two templates, gated by SMS_FULL_BODY env var.
+  //   SMS_FULL_BODY=true  → rich template w/ emojis + URLs (post-10DLC)
+  //   default             → SMS-only / keyword-driven (pre-10DLC carrier filter avoidance)
+  // The URL routes to /l/<token> where the driver lands on a tokenized page
+  // that adapts to the current step — at "accepted" it shows the BOL upload
+  // button; at "picked-up" it shows POD upload; at "delivered" it shows pay.
+  const useFullBody = process.env.SMS_FULL_BODY === "true";
+  const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+  const url = `${baseUrl}/l/${load.confirmationToken}`;
+
   let body = "";
   if (step === "accepted") {
-    body =
-      `Load ${load.loadNumber} confirmed.\n\n` +
-      `At pickup: send BOL photo or reply PICKED UP.`;
+    body = useFullBody
+      ? `✅ Load ${load.loadNumber} confirmed.\n\n` +
+        `📋 At pickup, upload your BOL: ${url}\n` +
+        `Or reply PICKED UP and send a BOL photo.`
+      : `Load ${load.loadNumber} confirmed.\n\n` +
+        `At pickup: send BOL photo or reply PICKED UP.`;
   } else if (step === "picked-up") {
-    body =
-      `Load ${load.loadNumber} marked PICKED UP.\n\n` +
-      `Drive safe. At delivery: send POD photo or reply DELIVERED.`;
+    body = useFullBody
+      ? `🚚 Load ${load.loadNumber} marked PICKED UP.\n\n` +
+        `Drive safe. 📍 Live tracking + POD upload: ${url}\n` +
+        `Or reply DELIVERED and send a POD photo.`
+      : `Load ${load.loadNumber} marked PICKED UP.\n\n` +
+        `Drive safe. At delivery: send POD photo or reply DELIVERED.`;
   } else if (step === "delivered") {
-    body = `Load ${load.loadNumber} marked DELIVERED. Pay statement coming on your weekly settlement.`;
+    body = useFullBody
+      ? `🎉 Load ${load.loadNumber} marked DELIVERED.\n\n` +
+        `💰 Pay statement: ${url}`
+      : `Load ${load.loadNumber} marked DELIVERED. Pay statement coming on your weekly settlement.`;
   }
 
-  const { smsService } = await import("./sms-service");
-  const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
+  // Compliance: brand prefix + STOP suffix (idempotent).
+  const { smsService, withBrandAndOptOut } = await import("./sms-service");
+  body = withBrandAndOptOut(body);
+  // When full-body mode is on, allow the driver-dashboard footer to auto-append
+  // (it adds "👤 My Dashboard: https://traqiq.app/driver/<token>" — the driver
+  // profile link the user asked to restore).
+  const result = await smsService.sendSMS({ to: phone, body, skipFooter: !useFullBody });
   if (!result.success) {
     console.error(`[next-step-sms] ❌ ${result.error}`);
     return { ok: false, error: result.error };
@@ -318,16 +340,15 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       `Reply YES to accept or NO to decline.`;
 
   console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
-  const { smsService } = await import("./sms-service");
+  const { smsService, withBrandAndOptOut } = await import("./sms-service");
+  // Compliance: brand prefix + STOP suffix (idempotent — the FULL template
+  // already starts with "TRAQ-IQ Dispatch" so the prefix won't double up).
+  const finalBody = withBrandAndOptOut(body);
   try {
-    // smsService.sendSMS returns { success, error?, messageSid? } — does NOT throw.
-    // Without this check, a failed Twilio call (rejected number, unconfigured creds,
-    // trial-mode restrictions, etc.) would be reported as ✅ sent.
-    // Use object form with skipFooter to bypass appendDriverPortalFooter — that
-    // auto-appends "👤 My Dashboard: https://traqiq.app/driver/<token>" which
-    // adds an emoji + URL to every driver SMS and was triggering carrier filter
-    // (Twilio 30007). Once A2P 10DLC is approved, we can re-enable it.
-    const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
+    // When SMS_FULL_BODY is on, allow the auto-footer to add the driver's
+    // personal dashboard link "👤 My Dashboard: https://traqiq.app/driver/<token>".
+    // When off, keep skipFooter:true to maintain the carrier-friendly minimal SMS.
+    const result = await smsService.sendSMS({ to: phone, body: finalBody, skipFooter: !useFullBody });
     if (!result.success) {
       console.error(`[dispatch-sms] ❌ ${result.error || "unknown SMS failure"}`);
       return { ok: false, error: result.error || "SMS send failed (no error returned)", phone };
