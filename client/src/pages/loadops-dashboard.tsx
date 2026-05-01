@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SidebarNav } from '@/components/sidebar';
+import { RequireRole } from '@/components/RequireRole';
 
 // Import page components
 // Eager: the default view of this dashboard. Everything else is lazy so the
@@ -94,6 +95,10 @@ const RateconUpload = lazy(() => import('./ratecon-upload'));
 const ReviewQueue = lazy(() => import('./review-queue'));
 const Settlements = lazy(() => import('./settlements'));
 const DriverProfile = lazy(() => import('./driver-profile'));
+const UsersAdmin = lazy(() => import('./users'));
+const GmailSettings = lazy(() => import('./gmail-settings'));
+const LoadDetailsPage = lazy(() => import('./load-details'));
+const TestDispatchPage = lazy(() => import('./test-dispatch'));
 import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
@@ -559,7 +564,7 @@ export default function LoadOpsDashboard() {
       case '/manual-dispatch':
         return <ManualDispatch />;
       case '/google-sheets-import':
-        return <GoogleSheetsImport />;
+        return <RequireRole roles={["admin"]}><GoogleSheetsImport /></RequireRole>;
       case '/driver-management':
         return <DriverManagement />;
       case '/contacts':
@@ -575,6 +580,7 @@ export default function LoadOpsDashboard() {
       case '/dispatcher-vehicle-dashboard':
         return <DispatcherVehicleDashboard />;
       case '/gps-tracking':
+        // Dispatchers need to see driver locations to assign loads.
         return <GPSTracking />;
       case '/smart-load-matching':
         return <SmartLoadMatching />;
@@ -585,17 +591,17 @@ export default function LoadOpsDashboard() {
       case '/mood-tracker':
         return <MoodTracker />;
       case '/payments':
-        return <PaymentWorkflow />;
+        return <RequireRole roles={["admin"]}><PaymentWorkflow /></RequireRole>;
       case '/document-management':
         return <DocumentManagement />;
       case '/taskmagic-status':
         return <TaskMagicStatusPage />;
       case '/analytics':
-        return <AnalyticsDashboard />;
+        return <RequireRole roles={["admin"]}><AnalyticsDashboard /></RequireRole>;
       case '/fleet-calculator':
-        return <FleetCalculator />;
+        return <RequireRole roles={["admin"]}><FleetCalculator /></RequireRole>;
       case '/true-rpm-calculator':
-        return <TrueRPMCalculator />;
+        return <RequireRole roles={["admin"]}><TrueRPMCalculator /></RequireRole>;
       case '/scrapers':
         return <ScraperManagement />;
       case '/sms-status':
@@ -606,15 +612,15 @@ export default function LoadOpsDashboard() {
       case '/dispatcher-dashboard':
         return <DispatcherDashboard />;
       case '/dat-scraper':
-        return <DATScraper />;
+        return <RequireRole roles={["admin"]}><DATScraper /></RequireRole>;
       case '/dat-login':
-        return <DatLogin />;
+        return <RequireRole roles={["admin"]}><DatLogin /></RequireRole>;
       case '/admin-overview':
-        return <AdminOverview />;
+        return <RequireRole roles={["admin"]}><AdminOverview /></RequireRole>;
       case '/communication-dashboard':
         return <CommunicationDashboard />;
       case '/ai-communication-insights':
-        return <AICommunicationInsights />;
+        return <RequireRole roles={["admin"]}><AICommunicationInsights /></RequireRole>;
       case '/unified-messaging':
         return <UnifiedMessaging />;
       case '/twilio-settings':
@@ -625,22 +631,22 @@ export default function LoadOpsDashboard() {
         return <div className="p-6"><h1 className="text-2xl font-bold">Driver Profile</h1><p className="mt-4 text-muted-foreground">Driver profile page coming soon.</p></div>;
       case '/fleet':
       case '/fleet/dashboard':
-        return <FleetDashboard />;
+        return <RequireRole roles={["admin"]}><FleetDashboard /></RequireRole>;
       case '/fleet/trucks':
-        return <FleetTrucks />;
+        return <RequireRole roles={["admin"]}><FleetTrucks /></RequireRole>;
       case '/fleet/work-orders':
-        return <FleetWorkOrders />;
+        return <RequireRole roles={["admin"]}><FleetWorkOrders /></RequireRole>;
       case '/fleet/inspections':
-        return <FleetInspections />;
+        return <RequireRole roles={["admin"]}><FleetInspections /></RequireRole>;
       case '/fleet/vendors':
-        return <FleetVendors />;
+        return <RequireRole roles={["admin"]}><FleetVendors /></RequireRole>;
       case '/loads-inbox':
       case '/ga/loads':
         return <LoadsInbox />;
       case '/active-loads':
         return <ActiveLoads />;
       case '/items':
-        return <ItemsPage />;
+        return <RequireRole roles={["admin"]}><ItemsPage /></RequireRole>;
       // Universal Ratecon Intake (PR #1)
       case '/ratecon-upload':
         return <RateconUpload />;
@@ -648,10 +654,27 @@ export default function LoadOpsDashboard() {
         return <ReviewQueue />;
       // Pre-existing pages that were broken by missing route entries
       case '/settlements':
-        return <Settlements />;
+        return <RequireRole roles={["admin", "finance"]}><Settlements /></RequireRole>;
       case '/driver-profile':
         return <DriverProfile />;
+      // Admin: Team management
+      case '/users':
+      case '/team':
+        return <RequireRole roles={["admin"]}><UsersAdmin /></RequireRole>;
+      // Admin: Gmail integration settings
+      case '/gmail-settings':
+        return <RequireRole roles={["admin"]}><GmailSettings /></RequireRole>;
+      // Admin: Test Dispatch SMS — fires a fake-load dispatch SMS to a chosen phone
+      case '/test-dispatch':
+        return <RequireRole roles={["admin"]}><TestDispatchPage /></RequireRole>;
       default:
+        // Pattern routes (must be after the string-equality cases above).
+        // /loads/<id> — load detail page (linked from "New Load Detected" toast,
+        // /api/loads listing rows, dispatch admin alerts, etc.)
+        const loadDetailMatch = location.match(/^\/loads\/([^/]+)$/);
+        if (loadDetailMatch) {
+          return <LoadDetailsPage id={loadDetailMatch[1]} />;
+        }
         return <NotFound />;
     }
   };

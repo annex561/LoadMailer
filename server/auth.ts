@@ -197,3 +197,17 @@ export const isAuthenticated: RequestHandler = (req, res, next) => {
   }
   res.status(401).json({ message: "Unauthorized" });
 };
+
+// Middleware factory: require authenticated session AND a role in the allowed list
+export function requireRole(...allowed: string[]): RequestHandler {
+  return (req, res, next) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const role = (req.user as any)?.role;
+    if (!role || !allowed.includes(role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    return next();
+  };
+}

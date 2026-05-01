@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useParams, useLocation } from "wouter";
 import { EVChecklist } from "@/components/load-lifecycle/EVChecklist";
 import {
   Loader2,
@@ -12,16 +13,43 @@ import {
   FileText,
   Phone,
   Building,
+  Send,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
-export default function LoadDetailsPage() {
+interface LoadDetailsPageProps {
+  /** Optional explicit id, used when this page is rendered outside a wouter Route
+   *  (e.g. from the loadops-dashboard renderContent switch). When omitted, the
+   *  id is read from useParams and then from the location pathname as fallback. */
+  id?: string;
+}
+
+export default function LoadDetailsPage({ id: idProp }: LoadDetailsPageProps = {}) {
   const params = useParams<{ id: string }>();
+  const [location] = useLocation();
+  // Resolve id from (1) explicit prop (2) wouter useParams (3) /loads/<id> path
+  const fallbackFromPath = location.match(/^\/loads\/([^/]+)$/)?.[1];
+  const id = idProp ?? params.id ?? fallbackFromPath;
 
   const { data: load, isLoading, error } = useQuery<any>({
-    queryKey: [`/api/loads/${params.id}`],
-    enabled: !!params.id,
+    queryKey: [`/api/loads/${id}`],
+    enabled: !!id,
   });
 
   if (isLoading) {
@@ -97,6 +125,7 @@ export default function LoadDetailsPage() {
             {load.miles && (
               <div className="text-sm text-slate-400">{load.miles.toLocaleString()} miles</div>
             )}
+            <TestDispatchButton loadId={load.id} loadNumber={load.loadNumber} />
           </div>
         </div>
 
@@ -288,5 +317,91 @@ function DocumentCard({
         {hasDoc ? "Uploaded" : "Pending"}
       </p>
     </div>
+  );
+}
+
+
+/**
+ * Admin-only "Send Test Dispatch SMS" button. Renders the same dispatch
+ * SMS that real drivers receive — using THIS load's real broker, addresses,
+ * dates, and confirmationToken — but redirects the message to a chosen
+ * phone instead of the assigned driver. The /l/<token> link in the body
+ * resolves to a real load page, so end-to-end click-through is verifiable.
+ */
+function TestDispatchButton({ loadId, loadNumber }: { loadId: string; loadNumber?: string }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [previewBody, setPreviewBody] = useState<string | null>(null);
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/admin/test-dispatch/from-load/${loadId}`, { phone });
+      return res.json();
+    },
+    onSuccess: (data: { ok: boolean; error?: string; messageSid?: string; body?: string; url?: string }) => {
+      if (data.ok) {
+        toast({ title: "Test dispatch sent", description: `SID: ${data.messageSid}` });
+        setPreviewBody(data.body ?? null);
+      } else {
+        toast({ title: "Send failed", description: data.error ?? "unknown error", variant: "destructive" });
+      }
+    },
+    onError: (err: any) => {
+      toast({ title: "Send failed", description: String(err?.message ?? err), variant: "destructive" });
+    },
+  });
+
+  // Hide the button entirely for non-admins.
+  if (user?.role !== "admin") return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setPreviewBody(null); }}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="mt-3">
+          <Send className="w-3 h-3 mr-2" />
+          Send test SMS
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Send test dispatch SMS</DialogTitle>
+          <DialogDescription>
+            Sends the dispatch SMS for load <strong>{loadNumber ?? loadId}</strong> using
+            this load's real broker, addresses, dates, and confirmation token —
+            but redirects the message to the phone you specify below. The actual
+            assigned driver will <strong>not</strong> receive anything.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="testPhone">Test phone</Label>
+            <Input
+              id="testPhone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+14234555007 or 4234555007"
+              autoFocus
+            />
+          </div>
+          {previewBody && (
+            <div>
+              <Label>Sent message</Label>
+              <pre className="whitespace-pre-wrap break-words text-xs bg-slate-50 p-3 rounded-md font-sans border max-h-64 overflow-y-auto">
+                {previewBody}
+              </pre>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Close</Button>
+          <Button onClick={() => sendMutation.mutate()} disabled={!phone || sendMutation.isPending}>
+            <Send className="w-4 h-4 mr-2" />
+            {sendMutation.isPending ? "Sending…" : "Send to this phone"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -13,11 +13,15 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useUser } from "@/hooks/use-user";
 
-const menuGroups = [
+type MenuItem = { name: string; href: string; adminOnly?: boolean };
+type MenuGroup = { title: string; icon: JSX.Element; adminOnly?: boolean; items: MenuItem[] };
+
+const menuGroups: MenuGroup[] = [
   {
     title: "Dispatch Command",
     icon: <LayoutDashboard className="w-5 h-5" />,
     items: [
+      // Dispatchers need the Live Map to see driver locations when assigning loads.
       { name: "Control Tower", href: "/dispatcher" },
       { name: "Load Ops Board", href: "/loadops-dashboard" },
       { name: "Live Map", href: "/gps-tracking" },
@@ -35,56 +39,66 @@ const menuGroups = [
       { name: "Driver Messages", href: "/communication-dashboard" },
       { name: "Create New Load", href: "/manual-load-entry" },
       { name: "The Load Board", href: "/dat-loads" },
-      { name: "Items (AR)", href: "/items" },
+      // Templates are SMS canned-message tools the dispatcher uses daily.
+      { name: "SMS Templates", href: "/templates" },
+      { name: "Items (AR)", href: "/items", adminOnly: true },
     ]
   },
   {
     title: "Fleet & Drivers",
     icon: <Truck className="w-5 h-5" />,
     items: [
-      { name: "Fleet Dashboard", href: "/fleet" },
+      { name: "Fleet Dashboard", href: "/fleet", adminOnly: true },
       { name: "Driver Roster", href: "/driver-management" },
       { name: "Onboarding", href: "/driver-onboarding" },
-      { name: "Trucks", href: "/fleet/trucks" },
-      { name: "Work Orders", href: "/fleet/work-orders" },
-      { name: "Inspections", href: "/fleet/inspections" },
+      { name: "Trucks", href: "/fleet/trucks", adminOnly: true },
+      { name: "Work Orders", href: "/fleet/work-orders", adminOnly: true },
+      { name: "Inspections", href: "/fleet/inspections", adminOnly: true },
     ]
   },
   {
+    // Finance section is admin-only; dispatchers don't see rates/settlements/analytics.
     title: "Finance",
     icon: <DollarSign className="w-5 h-5" />,
+    adminOnly: true,
     items: [
-      { name: "True RPM Calc", href: "/true-rpm-calculator" },
-      { name: "Fleet Calculator", href: "/fleet-calculator" },
-      { name: "Payments", href: "/payments" },
-      { name: "Driver Settlements", href: "/settlements" },
-      { name: "Analytics", href: "/analytics" },
+      { name: "True RPM Calc", href: "/true-rpm-calculator", adminOnly: true },
+      { name: "Fleet Calculator", href: "/fleet-calculator", adminOnly: true },
+      { name: "Payments", href: "/payments", adminOnly: true },
+      { name: "Driver Settlements", href: "/settlements", adminOnly: true },
+      { name: "Analytics", href: "/analytics", adminOnly: true },
     ]
   },
   {
+    // Ops Monitor is system health — admin only.
     title: "System",
     icon: <Truck className="w-5 h-5" />,
+    adminOnly: true,
     items: [
-      { name: "Ops Monitor", href: "/ops" },
+      { name: "Ops Monitor", href: "/ops", adminOnly: true },
     ]
   },
   {
     title: "Communication",
     icon: <MessageSquare className="w-5 h-5" />,
     items: [
-      { name: "AI Insights", href: "/ai-communication-insights" },
+      // AI Insights is an analytics page — admin only.
+      { name: "AI Insights", href: "/ai-communication-insights", adminOnly: true },
       { name: "Customers", href: "/contacts" },
       { name: "SMS Status", href: "/sms-status" },
     ]
   },
   {
-    title: "System",
+    title: "Admin",
     icon: <Settings className="w-5 h-5" />,
+    adminOnly: true,
     items: [
-      { name: "Admin Overview", href: "/admin-overview" },
-      { name: "Templates", href: "/templates" },
-      { name: "DAT Login", href: "/dat-login" },
-      { name: "Debug", href: "/debug-token" },
+      { name: "Admin Overview", href: "/admin-overview", adminOnly: true },
+      { name: "Team", href: "/users", adminOnly: true },
+      { name: "Test Dispatch SMS", href: "/test-dispatch", adminOnly: true },
+      { name: "Gmail Settings", href: "/gmail-settings", adminOnly: true },
+      { name: "DAT Login", href: "/dat-login", adminOnly: true },
+      { name: "Debug", href: "/debug-token", adminOnly: true },
     ]
   }
 ];
@@ -93,6 +107,15 @@ export function SidebarNav() {
   const [location] = useLocation();
   const [openGroups, setOpenGroups] = useState<string[]>(["Dispatch Command", "Load Management"]);
   const { user, logout } = useUser();
+  const isAdmin = user?.role === "admin";
+
+  const visibleGroups = menuGroups
+    .filter((g) => !g.adminOnly || isAdmin)
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((i) => !i.adminOnly || isAdmin),
+    }))
+    .filter((g) => g.items.length > 0);
 
   const toggleGroup = (title: string) => {
     setOpenGroups(prev => 
@@ -111,7 +134,7 @@ export function SidebarNav() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 space-y-6">
-        {menuGroups.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.title}>
             <button 
               onClick={() => toggleGroup(group.title)}
@@ -147,7 +170,7 @@ export function SidebarNav() {
       <div className="p-4 border-t border-slate-800 bg-slate-950/50">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-slate-900 font-bold text-sm">
-            {user?.username.substring(0, 2).toUpperCase() || "AL"}
+            {user?.username?.substring(0, 2).toUpperCase() || "AL"}
           </div>
           <div className="overflow-hidden">
             <p className="text-sm font-medium text-white truncate">{user?.username || "Guest"}</p>

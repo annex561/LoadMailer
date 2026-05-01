@@ -206,23 +206,43 @@ export async function sendDriverNextStepSms(
   const phone = (driver as any).phoneNumber ?? (driver as any).phone;
   if (!phone) return { ok: false, error: "Driver has no phone" };
 
-  // SMS-only flow — no URLs (carrier filter avoidance). Driver replies
-  // keywords (PICKED UP / DELIVERED) or sends BOL/POD photos via MMS.
+  // Post-10DLC: URLs in dispatch SMS are the default. To temporarily fall
+  // back to the keyword-only template (e.g. if Twilio delivery degrades),
+  // set SMS_MINIMAL=true. Old SMS_FULL_BODY=true is still honored for
+  // backwards compatibility but is no longer required.
+  const useFullBody = process.env.SMS_MINIMAL !== "true";
+  const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+  const url = `${baseUrl}/l/${load.confirmationToken}`;
+
   let body = "";
   if (step === "accepted") {
-    body =
-      `Load ${load.loadNumber} confirmed.\n\n` +
-      `At pickup: send BOL photo or reply PICKED UP.`;
+    body = useFullBody
+      ? `✅ Load ${load.loadNumber} confirmed.\n\n` +
+        `📋 At pickup, upload your BOL: ${url}\n` +
+        `Or reply PICKED UP and send a BOL photo.`
+      : `Load ${load.loadNumber} confirmed.\n\n` +
+        `At pickup: send BOL photo or reply PICKED UP.`;
   } else if (step === "picked-up") {
-    body =
-      `Load ${load.loadNumber} marked PICKED UP.\n\n` +
-      `Drive safe. At delivery: send POD photo or reply DELIVERED.`;
+    body = useFullBody
+      ? `🚚 Load ${load.loadNumber} marked PICKED UP.\n\n` +
+        `Drive safe. 📍 Live tracking + POD upload: ${url}\n` +
+        `Or reply DELIVERED and send a POD photo.`
+      : `Load ${load.loadNumber} marked PICKED UP.\n\n` +
+        `Drive safe. At delivery: send POD photo or reply DELIVERED.`;
   } else if (step === "delivered") {
-    body = `Load ${load.loadNumber} marked DELIVERED. Pay statement coming on your weekly settlement.`;
+    body = useFullBody
+      ? `🎉 Load ${load.loadNumber} marked DELIVERED.\n\n` +
+        `💰 Pay statement: ${url}`
+      : `Load ${load.loadNumber} marked DELIVERED. Pay statement coming on your weekly settlement.`;
   }
 
-  const { smsService } = await import("./sms-service");
-  const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
+  // Compliance: brand prefix + STOP suffix (idempotent).
+  const { smsService, withBrandAndOptOut } = await import("./sms-service");
+  body = withBrandAndOptOut(body);
+  // When full-body mode is on, allow the driver-dashboard footer to auto-append
+  // (it adds "👤 My Dashboard: https://traqiq.app/driver/<token>" — the driver
+  // profile link the user asked to restore).
+  const result = await smsService.sendSMS({ to: phone, body, skipFooter: !useFullBody });
   if (!result.success) {
     console.error(`[next-step-sms] ❌ ${result.error}`);
     return { ok: false, error: result.error };
@@ -231,26 +251,17 @@ export async function sendDriverNextStepSms(
   return { ok: true, messageSid: result.messageSid };
 }
 
-// Driver dispatch SMS always fires when called — "Approve & Dispatch" is an
-// explicit user action, so there's no point gating it behind an env var.
-// (Admin alerts and YES/NO replies remain gated by SMS_ENABLED to prevent
-// noise during testing — only the explicit dispatch action sends real SMS.)
-export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string; messageSid?: string; phone?: string }> {
-  const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
-  if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
-  const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
-  if (!driver) return { ok: false, error: "Driver not found" };
-  const phone = (driver as any).phoneNumber ?? (driver as any).phone;
-  if (!phone) return { ok: false, error: "Driver has no phone" };
-
-  const payInput = computeLoadPayInput({
-    rate: { value: load.rate ?? 0 },
-    miles: { value: load.miles ?? 0 },
-  });
-  const pay = calculatePay(payInput, driverProfileToPayInput(driver));
-
+/**
+ * Build the dispatch SMS body for a given load + driver. Pure function
+ * (no DB, no SMS send) so it can be exercised by the admin "Test Dispatch"
+ * page to preview the exact message a driver will receive.
+ *
+ * Matches the body that sendDispatchSms() sends. SMS_MINIMAL=true env var
+ * flips to the legacy keyword-only template.
+ */
+export function buildDispatchSmsBody(load: any, driver: any): { body: string; url: string } {
   const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
-  const url = `${baseUrl}/l/${load.confirmationToken}`;
+  const url = `${baseUrl}/l/${load.confirmationToken ?? "test-token"}`;
   const pickupDateStr = load.pickupDate instanceof Date
     ? load.pickupDate.toLocaleDateString()
     : new Date(load.pickupDate).toLocaleDateString();
@@ -267,15 +278,12 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       ? load.deliveryAddress
       : `${load.destCity ?? ""}, ${load.destState ?? ""}`.trim().replace(/^,\s*/, "");
 
-  // SMS body. Two templates — set SMS_FULL_BODY=true in env to use the full
-  // version (emojis, URL, pricing). Default is the carrier-friendly minimal
-  // version because Twilio error 30007 (carrier filter) was blocking the rich
-  // template in production. Carriers (T-Mobile/AT&T/Verizon) tend to filter:
-  //   - Unfamiliar / unregistered URLs
-  //   - Pricing patterns
-  //   - Emojis combined with links + pay info
-  // Once A2P 10DLC registration is approved, flip SMS_FULL_BODY=true.
-  const useFullBody = process.env.SMS_FULL_BODY === "true";
+  const useFullBody = process.env.SMS_MINIMAL !== "true";
+  const payInput = computeLoadPayInput({
+    rate: { value: load.rate ?? 0 },
+    miles: { value: load.miles ?? 0 },
+  });
+  const pay = calculatePay(payInput, driverProfileToPayInput(driver));
 
   const commodityLine = load.description && load.description !== "General freight"
     ? `${useFullBody ? "📦 " : ""}${load.description}\n`
@@ -285,8 +293,7 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
     : "";
 
   const body = useFullBody
-    ? // FULL TEMPLATE — emojis + URL + price (use after A2P 10DLC approved)
-      `TRAQ-IQ Dispatch\n` +
+    ? `TRAQ-IQ Dispatch\n` +
       `New load #${load.loadNumber}` +
       (load.brokerName ? ` (${load.brokerName})` : "") +
       `\n\n` +
@@ -299,13 +306,7 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       `💰 NET PAY: $${pay.netPay.toFixed(2)}\n\n` +
       `Details & confirm: ${url}\n\n` +
       `Reply YES to accept · NO to decline`
-    : // SMS-ONLY TEMPLATE — no URLs, no emojis, no pricing.
-      // Driver journey is 100% via SMS keywords + MMS photos:
-      //   YES / NO       → accept / decline
-      //   PICKED UP      → mark in-transit (also: send BOL photo)
-      //   DELIVERED      → mark delivered (also: send POD photo)
-      // Pay statement comes weekly. Avoids carrier filter (Twilio 30007).
-      `TRAQ IQ Dispatch\n` +
+    : `TRAQ IQ Dispatch\n` +
       `Load ${load.loadNumber}` +
       (load.brokerName ? ` from ${load.brokerName}` : "") +
       `\n\n` +
@@ -317,17 +318,36 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
       specialLine +
       `Reply YES to accept or NO to decline.`;
 
+  return { body, url };
+}
+
+// Driver dispatch SMS always fires when called — "Approve & Dispatch" is an
+// explicit user action, so there's no point gating it behind an env var.
+// (Admin alerts and YES/NO replies remain gated by SMS_ENABLED to prevent
+// noise during testing — only the explicit dispatch action sends real SMS.)
+export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string; messageSid?: string; phone?: string }> {
+  const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
+  if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
+  const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
+  if (!driver) return { ok: false, error: "Driver not found" };
+  const phone = (driver as any).phoneNumber ?? (driver as any).phone;
+  if (!phone) return { ok: false, error: "Driver has no phone" };
+
+  // Reuse the shared body-builder so the admin "Test Dispatch" page renders
+  // the exact same SMS that real drivers receive.
+  const useFullBody = process.env.SMS_MINIMAL !== "true";
+  const { body } = buildDispatchSmsBody(load, driver);
+
   console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
-  const { smsService } = await import("./sms-service");
+  const { smsService, withBrandAndOptOut } = await import("./sms-service");
+  // Compliance: brand prefix + STOP suffix (idempotent — the FULL template
+  // already starts with "TRAQ-IQ Dispatch" so the prefix won't double up).
+  const finalBody = withBrandAndOptOut(body);
   try {
-    // smsService.sendSMS returns { success, error?, messageSid? } — does NOT throw.
-    // Without this check, a failed Twilio call (rejected number, unconfigured creds,
-    // trial-mode restrictions, etc.) would be reported as ✅ sent.
-    // Use object form with skipFooter to bypass appendDriverPortalFooter — that
-    // auto-appends "👤 My Dashboard: https://traqiq.app/driver/<token>" which
-    // adds an emoji + URL to every driver SMS and was triggering carrier filter
-    // (Twilio 30007). Once A2P 10DLC is approved, we can re-enable it.
-    const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
+    // When SMS_FULL_BODY is on, allow the auto-footer to add the driver's
+    // personal dashboard link "👤 My Dashboard: https://traqiq.app/driver/<token>".
+    // When off, keep skipFooter:true to maintain the carrier-friendly minimal SMS.
+    const result = await smsService.sendSMS({ to: phone, body: finalBody, skipFooter: !useFullBody });
     if (!result.success) {
       console.error(`[dispatch-sms] ❌ ${result.error || "unknown SMS failure"}`);
       return { ok: false, error: result.error || "SMS send failed (no error returned)", phone };
