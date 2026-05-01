@@ -810,6 +810,15 @@ export async function registerRoutes(app: Express): Promise<void> {
     '/api/ingest/scheduler',
     '/api/users',
   ], requireRole('admin'));
+
+  // Dispatcher-or-admin operational surface (ratecon intake, review queue,
+  // dispatch approvals, HOS check, geofence). Drivers use SMS-only + tokenized
+  // /api/confirm/:token endpoints which stay unauthenticated by design.
+  app.use([
+    '/api/ratecon-intake',
+    '/api/hos-check',
+    '/api/geofence',
+  ], requireRole('admin', 'dispatcher'));
   // /api/dispatch-criteria: GET allowed for dispatchers, mutations admin-only.
   app.use('/api/dispatch-criteria', (req, res, next) => {
     if (req.method === 'GET') return isAuthenticated(req, res, next);

@@ -1,5 +1,6 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
+import { Strategy as GoogleStrategy, type Profile } from "passport-google-oauth20";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import type { Express, RequestHandler } from "express";
@@ -9,6 +10,48 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq, or } from "drizzle-orm";
+
+// ---- Role + allowlist config (env-driven, no secrets in code) -------------
+// AUTH_ALLOWED_EMAILS = comma-separated emails permitted to sign in via Google
+// AUTH_ROLE_MAP       = comma-separated email:role pairs; default role = dispatcher
+//   e.g. "annex561@gmail.com:owner,julio@example.com:dispatcher"
+// Role names match existing route guards (requireRole('admin'), etc.).
+// "admin" = full access (you), "dispatcher" = ratecon/driver ops (Julio),
+// "viewer" = read-only.
+export type Role = "admin" | "dispatcher" | "viewer";
+
+function parseAllowedEmails(): Set<string> {
+  return new Set(
+    (process.env.AUTH_ALLOWED_EMAILS ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function parseRoleMap(): Map<string, Role> {
+  const m = new Map<string, Role>();
+  for (const pair of (process.env.AUTH_ROLE_MAP ?? "").split(",")) {
+    const [email, role] = pair.split(":").map((s) => s?.trim().toLowerCase());
+    if (!email || !role) continue;
+    if (role === "admin" || role === "dispatcher" || role === "viewer") {
+      m.set(email, role as Role);
+    }
+  }
+  return m;
+}
+
+function isEmailAllowed(email?: string | null): boolean {
+  if (!email) return false;
+  const allowed = parseAllowedEmails();
+  // Empty allowlist == open in dev only. Production REQUIRES the env var.
+  if (allowed.size === 0) return process.env.NODE_ENV !== "production";
+  return allowed.has(email.toLowerCase());
+}
+
+function roleForEmail(email: string): Role {
+  return parseRoleMap().get(email.toLowerCase()) ?? "dispatcher";
+}
 
 const scryptAsync = promisify(scrypt);
 
@@ -109,6 +152,86 @@ export async function setupAuth(app: Express) {
     )
   );
 
+  // ---- Google OAuth strategy (only registered if creds present) ----
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const googleCallbackUrl =
+    process.env.GOOGLE_CALLBACK_URL ?? "/api/auth/google/callback";
+
+  if (googleClientId && googleClientSecret) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: googleClientId,
+          clientSecret: googleClientSecret,
+          callbackURL: googleCallbackUrl,
+        },
+        async (
+          _accessToken: string,
+          _refreshToken: string,
+          profile: Profile,
+          done: (err: any, user?: any, info?: any) => void,
+        ) => {
+          try {
+            const email = (profile.emails?.[0]?.value ?? "").toLowerCase();
+            if (!isEmailAllowed(email)) {
+              console.warn(`[google-oauth] blocked sign-in for ${email || "(no email)"} — not in AUTH_ALLOWED_EMAILS`);
+              return done(null, false, { message: "Email not authorized" });
+            }
+
+            // 1) Match by googleId
+            let [user] = await db
+              .select()
+              .from(users)
+              .where(eq(users.googleId, profile.id));
+
+            // 2) Fall back to matching by email (link existing local account)
+            if (!user && email) {
+              [user] = await db.select().from(users).where(eq(users.email, email));
+            }
+
+            const firstName = profile.name?.givenName ?? null;
+            const lastName = profile.name?.familyName ?? null;
+            const profileImageUrl = profile.photos?.[0]?.value ?? null;
+
+            if (user) {
+              // Backfill googleId / profile if linking an existing email user
+              const updates: Record<string, unknown> = { updatedAt: new Date() };
+              if (!user.googleId) updates.googleId = profile.id;
+              if (!user.firstName && firstName) updates.firstName = firstName;
+              if (!user.lastName && lastName) updates.lastName = lastName;
+              if (!user.profileImageUrl && profileImageUrl) {
+                updates.profileImageUrl = profileImageUrl;
+              }
+              await db.update(users).set(updates).where(eq(users.id, user.id));
+              // Re-read so role/google_id are in sync
+              [user] = await db.select().from(users).where(eq(users.id, user.id));
+            } else {
+              // 3) Create new user with role from AUTH_ROLE_MAP
+              const role = roleForEmail(email);
+              user = await storage.upsertUser({
+                email,
+                username: email,
+                googleId: profile.id,
+                firstName,
+                lastName,
+                profileImageUrl,
+                role,
+              } as any);
+            }
+
+            return done(null, user);
+          } catch (err) {
+            return done(err);
+          }
+        },
+      ),
+    );
+    console.log("🔐 Google OAuth strategy registered");
+  } else {
+    console.warn("⚠️ GOOGLE_CLIENT_ID/SECRET not set — Google sign-in disabled");
+  }
+
   passport.serializeUser((user: any, cb) => cb(null, user.id));
   passport.deserializeUser(async (id: string, cb) => {
     try {
@@ -181,10 +304,6 @@ export async function setupAuth(app: Express) {
   // this endpoint returns 403 and refuses. There is no way to create a second
   // admin via this path, so leaving it in production is safe (it can't be used
   // to escalate privilege once setup is done).
-  //
-  // Use case: the seed script (scripts/create-staff.ts) was never run on
-  // Railway, so no admin exists, and the user can't log in to create one
-  // via the Team page (which itself requires admin).
   app.post("/api/bootstrap-admin", async (req, res, next) => {
     try {
       const { username, email, password, firstName, lastName } = req.body as {
@@ -202,7 +321,6 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ message: "password must be at least 8 characters" });
       }
 
-      // Refuse if ANY admin already exists.
       const [existingAdmin] = await db
         .select({ id: users.id })
         .from(users)
@@ -214,7 +332,6 @@ export async function setupAuth(app: Express) {
         });
       }
 
-      // Refuse if a user with this username/email already exists (avoid clobbering).
       const collision = await findUser(username ?? email ?? "");
       if (collision) {
         return res.status(409).json({ message: "User with that username or email already exists" });
@@ -232,7 +349,6 @@ export async function setupAuth(app: Express) {
 
       console.log(`🔐 Bootstrap admin created: ${newAdmin.username ?? newAdmin.email} (id=${newAdmin.id})`);
 
-      // Auto-login so the user lands in the app immediately.
       req.login(newAdmin, (err) => {
         if (err) return next(err);
         const { password: _pw, ...safeUser } = newAdmin;
@@ -241,6 +357,40 @@ export async function setupAuth(app: Express) {
     } catch (err) {
       next(err);
     }
+  });
+
+  // GET /api/auth/google — kick off OAuth flow
+  app.get("/api/auth/google", (req, res, next) => {
+    if (!googleClientId) {
+      return res.status(503).json({ message: "Google sign-in not configured" });
+    }
+    passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+  });
+
+  // GET /api/auth/google/callback — OAuth return URL
+  app.get("/api/auth/google/callback", (req, res, next) => {
+    if (!googleClientId) {
+      return res.redirect("/auth?error=google_not_configured");
+    }
+    passport.authenticate("google", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) {
+        const reason = encodeURIComponent(info?.message ?? "google_failed");
+        return res.redirect(`/auth?error=${reason}`);
+      }
+      req.login(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
+        return res.redirect("/");
+      });
+    })(req, res, next);
+  });
+
+  // GET /api/auth/config — frontend uses this to know which buttons to show
+  app.get("/api/auth/config", (_req, res) => {
+    res.json({
+      google: !!googleClientId,
+      local: true,
+    });
   });
 
   // GET /api/logout
