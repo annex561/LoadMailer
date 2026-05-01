@@ -124,6 +124,12 @@ export async function ensureSchema(): Promise<void> {
     }
     try { await pool.query(`ALTER TABLE loads ADD CONSTRAINT loads_confirmation_token_unique UNIQUE (confirmation_token)`); } catch (_) {}
 
+    // Users — Google OAuth column (only adds google_id; other columns assumed present)
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR`);
+      await pool.query(`ALTER TABLE users ADD CONSTRAINT users_google_id_unique UNIQUE (google_id)`);
+    } catch (_) {}
+
     // ratecon_intake table (Universal Ratecon Intake PR #1)
     try {
       await pool.query(`
