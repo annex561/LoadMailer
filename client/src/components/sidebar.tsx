@@ -21,9 +21,10 @@ const menuGroups: MenuGroup[] = [
     title: "Dispatch Command",
     icon: <LayoutDashboard className="w-5 h-5" />,
     items: [
-      // Dispatchers need the Live Map to see driver locations when assigning loads.
+      // Dispatchers need the Live Map + Live Tracking to coordinate dispatch.
       { name: "Control Tower", href: "/dispatcher" },
       { name: "Load Ops Board", href: "/loadops-dashboard" },
+      { name: "Live Tracking", href: "/live-tracking" },
       { name: "Live Map", href: "/gps-tracking" },
     ]
   },

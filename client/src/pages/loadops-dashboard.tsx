@@ -100,6 +100,7 @@ const GmailSettings = lazy(() => import('./gmail-settings'));
 const LoadDetailsPage = lazy(() => import('./load-details'));
 const TestDispatchPage = lazy(() => import('./test-dispatch'));
 const SystemHealthPage = lazy(() => import('./system-health'));
+const LiveTrackingPage = lazy(() => import('./live-tracking'));
 import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
@@ -671,6 +672,9 @@ export default function LoadOpsDashboard() {
       // Admin: System Health — diagnostic checks for Twilio + DB schema + dispatch
       case '/system-health':
         return <RequireRole roles={["admin"]}><SystemHealthPage /></RequireRole>;
+      // Live Tracking — every active load with current lifecycle stage at a glance
+      case '/live-tracking':
+        return <LiveTrackingPage />;
       default:
         // Pattern routes (must be after the string-equality cases above).
         // /loads/<id> — load detail page (linked from "New Load Detected" toast,
