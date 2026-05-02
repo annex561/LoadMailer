@@ -279,7 +279,7 @@ export default function LoadDetailsPage({ id: idProp }: LoadDetailsPageProps = {
         )}
       </div>
 
-      <div className="w-full md:w-96 bg-white dark:bg-slate-800 border-l dark:border-slate-700 z-10 overflow-y-auto">
+      <div className="w-full md:w-[420px] lg:w-[460px] flex-shrink-0 bg-white dark:bg-slate-800 border-l dark:border-slate-700 z-10 overflow-y-auto">
         <EVChecklist load={load} />
       </div>
     </div>
