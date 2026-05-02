@@ -58,12 +58,25 @@ async function findOptedOutDriver(phone: string): Promise<{ id: string; smsOpted
  * A2P 10DLC compliance: standardize first-touch / marketing-flavored SMS with the
  * required brand identifier and opt-out language. Idempotent — won't double up
  * if the brand or STOP suffix is already present.
+ *
+ * The brand prefix MUST match the brand registered with TCR (The Campaign
+ * Registry). LAMP Logistics is the registered brand on this Twilio account
+ * and the campaign sample messages all start with "LAMP Dispatch:" — so
+ * outbound traffic that uses a different prefix (e.g. "TRAQ-IQ:") gets
+ * filtered by carriers as content-mismatch (Twilio error 30007).
+ *
+ * Override via SMS_BRAND_PREFIX env var if the brand changes.
  */
 export function withBrandAndOptOut(body: string, opts: { includeStopSuffix?: boolean } = {}): string {
   const { includeStopSuffix = true } = opts;
+  const brandPrefix = (process.env.SMS_BRAND_PREFIX || "LAMP Dispatch").trim();
   let out = body.trim();
-  if (!/^TRAQ[- ]?IQ[:\s]/i.test(out)) {
-    out = `TRAQ-IQ: ${out}`;
+  // Strip any pre-existing TRAQ-IQ prefix from older code paths.
+  out = out.replace(/^TRAQ[- ]?IQ\s+Dispatch\s*\n?/i, "").replace(/^TRAQ[- ]?IQ:\s*/i, "");
+  // Add the registered brand prefix if not already there.
+  const brandRegex = new RegExp(`^${brandPrefix.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}[:\\s]`, "i");
+  if (!brandRegex.test(out)) {
+    out = `${brandPrefix}: ${out}`;
   }
   if (includeStopSuffix && !/reply\s+stop/i.test(out)) {
     out = `${out}\nReply STOP to opt out, HELP for help.`;
