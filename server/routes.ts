@@ -34,6 +34,7 @@ import { smsCommunicationService } from './sms-communication-service';
 import { setupAuth, isAuthenticated, requireRole } from "./auth";
 import { registerUserRoutes } from "./routes/users";
 import { registerTestDispatchRoutes } from "./routes/test-dispatch";
+import { registerAdminHealthRoutes } from "./routes/admin-health";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';
@@ -819,6 +820,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   registerUserRoutes(app);
   // Admin "Test Dispatch SMS" tooling (each route declares requireRole('admin') itself)
   registerTestDispatchRoutes(app);
+  // Admin diagnostic endpoints — health check + per-load dispatch diagnosis.
+  // Critical for catching silent failures (missing env vars, schema drift,
+  // opted-out drivers, etc.) before they bite during a real dispatch.
+  registerAdminHealthRoutes(app);
 
   // Ratecon intake routes (PDF upload + manual entry)
   registerRateconIntakeRoutes(app);
