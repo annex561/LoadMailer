@@ -19,6 +19,13 @@ export async function ensureSchema(): Promise<void> {
     ['phone_number', 'TEXT'],
     ['city', 'TEXT'],
     ['enable_sms_notifications', 'BOOLEAN NOT NULL DEFAULT false'],
+    // A2P 10DLC compliance — consent + opt-out audit trail (PR #39).
+    // Without these, every SELECT * FROM drivers fails post-deploy because
+    // the Drizzle schema declares them but the columns don't yet exist.
+    ['sms_consent_at', 'TIMESTAMP'],
+    ['sms_consent_source', 'TEXT'],
+    ['sms_consent_ip', 'TEXT'],
+    ['sms_opted_out_at', 'TIMESTAMP'],
     ['current_mood', "TEXT DEFAULT '😐'"],
     ['mood_updated_at', 'TIMESTAMP'],
     ['mood_note', 'TEXT'],
