@@ -94,12 +94,9 @@ export function registerTestDispatchRoutes(app: Express) {
       const load = defaultLoad(overrides);
       const driver = defaultDriver(overrides);
       const { body, url } = buildDispatchSmsBody(load, driver);
-      // Append the same footer the send path appends, so the preview
-      // matches what a driver actually receives.
-      const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
-      const normalizedBase = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`;
       const { withBrandAndOptOut } = await import("../sms-service");
-      const finalBody = withBrandAndOptOut(`${body}\n\n👤 My Dashboard: ${normalizedBase}/driver/test-driver-token`);
+      // No dashboard footer — single URL only (carrier filter avoidance).
+      const finalBody = withBrandAndOptOut(body);
       res.json({ ok: true, body: finalBody, url, load, driver });
     } catch (err: any) {
       console.error("[test-dispatch:preview]", err);
@@ -150,21 +147,14 @@ export function registerTestDispatchRoutes(app: Express) {
       const { smsService, withBrandAndOptOut } = await import("../sms-service");
 
       // Manually append the "👤 My Dashboard" footer using the load's
-      // assigned driver token (or a synthetic one if no driver assigned),
-      // because the auto-footer in sms-service.ts only fires when the
-      // recipient phone matches a registered driver — not the case for
-      // a test send to the admin's phone.
-      const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
-      const normalizedBase = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`;
-      const dashboardToken = (driver as any).trackingToken ?? "test-driver-token";
-      const bodyWithFooter = `${body}\n\n👤 My Dashboard: ${normalizedBase}/driver/${dashboardToken}`;
-      const finalBody = withBrandAndOptOut(bodyWithFooter);
+      // No second URL (driver dashboard footer) — carriers filter messages
+      // with two URLs as suspicious, even with 10DLC approved. The single
+      // /l/<token> link in the body lets the driver reach everything.
+      const finalBody = withBrandAndOptOut(body);
 
       const result = await smsService.sendSMS({
         to: phone,
         body: finalBody,
-        // skipFooter:true — we just appended it manually above, so don't
-        // let the auto-footer logic also run (would dedup but better safe).
         skipFooter: true,
       });
       console.log(
@@ -202,12 +192,8 @@ export function registerTestDispatchRoutes(app: Express) {
       const { smsService, withBrandAndOptOut } = await import("../sms-service");
       // Manually append the dashboard footer with a demo token so the test
       // phone (which is typically not a registered driver) still sees the
-      // footer shape. The auto-footer in sms-service.ts only fires when the
-      // recipient phone matches a row in the drivers table.
-      const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
-      const normalizedBase = baseUrl.startsWith("http") ? baseUrl : `https://${baseUrl}`;
-      const bodyWithFooter = `${body}\n\n👤 My Dashboard: ${normalizedBase}/driver/test-driver-token`;
-      const finalBody = withBrandAndOptOut(bodyWithFooter);
+      // No second URL — single load detail link only (carrier filter avoidance).
+      const finalBody = withBrandAndOptOut(body);
       const result = await smsService.sendSMS({
         to: overrides.phone,
         body: finalBody,

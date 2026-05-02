@@ -285,29 +285,31 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
   });
   const pay = calculatePay(payInput, driverProfileToPayInput(driver));
 
+  // Body shape matches the carrier-registered sample messages closely:
+  // brand prefix, plain text, ONE URL (the load detail/confirmation page),
+  // no caps-lock screams, no pricing patterns, minimal emojis. Carriers
+  // (T-Mobile especially) compare actual content against the TCR-registered
+  // samples and filter mismatches as 30007. The branded prefix + STOP
+  // suffix are appended later by withBrandAndOptOut().
   const commodityLine = load.description && load.description !== "General freight"
-    ? `${useFullBody ? "📦 " : ""}${load.description}\n`
+    ? `${load.description}\n`
     : "";
   const specialLine = load.specialInstructions
-    ? `${useFullBody ? "⚠️ " : "NOTE: "}${load.specialInstructions}\n\n`
+    ? `Note: ${load.specialInstructions.slice(0, 120)}\n`
     : "";
 
   const body = useFullBody
-    ? `TRAQ-IQ Dispatch\n` +
-      `New load #${load.loadNumber}` +
+    ? `Load #${load.loadNumber}` +
       (load.brokerName ? ` (${load.brokerName})` : "") +
-      `\n\n` +
-      `📍 PICKUP\n${pickupLine}\n` +
-      `${pickupDateStr} @ ${load.pickupTime}\n\n` +
-      `📍 DROP\n${dropLine}\n` +
-      `${deliveryDateStr} @ ${load.deliveryTime}\n\n` +
+      `\n` +
+      `Pickup: ${pickupLine} - ${pickupDateStr} ${load.pickupTime}\n` +
+      `Drop: ${dropLine} - ${deliveryDateStr} ${load.deliveryTime}\n` +
       commodityLine +
       specialLine +
-      `💰 NET PAY: $${pay.netPay.toFixed(2)}\n\n` +
-      `Details & confirm: ${url}\n\n` +
-      `Reply YES to accept · NO to decline`
-    : `TRAQ IQ Dispatch\n` +
-      `Load ${load.loadNumber}` +
+      `Pay: $${pay.netPay.toFixed(2)}\n` +
+      `Details: ${url}\n` +
+      `Reply YES to accept or NO to decline.`
+    : `Load ${load.loadNumber}` +
       (load.brokerName ? ` from ${load.brokerName}` : "") +
       `\n\n` +
       `Pickup: ${pickupLine}\n` +
@@ -340,14 +342,15 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
 
   console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
   const { smsService, withBrandAndOptOut } = await import("./sms-service");
-  // Compliance: brand prefix + STOP suffix (idempotent — the FULL template
-  // already starts with "TRAQ-IQ Dispatch" so the prefix won't double up).
+  // Compliance: registered brand prefix + STOP suffix (idempotent).
   const finalBody = withBrandAndOptOut(body);
   try {
-    // When SMS_FULL_BODY is on, allow the auto-footer to add the driver's
-    // personal dashboard link "👤 My Dashboard: https://traqiq.app/driver/<token>".
-    // When off, keep skipFooter:true to maintain the carrier-friendly minimal SMS.
-    const result = await smsService.sendSMS({ to: phone, body: finalBody, skipFooter: !useFullBody });
+    // ALWAYS skipFooter for the dispatch SMS now. Carriers (T-Mobile in
+    // particular) filter messages with two URLs as suspicious even when 10DLC
+    // is approved — the registered campaign samples have a single URL each.
+    // The driver dashboard is reachable from the load detail page (which is
+    // the URL we DO include), so no information is lost.
+    const result = await smsService.sendSMS({ to: phone, body: finalBody, skipFooter: true });
     if (!result.success) {
       console.error(`[dispatch-sms] ❌ ${result.error || "unknown SMS failure"}`);
       return { ok: false, error: result.error || "SMS send failed (no error returned)", phone };
