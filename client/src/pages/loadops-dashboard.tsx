@@ -99,6 +99,7 @@ const UsersAdmin = lazy(() => import('./users'));
 const GmailSettings = lazy(() => import('./gmail-settings'));
 const LoadDetailsPage = lazy(() => import('./load-details'));
 const TestDispatchPage = lazy(() => import('./test-dispatch'));
+const SystemHealthPage = lazy(() => import('./system-health'));
 import DriverLocationMap from '@/components/driver-location-map';
 
 interface FinanceMetric {
@@ -667,6 +668,9 @@ export default function LoadOpsDashboard() {
       // Admin: Test Dispatch SMS — fires a fake-load dispatch SMS to a chosen phone
       case '/test-dispatch':
         return <RequireRole roles={["admin"]}><TestDispatchPage /></RequireRole>;
+      // Admin: System Health — diagnostic checks for Twilio + DB schema + dispatch
+      case '/system-health':
+        return <RequireRole roles={["admin"]}><SystemHealthPage /></RequireRole>;
       default:
         // Pattern routes (must be after the string-equality cases above).
         // /loads/<id> — load detail page (linked from "New Load Detected" toast,

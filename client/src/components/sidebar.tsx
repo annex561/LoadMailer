@@ -94,6 +94,7 @@ const menuGroups: MenuGroup[] = [
     adminOnly: true,
     items: [
       { name: "Admin Overview", href: "/admin-overview", adminOnly: true },
+      { name: "System Health", href: "/system-health", adminOnly: true },
       { name: "Team", href: "/users", adminOnly: true },
       { name: "Test Dispatch SMS", href: "/test-dispatch", adminOnly: true },
       { name: "Gmail Settings", href: "/gmail-settings", adminOnly: true },
