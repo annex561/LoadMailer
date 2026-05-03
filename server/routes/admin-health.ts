@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { eq, sql } from "drizzle-orm";
+import twilio from "twilio";
 import { db, pool } from "../db";
 import { drivers, loads } from "@shared/schema";
 import { requireRole } from "../auth";
@@ -213,5 +214,87 @@ export function registerAdminHealthRoutes(app: Express) {
         ? { id: driver.id, name: driver.name, phone, smsOptedOutAt: driver.smsOptedOutAt, trackingToken: driver.trackingToken }
         : null,
     });
+  });
+
+  // Twilio-side probe: hits the actual Twilio API to find out what Twilio thinks.
+  // This is the answer to "I sent a test SMS, the API returned 201, but the
+  // recipient never got it" — Twilio Console shows the truth (Undelivered + error
+  // code), and this endpoint surfaces that truth without leaving the app.
+  app.get("/api/admin/twilio-probe", requireRole("admin"), async (_req, res) => {
+    const sid = process.env.TWILIO_ACCOUNT_SID;
+    const token = process.env.TWILIO_AUTH_TOKEN;
+    if (!sid || !token) {
+      return res.status(500).json({ ok: false, error: "Twilio creds missing" });
+    }
+    const client = twilio(sid, token);
+
+    const out: any = { ok: true };
+
+    try {
+      const acct = await client.api.v2010.accounts(sid).fetch();
+      out.account = {
+        sid: acct.sid,
+        friendlyName: acct.friendlyName,
+        type: acct.type, // "Trial" or "Full" — THE big one
+        status: acct.status,
+      };
+      out.isTrial = acct.type === "Trial";
+    } catch (e: any) {
+      out.account = { error: e?.message ?? String(e) };
+    }
+
+    try {
+      const balance = await client.balance.fetch();
+      out.balance = { currency: balance.currency, balance: balance.balance };
+    } catch (e: any) {
+      out.balance = { error: e?.message ?? String(e) };
+    }
+
+    try {
+      const messages = await client.messages.list({ limit: 10 });
+      out.recentMessages = messages.map((m) => ({
+        sid: m.sid,
+        to: m.to,
+        from: m.from,
+        status: m.status,
+        errorCode: m.errorCode,
+        errorMessage: m.errorMessage,
+        dateSent: m.dateSent,
+        body: m.body?.slice(0, 60),
+      }));
+      const failed = messages.filter((m) => m.errorCode);
+      out.summary = {
+        total: messages.length,
+        failed: failed.length,
+        statuses: messages.reduce((acc: Record<string, number>, m) => {
+          acc[m.status] = (acc[m.status] ?? 0) + 1;
+          return acc;
+        }, {}),
+        commonErrorCodes: Array.from(new Set(failed.map((m) => m.errorCode))).filter(Boolean),
+      };
+    } catch (e: any) {
+      out.recentMessages = { error: e?.message ?? String(e) };
+    }
+
+    // Diagnosis hint based on what we found
+    const hints: string[] = [];
+    if (out.isTrial) {
+      hints.push("ACCOUNT IS IN TRIAL MODE — trial accounts cannot send via 10DLC. Every send returns 30007. Upgrade at https://console.twilio.com/billing/manage-billing/upgrade");
+    }
+    if (out.summary?.commonErrorCodes?.includes(30007)) {
+      hints.push("Error 30007 = carrier filtered. If account is Full and 10DLC campaign verified, open Twilio support ticket — likely a carrier-side block on this number.");
+    }
+    if (out.summary?.commonErrorCodes?.includes(30034)) {
+      hints.push("Error 30034 = sending number not associated with verified 10DLC campaign.");
+    }
+    if (out.summary?.commonErrorCodes?.includes(21610)) {
+      hints.push("Error 21610 = recipient previously replied STOP and is opted out at Twilio level. Have them text START.");
+    }
+    if (out.balance?.balance && parseFloat(out.balance.balance) < 1) {
+      hints.push(`Account balance is ${out.balance.balance} ${out.balance.currency} — top up at https://console.twilio.com/billing`);
+    }
+    out.hints = hints;
+
+    res.json(out);
   });
 }

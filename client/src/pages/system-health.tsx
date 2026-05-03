@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, AlertCircle, Stethoscope, RefreshCw } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Stethoscope, RefreshCw, Phone } from "lucide-react";
 
 interface Check {
   name: string;
@@ -16,6 +16,30 @@ interface HealthResponse {
   ok: boolean;
   checks: Check[];
   env: { node: string };
+}
+
+interface TwilioProbeResponse {
+  ok: boolean;
+  isTrial?: boolean;
+  account?: { sid?: string; friendlyName?: string; type?: string; status?: string; error?: string };
+  balance?: { currency?: string; balance?: string; error?: string };
+  recentMessages?: Array<{
+    sid: string;
+    to: string;
+    from: string;
+    status: string;
+    errorCode: number | null;
+    errorMessage: string | null;
+    dateSent: string | null;
+    body?: string;
+  }> | { error: string };
+  summary?: {
+    total: number;
+    failed: number;
+    statuses: Record<string, number>;
+    commonErrorCodes: number[];
+  };
+  hints?: string[];
 }
 
 interface DiagnoseResponse {
@@ -43,6 +67,14 @@ export default function SystemHealthPage() {
       queryKey: ["/api/admin/health"],
       refetchOnWindowFocus: true,
       staleTime: 10_000,
+    });
+
+  const [probeEnabled, setProbeEnabled] = useState(false);
+  const { data: probe, isFetching: probeFetching, refetch: refetchProbe } =
+    useQuery<TwilioProbeResponse>({
+      queryKey: ["/api/admin/twilio-probe"],
+      enabled: probeEnabled,
+      staleTime: 0,
     });
 
   const { data: diagnose, isLoading: diagnoseLoading, isFetching: diagnoseFetching } =
@@ -118,6 +150,135 @@ export default function SystemHealthPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Twilio-side probe — fetches real status from Twilio API */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="w-5 h-5" />
+            Twilio carrier probe
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Hits the Twilio API and shows the truth about your account: Trial vs Full,
+            balance, and the actual delivery status of the last 10 messages — including
+            carrier error codes (30007 = filtered, 21610 = STOP'd, etc). This is the
+            answer to "the API said it sent but the driver got nothing."
+          </p>
+          <Button
+            onClick={() => {
+              if (!probeEnabled) setProbeEnabled(true);
+              else refetchProbe();
+            }}
+            disabled={probeFetching}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${probeFetching ? "animate-spin" : ""}`} />
+            {probeEnabled ? "Re-probe Twilio" : "Probe Twilio now"}
+          </Button>
+
+          {probe && (
+            <div className="space-y-3 mt-4">
+              {probe.isTrial && (
+                <div className="p-3 rounded-md border border-red-500/40 bg-red-500/10">
+                  <div className="font-bold text-red-600 dark:text-red-400">
+                    🚨 Trial account detected — this is why SMS is failing
+                  </div>
+                  <div className="text-sm mt-1">
+                    Trial Twilio accounts cannot send via 10DLC. Every send returns 30007. Upgrade at{" "}
+                    <a
+                      href="https://console.twilio.com/billing/manage-billing/upgrade"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline font-medium"
+                    >
+                      console.twilio.com/billing
+                    </a>
+                    .
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-md border bg-card">
+                  <div className="text-xs text-muted-foreground">Account type</div>
+                  <div className={`font-mono text-sm ${probe.isTrial ? "text-red-500" : "text-emerald-500"}`}>
+                    {probe.account?.type ?? probe.account?.error ?? "?"}
+                  </div>
+                </div>
+                <div className="p-3 rounded-md border bg-card">
+                  <div className="text-xs text-muted-foreground">Balance</div>
+                  <div className="font-mono text-sm">
+                    {probe.balance?.balance
+                      ? `${probe.balance.balance} ${probe.balance.currency}`
+                      : probe.balance?.error ?? "?"}
+                  </div>
+                </div>
+              </div>
+
+              {probe.summary && (
+                <div className="p-3 rounded-md border bg-card">
+                  <div className="text-xs text-muted-foreground">Last 10 messages</div>
+                  <div className="text-sm mt-1">
+                    {probe.summary.failed > 0 ? (
+                      <span className="text-red-500 font-medium">
+                        {probe.summary.failed}/{probe.summary.total} failed
+                      </span>
+                    ) : (
+                      <span className="text-emerald-500 font-medium">
+                        all {probe.summary.total} OK
+                      </span>
+                    )}
+                    {probe.summary.commonErrorCodes.length > 0 && (
+                      <span className="ml-2 text-muted-foreground">
+                        (error codes: {probe.summary.commonErrorCodes.join(", ")})
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Statuses: {Object.entries(probe.summary.statuses).map(([k, v]) => `${k}=${v}`).join(", ")}
+                  </div>
+                </div>
+              )}
+
+              {probe.hints && probe.hints.length > 0 && (
+                <div className="p-3 rounded-md border border-amber-500/40 bg-amber-500/5 space-y-1">
+                  <div className="text-xs font-semibold text-amber-600 dark:text-amber-400">Diagnosis</div>
+                  {probe.hints.map((h, i) => (
+                    <div key={i} className="text-sm">{h}</div>
+                  ))}
+                </div>
+              )}
+
+              {Array.isArray(probe.recentMessages) && (
+                <div className="space-y-1 max-h-96 overflow-auto">
+                  {probe.recentMessages.map((m) => (
+                    <div key={m.sid} className="p-2 rounded border bg-card font-mono text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{m.dateSent ? new Date(m.dateSent).toLocaleString() : "—"}</span>
+                        <Badge
+                          variant={m.errorCode ? "destructive" : "secondary"}
+                          className="text-[10px]"
+                        >
+                          {m.status}
+                          {m.errorCode ? ` · ${m.errorCode}` : ""}
+                        </Badge>
+                      </div>
+                      <div className="text-muted-foreground mt-1">
+                        {m.from} → {m.to}
+                      </div>
+                      {m.errorMessage && (
+                        <div className="text-red-500 mt-1">{m.errorMessage}</div>
+                      )}
+                      {m.body && <div className="text-muted-foreground mt-1 truncate">{m.body}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
