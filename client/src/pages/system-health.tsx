@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, AlertCircle, Stethoscope, RefreshCw, Phone } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Stethoscope, RefreshCw, Phone, Send } from "lucide-react";
 
 interface Check {
   name: string;
@@ -69,6 +69,9 @@ export default function SystemHealthPage() {
       staleTime: 10_000,
     });
 
+  const [testPhoneInput, setTestPhoneInput] = useState("+16602290858");
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; messageSid?: string; error?: string } | null>(null);
   const [probeEnabled, setProbeEnabled] = useState(false);
   const { data: probe, isFetching: probeFetching, refetch: refetchProbe } =
     useQuery<TwilioProbeResponse>({
@@ -150,6 +153,81 @@ export default function SystemHealthPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Test SMS to arbitrary number — for isolating per-recipient carrier blocks */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Send className="w-5 h-5" />
+            Send test SMS to any number
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Sends the standard test dispatch body (matches your TCR Sample #1) to whatever number
+            you enter. Use this to isolate per-recipient carrier blocks: if your dispatcher number
+            keeps getting 30007 but a different recipient delivers, the block is per-recipient and
+            real drivers will work fine.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              value={testPhoneInput}
+              onChange={(e) => setTestPhoneInput(e.target.value)}
+              placeholder="+16602290858"
+              className="font-mono text-sm"
+            />
+            <Button
+              onClick={async () => {
+                setTestSending(true);
+                setTestResult(null);
+                try {
+                  const r = await fetch("/api/admin/test-dispatch/send", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ phone: testPhoneInput.trim() }),
+                  });
+                  setTestResult(await r.json());
+                  // Wait 3s then re-probe so the new message shows up in the list
+                  setProbeEnabled(true);
+                  setTimeout(() => refetchProbe(), 3000);
+                } catch (e: any) {
+                  setTestResult({ ok: false, error: e?.message ?? String(e) });
+                } finally {
+                  setTestSending(false);
+                }
+              }}
+              disabled={!testPhoneInput.trim() || testSending}
+            >
+              {testSending ? "Sending…" : "Send test"}
+            </Button>
+          </div>
+          {testResult && (
+            <div
+              className={`p-3 rounded-md border text-sm ${
+                testResult.ok
+                  ? "border-emerald-500/40 bg-emerald-500/5"
+                  : "border-red-500/40 bg-red-500/5"
+              }`}
+            >
+              <div className="font-medium">
+                {testResult.ok ? "✅ Twilio accepted the message" : "❌ Twilio rejected the message"}
+              </div>
+              {testResult.messageSid && (
+                <div className="text-xs text-muted-foreground mt-1 font-mono">
+                  SID: {testResult.messageSid}
+                </div>
+              )}
+              {testResult.error && (
+                <div className="text-xs text-red-500 mt-1">{testResult.error}</div>
+              )}
+              <div className="text-xs text-muted-foreground mt-2">
+                Auto-reprobing Twilio in 3 sec to check delivery status…
+              </div>
             </div>
           )}
         </CardContent>
