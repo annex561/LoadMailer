@@ -608,10 +608,11 @@ export default function DriverOnboarding() {
                   required
                 />
                 <span className="text-sm text-slate-800">
-                  I agree to receive SMS messages from <strong>TRAQ-IQ</strong> for load offers,
-                  dispatch coordination, GPS tracking requests, document uploads, and account
-                  notifications. Message frequency varies. Message and data rates may apply.
-                  Reply <strong>STOP</strong> to cancel, <strong>HELP</strong> for help. See our{' '}
+                  I agree to receive SMS messages from <strong>LAMP Logistics</strong> (operating
+                  the TRAQ-IQ platform) for load offers, dispatch coordination, GPS tracking
+                  requests, document uploads, and account notifications. Message frequency
+                  varies. Message and data rates may apply. Reply <strong>STOP</strong> to cancel,
+                  <strong> HELP</strong> for help. See our{' '}
                   <a href="/privacy" target="_blank" rel="noreferrer" className="text-blue-600 underline">
                     Privacy Policy
                   </a>{' '}
@@ -623,8 +624,8 @@ export default function DriverOnboarding() {
               </label>
               {!formData.smsConsent && (
                 <p className="text-xs text-slate-500 mt-2">
-                  You must agree to SMS notifications to complete onboarding — TRAQ-IQ uses SMS
-                  for all dispatch and load communication.
+                  You must agree to SMS notifications to complete onboarding — LAMP Logistics
+                  (TRAQ-IQ) uses SMS for all dispatch and load communication.
                 </p>
               )}
             </div>

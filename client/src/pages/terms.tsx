@@ -31,8 +31,9 @@ export default function TermsOfService() {
         <h2 className="text-xl font-semibold mt-8 mb-3">3. SMS messaging</h2>
         <p className="mb-4">
           By providing your phone number and checking the SMS consent box during driver
-          onboarding, you agree to receive operational SMS messages from TRAQ-IQ. Message
-          frequency varies based on load activity. Message and data rates may apply.
+          onboarding, you agree to receive operational SMS messages from LAMP Logistics
+          (operating the TRAQ-IQ platform). Message frequency varies based on load activity.
+          Message and data rates may apply.
         </p>
         <p className="mb-6">
           To opt out at any time, reply <strong>STOP</strong>. Reply <strong>HELP</strong> for
