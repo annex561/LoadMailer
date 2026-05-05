@@ -28,7 +28,8 @@ export default function PrivacyPolicy() {
         <p className="mb-4">
           By providing your phone number and checking the SMS consent box during driver
           onboarding (or otherwise providing explicit written or recorded consent), you
-          agree to receive SMS messages from TRAQ-IQ for the following purposes:
+          agree to receive SMS messages from LAMP Logistics (operating the TRAQ-IQ platform)
+          for the following purposes:
         </p>
         <ul className="list-disc pl-6 space-y-2 mb-4">
           <li>Load offers and dispatch coordination</li>
