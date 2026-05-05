@@ -86,6 +86,38 @@ export function registerAdminHealthRoutes(app: Express) {
       detail: customDomain ? `Set to ${customDomain}` : "Defaults to https://traqiq.app — set CUSTOM_DOMAIN to override",
     });
 
+    // Dispatch channel — the BIG one for the Twilio-blocked workaround.
+    const dispatchChannel = (process.env.DISPATCH_CHANNEL || "sms").toLowerCase();
+    const validChannels = ["sms", "email", "both", "email_fallback"];
+    checks.push({
+      name: "Dispatch channel (DISPATCH_CHANNEL)",
+      ok: validChannels.includes(dispatchChannel),
+      detail: !validChannels.includes(dispatchChannel)
+        ? `Invalid value "${dispatchChannel}" — must be one of: ${validChannels.join(", ")}. Falls back to "sms".`
+        : dispatchChannel === "sms"
+          ? "SMS only (default). If Twilio is filtering, drivers get nothing — set to 'email_fallback' until Twilio is fixed."
+          : dispatchChannel === "email"
+            ? "EMAIL ONLY — Twilio is bypassed entirely. Drivers receive load offers via email."
+            : dispatchChannel === "both"
+              ? "BOTH — every dispatch fires SMS AND email."
+              : "EMAIL FALLBACK — tries SMS first, fires email only if SMS fails. Best mode while Twilio block is active.",
+    });
+
+    // SMTP creds (only relevant if dispatch channel uses email)
+    const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER || "";
+    const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS || "";
+    const smtpConfigured = !!(smtpUser && smtpPass);
+    const emailMattersForChannel = dispatchChannel !== "sms";
+    checks.push({
+      name: "SMTP credentials (for email dispatch)",
+      ok: !emailMattersForChannel || smtpConfigured,
+      detail: smtpConfigured
+        ? `SMTP_USER set to ${smtpUser}; password present`
+        : emailMattersForChannel
+          ? `MISSING — DISPATCH_CHANNEL=${dispatchChannel} requires SMTP_USER + SMTP_PASS to send email. Set in Railway env.`
+          : "Not set, but DISPATCH_CHANNEL=sms so email is unused. Configure if you switch channels.",
+    });
+
     // SMS minimal mode flag
     const smsMinimal = process.env.SMS_MINIMAL === "true";
     checks.push({
