@@ -439,26 +439,41 @@ export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; er
 
   const { body } = buildDispatchSmsBody(load, driver);
 
-  console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber} (channel=${channel})`);
-  const { smsService, withBrandAndOptOut } = await import("./sms-service");
+  // SMS provider routing. Default is twilio (existing behavior). Set
+  // SMS_PROVIDER=telnyx in env to route through Telnyx instead — the
+  // body builder, brand prefix, and STOP suffix are provider-agnostic
+  // so this is a true drop-in.
+  const provider = (process.env.SMS_PROVIDER || "twilio").toLowerCase();
+  console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber} (channel=${channel}, provider=${provider})`);
+
+  const { withBrandAndOptOut } = await import("./sms-service");
   const finalBody = withBrandAndOptOut(body);
 
   let smsOk = false;
   let smsErr: string | undefined;
   let messageSid: string | undefined;
   try {
-    const result = await smsService.sendSMS({ to: phone, body: finalBody, skipFooter: true });
-    smsOk = result.success;
-    smsErr = result.error;
-    messageSid = result.messageSid;
-    if (smsOk) {
-      console.log(`[dispatch-sms] ✅ sent to ${phone} (SID: ${messageSid})`);
+    if (provider === "telnyx") {
+      const { sendTelnyxSms } = await import("./telnyx-service");
+      const result = await sendTelnyxSms({ to: phone, body: finalBody });
+      smsOk = result.success;
+      smsErr = result.error;
+      messageSid = result.messageSid;
     } else {
-      console.error(`[dispatch-sms] ❌ ${smsErr || "unknown SMS failure"}`);
+      const { smsService } = await import("./sms-service");
+      const result = await smsService.sendSMS({ to: phone, body: finalBody, skipFooter: true });
+      smsOk = result.success;
+      smsErr = result.error;
+      messageSid = result.messageSid;
+    }
+    if (smsOk) {
+      console.log(`[dispatch-sms] ✅ sent via ${provider} to ${phone} (id: ${messageSid})`);
+    } else {
+      console.error(`[dispatch-sms] ❌ ${provider}: ${smsErr || "unknown SMS failure"}`);
     }
   } catch (err: any) {
-    smsErr = `Twilio: ${err.message}`;
-    console.error(`[dispatch-sms] ❌ Twilio send threw: ${err.message}`);
+    smsErr = `${provider}: ${err.message}`;
+    console.error(`[dispatch-sms] ❌ ${provider} send threw: ${err.message}`);
   }
 
   // "both" → fire email regardless of SMS result.
