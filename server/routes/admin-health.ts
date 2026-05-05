@@ -86,6 +86,32 @@ export function registerAdminHealthRoutes(app: Express) {
       detail: customDomain ? `Set to ${customDomain}` : "Defaults to https://traqiq.app — set CUSTOM_DOMAIN to override",
     });
 
+    // SMS provider — twilio (default) or telnyx
+    const smsProvider = (process.env.SMS_PROVIDER || "twilio").toLowerCase();
+    const validProviders = ["twilio", "telnyx"];
+    checks.push({
+      name: "SMS provider (SMS_PROVIDER)",
+      ok: validProviders.includes(smsProvider),
+      detail: !validProviders.includes(smsProvider)
+        ? `Invalid value "${smsProvider}" — must be 'twilio' or 'telnyx'. Falls back to twilio.`
+        : smsProvider === "twilio"
+          ? "Twilio (default). Active sender pool: Messaging Service " + (process.env.TWILIO_MESSAGING_SERVICE_SID || "(not set)")
+          : "Telnyx. Active profile: " + (process.env.TELNYX_MESSAGING_PROFILE_ID || "(NOT SET — sends will fail)"),
+    });
+
+    // Telnyx creds (only relevant if provider is telnyx)
+    if (smsProvider === "telnyx") {
+      const telnyxKey = process.env.TELNYX_API_KEY || "";
+      const telnyxProfile = process.env.TELNYX_MESSAGING_PROFILE_ID || "";
+      checks.push({
+        name: "Telnyx credentials",
+        ok: !!(telnyxKey && telnyxProfile),
+        detail: telnyxKey && telnyxProfile
+          ? `TELNYX_API_KEY present; profile ${telnyxProfile}`
+          : "MISSING — set TELNYX_API_KEY and TELNYX_MESSAGING_PROFILE_ID in Railway env",
+      });
+    }
+
     // Dispatch channel — the BIG one for the Twilio-blocked workaround.
     const dispatchChannel = (process.env.DISPATCH_CHANNEL || "sms").toLowerCase();
     const validChannels = ["sms", "email", "both", "email_fallback"];
@@ -326,6 +352,58 @@ export function registerAdminHealthRoutes(app: Express) {
       hints.push(`Account balance is ${out.balance.balance} ${out.balance.currency} — top up at https://console.twilio.com/billing`);
     }
     out.hints = hints;
+
+    res.json(out);
+  });
+
+  // Telnyx-side probe: same idea as the Twilio probe, but for Telnyx. Fetches
+  // the last N messages from Telnyx so you can verify deliverability after
+  // switching SMS_PROVIDER=telnyx without leaving the app.
+  app.get("/api/admin/telnyx-probe", requireRole("admin"), async (_req, res) => {
+    const apiKey = process.env.TELNYX_API_KEY;
+    const profileId = process.env.TELNYX_MESSAGING_PROFILE_ID;
+    if (!apiKey) {
+      return res.status(500).json({ ok: false, error: "TELNYX_API_KEY not set" });
+    }
+    const out: any = { ok: true, profileId: profileId ?? null };
+
+    try {
+      const r = await fetch(
+        `https://api.telnyx.com/v2/messages?page[size]=10${profileId ? `&filter[messaging_profile_id]=${profileId}` : ""}`,
+        { headers: { Authorization: `Bearer ${apiKey}` } },
+      );
+      const j: any = await r.json();
+      if (!r.ok) {
+        out.ok = false;
+        out.error = `Telnyx HTTP ${r.status}`;
+        out.detail = j;
+      } else {
+        const msgs = (j.data ?? []) as any[];
+        out.recentMessages = msgs.map((m) => ({
+          id: m.id,
+          to: m.to?.[0]?.phone_number,
+          from: m.from?.phone_number,
+          status: m.to?.[0]?.status ?? m.outbound_status,
+          errors: m.errors ?? [],
+          sentAt: m.sent_at,
+          completedAt: m.completed_at,
+          textPreview: (m.text ?? "").slice(0, 60),
+        }));
+        const failed = out.recentMessages.filter((m: any) => m.errors?.length || ["delivery_failed", "sending_failed"].includes(m.status));
+        out.summary = {
+          total: msgs.length,
+          failed: failed.length,
+          statuses: out.recentMessages.reduce((acc: Record<string, number>, m: any) => {
+            const s = m.status ?? "unknown";
+            acc[s] = (acc[s] ?? 0) + 1;
+            return acc;
+          }, {}),
+        };
+      }
+    } catch (e: any) {
+      out.ok = false;
+      out.error = e?.message ?? String(e);
+    }
 
     res.json(out);
   });
