@@ -2,8 +2,21 @@ import { db } from "./db";
 import { rateconIntake, loads, drivers, customers } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import nodemailer from "nodemailer";
 import type { PayDriverInput, PayLoadInput } from "./pay-calculator";
 import { calculatePay } from "./pay-calculator";
+
+// Reuse the same SMTP transport as load-lifecycle-service / bidding-service.
+// Defaults align with the existing wiring (Gmail SMTP via SMTP_USER/SMTP_PASS).
+const dispatchMailer = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: parseInt(process.env.SMTP_PORT || "587"),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER || process.env.EMAIL_USER || "",
+    pass: process.env.SMTP_PASS || process.env.EMAIL_PASS || "",
+  },
+});
 
 export interface DispatchOutcome {
   ok: boolean;
@@ -327,38 +340,141 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
 // explicit user action, so there's no point gating it behind an env var.
 // (Admin alerts and YES/NO replies remain gated by SMS_ENABLED to prevent
 // noise during testing — only the explicit dispatch action sends real SMS.)
-export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string; messageSid?: string; phone?: string }> {
+/**
+ * Email dispatch — fallback channel for when SMS is blocked at the carrier.
+ *
+ * Renders the SAME body the SMS would carry (so drivers see consistent info
+ * across channels) plus a clearer subject line and a prominent "View Load"
+ * button. Returns shape mirrors sendDispatchSms for easy interop.
+ */
+export async function sendDispatchEmail(loadId: string): Promise<{ ok: boolean; error?: string; email?: string; messageId?: string }> {
+  const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
+  if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
+  const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
+  if (!driver) return { ok: false, error: "Driver not found" };
+  const email = (driver as any).email;
+  if (!email) return { ok: false, error: "Driver has no email" };
+
+  const { body, url } = buildDispatchSmsBody(load, driver);
+  const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+  const dashboardUrl = (driver as any).trackingToken
+    ? `${baseUrl}/driver/${(driver as any).trackingToken}`
+    : null;
+
+  const subject = `New Load Offer: #${load.loadNumber}${load.brokerName ? ` — ${load.brokerName}` : ""}`;
+  const text =
+    `Hi ${driver.name ?? "Driver"},\n\n` +
+    `${body}\n\n` +
+    (dashboardUrl ? `Your dashboard: ${dashboardUrl}\n\n` : "") +
+    `— LAMP Logistics Dispatch\n` +
+    `dispatch@traqiq.app`;
+
+  const html =
+    `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;color:#111;">` +
+    `<h2 style="color:#0d9488;margin-bottom:8px;">New Load Offer #${load.loadNumber}</h2>` +
+    (load.brokerName ? `<p style="color:#6b7280;margin-top:0;">${load.brokerName}</p>` : "") +
+    `<pre style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.55;">${body.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>` +
+    `<p style="margin-top:24px;"><a href="${url}" style="background:#0d9488;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">View Load Details</a></p>` +
+    (dashboardUrl ? `<p style="font-size:13px;color:#6b7280;">Driver Dashboard: <a href="${dashboardUrl}">${dashboardUrl}</a></p>` : "") +
+    `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />` +
+    `<p style="font-size:12px;color:#9ca3af;">LAMP Logistics Dispatch · operating the TRAQ-IQ platform · dispatch@traqiq.app</p>` +
+    `</div>`;
+
+  const fromAddr = process.env.DISPATCH_FROM_EMAIL || process.env.SMTP_USER || process.env.EMAIL_USER || "dispatch@traqiq.app";
+
+  console.log(`[dispatch-email] sending to ${email} for load ${load.loadNumber}`);
+  try {
+    const info = await dispatchMailer.sendMail({
+      from: `"LAMP Logistics Dispatch" <${fromAddr}>`,
+      to: email,
+      subject,
+      text,
+      html,
+    });
+    console.log(`[dispatch-email] ✅ sent to ${email} (msgId: ${info.messageId})`);
+    return { ok: true, messageId: info.messageId, email };
+  } catch (err: any) {
+    console.error(`[dispatch-email] ❌ SMTP send failed: ${err.message}`);
+    return { ok: false, error: `SMTP: ${err.message}`, email };
+  }
+}
+
+/**
+ * Send dispatch via the configured channel. Behavior controlled by
+ * DISPATCH_CHANNEL env var:
+ *
+ *   "sms"            (default) — SMS only
+ *   "email"          — email only
+ *   "both"           — SMS AND email (best-effort each)
+ *   "email_fallback" — try SMS; if it fails, fire email
+ *
+ * Use "email_fallback" while Twilio carrier filtering is unresolved — drivers
+ * still get the offer, and once SMS recovers no env-var change is needed.
+ *
+ * The function name keeps "Sms" for backward compatibility with all call sites
+ * (load-lifecycle-service, ratecon-intake, routes.ts admin actions).
+ */
+export async function sendDispatchSms(loadId: string): Promise<{ ok: boolean; error?: string; messageSid?: string; phone?: string; email?: string; channel?: string }> {
+  const channel = (process.env.DISPATCH_CHANNEL || "sms").toLowerCase();
+
+  // Email-only mode: never call Twilio.
+  if (channel === "email") {
+    const r = await sendDispatchEmail(loadId);
+    return { ok: r.ok, error: r.error, email: r.email, channel: "email" };
+  }
+
   const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
   if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
   const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
   if (!driver) return { ok: false, error: "Driver not found" };
   const phone = (driver as any).phoneNumber ?? (driver as any).phone;
-  if (!phone) return { ok: false, error: "Driver has no phone" };
+  if (!phone) {
+    // No phone — try email if we have a path for it, otherwise fail as before.
+    if (channel === "both" || channel === "email_fallback") {
+      const r = await sendDispatchEmail(loadId);
+      return { ok: r.ok, error: r.error, email: r.email, channel: "email" };
+    }
+    return { ok: false, error: "Driver has no phone" };
+  }
 
-  // Reuse the shared body-builder so the admin "Test Dispatch" page renders
-  // the exact same SMS that real drivers receive.
-  const useFullBody = process.env.SMS_MINIMAL !== "true";
   const { body } = buildDispatchSmsBody(load, driver);
 
-  console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber}`);
+  console.log(`[dispatch-sms] sending to ${phone} for load ${load.loadNumber} (channel=${channel})`);
   const { smsService, withBrandAndOptOut } = await import("./sms-service");
-  // Compliance: registered brand prefix + STOP suffix (idempotent).
   const finalBody = withBrandAndOptOut(body);
+
+  let smsOk = false;
+  let smsErr: string | undefined;
+  let messageSid: string | undefined;
   try {
-    // ALWAYS skipFooter for the dispatch SMS now. Carriers (T-Mobile in
-    // particular) filter messages with two URLs as suspicious even when 10DLC
-    // is approved — the registered campaign samples have a single URL each.
-    // The driver dashboard is reachable from the load detail page (which is
-    // the URL we DO include), so no information is lost.
     const result = await smsService.sendSMS({ to: phone, body: finalBody, skipFooter: true });
-    if (!result.success) {
-      console.error(`[dispatch-sms] ❌ ${result.error || "unknown SMS failure"}`);
-      return { ok: false, error: result.error || "SMS send failed (no error returned)", phone };
+    smsOk = result.success;
+    smsErr = result.error;
+    messageSid = result.messageSid;
+    if (smsOk) {
+      console.log(`[dispatch-sms] ✅ sent to ${phone} (SID: ${messageSid})`);
+    } else {
+      console.error(`[dispatch-sms] ❌ ${smsErr || "unknown SMS failure"}`);
     }
-    console.log(`[dispatch-sms] ✅ sent to ${phone} (SID: ${result.messageSid})`);
-    return { ok: true, messageSid: result.messageSid, phone };
   } catch (err: any) {
+    smsErr = `Twilio: ${err.message}`;
     console.error(`[dispatch-sms] ❌ Twilio send threw: ${err.message}`);
-    return { ok: false, error: `Twilio: ${err.message}`, phone };
   }
+
+  // "both" → fire email regardless of SMS result.
+  // "email_fallback" → fire email only if SMS failed.
+  const shouldEmail =
+    channel === "both" || (channel === "email_fallback" && !smsOk);
+
+  if (shouldEmail) {
+    const r = await sendDispatchEmail(loadId);
+    if (smsOk && r.ok) return { ok: true, messageSid, phone, email: r.email, channel: "both" };
+    if (smsOk && !r.ok) return { ok: true, messageSid, phone, channel: "sms+email_failed", error: `email error: ${r.error}` };
+    if (!smsOk && r.ok) return { ok: true, email: r.email, phone, channel: "email_fallback", error: `sms error: ${smsErr}` };
+    return { ok: false, error: `sms error: ${smsErr}; email error: ${r.error}`, phone, channel };
+  }
+
+  return smsOk
+    ? { ok: true, messageSid, phone, channel: "sms" }
+    : { ok: false, error: smsErr || "SMS send failed", phone, channel: "sms" };
 }
