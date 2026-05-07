@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { db } from "../db";
 import { drivers, loads } from "@shared/schema";
 import { requireRole } from "../auth";
@@ -191,37 +192,55 @@ export function registerTestDispatchRoutes(app: Express) {
 
       const load = defaultLoad({ ...overrides, loadNumber: "URL-TEST-" + Date.now().toString().slice(-6) });
       const driver = defaultDriver(overrides);
-      const { body: bodyWithUrl } = buildDispatchSmsBody(load, driver);
+      const { body: bodyWithTestUrl } = buildDispatchSmsBody(load, driver);
 
-      // Strip the "Details: <url>\n" line for the no-URL variant.
-      const bodyNoUrl = bodyWithUrl.replace(/^Details:\s+\S+\s*\n?/im, "");
+      // Variant 2: production-style URL (no "test-" prefix). Real loads use
+      // nanoid tokens — we synthesize one here and swap it into the URL.
+      // Carriers may have flagged "test-" specifically; if a clean nanoid
+      // URL passes, real production traffic will work as-is.
+      const prodToken = nanoid(8);
+      const bodyWithProdUrl = bodyWithTestUrl.replace(
+        /(https:\/\/[^\s/]+\/l\/)test-[a-z0-9]+/i,
+        `$1${prodToken}`,
+      );
+
+      // Variant 3: no URL line at all — confirms baseline deliverability.
+      const bodyNoUrl = bodyWithTestUrl.replace(/^Details:\s+\S+\s*\n?/im, "");
 
       const { smsService, withBrandAndOptOut } = await import("../sms-service");
-      const withUrlFinal = withBrandAndOptOut(bodyWithUrl);
+      const withTestUrlFinal = withBrandAndOptOut(bodyWithTestUrl);
+      const withProdUrlFinal = withBrandAndOptOut(bodyWithProdUrl);
       const noUrlFinal = withBrandAndOptOut(bodyNoUrl);
 
-      console.log(`[url-diagnostic] sending pair to ${overrides.phone} (load=${load.loadNumber})`);
+      console.log(`[url-diagnostic] sending triple to ${overrides.phone} (load=${load.loadNumber})`);
 
-      const r1 = await smsService.sendSMS({ to: overrides.phone, body: withUrlFinal, skipFooter: true });
-      // Brief pause so the messages don't queue back-to-back as a perceived burst.
+      const r1 = await smsService.sendSMS({ to: overrides.phone, body: withTestUrlFinal, skipFooter: true });
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      const r2 = await smsService.sendSMS({ to: overrides.phone, body: noUrlFinal, skipFooter: true });
+      const r2 = await smsService.sendSMS({ to: overrides.phone, body: withProdUrlFinal, skipFooter: true });
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const r3 = await smsService.sendSMS({ to: overrides.phone, body: noUrlFinal, skipFooter: true });
 
-      console.log(`[url-diagnostic] withUrl sid=${r1.messageSid ?? "-"} ok=${r1.success}; noUrl sid=${r2.messageSid ?? "-"} ok=${r2.success}`);
+      console.log(`[url-diagnostic] testUrl=${r1.messageSid ?? "-"} prodUrl=${r2.messageSid ?? "-"} noUrl=${r3.messageSid ?? "-"}`);
 
       res.json({
-        ok: r1.success && r2.success,
+        ok: r1.success && r2.success && r3.success,
         loadNumber: load.loadNumber,
         withUrl: {
           ok: r1.success,
           messageSid: r1.messageSid,
           error: r1.error,
-          body: withUrlFinal,
+          body: withTestUrlFinal,
         },
-        noUrl: {
+        withProdUrl: {
           ok: r2.success,
           messageSid: r2.messageSid,
           error: r2.error,
+          body: withProdUrlFinal,
+        },
+        noUrl: {
+          ok: r3.success,
+          messageSid: r3.messageSid,
+          error: r3.error,
           body: noUrlFinal,
         },
       });

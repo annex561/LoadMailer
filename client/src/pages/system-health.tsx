@@ -77,6 +77,7 @@ export default function SystemHealthPage() {
     ok?: boolean;
     loadNumber?: string;
     withUrl?: { ok: boolean; messageSid?: string; error?: string; body?: string };
+    withProdUrl?: { ok: boolean; messageSid?: string; error?: string; body?: string };
     noUrl?: { ok: boolean; messageSid?: string; error?: string; body?: string };
     error?: string;
   } | null>(null);
@@ -243,10 +244,11 @@ export default function SystemHealthPage() {
           <div className="mt-6 pt-6 border-t">
             <div className="font-semibold text-sm mb-1">URL filter diagnostic (Twilio T&S request)</div>
             <p className="text-xs text-muted-foreground mb-3">
-              Per Twilio T&S ticket #26735656: fires two sends to the recipient above. Body is
-              identical except one includes the load Details URL and one omits it. Compare the
-              delivery status of both to confirm whether the URL is what's tripping carrier
-              filtering. Both SIDs are returned — paste them into your Twilio reply.
+              Per Twilio T&S ticket #26735656: fires three sends to the recipient above. Bodies
+              are identical except for the URL line: (1) WITH "test-" prefix URL — what the test
+              endpoint currently emits, (2) WITH production-style URL — what real loads actually
+              send (no "test-" prefix), (3) WITHOUT URL. If only (2) and (3) deliver, real
+              production traffic will work as-is and only the test endpoint needs cleanup.
             </p>
             <Button
               variant="outline"
@@ -271,7 +273,7 @@ export default function SystemHealthPage() {
               }}
               disabled={!testPhoneInput.trim() || diagSending}
             >
-              {diagSending ? "Sending pair…" : "Run URL diagnostic (2 sends)"}
+              {diagSending ? "Sending triple…" : "Run URL diagnostic (3 sends)"}
             </Button>
 
             {diagResult && (
@@ -290,7 +292,7 @@ export default function SystemHealthPage() {
                     }`}
                   >
                     <div className="font-medium">
-                      {diagResult.withUrl.ok ? "✅ WITH URL — Twilio accepted" : "❌ WITH URL — Twilio rejected"}
+                      WITH "test-" URL (current test endpoint) — {diagResult.withUrl.ok ? "✅ Twilio accepted" : "❌ Twilio rejected"}
                     </div>
                     {diagResult.withUrl.messageSid && (
                       <div className="text-xs text-muted-foreground mt-1 font-mono">
@@ -299,6 +301,27 @@ export default function SystemHealthPage() {
                     )}
                     {diagResult.withUrl.error && (
                       <div className="text-xs text-red-500 mt-1">{diagResult.withUrl.error}</div>
+                    )}
+                  </div>
+                )}
+                {diagResult.withProdUrl && (
+                  <div
+                    className={`p-3 rounded-md border text-sm ${
+                      diagResult.withProdUrl.ok
+                        ? "border-emerald-500/40 bg-emerald-500/5"
+                        : "border-red-500/40 bg-red-500/5"
+                    }`}
+                  >
+                    <div className="font-medium">
+                      WITH production-style URL (no "test-" prefix) — {diagResult.withProdUrl.ok ? "✅ Twilio accepted" : "❌ Twilio rejected"}
+                    </div>
+                    {diagResult.withProdUrl.messageSid && (
+                      <div className="text-xs text-muted-foreground mt-1 font-mono">
+                        SID: {diagResult.withProdUrl.messageSid}
+                      </div>
+                    )}
+                    {diagResult.withProdUrl.error && (
+                      <div className="text-xs text-red-500 mt-1">{diagResult.withProdUrl.error}</div>
                     )}
                   </div>
                 )}
@@ -327,9 +350,9 @@ export default function SystemHealthPage() {
                   <div className="p-3 rounded-md border border-amber-500/40 bg-amber-500/5 text-xs">
                     <div className="font-semibold mb-1">Next step:</div>
                     <div className="text-muted-foreground">
-                      Wait ~30 sec, click <strong>Re-probe Twilio</strong> below, then look for these two SIDs in the
-                      Last 10 messages list. If "WITH URL" shows undelivered/30007 and "WITHOUT URL" shows delivered,
-                      the URL is the trigger. Reply to Danny on ticket #26735656 with both SIDs and statuses.
+                      Wait ~30 sec, click <strong>Re-probe Twilio</strong> below, then look for all three SIDs in the
+                      Last 10 messages list. The pattern that delivers tells us the fix. Reply to Danny on ticket
+                      #26735656 with all SIDs and statuses.
                     </div>
                   </div>
                 )}
