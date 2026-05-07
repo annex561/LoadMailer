@@ -318,8 +318,11 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
   // Combined with DISPATCH_CHANNEL=both, drivers get the SMS heads-up AND the
   // email with the actual link they need to accept and upload BOL/POD.
   const omitUrl = process.env.SMS_OMIT_URL === "true";
+  // When URL is omitted, advertise the SMS command set so drivers know they
+  // can stay 100% in SMS — no portal, no email, no clicks. The handler for
+  // these commands lives in sms-communication-service.handleDispatchKeyword.
   const detailsLine = omitUrl
-    ? `Full details + accept link sent to your email.\n`
+    ? `Reply DETAILS for full info, HELP for commands.\n`
     : `Details: ${url}\n`;
 
   const body = useFullBody
