@@ -178,6 +178,59 @@ export function registerTestDispatchRoutes(app: Express) {
   // Send to a specified phone. Goes through the SAME smsService.sendSMS path
   // as production dispatch, so 10DLC compliance, opt-out check, and the
   // driver-dashboard footer all apply identically.
+  // URL diagnostic — fires TWO sends to the same recipient with body
+  // identical except one includes the load Details URL and one omits it.
+  // Used to test Twilio T&S hypothesis (ticket #26735656) that the
+  // traqiq.app/l/test-* URL pattern is what's tripping carrier filtering.
+  app.post("/api/admin/test-dispatch/url-diagnostic", requireRole("admin"), async (req, res) => {
+    try {
+      const overrides = (req.body ?? {}) as TestDispatchBody;
+      if (!overrides.phone) {
+        return res.status(400).json({ ok: false, error: "phone is required" });
+      }
+
+      const load = defaultLoad({ ...overrides, loadNumber: "URL-TEST-" + Date.now().toString().slice(-6) });
+      const driver = defaultDriver(overrides);
+      const { body: bodyWithUrl } = buildDispatchSmsBody(load, driver);
+
+      // Strip the "Details: <url>\n" line for the no-URL variant.
+      const bodyNoUrl = bodyWithUrl.replace(/^Details:\s+\S+\s*\n?/im, "");
+
+      const { smsService, withBrandAndOptOut } = await import("../sms-service");
+      const withUrlFinal = withBrandAndOptOut(bodyWithUrl);
+      const noUrlFinal = withBrandAndOptOut(bodyNoUrl);
+
+      console.log(`[url-diagnostic] sending pair to ${overrides.phone} (load=${load.loadNumber})`);
+
+      const r1 = await smsService.sendSMS({ to: overrides.phone, body: withUrlFinal, skipFooter: true });
+      // Brief pause so the messages don't queue back-to-back as a perceived burst.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const r2 = await smsService.sendSMS({ to: overrides.phone, body: noUrlFinal, skipFooter: true });
+
+      console.log(`[url-diagnostic] withUrl sid=${r1.messageSid ?? "-"} ok=${r1.success}; noUrl sid=${r2.messageSid ?? "-"} ok=${r2.success}`);
+
+      res.json({
+        ok: r1.success && r2.success,
+        loadNumber: load.loadNumber,
+        withUrl: {
+          ok: r1.success,
+          messageSid: r1.messageSid,
+          error: r1.error,
+          body: withUrlFinal,
+        },
+        noUrl: {
+          ok: r2.success,
+          messageSid: r2.messageSid,
+          error: r2.error,
+          body: noUrlFinal,
+        },
+      });
+    } catch (err: any) {
+      console.error("[url-diagnostic]", err);
+      res.status(500).json({ ok: false, error: err?.message ?? "diagnostic failed" });
+    }
+  });
+
   app.post("/api/admin/test-dispatch/send", requireRole("admin"), async (req, res) => {
     try {
       const overrides = (req.body ?? {}) as TestDispatchBody;

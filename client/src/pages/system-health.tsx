@@ -72,6 +72,14 @@ export default function SystemHealthPage() {
   const [testPhoneInput, setTestPhoneInput] = useState("+16602290858");
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; messageSid?: string; error?: string } | null>(null);
+  const [diagSending, setDiagSending] = useState(false);
+  const [diagResult, setDiagResult] = useState<{
+    ok?: boolean;
+    loadNumber?: string;
+    withUrl?: { ok: boolean; messageSid?: string; error?: string; body?: string };
+    noUrl?: { ok: boolean; messageSid?: string; error?: string; body?: string };
+    error?: string;
+  } | null>(null);
   const [probeEnabled, setProbeEnabled] = useState(false);
   const { data: probe, isFetching: probeFetching, refetch: refetchProbe } =
     useQuery<TwilioProbeResponse>({
@@ -230,6 +238,104 @@ export default function SystemHealthPage() {
               </div>
             </div>
           )}
+
+          {/* URL diagnostic — fires two messages with body identical except for the URL */}
+          <div className="mt-6 pt-6 border-t">
+            <div className="font-semibold text-sm mb-1">URL filter diagnostic (Twilio T&S request)</div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Per Twilio T&S ticket #26735656: fires two sends to the recipient above. Body is
+              identical except one includes the load Details URL and one omits it. Compare the
+              delivery status of both to confirm whether the URL is what's tripping carrier
+              filtering. Both SIDs are returned — paste them into your Twilio reply.
+            </p>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                setDiagSending(true);
+                setDiagResult(null);
+                try {
+                  const r = await fetch("/api/admin/test-dispatch/url-diagnostic", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ phone: testPhoneInput.trim() }),
+                  });
+                  setDiagResult(await r.json());
+                  setProbeEnabled(true);
+                  setTimeout(() => refetchProbe(), 8000);
+                } catch (e: any) {
+                  setDiagResult({ error: e?.message ?? String(e) });
+                } finally {
+                  setDiagSending(false);
+                }
+              }}
+              disabled={!testPhoneInput.trim() || diagSending}
+            >
+              {diagSending ? "Sending pair…" : "Run URL diagnostic (2 sends)"}
+            </Button>
+
+            {diagResult && (
+              <div className="mt-3 space-y-2">
+                {diagResult.error && (
+                  <div className="p-3 rounded-md border border-red-500/40 bg-red-500/5 text-sm text-red-500">
+                    {diagResult.error}
+                  </div>
+                )}
+                {diagResult.withUrl && (
+                  <div
+                    className={`p-3 rounded-md border text-sm ${
+                      diagResult.withUrl.ok
+                        ? "border-emerald-500/40 bg-emerald-500/5"
+                        : "border-red-500/40 bg-red-500/5"
+                    }`}
+                  >
+                    <div className="font-medium">
+                      {diagResult.withUrl.ok ? "✅ WITH URL — Twilio accepted" : "❌ WITH URL — Twilio rejected"}
+                    </div>
+                    {diagResult.withUrl.messageSid && (
+                      <div className="text-xs text-muted-foreground mt-1 font-mono">
+                        SID: {diagResult.withUrl.messageSid}
+                      </div>
+                    )}
+                    {diagResult.withUrl.error && (
+                      <div className="text-xs text-red-500 mt-1">{diagResult.withUrl.error}</div>
+                    )}
+                  </div>
+                )}
+                {diagResult.noUrl && (
+                  <div
+                    className={`p-3 rounded-md border text-sm ${
+                      diagResult.noUrl.ok
+                        ? "border-emerald-500/40 bg-emerald-500/5"
+                        : "border-red-500/40 bg-red-500/5"
+                    }`}
+                  >
+                    <div className="font-medium">
+                      {diagResult.noUrl.ok ? "✅ WITHOUT URL — Twilio accepted" : "❌ WITHOUT URL — Twilio rejected"}
+                    </div>
+                    {diagResult.noUrl.messageSid && (
+                      <div className="text-xs text-muted-foreground mt-1 font-mono">
+                        SID: {diagResult.noUrl.messageSid}
+                      </div>
+                    )}
+                    {diagResult.noUrl.error && (
+                      <div className="text-xs text-red-500 mt-1">{diagResult.noUrl.error}</div>
+                    )}
+                  </div>
+                )}
+                {diagResult.withUrl && diagResult.noUrl && (
+                  <div className="p-3 rounded-md border border-amber-500/40 bg-amber-500/5 text-xs">
+                    <div className="font-semibold mb-1">Next step:</div>
+                    <div className="text-muted-foreground">
+                      Wait ~30 sec, click <strong>Re-probe Twilio</strong> below, then look for these two SIDs in the
+                      Last 10 messages list. If "WITH URL" shows undelivered/30007 and "WITHOUT URL" shows delivered,
+                      the URL is the trigger. Reply to Danny on ticket #26735656 with both SIDs and statuses.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
