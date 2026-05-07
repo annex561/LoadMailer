@@ -311,6 +311,17 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
     ? `Note: ${load.specialInstructions.slice(0, 120)}\n`
     : "";
 
+  // Workaround for Twilio T&S ticket #26735656: any traqiq.app/l/* URL is
+  // currently filtered with carrier 30007. Until Twilio resolves it (branded
+  // domain, allowlist, or click-tracking), set SMS_OMIT_URL=true to strip the
+  // Details URL line and tell the driver to check email for the full link.
+  // Combined with DISPATCH_CHANNEL=both, drivers get the SMS heads-up AND the
+  // email with the actual link they need to accept and upload BOL/POD.
+  const omitUrl = process.env.SMS_OMIT_URL === "true";
+  const detailsLine = omitUrl
+    ? `Full details + accept link sent to your email.\n`
+    : `Details: ${url}\n`;
+
   const body = useFullBody
     ? `Load #${load.loadNumber}` +
       (load.brokerName ? ` (${load.brokerName})` : "") +
@@ -320,7 +331,7 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
       commodityLine +
       specialLine +
       `Pay: $${pay.netPay.toFixed(2)}\n` +
-      `Details: ${url}\n` +
+      detailsLine +
       `Reply YES to accept or NO to decline.`
     : `Load ${load.loadNumber}` +
       (load.brokerName ? ` from ${load.brokerName}` : "") +

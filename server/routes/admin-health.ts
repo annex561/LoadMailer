@@ -144,6 +144,16 @@ export function registerAdminHealthRoutes(app: Express) {
           : "Not set, but DISPATCH_CHANNEL=sms so email is unused. Configure if you switch channels.",
     });
 
+    // SMS_OMIT_URL — workaround for Twilio T&S #26735656 (URL-triggered 30007).
+    const smsOmitUrl = process.env.SMS_OMIT_URL === "true";
+    checks.push({
+      name: "SMS URL omission (SMS_OMIT_URL)",
+      ok: true,
+      detail: smsOmitUrl
+        ? "ACTIVE — Details URL stripped from dispatch SMS body. Combine with DISPATCH_CHANNEL=both so the email carries the actual accept/upload link. Use until Twilio resolves carrier filtering on traqiq.app URLs."
+        : "Inactive — SMS body includes Details URL. If 30007 errors persist, set SMS_OMIT_URL=true and DISPATCH_CHANNEL=both as a workaround.",
+    });
+
     // SMS minimal mode flag
     const smsMinimal = process.env.SMS_MINIMAL === "true";
     checks.push({
