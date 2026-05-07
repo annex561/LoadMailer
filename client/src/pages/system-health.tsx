@@ -78,6 +78,7 @@ export default function SystemHealthPage() {
     loadNumber?: string;
     withUrl?: { ok: boolean; messageSid?: string; error?: string; body?: string };
     withProdUrl?: { ok: boolean; messageSid?: string; error?: string; body?: string };
+    withShortUrl?: { ok: boolean; messageSid?: string; error?: string; body?: string };
     noUrl?: { ok: boolean; messageSid?: string; error?: string; body?: string };
     error?: string;
   } | null>(null);
@@ -244,11 +245,11 @@ export default function SystemHealthPage() {
           <div className="mt-6 pt-6 border-t">
             <div className="font-semibold text-sm mb-1">URL filter diagnostic (Twilio T&S request)</div>
             <p className="text-xs text-muted-foreground mb-3">
-              Per Twilio T&S ticket #26735656: fires three sends to the recipient above. Bodies
-              are identical except for the URL line: (1) WITH "test-" prefix URL — what the test
-              endpoint currently emits, (2) WITH production-style URL — what real loads actually
-              send (no "test-" prefix), (3) WITHOUT URL. If only (2) and (3) deliver, real
-              production traffic will work as-is and only the test endpoint needs cleanup.
+              Fires four sends to the recipient. Bodies identical except for the URL line:
+              (1) "test-" prefix URL — current test endpoint, (2) production-style URL — real load
+              token, (3) SHORT URL (e.g. /r/X9, 2-char token) — tests if URL "shape" passes when
+              full pattern doesn't, (4) WITHOUT URL — baseline. If (3) delivers, we just change
+              the production URL pattern and we're done — no domain change needed.
             </p>
             <Button
               variant="outline"
@@ -273,7 +274,7 @@ export default function SystemHealthPage() {
               }}
               disabled={!testPhoneInput.trim() || diagSending}
             >
-              {diagSending ? "Sending triple…" : "Run URL diagnostic (3 sends)"}
+              {diagSending ? "Sending all 4…" : "Run URL diagnostic (4 sends)"}
             </Button>
 
             {diagResult && (
@@ -322,6 +323,27 @@ export default function SystemHealthPage() {
                     )}
                     {diagResult.withProdUrl.error && (
                       <div className="text-xs text-red-500 mt-1">{diagResult.withProdUrl.error}</div>
+                    )}
+                  </div>
+                )}
+                {diagResult.withShortUrl && (
+                  <div
+                    className={`p-3 rounded-md border text-sm ${
+                      diagResult.withShortUrl.ok
+                        ? "border-emerald-500/40 bg-emerald-500/5"
+                        : "border-red-500/40 bg-red-500/5"
+                    }`}
+                  >
+                    <div className="font-medium">
+                      WITH SHORT URL (e.g. /r/X9 — minimal token) — {diagResult.withShortUrl.ok ? "✅ Twilio accepted" : "❌ Twilio rejected"}
+                    </div>
+                    {diagResult.withShortUrl.messageSid && (
+                      <div className="text-xs text-muted-foreground mt-1 font-mono">
+                        SID: {diagResult.withShortUrl.messageSid}
+                      </div>
+                    )}
+                    {diagResult.withShortUrl.error && (
+                      <div className="text-xs text-red-500 mt-1">{diagResult.withShortUrl.error}</div>
                     )}
                   </div>
                 )}
