@@ -916,6 +916,156 @@ export class SMSCommunicationService {
       return true;
     }
 
+    // ---- DETAILS / INFO / D: full info about current/pending load ----
+    if (["DETAILS", "INFO", "D", "DETAIL"].includes(body)) {
+      const [load] = await db
+        .select()
+        .from(loads)
+        .where(
+          and(
+            eq(loads.driverId, drv.id),
+            inArray(loads.status, ["pending", "assigned", "in_transit"]),
+          ),
+        )
+        .orderBy(desc(loads.createdAt))
+        .limit(1);
+      if (!load) {
+        await sendReply("No active or pending load found. Reply HELP for available commands.");
+        return true;
+      }
+      const pickupLine =
+        load.pickupAddress && load.pickupAddress.trim()
+          ? load.pickupAddress
+          : `${load.originCity ?? ""}, ${load.originState ?? ""}`.replace(/^,\s*/, "").trim();
+      const dropLine =
+        load.deliveryAddress && load.deliveryAddress.trim()
+          ? load.deliveryAddress
+          : `${load.destCity ?? ""}, ${load.destState ?? ""}`.replace(/^,\s*/, "").trim();
+      const fmt = (d: any) => (d ? new Date(d).toLocaleDateString() : "TBD");
+      const lines = [
+        `Load #${load.loadNumber}${load.brokerName ? ` (${load.brokerName})` : ""}`,
+        `Status: ${load.status}`,
+        ``,
+        `PICKUP`,
+        `${pickupLine}`,
+        `${fmt(load.pickupDate)} ${load.pickupTime ?? ""}`,
+        ``,
+        `DROP`,
+        `${dropLine}`,
+        `${fmt(load.deliveryDate)} ${load.deliveryTime ?? ""}`,
+        ``,
+        `Rate: $${(load.rate ?? 0).toFixed(2)} | Miles: ${load.miles ?? 0}`,
+      ];
+      if (load.description && load.description !== "General freight") {
+        lines.push(``, `Commodity: ${load.description}`);
+      }
+      if (load.specialInstructions) {
+        lines.push(``, `Notes: ${load.specialInstructions.slice(0, 200)}`);
+      }
+      lines.push(``, `Reply HELP for commands.`);
+      await sendReply(lines.join("\n"));
+      return true;
+    }
+
+    // ---- PAY / P: pay summary for current/most-recent load ----
+    if (["PAY", "P"].includes(body)) {
+      const [load] = await db
+        .select()
+        .from(loads)
+        .where(eq(loads.driverId, drv.id))
+        .orderBy(desc(loads.createdAt))
+        .limit(1);
+      if (!load) {
+        await sendReply("No load history found.");
+        return true;
+      }
+      try {
+        const { calculatePay } = await import("./pay-calculator");
+        const { driverProfileToPayInput, computeLoadPayInput } = await import(
+          "./ratecon-dispatch-service"
+        );
+        const pay = calculatePay(
+          computeLoadPayInput({
+            rate: { value: load.rate ?? 0 },
+            miles: { value: load.miles ?? 0 },
+          }),
+          driverProfileToPayInput(drv),
+        );
+        const lines = [
+          `Load #${load.loadNumber} pay (${load.status}):`,
+          ...pay.lineItems.map((li) => `  ${li.label}: $${li.amount.toFixed(2)}`),
+          ...pay.deductions.map((d) => `  ${d.label}: -$${d.amount.toFixed(2)}`),
+          `  Net: $${pay.netPay.toFixed(2)}`,
+        ];
+        if (pay.recurringDeductions.length > 0) {
+          lines.push(``, `Weekly deductions:`);
+          for (const r of pay.recurringDeductions) {
+            lines.push(`  ${r.label}: -$${r.amount.toFixed(2)}`);
+          }
+        }
+        await sendReply(lines.join("\n"));
+      } catch (err: any) {
+        await sendReply(`Could not compute pay for load ${load.loadNumber}. Dispatcher will follow up.`);
+      }
+      return true;
+    }
+
+    // ---- BAL / BALANCE: settled-balance summary across recent delivered loads ----
+    if (["BAL", "BALANCE"].includes(body)) {
+      const recent = await db
+        .select()
+        .from(loads)
+        .where(and(eq(loads.driverId, drv.id), eq(loads.status, "delivered")))
+        .orderBy(desc(loads.deliveredAt))
+        .limit(10);
+      if (!recent.length) {
+        await sendReply("No delivered loads on file yet.");
+        return true;
+      }
+      try {
+        const { calculatePay } = await import("./pay-calculator");
+        const { driverProfileToPayInput, computeLoadPayInput } = await import(
+          "./ratecon-dispatch-service"
+        );
+        let total = 0;
+        const lines: string[] = ["Recent delivered loads:"];
+        for (const l of recent) {
+          const pay = calculatePay(
+            computeLoadPayInput({ rate: { value: l.rate ?? 0 }, miles: { value: l.miles ?? 0 } }),
+            driverProfileToPayInput(drv),
+          );
+          total += pay.netPay;
+          const date = l.deliveredAt ? new Date(l.deliveredAt).toLocaleDateString() : "";
+          lines.push(`  ${date} #${l.loadNumber}: $${pay.netPay.toFixed(2)}`);
+        }
+        lines.push(``, `Total (last ${recent.length}): $${total.toFixed(2)}`);
+        lines.push(`Settlement processed weekly.`);
+        await sendReply(lines.join("\n"));
+      } catch (err: any) {
+        await sendReply("Could not compute balance. Dispatcher will follow up.");
+      }
+      return true;
+    }
+
+    // ---- HELP / COMMANDS / ? ----
+    if (["HELP", "COMMANDS", "CMD", "?"].includes(body)) {
+      const lines = [
+        `LAMP Logistics SMS commands:`,
+        ``,
+        `YES / NO    accept or decline a load offer`,
+        `DETAILS     full info on current load`,
+        `PICKED UP   mark load as picked up`,
+        `DELIVERED   mark as delivered, get pay summary`,
+        `PAY         pay breakdown for current load`,
+        `BAL         recent earnings + total`,
+        `(photo)     attach BOL/POD to current load`,
+        `HELP        this list`,
+        `STOP        opt out of SMS`,
+      ];
+      await sendReply(lines.join("\n"));
+      return true;
+    }
+
     // ---- MMS photo: attach to current load as BOL or POD ----
     if (mediaUrls.length > 0 && mediaTypes.some((t) => (t || "").startsWith("image/"))) {
       const [active] = await db
