@@ -204,26 +204,40 @@ export function registerTestDispatchRoutes(app: Express) {
         `$1${prodToken}`,
       );
 
-      // Variant 3: no URL line at all — confirms baseline deliverability.
+      // Variant 3: SHORT URL pattern — much shorter token + shorter path.
+      // Carrier filter heuristics often score URL "shape" (length, token
+      // entropy, path depth). A 2-char token at /r/ is much less spam-like
+      // than a long /l/test-... pattern. If this passes, we just change the
+      // production URL pattern — no domain change required.
+      const shortToken = Math.random().toString(36).slice(2, 4); // 2 chars
+      const bodyWithShortUrl = bodyWithTestUrl.replace(
+        /(https:\/\/[^\s/]+)\/l\/test-[a-z0-9]+/i,
+        `$1/r/${shortToken}`,
+      );
+
+      // Variant 4: no URL line at all — confirms baseline deliverability.
       const bodyNoUrl = bodyWithTestUrl.replace(/^Details:\s+\S+\s*\n?/im, "");
 
       const { smsService, withBrandAndOptOut } = await import("../sms-service");
       const withTestUrlFinal = withBrandAndOptOut(bodyWithTestUrl);
       const withProdUrlFinal = withBrandAndOptOut(bodyWithProdUrl);
+      const withShortUrlFinal = withBrandAndOptOut(bodyWithShortUrl);
       const noUrlFinal = withBrandAndOptOut(bodyNoUrl);
 
-      console.log(`[url-diagnostic] sending triple to ${overrides.phone} (load=${load.loadNumber})`);
+      console.log(`[url-diagnostic] sending quad to ${overrides.phone} (load=${load.loadNumber})`);
 
       const r1 = await smsService.sendSMS({ to: overrides.phone, body: withTestUrlFinal, skipFooter: true });
       await new Promise((resolve) => setTimeout(resolve, 1500));
       const r2 = await smsService.sendSMS({ to: overrides.phone, body: withProdUrlFinal, skipFooter: true });
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      const r3 = await smsService.sendSMS({ to: overrides.phone, body: noUrlFinal, skipFooter: true });
+      const r3 = await smsService.sendSMS({ to: overrides.phone, body: withShortUrlFinal, skipFooter: true });
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const r4 = await smsService.sendSMS({ to: overrides.phone, body: noUrlFinal, skipFooter: true });
 
-      console.log(`[url-diagnostic] testUrl=${r1.messageSid ?? "-"} prodUrl=${r2.messageSid ?? "-"} noUrl=${r3.messageSid ?? "-"}`);
+      console.log(`[url-diagnostic] testUrl=${r1.messageSid ?? "-"} prodUrl=${r2.messageSid ?? "-"} shortUrl=${r3.messageSid ?? "-"} noUrl=${r4.messageSid ?? "-"}`);
 
       res.json({
-        ok: r1.success && r2.success && r3.success,
+        ok: r1.success && r2.success && r3.success && r4.success,
         loadNumber: load.loadNumber,
         withUrl: {
           ok: r1.success,
@@ -237,10 +251,16 @@ export function registerTestDispatchRoutes(app: Express) {
           error: r2.error,
           body: withProdUrlFinal,
         },
-        noUrl: {
+        withShortUrl: {
           ok: r3.success,
           messageSid: r3.messageSid,
           error: r3.error,
+          body: withShortUrlFinal,
+        },
+        noUrl: {
+          ok: r4.success,
+          messageSid: r4.messageSid,
+          error: r4.error,
           body: noUrlFinal,
         },
       });
