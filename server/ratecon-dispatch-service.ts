@@ -352,18 +352,15 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
   // Workaround for Twilio T&S ticket #26735656 — see SMS_OMIT_URL handling.
   const omitUrl = process.env.SMS_OMIT_URL === "true";
 
-  // Driver-friendly format with ===== dividers between sections, matching
-  // the visual style truckers are familiar with from broker dispatch SMS.
-  // Each block is a discrete unit a driver can scan at a glance.
-  const supportPhone = process.env.DRIVER_SUPPORT_PHONE || "(203) 951-1991";
-  const showMacropointNote = process.env.SHOW_MACROPOINT_NOTE === "true" ||
-    /macropoint/i.test(load.specialInstructions ?? "");
+  // Format inspired by the broker-style SMS truckers are used to: each
+  // section is a discrete block separated by a ===== divider so drivers
+  // can scan it at a glance. Content here is OUR data only — header,
+  // support footer, and Macropoint copy are not standard inclusions.
 
   const sections: string[] = [];
 
-  // Header — brand check-in instruction.
+  // Header — load identifier.
   sections.push(
-    `Please check in as LAMP Logistics\n` +
     `Load #${load.loadNumber}` +
     (load.brokerName ? ` · ${load.brokerName}` : ""),
   );
@@ -392,9 +389,8 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
     sections.push(cargoLines.join("\n"));
   }
 
-  // Special instructions (only when present and not just a Macropoint note,
-  // which gets its own block below).
-  if (load.specialInstructions && !/^macropoint/i.test(load.specialInstructions.trim())) {
+  // Special instructions (when present in the load).
+  if (load.specialInstructions && load.specialInstructions.trim()) {
     sections.push(`Note: ${load.specialInstructions.slice(0, 160)}`);
   }
 
@@ -402,15 +398,6 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
   // This is the number drivers care about for the YES/NO decision.
   if (load.rate && Number(load.rate) > 0) {
     sections.push(`Rate: ${formatMoney(Number(load.rate))}`);
-  }
-
-  // Macropoint requirement (broker-dependent — surfaces when the load's
-  // specialInstructions mention it, or when SHOW_MACROPOINT_NOTE=true.)
-  if (showMacropointNote) {
-    sections.push(
-      `For tracking purposes, please accept Macropoint.\n` +
-      `This is a strict requirement.`,
-    );
   }
 
   // Details URL — only when SMS_OMIT_URL is not set.
@@ -422,12 +409,6 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
 
   // Action prompt.
   sections.push(`Reply YES to accept or NO to decline.`);
-
-  // Support footer — driver-friendly closing.
-  sections.push(
-    `24/7 support: ${supportPhone}\n` +
-    `Stay safe on the road and have a good trip!`,
-  );
 
   // Join sections with the divider on its own line, surrounded by blank
   // lines so each block stands alone.
