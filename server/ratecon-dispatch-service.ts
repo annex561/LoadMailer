@@ -316,6 +316,11 @@ function formatAddressBlock(addr: string): string {
   return trimmed;
 }
 
+// Standard divider for visually separating SMS sections. 28 equals signs
+// is the sweet spot — wide enough to look like a real divider on most
+// phones, narrow enough not to wrap on small screens.
+const DIVIDER = "============================";
+
 // Format currency with thousands separators: 1080 → "$1,080.00"
 function formatMoney(amount: number): string {
   return `$${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
@@ -343,54 +348,96 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
   const dropBlock = formatAddressBlock(dropRaw);
 
   const useFullBody = process.env.SMS_MINIMAL !== "true";
-  const payInput = computeLoadPayInput({
-    rate: { value: load.rate ?? 0 },
-    miles: { value: load.miles ?? 0 },
-  });
-  const pay = calculatePay(payInput, driverProfileToPayInput(driver));
-
-  const commodityLine = load.description && load.description !== "General freight"
-    ? `Commodity: ${load.description}\n`
-    : "";
-  const specialLine = load.specialInstructions
-    ? `Note: ${load.specialInstructions.slice(0, 120)}\n`
-    : "";
 
   // Workaround for Twilio T&S ticket #26735656 — see SMS_OMIT_URL handling.
   const omitUrl = process.env.SMS_OMIT_URL === "true";
-  // When URL is omitted, advertise the SMS command set so drivers know they
-  // can stay 100% in SMS — no portal, no email, no clicks. The handler for
-  // these commands lives in sms-communication-service.handleDispatchKeyword.
-  const detailsLine = omitUrl
-    ? `Reply DETAILS for full info, HELP for commands.\n`
-    : `Details: ${url}\n`;
 
-  // Body uses generous line breaks and section headers so a driver can scan
-  // it at a glance — pickup time on one line, address on the next, blank
-  // line before drop. Optimized for "I'm at a stoplight, will I take this load?"
+  // Driver-friendly format with ===== dividers between sections, matching
+  // the visual style truckers are familiar with from broker dispatch SMS.
+  // Each block is a discrete unit a driver can scan at a glance.
+  const supportPhone = process.env.DRIVER_SUPPORT_PHONE || "(203) 951-1991";
+  const showMacropointNote = process.env.SHOW_MACROPOINT_NOTE === "true" ||
+    /macropoint/i.test(load.specialInstructions ?? "");
+
+  const sections: string[] = [];
+
+  // Header — brand check-in instruction.
+  sections.push(
+    `Please check in as LAMP Logistics\n` +
+    `Load #${load.loadNumber}` +
+    (load.brokerName ? ` · ${load.brokerName}` : ""),
+  );
+
+  // Pickup block.
+  sections.push(
+    `PU: ${pickupDate} ${pickupTime}\n` +
+    `${pickupBlock}`,
+  );
+
+  // Drop block.
+  sections.push(
+    `DROP: ${deliveryDate} ${deliveryTime}\n` +
+    `${dropBlock}`,
+  );
+
+  // Commodity + weight (only if we have either).
+  const cargoLines: string[] = [];
+  if (load.description && load.description !== "General freight") {
+    cargoLines.push(`Commodity: ${load.description}`);
+  }
+  if (load.weight && Number(load.weight) > 0) {
+    cargoLines.push(`Weight: ${Number(load.weight).toLocaleString()} lbs`);
+  }
+  if (cargoLines.length > 0) {
+    sections.push(cargoLines.join("\n"));
+  }
+
+  // Special instructions (only when present and not just a Macropoint note,
+  // which gets its own block below).
+  if (load.specialInstructions && !/^macropoint/i.test(load.specialInstructions.trim())) {
+    sections.push(`Note: ${load.specialInstructions.slice(0, 160)}`);
+  }
+
+  // Rate (gross broker rate — what the load pays, before any deductions).
+  // This is the number drivers care about for the YES/NO decision.
+  if (load.rate && Number(load.rate) > 0) {
+    sections.push(`Rate: ${formatMoney(Number(load.rate))}`);
+  }
+
+  // Macropoint requirement (broker-dependent — surfaces when the load's
+  // specialInstructions mention it, or when SHOW_MACROPOINT_NOTE=true.)
+  if (showMacropointNote) {
+    sections.push(
+      `For tracking purposes, please accept Macropoint.\n` +
+      `This is a strict requirement.`,
+    );
+  }
+
+  // Details URL — only when SMS_OMIT_URL is not set.
+  if (!omitUrl) {
+    sections.push(`Details: ${url}`);
+  } else {
+    sections.push(`Reply DETAILS for full info, HELP for commands.`);
+  }
+
+  // Action prompt.
+  sections.push(`Reply YES to accept or NO to decline.`);
+
+  // Support footer — driver-friendly closing.
+  sections.push(
+    `24/7 support: ${supportPhone}\n` +
+    `Stay safe on the road and have a good trip!`,
+  );
+
+  // Join sections with the divider on its own line, surrounded by blank
+  // lines so each block stands alone.
   const body = useFullBody
-    ? `Load #${load.loadNumber}` +
-      (load.brokerName ? ` · ${load.brokerName}` : "") +
-      `\n\n` +
-      `PICKUP  ${pickupDate}  ${pickupTime}\n` +
-      `${pickupBlock}\n\n` +
-      `DROP  ${deliveryDate}  ${deliveryTime}\n` +
-      `${dropBlock}\n\n` +
-      commodityLine +
-      specialLine +
-      `Pay: ${formatMoney(pay.netPay)}\n\n` +
-      detailsLine +
-      `\n` +
-      `Reply YES to accept or NO to decline.`
+    ? sections.join(`\n${DIVIDER}\n`)
     : `Load ${load.loadNumber}` +
       (load.brokerName ? ` from ${load.brokerName}` : "") +
       `\n\n` +
-      `PICKUP  ${pickupDate}  ${pickupTime}\n` +
-      `${pickupBlock}\n\n` +
-      `DROP  ${deliveryDate}  ${deliveryTime}\n` +
-      `${dropBlock}\n\n` +
-      commodityLine +
-      specialLine +
+      `PU: ${pickupDate} ${pickupTime}\n${pickupBlock}\n\n` +
+      `DROP: ${deliveryDate} ${deliveryTime}\n${dropBlock}\n\n` +
       `Reply YES to accept or NO to decline.`;
 
   return { body, url };
