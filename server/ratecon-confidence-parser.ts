@@ -3,6 +3,39 @@ import PDFParser from "pdf2json";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "not-configured" });
 
+/**
+ * Pull recent dispatcher corrections from the DB to inject as few-shot
+ * examples in the parser prompt. Each correction is a real example of
+ * (raw RateCon text → the JSON the dispatcher actually wanted), so over
+ * time the parser learns the local patterns: how a specific broker formats
+ * times, where the rate hides on their RateCons, etc.
+ *
+ * Best-effort — if the DB is unavailable or the table is empty, the parser
+ * falls back to its zero-shot system prompt (the existing behavior).
+ */
+async function fetchLearningExamples(limit = 3): Promise<Array<{ rawText: string; correctedParse: any }>> {
+  if (process.env.RATECON_DISABLE_FEW_SHOT === "true") return [];
+  try {
+    const { db } = await import("./db");
+    const { rateconCorrections } = await import("@shared/schema");
+    const { desc } = await import("drizzle-orm");
+    const rows = await db
+      .select()
+      .from(rateconCorrections)
+      .orderBy(desc(rateconCorrections.createdAt))
+      .limit(limit);
+    return rows
+      .filter((r: any) => r.rawText && r.correctedParse)
+      .map((r: any) => ({
+        rawText: String(r.rawText),
+        correctedParse: r.correctedParse,
+      }));
+  } catch {
+    // Table may not exist yet on first deploy, or DB unavailable in tests
+    return [];
+  }
+}
+
 function safeDecodeURI(str: string): string {
   try {
     return decodeURIComponent(str);
@@ -134,12 +167,34 @@ export async function parseRatecon(pdfBuffer: Buffer): Promise<ParsedRateconV2> 
     );
   }
 
-  // Step 2: send extracted text to GPT-4o for structured extraction with confidence scores
+  // Step 2: send extracted text to GPT-4o for structured extraction with
+  // confidence scores. Pull recent dispatcher corrections from the DB and
+  // include them as few-shot user→assistant pairs so the model learns the
+  // specific fixes our dispatchers have made on previous RateCons.
+  const examples = await fetchLearningExamples(3);
+  const fewShotMessages = examples.flatMap((ex) => {
+    // Trim each example raw text to keep prompt size in check. 6KB per
+    // example × 3 examples ≈ 18KB extra prompt; well within the 128K
+    // context window for gpt-4o.
+    const trimmed = ex.rawText.slice(0, 6000);
+    return [
+      {
+        role: "user" as const,
+        content: `Extract the rate confirmation details from the following text. The text was extracted from a PDF, so layout cues like columns may be flattened — use surrounding context to disambiguate.\n\n--- BEGIN RATECON TEXT ---\n${trimmed}\n--- END RATECON TEXT ---`,
+      },
+      {
+        role: "assistant" as const,
+        content: JSON.stringify(ex.correctedParse),
+      },
+    ];
+  });
+
   const model = "gpt-4o";
   const resp = await openai.chat.completions.create({
     model,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
+      ...fewShotMessages,
       {
         role: "user",
         content: `Extract the rate confirmation details from the following text. The text was extracted from a PDF, so layout cues like columns may be flattened — use surrounding context to disambiguate.\n\n--- BEGIN RATECON TEXT ---\n${pdfText}\n--- END RATECON TEXT ---`,
@@ -147,6 +202,9 @@ export async function parseRatecon(pdfBuffer: Buffer): Promise<ParsedRateconV2> 
     ],
     response_format: { type: "json_object" },
   });
+  if (examples.length > 0) {
+    console.log(`[ratecon-parser] injected ${examples.length} dispatcher correction(s) as few-shot examples`);
+  }
 
   const content = resp.choices[0]?.message?.content;
   if (!content) throw new Error("OpenAI returned empty response");

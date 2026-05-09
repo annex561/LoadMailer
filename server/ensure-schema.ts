@@ -216,7 +216,30 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ ratecon_intake table: ${e.message}`);
     }
 
-    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake created)`);
+    // ratecon_corrections — every dispatcher correction becomes a learning
+    // signal for future parses. The parser pulls the most recent N rows as
+    // few-shot examples in its GPT-4o prompt.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS ratecon_corrections (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+          intake_id VARCHAR NOT NULL,
+          broker_name TEXT,
+          raw_text TEXT,
+          original_parse JSONB,
+          corrected_parse JSONB,
+          fields_changed TEXT[],
+          corrected_by VARCHAR,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_ratecon_corrections_broker ON ratecon_corrections(broker_name)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_ratecon_corrections_created ON ratecon_corrections(created_at DESC)`);
+    } catch (e: any) {
+      log(`⚠️ ratecon_corrections table: ${e.message}`);
+    }
+
+    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections created)`);
   } catch (err: any) {
     log(`⚠️ ensureSchema error: ${err.message}`);
   }
