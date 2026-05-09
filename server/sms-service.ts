@@ -186,6 +186,14 @@ export class SMSLoadService {
     let body = typeof toOrParams === 'string' ? bodyParam! : toOrParams.body;
     const skipFooter = typeof toOrParams === 'object' && !!toOrParams.skipFooter;
 
+    // KILL SWITCH — set SMS_DISABLED=true on Railway to instantly halt every
+    // outbound SMS without removing Twilio credentials. Hits BEFORE any other
+    // logic so absolutely nothing fires. Restore by unsetting the env var.
+    if (process.env.SMS_DISABLED === 'true') {
+      console.log(`🚫 [SMS_DISABLED] would have sent to ${to}: "${body.slice(0, 60).replace(/\n/g, ' ')}..."`);
+      return { success: false, error: 'SMS_DISABLED=true — outbound SMS halted' };
+    }
+
     // A2P 10DLC: never send to a driver who has replied STOP. This is a hard guard
     // — Twilio also enforces this, but we double-check to keep our audit clean.
     const optedOut = await findOptedOutDriver(to);
