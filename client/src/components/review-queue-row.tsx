@@ -93,7 +93,7 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium">📍 Pickup</label>
             <Input
@@ -194,7 +194,7 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
         </div>
 
         {(parsed.commodity?.value || parsed.specialInstructions?.value) && (
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
             {parsed.commodity?.value && (
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Commodity</label>
@@ -210,7 +210,7 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-medium">Rate</label>
             <Input
@@ -246,15 +246,33 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
           </div>
         </div>
 
-        <div className="flex gap-2 justify-end">
-          <Button variant="outline" onClick={save} disabled={saving}>
+        {/* Action buttons. On mobile each button is full width (easy tap
+            targets while driving / standing). On desktop they sit on one
+            row right-aligned. Approve & Dispatch is the primary action so
+            it appears first on mobile (top of stack). */}
+        <div className="flex flex-col sm:flex-row sm:justify-end gap-2 pt-2">
+          <Button
+            onClick={() => onApprove(driverId || null)}
+            data-testid={`btn-approve-${row.id}`}
+            className="w-full sm:w-auto sm:order-3"
+            size="lg"
+          >
+            Approve &amp; Dispatch
+          </Button>
+          <Button
+            variant="outline"
+            onClick={save}
+            disabled={saving}
+            className="w-full sm:w-auto sm:order-1"
+          >
             {saving ? "Saving..." : "Save"}
           </Button>
-          <Button variant="destructive" onClick={onReject}>
+          <Button
+            variant="destructive"
+            onClick={onReject}
+            className="w-full sm:w-auto sm:order-2"
+          >
             Reject
-          </Button>
-          <Button onClick={() => onApprove(driverId || null)} data-testid={`btn-approve-${row.id}`}>
-            Approve & Dispatch
           </Button>
         </div>
       </CardContent>
