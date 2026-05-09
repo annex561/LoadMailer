@@ -45,6 +45,14 @@ function isConfigured(): boolean {
 
 export async function sendTelnyxSms(params: { to: string; body: string }): Promise<TelnyxSendResult> {
   const { to, body } = params;
+
+  // Honor the same kill switch as the Twilio path so SMS_DISABLED=true halts
+  // every outbound SMS regardless of which provider is configured.
+  if (process.env.SMS_DISABLED === "true") {
+    console.log(`🚫 [SMS_DISABLED] (telnyx) would have sent to ${to}: "${body.slice(0, 60).replace(/\n/g, " ")}..."`);
+    return { success: false, error: "SMS_DISABLED=true — outbound SMS halted" };
+  }
+
   const apiKey = process.env.TELNYX_API_KEY;
   const profileId = process.env.TELNYX_MESSAGING_PROFILE_ID;
   const fromNumber = process.env.TELNYX_PHONE_NUMBER || "";
