@@ -230,23 +230,28 @@ export async function sendDriverNextStepSms(
   let body = "";
   if (step === "accepted") {
     body = useFullBody
-      ? `✅ Load ${load.loadNumber} confirmed.\n\n` +
-        `📋 At pickup, upload your BOL: ${url}\n` +
-        `Or reply PICKED UP and send a BOL photo.`
+      ? `Load ${load.loadNumber} confirmed.\n\n` +
+        `AT PICKUP\n` +
+        `Send BOL photo, or reply PICKED UP.\n\n` +
+        `Upload BOL: ${url}`
       : `Load ${load.loadNumber} confirmed.\n\n` +
-        `At pickup: send BOL photo or reply PICKED UP.`;
+        `AT PICKUP\n` +
+        `Send BOL photo, or reply PICKED UP.`;
   } else if (step === "picked-up") {
     body = useFullBody
-      ? `🚚 Load ${load.loadNumber} marked PICKED UP.\n\n` +
-        `Drive safe. 📍 Live tracking + POD upload: ${url}\n` +
-        `Or reply DELIVERED and send a POD photo.`
-      : `Load ${load.loadNumber} marked PICKED UP.\n\n` +
-        `Drive safe. At delivery: send POD photo or reply DELIVERED.`;
+      ? `Load ${load.loadNumber} PICKED UP. Drive safe.\n\n` +
+        `AT DELIVERY\n` +
+        `Send POD photo, or reply DELIVERED.\n\n` +
+        `Upload POD: ${url}`
+      : `Load ${load.loadNumber} PICKED UP. Drive safe.\n\n` +
+        `AT DELIVERY\n` +
+        `Send POD photo, or reply DELIVERED.`;
   } else if (step === "delivered") {
     body = useFullBody
-      ? `🎉 Load ${load.loadNumber} marked DELIVERED.\n\n` +
-        `💰 Pay statement: ${url}`
-      : `Load ${load.loadNumber} marked DELIVERED. Pay statement coming on your weekly settlement.`;
+      ? `Load ${load.loadNumber} DELIVERED. Thanks.\n\n` +
+        `Pay statement: ${url}`
+      : `Load ${load.loadNumber} DELIVERED. Thanks.\n\n` +
+        `Pay statement on your weekly settlement.`;
   }
 
   // Compliance: brand prefix + STOP suffix (idempotent).
@@ -272,24 +277,70 @@ export async function sendDriverNextStepSms(
  * Matches the body that sendDispatchSms() sends. SMS_MINIMAL=true env var
  * flips to the legacy keyword-only template.
  */
+// Format a Date as "Tue 5/7" — short day-of-week + numeric date so a driver
+// glancing at the screen instantly knows WHEN without parsing 5/7/2026.
+function formatDispatchDate(d: Date | string | null | undefined): string {
+  if (!d) return "TBD";
+  const date = d instanceof Date ? d : new Date(d);
+  if (isNaN(date.getTime())) return "TBD";
+  const dow = date.toLocaleDateString("en-US", { weekday: "short" });
+  return `${dow} ${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+// Format "08:00" → "8:00 AM" for at-a-glance readability.
+function formatDispatchTime(t: string | null | undefined): string {
+  if (!t) return "";
+  const m = t.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return t;
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  const period = h >= 12 ? "PM" : "AM";
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${min} ${period}`;
+}
+
+// Render a multi-line address. The pickupAddress field is often a single
+// concatenated string ("ACME CORP 123 Main St City, ST 12345"). We split on
+// the city-state-zip suffix so that pattern lands on its own line, which is
+// what a driver scans first when navigating.
+function formatAddressBlock(addr: string): string {
+  const trimmed = addr.trim();
+  // Match a trailing "<city>, <ST> <zip>" — push it to its own line.
+  const m = trimmed.match(/^(.*?)[\s,]+([A-Za-z .'-]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+  if (m) {
+    const head = m[1].replace(/,\s*$/, "").trim();
+    const cityStateZip = `${m[2].trim()}, ${m[3]} ${m[4]}`;
+    return `${head}\n${cityStateZip}`;
+  }
+  return trimmed;
+}
+
+// Format currency with thousands separators: 1080 → "$1,080.00"
+function formatMoney(amount: number): string {
+  return `$${amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+}
+
 export function buildDispatchSmsBody(load: any, driver: any): { body: string; url: string } {
   const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
   const url = `${baseUrl}/l/${load.confirmationToken ?? "test-token"}`;
-  const pickupDateStr = load.pickupDate instanceof Date
-    ? load.pickupDate.toLocaleDateString()
-    : new Date(load.pickupDate).toLocaleDateString();
-  const deliveryDateStr = load.deliveryDate instanceof Date
-    ? load.deliveryDate.toLocaleDateString()
-    : new Date(load.deliveryDate).toLocaleDateString();
 
-  const pickupLine =
+  const pickupDate = formatDispatchDate(load.pickupDate);
+  const deliveryDate = formatDispatchDate(load.deliveryDate);
+  const pickupTime = formatDispatchTime(load.pickupTime);
+  const deliveryTime = formatDispatchTime(load.deliveryTime);
+
+  const pickupRaw =
     load.pickupAddress && load.pickupAddress.trim().length > 0
       ? load.pickupAddress
       : `${load.originCity ?? ""}, ${load.originState ?? ""}`.trim().replace(/^,\s*/, "");
-  const dropLine =
+  const dropRaw =
     load.deliveryAddress && load.deliveryAddress.trim().length > 0
       ? load.deliveryAddress
       : `${load.destCity ?? ""}, ${load.destState ?? ""}`.trim().replace(/^,\s*/, "");
+
+  const pickupBlock = formatAddressBlock(pickupRaw);
+  const dropBlock = formatAddressBlock(dropRaw);
 
   const useFullBody = process.env.SMS_MINIMAL !== "true";
   const payInput = computeLoadPayInput({
@@ -298,51 +349,43 @@ export function buildDispatchSmsBody(load: any, driver: any): { body: string; ur
   });
   const pay = calculatePay(payInput, driverProfileToPayInput(driver));
 
-  // Body shape matches the carrier-registered sample messages closely:
-  // brand prefix, plain text, ONE URL (the load detail/confirmation page),
-  // no caps-lock screams, no pricing patterns, minimal emojis. Carriers
-  // (T-Mobile especially) compare actual content against the TCR-registered
-  // samples and filter mismatches as 30007. The branded prefix + STOP
-  // suffix are appended later by withBrandAndOptOut().
   const commodityLine = load.description && load.description !== "General freight"
-    ? `${load.description}\n`
+    ? `Commodity: ${load.description}\n`
     : "";
   const specialLine = load.specialInstructions
     ? `Note: ${load.specialInstructions.slice(0, 120)}\n`
     : "";
 
-  // Workaround for Twilio T&S ticket #26735656: any traqiq.app/l/* URL is
-  // currently filtered with carrier 30007. Until Twilio resolves it (branded
-  // domain, allowlist, or click-tracking), set SMS_OMIT_URL=true to strip the
-  // Details URL line and tell the driver to check email for the full link.
-  // Combined with DISPATCH_CHANNEL=both, drivers get the SMS heads-up AND the
-  // email with the actual link they need to accept and upload BOL/POD.
+  // Workaround for Twilio T&S ticket #26735656 — see SMS_OMIT_URL handling.
   const omitUrl = process.env.SMS_OMIT_URL === "true";
-  // When URL is omitted, advertise the SMS command set so drivers know they
-  // can stay 100% in SMS — no portal, no email, no clicks. The handler for
-  // these commands lives in sms-communication-service.handleDispatchKeyword.
   const detailsLine = omitUrl
     ? `Reply DETAILS for full info, HELP for commands.\n`
     : `Details: ${url}\n`;
 
+  // Body uses generous line breaks and section headers so a driver can scan
+  // it at a glance — pickup time on one line, address on the next, blank
+  // line before drop. Optimized for "I'm at a stoplight, will I take this load?"
   const body = useFullBody
     ? `Load #${load.loadNumber}` +
-      (load.brokerName ? ` (${load.brokerName})` : "") +
-      `\n` +
-      `Pickup: ${pickupLine} - ${pickupDateStr} ${load.pickupTime}\n` +
-      `Drop: ${dropLine} - ${deliveryDateStr} ${load.deliveryTime}\n` +
+      (load.brokerName ? ` · ${load.brokerName}` : "") +
+      `\n\n` +
+      `PICKUP  ${pickupDate}  ${pickupTime}\n` +
+      `${pickupBlock}\n\n` +
+      `DROP  ${deliveryDate}  ${deliveryTime}\n` +
+      `${dropBlock}\n\n` +
       commodityLine +
       specialLine +
-      `Pay: $${pay.netPay.toFixed(2)}\n` +
+      `Pay: ${formatMoney(pay.netPay)}\n\n` +
       detailsLine +
+      `\n` +
       `Reply YES to accept or NO to decline.`
     : `Load ${load.loadNumber}` +
       (load.brokerName ? ` from ${load.brokerName}` : "") +
       `\n\n` +
-      `Pickup: ${pickupLine}\n` +
-      `${pickupDateStr} ${load.pickupTime}\n\n` +
-      `Delivery: ${dropLine}\n` +
-      `${deliveryDateStr} ${load.deliveryTime}\n\n` +
+      `PICKUP  ${pickupDate}  ${pickupTime}\n` +
+      `${pickupBlock}\n\n` +
+      `DROP  ${deliveryDate}  ${deliveryTime}\n` +
+      `${dropBlock}\n\n` +
       commodityLine +
       specialLine +
       `Reply YES to accept or NO to decline.`;

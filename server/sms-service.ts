@@ -129,7 +129,10 @@ async function appendDriverPortalFooter(phone: string, body: string): Promise<st
 
     const baseUrl = process.env.CUSTOM_DOMAIN || process.env.PUBLIC_URL || 'https://traqiq.app';
     const normalizedBase = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
-    return `${body}\n\n👤 My Dashboard: ${normalizedBase}/driver/${driver.trackingToken}`;
+    // Drop the URL onto its own line (under a label) instead of inlining it
+    // beside text. Long tracking tokens hard-wrap awkwardly on phones; isolating
+    // the URL keeps the message scannable while driving.
+    return `${body}\n\nMy Dashboard:\n${normalizedBase}/driver/${driver.trackingToken}`;
   } catch (err) {
     // Footer is best-effort; never break message delivery.
     console.error('[footer] error:', err);
