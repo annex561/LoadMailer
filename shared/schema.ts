@@ -389,6 +389,33 @@ export const rateconIntake = pgTable("ratecon_intake", {
 export type RateconIntake = typeof rateconIntake.$inferSelect;
 export type InsertRateconIntake = typeof rateconIntake.$inferInsert;
 
+// Stores every dispatcher correction made to a parsed RateCon. The parser
+// pulls the most recent N rows from this table and includes them as
+// few-shot examples in the GPT-4o prompt — so any field the dispatcher had
+// to fix becomes a learning signal for future RateCons. Especially valuable
+// when the same broker keeps shipping the same odd format.
+export const rateconCorrections = pgTable("ratecon_corrections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  intakeId: varchar("intake_id").notNull(),
+  brokerName: text("broker_name"),
+  // The raw text the parser was given (PDF text or email body)
+  rawText: text("raw_text"),
+  // What the parser originally produced
+  originalParse: jsonb("original_parse"),
+  // What the dispatcher saved (the corrected version)
+  correctedParse: jsonb("corrected_parse"),
+  // Which top-level fields changed (e.g. ["pickup.time", "rate.value"])
+  fieldsChanged: text("fields_changed").array(),
+  correctedBy: varchar("corrected_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_ratecon_corrections_broker").on(table.brokerName),
+  index("idx_ratecon_corrections_created").on(table.createdAt),
+]);
+
+export type RateconCorrection = typeof rateconCorrections.$inferSelect;
+export type InsertRateconCorrection = typeof rateconCorrections.$inferInsert;
+
 // ============================================================================
 // REVENUE LOOP TABLES - AR Invoices, Collections, Activity Log
 // ============================================================================

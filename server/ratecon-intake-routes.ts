@@ -2,8 +2,29 @@ import type { Express } from "express";
 import multer from "multer";
 import { enqueueRatecon, parseIntake } from "./ratecon-intake-service";
 import { db } from "./db";
-import { rateconIntake } from "@shared/schema";
+import { rateconIntake, rateconCorrections } from "@shared/schema";
 import { desc, eq } from "drizzle-orm";
+
+// Walks two parsed-RateCon JSON blobs and returns the dot-paths that differ.
+// Used to record exactly which fields the dispatcher had to fix so the parser
+// can learn from the diff.
+function diffParsedFields(before: any, after: any, prefix = ""): string[] {
+  if (!before && !after) return [];
+  if (typeof before !== typeof after || before === null || after === null) {
+    return prefix ? [prefix] : [];
+  }
+  if (typeof before !== "object") {
+    return before === after ? [] : prefix ? [prefix] : [];
+  }
+  const out: string[] = [];
+  const keySet = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
+  for (const k of Array.from(keySet)) {
+    if (k === "confidence") continue; // confidence flips often; not a real correction
+    const childPrefix = prefix ? `${prefix}.${k}` : k;
+    out.push(...diffParsedFields(before?.[k], after?.[k], childPrefix));
+  }
+  return out;
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -102,10 +123,23 @@ export function registerRateconIntakeRoutes(app: Express) {
   // separate "Approve & Dispatch" click needed. The auto-dispatch on the
   // initial parse already handles the high-confidence-match case; this
   // closes the gap for manual driver assignment from the review queue.
+  //
+  // Also captures every parsedJson change as a row in ratecon_corrections so
+  // the parser can learn from the dispatcher's fixes for future RateCons
+  // (few-shot examples in the GPT-4o prompt).
   app.patch("/api/ratecon-intake/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const { parsedJson, matchedDriverId } = req.body;
+
+      // Read the row BEFORE updating so we can diff parsedJson and capture
+      // a correction record if anything meaningful changed.
+      const [existing] = await db
+        .select()
+        .from(rateconIntake)
+        .where(eq(rateconIntake.id, id))
+        .limit(1);
+
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (parsedJson) updates.parsedJson = parsedJson;
       const driverWasAssigned = matchedDriverId !== undefined && matchedDriverId !== null && matchedDriverId !== "";
@@ -118,6 +152,39 @@ export function registerRateconIntakeRoutes(app: Express) {
         .set(updates)
         .where(eq(rateconIntake.id, id))
         .returning();
+
+      // Capture correction for parser learning. Only fires when:
+      //   - dispatcher actually edited parsedJson (parsedJson present in body)
+      //   - the diff has at least one non-confidence field changed
+      //   - we have raw text (PDF text or email body) to use as the prompt
+      //     example — without it we can't include this as a few-shot
+      if (parsedJson && existing?.parsedJson && (existing as any)?.rawEmailText !== undefined) {
+        const fieldsChanged = diffParsedFields(existing.parsedJson, parsedJson);
+        const rawText = ((existing as any).parsedJson as any)?.rawText
+          ?? (existing as any).rawEmailText
+          ?? "";
+        if (fieldsChanged.length > 0 && rawText && String(rawText).length > 50) {
+          try {
+            const userId = (req as any).user?.id ?? null;
+            const brokerName = (parsedJson as any)?.broker?.value ?? null;
+            await db.insert(rateconCorrections).values({
+              intakeId: id,
+              brokerName,
+              rawText: String(rawText).slice(0, 16000), // cap so the table doesn't bloat
+              originalParse: existing.parsedJson as any,
+              correctedParse: parsedJson,
+              fieldsChanged,
+              correctedBy: userId,
+            });
+            console.log(
+              `[ratecon-intake:patch] captured correction for ${id} (${fieldsChanged.length} fields: ${fieldsChanged.slice(0, 5).join(", ")})`,
+            );
+          } catch (corrErr: any) {
+            // Capture is best-effort; never fail the user-facing PATCH on it.
+            console.error("[ratecon-intake:patch] correction capture failed:", corrErr.message);
+          }
+        }
+      }
 
       // Auto-dispatch trigger — only when this PATCH actually assigned a
       // driver, and the row has no error-severity validator failures, and
