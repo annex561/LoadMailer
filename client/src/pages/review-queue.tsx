@@ -3,10 +3,20 @@ import { ReviewQueueRow, type IntakeRow } from "@/components/review-queue-row";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+// Read ?intake=:id from the URL. When present, the page renders just that
+// single intake — used by the SMS deep-link so the dispatcher can edit one
+// load on their phone without scrolling through the whole queue.
+function getIntakeIdFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const p = new URLSearchParams(window.location.search);
+  return p.get("intake");
+}
+
 export default function ReviewQueuePage() {
   const [rows, setRows] = useState<IntakeRow[]>([]);
   const [drivers, setDrivers] = useState<Array<{ id: string; name: string }>>([]);
   const [search, setSearch] = useState("");
+  const [focusIntakeId, setFocusIntakeId] = useState<string | null>(getIntakeIdFromUrl());
 
   const load = async () => {
     const [rqRes, drvRes] = await Promise.all([
@@ -24,6 +34,9 @@ export default function ReviewQueuePage() {
   }, []);
 
   const filteredRows = useMemo(() => {
+    // Deep-link from SMS: only the focused intake. No other queue clutter.
+    if (focusIntakeId) return rows.filter((r) => r.id === focusIntakeId);
+
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((r) => {
@@ -39,7 +52,18 @@ export default function ReviewQueuePage() {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [rows, search]);
+  }, [rows, search, focusIntakeId]);
+
+  // Clear the focus param without a page reload — used by the "Back to queue"
+  // button so the dispatcher returns to the full list cleanly.
+  const clearFocus = () => {
+    setFocusIntakeId(null);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("intake");
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
 
   // Group rows by load number so the dispatcher can see duplicates at a glance
   const dupCountByLoadNum = useMemo(() => {
@@ -99,34 +123,57 @@ export default function ReviewQueuePage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-4 gap-4">
-        <h1 className="text-2xl font-bold">
-          Review Queue{" "}
-          <span className="text-muted-foreground">
-            ({filteredRows.length}
-            {filteredRows.length !== rows.length ? ` of ${rows.length}` : ""})
-          </span>
-        </h1>
-        <div className="flex gap-2 items-center">
+    <div className="max-w-5xl mx-auto p-3 sm:p-6">
+      {focusIntakeId ? (
+        // Single-intake focused view — what the SMS deep-link opens to.
+        // Mobile-first: minimal chrome, clear way back to the full queue.
+        <div className="mb-3">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            onClick={rejectJunk}
-            data-testid="btn-reject-junk"
+            onClick={clearFocus}
+            data-testid="btn-back-to-queue"
+            className="-ml-2"
           >
-            🧹 Clean junk
+            ← Back to queue
           </Button>
-          <Input
-            type="text"
-            placeholder="Search by load #, broker, city, or filename…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-            data-testid="input-review-search"
-          />
+          <h1 className="text-xl sm:text-2xl font-bold mt-1">Edit Load</h1>
+          {filteredRows.length === 0 && rows.length > 0 && (
+            <p className="text-sm text-muted-foreground mt-2">
+              That intake isn't in the review queue anymore — it may have been dispatched or rejected. Tap "Back to queue" to see what's still pending.
+            </p>
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3 sm:gap-4">
+          <h1 className="text-2xl font-bold">
+            Review Queue{" "}
+            <span className="text-muted-foreground">
+              ({filteredRows.length}
+              {filteredRows.length !== rows.length ? ` of ${rows.length}` : ""})
+            </span>
+          </h1>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={rejectJunk}
+              data-testid="btn-reject-junk"
+              className="self-start sm:self-auto"
+            >
+              🧹 Clean junk
+            </Button>
+            <Input
+              type="text"
+              placeholder="Search by load #, broker, city, or filename…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-full sm:max-w-sm"
+              data-testid="input-review-search"
+            />
+          </div>
+        </div>
+      )}
 
       {filteredRows.length === 0 ? (
         <p className="text-muted-foreground">
