@@ -97,12 +97,18 @@ export function registerRateconIntakeRoutes(app: Express) {
   });
 
   // PATCH /api/ratecon-intake/:id — edit parsed fields (dispatcher inline edits)
+  // When a dispatcher assigns/changes the driver here AND the intake has no
+  // unresolved validator errors, we auto-fire dispatch on the spot — no
+  // separate "Approve & Dispatch" click needed. The auto-dispatch on the
+  // initial parse already handles the high-confidence-match case; this
+  // closes the gap for manual driver assignment from the review queue.
   app.patch("/api/ratecon-intake/:id", async (req, res) => {
     try {
       const { id } = req.params;
       const { parsedJson, matchedDriverId } = req.body;
       const updates: Record<string, unknown> = { updatedAt: new Date() };
       if (parsedJson) updates.parsedJson = parsedJson;
+      const driverWasAssigned = matchedDriverId !== undefined && matchedDriverId !== null && matchedDriverId !== "";
       if (matchedDriverId !== undefined) {
         updates.matchedDriverId = matchedDriverId;
         updates.matchedDriverConfidence = 1.0; // human-assigned = certain
@@ -112,7 +118,45 @@ export function registerRateconIntakeRoutes(app: Express) {
         .set(updates)
         .where(eq(rateconIntake.id, id))
         .returning();
-      res.json(updated);
+
+      // Auto-dispatch trigger — only when this PATCH actually assigned a
+      // driver, and the row has no error-severity validator failures, and
+      // it hasn't already been dispatched.
+      let autoDispatch: { triggered: boolean; ok?: boolean; loadId?: string; error?: string; sms?: any } = {
+        triggered: false,
+      };
+      if (driverWasAssigned && updated && updated.status !== "auto_dispatched" && updated.status !== "dispatched") {
+        const failures = (updated.validatorFailures ?? []) as Array<{ severity?: string }>;
+        const hasErrors = failures.some((f) => f?.severity === "error");
+        if (!hasErrors) {
+          try {
+            const { dispatchFromIntake, sendDispatchSms } = await import("./ratecon-dispatch-service");
+            const outcome = await dispatchFromIntake(id);
+            if (outcome.ok && outcome.loadId) {
+              const smsResult = await sendDispatchSms(outcome.loadId);
+              await db
+                .update(rateconIntake)
+                .set({ status: "auto_dispatched", updatedAt: new Date() })
+                .where(eq(rateconIntake.id, id));
+              autoDispatch = {
+                triggered: true,
+                ok: true,
+                loadId: outcome.loadId,
+                sms: smsResult,
+              };
+              console.log(`[ratecon-intake:patch] auto-dispatched ${id} → load ${outcome.loadNumber} (sms ok=${smsResult.ok})`);
+            } else {
+              autoDispatch = { triggered: true, ok: false, error: outcome.error };
+              console.warn(`[ratecon-intake:patch] auto-dispatch failed for ${id}: ${outcome.error}`);
+            }
+          } catch (dispatchErr: any) {
+            autoDispatch = { triggered: true, ok: false, error: dispatchErr?.message ?? String(dispatchErr) };
+            console.error(`[ratecon-intake:patch] auto-dispatch threw for ${id}:`, dispatchErr);
+          }
+        }
+      }
+
+      res.json({ ...updated, autoDispatch });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
