@@ -3743,11 +3743,20 @@ export async function registerRoutes(app: Express): Promise<void> {
       console.log("✅ Load Moved Successfully:", updatedLoad.status);
 
       // 2. SEND SMS (Only happens if Step 1 succeeds)
+      // Use the canonical sendDispatchSms path — same body builder the
+      // ratecon-intake flow uses, so manual dispatches and email-parsed
+      // dispatches produce identical messages. The legacy
+      // sendBookingRequest fired a separate "🚨 NEW LOAD ASSIGNMENT"
+      // template which double-notified drivers; removed.
       try {
-        const driver = await storage.getDriver(String(driverId));
-        if (driver && updatedLoad) {
-          await smsLoadService.sendBookingRequest(updatedLoad, driver);
-          console.log("✅ SMS Sent Successfully");
+        if (updatedLoad?.id) {
+          const { sendDispatchSms } = await import("./ratecon-dispatch-service");
+          const result = await sendDispatchSms(String(updatedLoad.id));
+          if (result.ok) {
+            console.log(`✅ Dispatch SMS sent (sid: ${result.messageSid ?? "-"}, channel: ${result.channel ?? "sms"})`);
+          } else {
+            console.warn(`⚠️ Dispatch SMS failed: ${result.error}`);
+          }
         }
       } catch (smsError) {
         console.error("⚠️ SMS Failed (but Load Moved):", smsError);

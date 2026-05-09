@@ -316,10 +316,11 @@ function formatAddressBlock(addr: string): string {
   return trimmed;
 }
 
-// Standard divider for visually separating SMS sections. 28 equals signs
-// is the sweet spot — wide enough to look like a real divider on most
-// phones, narrow enough not to wrap on small screens.
-const DIVIDER = "============================";
+// Standard divider for visually separating SMS sections. 18 chars fits on
+// a single line in iMessage / standard Android SMS bubbles without wrapping.
+// Longer dividers (28+) wrap to a second line on most phones, breaking the
+// visual block separation we're trying to create.
+const DIVIDER = "==================";
 
 // Format currency with thousands separators: 1080 → "$1,080.00"
 function formatMoney(amount: number): string {
