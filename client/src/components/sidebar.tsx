@@ -63,6 +63,7 @@ const menuGroups: MenuGroup[] = [
     icon: <DollarSign className="w-5 h-5" />,
     adminOnly: true,
     items: [
+      { name: "Factoring (Love's)", href: "/factoring", adminOnly: true },
       { name: "True RPM Calc", href: "/true-rpm-calculator", adminOnly: true },
       { name: "Fleet Calculator", href: "/fleet-calculator", adminOnly: true },
       { name: "Payments", href: "/payments", adminOnly: true },
