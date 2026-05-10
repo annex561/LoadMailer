@@ -79,6 +79,28 @@ function fmtMoney(n: number): string {
   return `$${n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
+// pdf-lib's Helvetica/HelveticaBold use WinAnsi encoding, which only covers
+// codepoints 0x20-0xFF. Any character outside that range (emoji, →, smart
+// quotes, en-dashes coming from the LLM parser, etc.) throws at draw time.
+// Replace common offenders with WinAnsi-safe equivalents and strip the rest
+// so a stray emoji in a broker name doesn't kill the entire PDF.
+function safe(text: string | null | undefined): string {
+  if (!text) return "";
+  return String(text)
+    .replace(/[‘’]/g, "'")    // smart single quotes -> apostrophe
+    .replace(/[“”]/g, '"')    // smart double quotes -> straight
+    .replace(/–/g, "-")             // en-dash -> hyphen
+    .replace(/—/g, "--")            // em-dash -> double hyphen (also WinAnsi-safe but normalize)
+    .replace(/→/g, "->")            // right arrow -> ascii
+    .replace(/←/g, "<-")            // left arrow
+    .replace(/…/g, "...")           // horizontal ellipsis
+    .replace(/ /g, " ")             // non-breaking space -> regular space
+    // Strip anything still outside the WinAnsi range. Catches emoji,
+    // CJK, math symbols, etc. We render `?` so the field still has SOMETHING
+    // there for the dispatcher to spot.
+    .replace(/[^\x20-\xFF]/g, "?");
+}
+
 // Signature is inlined as base64 in factoring-signature.ts so the bundled
 // production server (esbuild only bundles JS, not assets) has the signature
 // available without filesystem access. Returns null only if the inlined data
@@ -106,7 +128,7 @@ function drawTextBlock(
     const test = line ? `${line} ${word}` : word;
     const w = font.widthOfTextAtSize(test, size);
     if (w > maxWidth && line) {
-      page.drawText(line, { x, y: currentY, size, font, color: rgb(0, 0, 0) });
+      page.drawText(safe(line), { x, y: currentY, size, font, color: rgb(0, 0, 0) });
       currentY -= lineHeight;
       line = word;
     } else {
@@ -114,7 +136,7 @@ function drawTextBlock(
     }
   }
   if (line) {
-    page.drawText(line, { x, y: currentY, size, font, color: rgb(0, 0, 0) });
+    page.drawText(safe(line), { x, y: currentY, size, font, color: rgb(0, 0, 0) });
     currentY -= lineHeight;
   }
   return currentY;
@@ -134,15 +156,15 @@ export async function generateBillOfSale(load: LoadInputs): Promise<Uint8Array> 
   let y = 750;
 
   // Header — LAMP letterhead
-  page.drawText(LAMP.dba.toUpperCase(), { x: M, y, size: 18, font: helvBold });
+  page.drawText(safe(LAMP.dba.toUpperCase()), { x: M, y, size: 18, font: helvBold });
   y -= 18;
-  page.drawText(`${LAMP.address}, ${LAMP.cityStateZip}`, { x: M, y, size: 10, font: helv });
+  page.drawText(safe(`${LAMP.address}, ${LAMP.cityStateZip}`), { x: M, y, size: 10, font: helv });
   y -= 12;
-  page.drawText(`${LAMP.mc} · ${LAMP.dot} · ${LAMP.phone}`, { x: M, y, size: 10, font: helv });
+  page.drawText(safe(`${LAMP.mc} · ${LAMP.dot} · ${LAMP.phone}`), { x: M, y, size: 10, font: helv });
   y -= 30;
 
   // Title
-  page.drawText("BILL OF SALE / ASSIGNMENT OF INVOICE", {
+  page.drawText(safe("BILL OF SALE / ASSIGNMENT OF INVOICE"), {
     x: M,
     y,
     size: 14,
@@ -154,7 +176,7 @@ export async function generateBillOfSale(load: LoadInputs): Promise<Uint8Array> 
   y = drawTextBlock(
     page,
     helv,
-    `For value received, ${LAMP.legalName} (the "Seller") hereby sells, assigns, and transfers to ${LOVES.legalName} d/b/a ${LOVES.dba} (the "Buyer") the invoice described below and all rights to collect payment from the listed debtor.`,
+    safe(`For value received, ${LAMP.legalName} (the "Seller") hereby sells, assigns, and transfers to ${LOVES.legalName} d/b/a ${LOVES.dba} (the "Buyer") the invoice described below and all rights to collect payment from the listed debtor.`),
     M,
     y,
     512,
@@ -166,22 +188,22 @@ export async function generateBillOfSale(load: LoadInputs): Promise<Uint8Array> 
   const labelX = M;
   const valueX = M + 140;
   const drawField = (label: string, value: string) => {
-    page.drawText(label, { x: labelX, y, size: 11, font: helvBold });
-    page.drawText(value, { x: valueX, y, size: 11, font: helv });
+    page.drawText(safe(label), { x: labelX, y, size: 11, font: helvBold });
+    page.drawText(safe(value), { x: valueX, y, size: 11, font: helv });
     y -= 18;
   };
   drawField("Invoice #:", `LAMP-${load.loadNumber}`);
   drawField("Load #:", load.loadNumber);
   drawField("Debtor (Broker):", load.brokerName ?? "Unknown");
-  drawField("Pickup:", `${load.pickupCity ?? ""}, ${load.pickupState ?? ""} — ${fmtDate(load.pickupDate)}`);
-  drawField("Delivery:", `${load.deliveryCity ?? ""}, ${load.deliveryState ?? ""} — ${fmtDate(load.deliveryDate)}`);
+  drawField("Pickup:", `${load.pickupCity ?? ""}, ${load.pickupState ?? ""} -- ${fmtDate(load.pickupDate)}`);
+  drawField("Delivery:", `${load.deliveryCity ?? ""}, ${load.deliveryState ?? ""} -- ${fmtDate(load.deliveryDate)}`);
   drawField("Amount:", fmtMoney(load.rate));
   drawField("Date of Sale:", fmtDate(new Date()));
 
   y -= 30;
 
   // Signature line
-  page.drawText("Authorized Signature:", { x: M, y, size: 11, font: helvBold });
+  page.drawText(safe("Authorized Signature:"), { x: M, y, size: 11, font: helvBold });
   y -= 50;
 
   // Signature image
@@ -203,9 +225,9 @@ export async function generateBillOfSale(load: LoadInputs): Promise<Uint8Array> 
     thickness: 0.5,
   });
   y -= 5;
-  page.drawText("Annex Luberisse, LAMP Logistics", { x: M, y, size: 10, font: helv });
+  page.drawText(safe("Annex Luberisse, LAMP Logistics"), { x: M, y, size: 10, font: helv });
   y -= 12;
-  page.drawText(`Date: ${fmtDate(new Date())}`, { x: M, y, size: 10, font: helv });
+  page.drawText(safe(`Date: ${fmtDate(new Date())}`), { x: M, y, size: 10, font: helv });
 
   return await doc.save();
 }
@@ -224,24 +246,24 @@ export async function generateInvoice(load: LoadInputs): Promise<Uint8Array> {
   let y = 750;
 
   // Letterhead
-  page.drawText(LAMP.dba.toUpperCase(), { x: M, y, size: 20, font: helvBold });
+  page.drawText(safe(LAMP.dba.toUpperCase()), { x: M, y, size: 20, font: helvBold });
   y -= 18;
-  page.drawText(LAMP.legalName, { x: M, y, size: 11, font: helv });
+  page.drawText(safe(LAMP.legalName), { x: M, y, size: 11, font: helv });
   y -= 12;
-  page.drawText(`${LAMP.address}, ${LAMP.cityStateZip}`, { x: M, y, size: 10, font: helv });
+  page.drawText(safe(`${LAMP.address}, ${LAMP.cityStateZip}`), { x: M, y, size: 10, font: helv });
   y -= 12;
-  page.drawText(`${LAMP.mc} · ${LAMP.dot}`, { x: M, y, size: 10, font: helv });
+  page.drawText(safe(`${LAMP.mc} · ${LAMP.dot}`), { x: M, y, size: 10, font: helv });
   y -= 12;
-  page.drawText(`${LAMP.phone} · ${LAMP.email}`, { x: M, y, size: 10, font: helv });
+  page.drawText(safe(`${LAMP.phone} · ${LAMP.email}`), { x: M, y, size: 10, font: helv });
   y -= 25;
 
   // Invoice header (right-aligned)
-  page.drawText("INVOICE", { x: M, y, size: 22, font: helvBold });
+  page.drawText(safe("INVOICE"), { x: M, y, size: 22, font: helvBold });
   y -= 25;
 
   const drawField = (label: string, value: string, currentY: number) => {
-    page.drawText(label, { x: M, y: currentY, size: 11, font: helvBold });
-    page.drawText(value, { x: M + 130, y: currentY, size: 11, font: helv });
+    page.drawText(safe(label), { x: M, y: currentY, size: 11, font: helvBold });
+    page.drawText(safe(value), { x: M + 130, y: currentY, size: 11, font: helv });
     return currentY - 18;
   };
 
@@ -250,9 +272,9 @@ export async function generateInvoice(load: LoadInputs): Promise<Uint8Array> {
   y = drawField("Load #:", load.loadNumber, y);
 
   y -= 10;
-  page.drawText("Bill To:", { x: M, y, size: 11, font: helvBold });
+  page.drawText(safe("Bill To:"), { x: M, y, size: 11, font: helvBold });
   y -= 14;
-  page.drawText(load.brokerName ?? "Broker (see Rate Confirmation)", {
+  page.drawText(safe(load.brokerName ?? "Broker (see Rate Confirmation)"), {
     x: M,
     y,
     size: 11,
@@ -260,17 +282,20 @@ export async function generateInvoice(load: LoadInputs): Promise<Uint8Array> {
   });
   y -= 14;
   if (load.brokerMc) {
-    page.drawText(`MC: ${load.brokerMc}`, { x: M, y, size: 10, font: helv });
+    page.drawText(safe(`MC: ${load.brokerMc}`), { x: M, y, size: 10, font: helv });
     y -= 14;
   }
 
   y -= 14;
-  page.drawText("Description of Service", { x: M, y, size: 11, font: helvBold });
+  page.drawText(safe("Description of Service"), { x: M, y, size: 11, font: helvBold });
   y -= 16;
+  // pdf-lib's standard Helvetica is WinAnsi-encoded — it cannot render
+  // characters outside that codepage (e.g. the right-arrow U+2192). Stick
+  // to characters within WinAnsi: em-dash (—), middle-dot (·), basic ASCII.
   y = drawTextBlock(
     page,
     helv,
-    `Transportation services per Rate Confirmation: ${load.pickupCity ?? ""}, ${load.pickupState ?? ""} (pickup ${fmtDate(load.pickupDate)}) → ${load.deliveryCity ?? ""}, ${load.deliveryState ?? ""} (delivery ${fmtDate(load.deliveryDate)}).`,
+    safe(`Transportation services per Rate Confirmation: ${load.pickupCity ?? ""}, ${load.pickupState ?? ""} (pickup ${fmtDate(load.pickupDate)}) to ${load.deliveryCity ?? ""}, ${load.deliveryState ?? ""} (delivery ${fmtDate(load.deliveryDate)}).`),
     M,
     y,
     512,
@@ -279,8 +304,8 @@ export async function generateInvoice(load: LoadInputs): Promise<Uint8Array> {
   y -= 10;
 
   // Amount
-  page.drawText("Amount Due:", { x: M, y, size: 13, font: helvBold });
-  page.drawText(fmtMoney(load.rate), { x: M + 130, y, size: 13, font: helvBold });
+  page.drawText(safe("Amount Due:"), { x: M, y, size: 13, font: helvBold });
+  page.drawText(safe(fmtMoney(load.rate)), { x: M + 130, y, size: 13, font: helvBold });
   y -= 30;
 
   // NOA block — required on every invoice
@@ -291,7 +316,7 @@ export async function generateInvoice(load: LoadInputs): Promise<Uint8Array> {
   });
   y -= 14;
   for (const line of NOA_BLOCK) {
-    page.drawText(line, { x: M, y, size: 9, font: helv });
+    page.drawText(safe(line), { x: M, y, size: 9, font: helv });
     y -= 11;
   }
 
