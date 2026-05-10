@@ -11,8 +11,8 @@
 
 import type { Express } from "express";
 import { db } from "../db";
-import { loads, factoringSubmissions } from "@shared/schema";
-import { and, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
+import { loads, factoringSubmissions, rateconIntake } from "@shared/schema";
+import { and, desc, eq, isNotNull, isNull, ne, inArray } from "drizzle-orm";
 import { requireRole } from "../auth";
 import { buildFactoringPacket, submitToLoves, pastTodayCutoff } from "../factoring-loves";
 
@@ -41,12 +41,49 @@ export function registerFactoringRoutes(app: Express) {
         : [];
       const subByLoad = new Map(subs.map((s: any) => [s.loadId, s]));
 
+      // Look up intake rows for these loads to surface RateCon source
+      // (handles legacy bug where rateconPath got overwritten with BOL).
+      const intakes = rows.length
+        ? await db
+            .select()
+            .from(rateconIntake)
+            .where(inArray(rateconIntake.loadId, rows.map((r: any) => r.id)))
+        : [];
+      const intakeByLoad = new Map<string, any>(intakes.map((i: any) => [i.loadId, i]));
+
       const queue = rows.map((l: any) => {
-        const ready = !!(l.bolPath || l.podPath) && !!l.rateconPath && !!l.rate;
+        const intake: any = intakeByLoad.get(l.id);
+        // Where will the packet builder actually pull each doc from?
+        // Mirror the resolution logic in factoring-loves.ts so the UI
+        // shows the same answer the builder will use.
+        const rateconPathLooksLikeImage = !!(
+          l.rateconPath &&
+          (l.rateconPath.toLowerCase().endsWith(".jpg") ||
+            l.rateconPath.toLowerCase().endsWith(".jpeg") ||
+            l.rateconPath.toLowerCase().endsWith(".png"))
+        );
+
+        let rateconSource: string | null = null;
+        if (l.rateconPath && !rateconPathLooksLikeImage) {
+          rateconSource = "loads.ratecon_path (PDF)";
+        } else if (intake?.pdfPath) {
+          rateconSource = "ratecon_intake.pdf_path (intake fallback)";
+        }
+
+        let bolSource: string | null = null;
+        if (l.bolPath) bolSource = "loads.bol_path (driver MMS)";
+        else if (l.podPath) bolSource = "loads.pod_path";
+        else if (rateconPathLooksLikeImage && l.rateconPath) {
+          bolSource = "loads.ratecon_path (legacy BOL overwrite)";
+        }
+
         const issues: string[] = [];
-        if (!l.rateconPath) issues.push("no rate confirmation");
-        if (!(l.bolPath || l.podPath)) issues.push("no BOL/POD on file");
+        if (!rateconSource) issues.push("no Rate Confirmation found");
+        if (!bolSource) issues.push("no BOL/POD on file");
         if (!l.rate || l.rate <= 0) issues.push("no rate amount");
+
+        const ready = !!rateconSource && !!bolSource && !!l.rate;
+
         return {
           loadId: l.id,
           loadNumber: l.loadNumber,
@@ -55,6 +92,8 @@ export function registerFactoringRoutes(app: Express) {
           rate: l.rate,
           ready,
           issues,
+          rateconSource,
+          bolSource,
           factoringStatus: l.factoringStatus,
           existingSubmission: subByLoad.get(l.id) ?? null,
         };

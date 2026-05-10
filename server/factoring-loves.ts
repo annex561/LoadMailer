@@ -14,7 +14,7 @@
 
 import nodemailer from "nodemailer";
 import { db } from "./db";
-import { loads, factoringSubmissions } from "@shared/schema";
+import { loads, factoringSubmissions, rateconIntake } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { generateBillOfSale, generateInvoice, mergePacketPdfs, LAMP } from "./factoring-pdf-templates";
 
@@ -116,54 +116,116 @@ export async function buildFactoringPacket(loadId: string): Promise<PacketResult
     { label: "Invoice", bytes: invoice, kind: "pdf" },
   ];
 
-  // Rate Confirmation — pulled from load.rateconPath. If missing, warn but proceed.
-  // RateCon may live in object storage (gs://) or a local path; use objectStorage helper.
+  // ---- Resolve Rate Confirmation source ----
+  // Primary source: load.rateconPath. Two complications we handle:
+  //  1. Legacy BOL bug (PR #67) overwrote rateconPath with a JPG/PNG photo.
+  //     If we detect rateconPath is an image (not a PDF), we treat it as
+  //     the BOL fallback and pull the original RateCon from rateconIntake
+  //     instead.
+  //  2. Some loads were dispatched before rateconPath was wired through —
+  //     fall back to rateconIntake.pdfPath via the load_id linkage.
+  let rateconBytes: Buffer | null = null;
+  let rateconIsLegacyBolImage = false;
+
   if (load.rateconPath) {
     try {
       const buf = await loadFromObjectStorage(load.rateconPath);
-      // Detect kind by magic bytes — PDFs start with %PDF, images with JPG/PNG signatures.
       const isPdf = buf.length >= 4 && buf.subarray(0, 4).toString() === "%PDF";
-      parts.push({
-        label: "Rate Confirmation",
-        bytes: buf,
-        kind: isPdf ? "pdf" : "image",
-      });
+      if (isPdf) {
+        rateconBytes = buf;
+        console.log(`[factoring] RateCon loaded from load.rateconPath (PDF, ${buf.length} bytes)`);
+      } else {
+        // Legacy bug: an image landed here. Use it as BOL fallback later.
+        rateconIsLegacyBolImage = true;
+        console.log(`[factoring] load.rateconPath is an image — legacy BOL overwrite detected; will use as BOL fallback`);
+      }
     } catch (err: any) {
-      warnings.push(`Could not load Rate Confirmation: ${err.message}`);
+      warnings.push(`Could not load load.rateconPath: ${err.message}`);
     }
-  } else {
-    warnings.push("No Rate Confirmation on file");
   }
 
-  // BOL / POD — single signed-at-delivery photo. Phase 1 stores it on bolPath
-  // (per the SMS pipeline update in this PR).
-  const bolPath = load.bolPath ?? load.podPath ?? null;
-  if (bolPath) {
+  // Fall back to the intake row when rateconPath was missing or was the
+  // legacy-bug image. The intake's pdfPath is the original parser-extracted
+  // PDF and is the authoritative RateCon source.
+  if (!rateconBytes) {
     try {
-      const buf = await loadFromObjectStorage(bolPath);
+      const [intake] = await db
+        .select()
+        .from(rateconIntake)
+        .where(eq(rateconIntake.loadId, loadId))
+        .limit(1);
+      if (intake?.pdfPath) {
+        const buf = await loadFromObjectStorage(intake.pdfPath);
+        const isPdf = buf.length >= 4 && buf.subarray(0, 4).toString() === "%PDF";
+        if (isPdf) {
+          rateconBytes = buf;
+          console.log(`[factoring] RateCon loaded from rateconIntake.pdfPath (PDF, ${buf.length} bytes)`);
+        }
+      }
+    } catch (err: any) {
+      console.error(`[factoring] intake fallback failed: ${err.message}`);
+    }
+  }
+
+  if (rateconBytes) {
+    parts.push({ label: "Rate Confirmation", bytes: rateconBytes, kind: "pdf" });
+  } else {
+    warnings.push("No Rate Confirmation PDF found on this load (checked load.rateconPath and rateconIntake.pdfPath)");
+  }
+
+  // ---- Resolve BOL/POD source ----
+  // Primary: load.bolPath (new field from this PR)
+  // Fallback 1: load.podPath (older code path)
+  // Fallback 2: load.rateconPath IF it's actually an image (legacy bug data)
+  let bolPathToUse: string | null = null;
+  let bolSource = "";
+  if (load.bolPath) {
+    bolPathToUse = load.bolPath;
+    bolSource = "load.bolPath";
+  } else if (load.podPath) {
+    bolPathToUse = load.podPath;
+    bolSource = "load.podPath";
+  } else if (rateconIsLegacyBolImage && load.rateconPath) {
+    bolPathToUse = load.rateconPath;
+    bolSource = "load.rateconPath (legacy BOL overwrite)";
+  }
+
+  if (bolPathToUse) {
+    try {
+      const buf = await loadFromObjectStorage(bolPathToUse);
       const isPdf = buf.length >= 4 && buf.subarray(0, 4).toString() === "%PDF";
       parts.push({
         label: "BOL / POD",
         bytes: buf,
         kind: isPdf ? "pdf" : "image",
       });
+      console.log(`[factoring] BOL loaded from ${bolSource} (${isPdf ? "PDF" : "image"}, ${buf.length} bytes)`);
     } catch (err: any) {
-      warnings.push(`Could not load BOL/POD: ${err.message}`);
+      warnings.push(`Could not load BOL/POD from ${bolSource}: ${err.message}`);
     }
   } else {
     warnings.push("No signed BOL on file — driver hasn't sent it via SMS yet");
   }
 
-  if (parts.length < 3) {
+  // Sanity check: the bare minimum for a valid Love's packet is Bill of
+  // Sale + Invoice + RateCon + BOL = 4 docs. If we don't have at least
+  // 3, refuse — Love's will reject the packet anyway.
+  const hasRatecon = !!rateconBytes;
+  const hasBol = !!bolPathToUse;
+  if (!hasRatecon || !hasBol) {
+    const missing: string[] = [];
+    if (!hasRatecon) missing.push("Rate Confirmation");
+    if (!hasBol) missing.push("BOL/POD");
     return {
       ok: false,
-      error: "Packet has fewer than 3 documents — submission would be rejected by Love's",
+      error: `Cannot build packet — missing: ${missing.join(", ")}`,
       loadId,
       warnings,
     };
   }
 
   const pdfBytes = await mergePacketPdfs(parts);
+  console.log(`[factoring] packet built for load ${load.loadNumber}: ${parts.length} parts, ${pdfBytes.length} bytes`);
   return { ok: true, loadId, pdfBytes, warnings };
 }
 

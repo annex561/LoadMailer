@@ -13,6 +13,8 @@ interface QueueItem {
   rate: number | null;
   ready: boolean;
   issues: string[];
+  rateconSource: string | null;
+  bolSource: string | null;
   factoringStatus: string | null;
   existingSubmission: any;
 }
@@ -144,6 +146,20 @@ export default function FactoringPage() {
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
                         Delivered {q.deliveredAt ? new Date(q.deliveredAt).toLocaleString() : "?"} · Rate {fmtMoney(q.rate)}
+                      </div>
+                      {/* Show exactly which sources the packet will pull from
+                          so the dispatcher can verify before submitting. */}
+                      <div className="text-xs mt-2 space-y-0.5 font-mono opacity-80">
+                        <div>
+                          {q.rateconSource ? "✓" : "✗"}{" "}
+                          <span className="text-muted-foreground">RateCon:</span>{" "}
+                          {q.rateconSource ?? "MISSING"}
+                        </div>
+                        <div>
+                          {q.bolSource ? "✓" : "✗"}{" "}
+                          <span className="text-muted-foreground">BOL:</span>{" "}
+                          {q.bolSource ?? "MISSING — driver hasn't sent photo yet"}
+                        </div>
                       </div>
                       {q.issues.length > 0 && (
                         <div className="text-xs text-amber-500 mt-1 flex items-start gap-1">
