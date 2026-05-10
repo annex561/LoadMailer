@@ -70,10 +70,16 @@ export default function ActiveLoads() {
   if (isLoading) return <div className="p-8 text-slate-500">Loading Command Center...</div>;
 
   return (
-    <div className="flex h-[calc(100vh-60px)] bg-slate-950 text-slate-100 overflow-hidden">
-      
+    // h-full instead of h-[calc(100vh-60px)] — the parent <main> already
+    // sizes to the available viewport. The old hard-coded 60px offset caused
+    // this page to extend beyond the main content area on layouts where the
+    // header isn't 60px tall, which made the inner left panel visually
+    // overlap the global app sidebar. flex-shrink-0 + relative on the inner
+    // panel keeps it strictly inside its flex parent regardless of viewport.
+    <div className="flex h-full w-full bg-slate-950 text-slate-100 overflow-hidden relative">
+
       {/* LEFT PANEL: FLEET LIST */}
-      <div className="w-[300px] h-full border-r border-slate-800 bg-slate-900 flex flex-col">
+      <div className="w-[300px] flex-shrink-0 h-full border-r border-slate-800 bg-slate-900 flex flex-col relative">
         <div className="p-4 border-b border-slate-800 shrink-0">
           <h2 className="font-bold text-white flex items-center gap-2">
             <Truck className="w-4 h-4 text-emerald-500" /> Active Loads ({activeLoads.length})
