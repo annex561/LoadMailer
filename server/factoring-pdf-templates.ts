@@ -12,8 +12,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from "pdf-lib";
-import * as fs from "fs/promises";
-import * as path from "path";
+import { getAnnexSignaturePngBytes } from "./factoring-signature";
 
 // LAMP entity constants — pulled out so they're easy to update if anything
 // changes (e.g. address change, new MC number). Source: NOA + dispatcher.
@@ -80,19 +79,12 @@ function fmtMoney(n: number): string {
   return `$${n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
+// Signature is inlined as base64 in factoring-signature.ts so the bundled
+// production server (esbuild only bundles JS, not assets) has the signature
+// available without filesystem access. Returns null only if the inlined data
+// is missing — caller treats that as best-effort and renders without sig.
 async function loadSignaturePng(): Promise<Buffer | null> {
-  const candidates = [
-    path.resolve(process.cwd(), "server/assets/signatures/annex.png"),
-    path.resolve(__dirname, "assets/signatures/annex.png"),
-  ];
-  for (const p of candidates) {
-    try {
-      return await fs.readFile(p);
-    } catch {
-      /* try next */
-    }
-  }
-  return null;
+  return getAnnexSignaturePngBytes();
 }
 
 // Helper: draw a left-aligned wrapped text block. Returns the y-coordinate
