@@ -770,6 +770,16 @@ async function initializeAllServices() {
       }
     });
 
+    // HOS check cron — daily morning On Duty / Off Duty SMS to drivers
+    Promise.resolve().then(async () => {
+      try {
+        const { hosCheckCron } = await import('./hos-check-cron');
+        await hosCheckCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize HOS check cron:', error);
+      }
+    });
+
     console.log('✅ Background service initialization started');
   } catch (error) {
     console.error('❌ Error starting background services:', error);
@@ -941,6 +951,26 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { geofenceCron } = await import('./geofence-cron');
       res.json({ ok: true, ...geofenceCron.getStatus() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // HOS daily check — manual trigger + status
+  app.post('/api/hos-check/tick', async (_req, res) => {
+    try {
+      const { hosCheckCron } = await import('./hos-check-cron');
+      const r = await hosCheckCron.triggerNow();
+      res.json({ ok: true, ...r });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  app.get('/api/hos-check/status', async (_req, res) => {
+    try {
+      const { hosCheckCron } = await import('./hos-check-cron');
+      res.json({ ok: true, ...hosCheckCron.getStatus() });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
     }

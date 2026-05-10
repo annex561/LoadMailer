@@ -6,7 +6,7 @@
 
 import cron from 'node-cron';
 import { db } from './db';
-import { loads, driverLocations } from '@shared/schema';
+import { loads, driverLocations, drivers } from '@shared/schema';
 import { and, isNotNull, isNull, eq, desc } from 'drizzle-orm';
 import { haversineDistance } from './auto-load-matcher';
 import { geocode } from './geocoder';
@@ -57,6 +57,14 @@ class GeofenceCron {
         const pickupDone = !!sop.pickupPhotoRequestedAt;
         const deliveryDone = !!sop.deliveryPhotoRequestedAt;
         if (pickupDone && deliveryDone) { result.skipped++; continue; }
+
+        // Skip if driver is off duty (HOS check) — no SMS spam when not working
+        const [drv] = await db
+          .select({ isOnDuty: drivers.isOnDuty })
+          .from(drivers)
+          .where(eq(drivers.id, load.driverId!))
+          .limit(1);
+        if (drv && drv.isOnDuty === false) { result.skipped++; continue; }
 
         // Latest driver location
         const [loc] = await db

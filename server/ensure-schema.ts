@@ -83,6 +83,9 @@ export async function ensureSchema(): Promise<void> {
     ['deduct_eld_monthly', 'REAL DEFAULT 0'],
     ['deduct_occ_acc_enabled', 'BOOLEAN NOT NULL DEFAULT false'],
     ['deduct_occ_acc_weekly', 'REAL DEFAULT 0'],
+    // Daily HOS check
+    ['is_on_duty', 'BOOLEAN NOT NULL DEFAULT false'],
+    ['last_hos_check_at', 'TIMESTAMP'],
   ];
 
   // Universal Ratecon Intake — loads.confirmation_* columns (PR #1)
@@ -292,7 +295,26 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ ratecon_corrections table: ${e.message}`);
     }
 
-    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections created)`);
+    // hos_check_log — per-driver-per-day dedup for the HOS check cron.
+    // Unique constraint on (driver_id, send_date) makes the cron idempotent:
+    // a duplicate tick on the same day is a no-op via ON CONFLICT DO NOTHING.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS hos_check_log (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+          driver_id VARCHAR NOT NULL,
+          send_date TEXT NOT NULL,
+          sent_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE (driver_id, send_date)
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_hos_check_log_driver ON hos_check_log(driver_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_hos_check_log_date ON hos_check_log(send_date)`);
+    } catch (e: any) {
+      log(`⚠️ hos_check_log table: ${e.message}`);
+    }
+
+    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log created)`);
   } catch (err: any) {
     log(`⚠️ ensureSchema error: ${err.message}`);
   }
