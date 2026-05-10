@@ -59,6 +59,7 @@ const DriverLoadView = lazy(() => import("@/pages/driver-load-view"));
 const TrueRPMCalculator = lazy(() => import("@/pages/true-rpm-calculator"));
 const RateconUploadPage = lazy(() => import("@/pages/ratecon-upload"));
 const ReviewQueuePage = lazy(() => import("@/pages/review-queue"));
+const FactoringPage = lazy(() => import("@/pages/factoring"));
 const DriverConfirmPage = lazy(() => import("@/pages/driver-confirm"));
 // Public legal pages — required for A2P 10DLC TCR campaign approval.
 const PrivacyPolicy = lazy(() => import("@/pages/privacy"));
@@ -133,6 +134,7 @@ function Router() {
       <Route path="/true-rpm-calculator" component={TrueRPMCalculator} />
       <Route path="/ratecon-upload" component={RateconUploadPage} />
       <Route path="/review-queue" component={ReviewQueuePage} />
+      <Route path="/factoring" component={FactoringPage} />
       <Route path="/loads/:id" component={LoadDetailsPage} />
       <Route component={NotFound} />
     </Switch>

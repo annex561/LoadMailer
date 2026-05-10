@@ -216,6 +216,59 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ ratecon_intake table: ${e.message}`);
     }
 
+    // factoring_submissions — one row per packet sent to a factor (currently
+    // only Love's Financial). Unique on load_id so the same load can never
+    // be double-submitted. See docs/factoring/loves-financial.md.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS factoring_submissions (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+          load_id VARCHAR NOT NULL UNIQUE,
+          factor TEXT NOT NULL DEFAULT 'loves',
+          status TEXT NOT NULL DEFAULT 'queued',
+          packet_pdf_path TEXT,
+          submitted_at TIMESTAMP,
+          submitted_by VARCHAR,
+          funded_at TIMESTAMP,
+          amount_invoiced REAL,
+          amount_advanced REAL,
+          fee_charged REAL,
+          loves_invoice_id TEXT,
+          loves_schedule_id TEXT,
+          email_message_id TEXT,
+          error_message TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_factoring_status ON factoring_submissions(status)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_factoring_load ON factoring_submissions(load_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_factoring_submitted_at ON factoring_submissions(submitted_at)`);
+    } catch (e: any) {
+      log(`⚠️ factoring_submissions table: ${e.message}`);
+    }
+
+    // Add new columns to loads for BOL verification + factoring lifecycle.
+    // ALTER TABLE ADD COLUMN IF NOT EXISTS is supported on PG 9.6+.
+    try {
+      const newLoadCols: Array<[string, string]> = [
+        ["bol_verified_at", "TIMESTAMP"],
+        ["bol_verify_attempts", "INTEGER DEFAULT 0"],
+        ["good_to_go_sent_at", "TIMESTAMP"],
+        ["factoring_status", "TEXT DEFAULT 'not_ready'"],
+        ["factoring_submitted_at", "TIMESTAMP"],
+        ["factoring_funded_at", "TIMESTAMP"],
+        ["factoring_loves_invoice_id", "TEXT"],
+        ["factoring_schedule_id", "TEXT"],
+        ["factoring_amount_advanced", "REAL"],
+      ];
+      for (const [col, type] of newLoadCols) {
+        await pool.query(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS ${col} ${type}`);
+      }
+    } catch (e: any) {
+      log(`⚠️ loads factoring columns: ${e.message}`);
+    }
+
     // ratecon_corrections — every dispatcher correction becomes a learning
     // signal for future parses. The parser pulls the most recent N rows as
     // few-shot examples in its GPT-4o prompt.

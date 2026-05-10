@@ -32,8 +32,29 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
   const [driverId, setDriverId] = useState(row.matchedDriverId ?? "");
   const [saving, setSaving] = useState(false);
 
-  const warningsFor = (field: string) =>
-    (row.validatorFailures ?? []).filter((f) => f.field === field);
+  // Warnings come from the server-side validator output and don't update
+  // until a save round-trip. When the dispatcher edits live (e.g. picks a
+  // driver, adds an AM/PM-disambiguated time), we hide the now-resolved
+  // warnings client-side so the UI matches reality.
+  const warningsFor = (field: string) => {
+    const all = (row.validatorFailures ?? []).filter((f) => f.field === field);
+    if (field === "driverName" && driverId) return []; // resolved live
+    return all;
+  };
+
+  // Top-banner reviewReason text — strip "driver needs manual assignment"
+  // once a driver has been picked. Pure display fix; the underlying server
+  // record still has the original reason until the next save.
+  const liveReviewReason = (() => {
+    if (!row.reviewReason) return row.reviewReason;
+    if (!driverId) return row.reviewReason;
+    return row.reviewReason
+      .split("|")
+      .map((s) => s.trim())
+      .filter((s) => !/driver needs manual assignment/i.test(s))
+      .join(" | ")
+      .trim() || null;
+  })();
 
   const save = async () => {
     setSaving(true);
@@ -69,8 +90,11 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
           </div>
         </div>
 
-        {/* Why this landed in the review queue */}
-        {(row.parseError || row.reviewReason) && (
+        {/* Why this landed in the review queue. The reviewReason text is from
+            the original parse — we strip the "driver needs manual assignment"
+            piece if the dispatcher has already picked a driver, so the live
+            UI matches what's actually still pending. */}
+        {(row.parseError || liveReviewReason) && (
           <div
             className={`rounded-md border p-3 text-sm ${
               row.parseError
@@ -83,7 +107,7 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
               {row.parseError ? "❌ Parser failed" : "⚠️ Needs review"}
             </div>
             <div className="text-xs whitespace-pre-wrap">
-              {row.parseError ?? row.reviewReason}
+              {row.parseError ?? liveReviewReason}
             </div>
             {row.parseError && (
               <div className="text-xs mt-2 opacity-75">
