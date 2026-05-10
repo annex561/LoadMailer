@@ -93,6 +93,7 @@ const ActiveLoads = lazy(() => import('./active-loads'));
 const ItemsPage = lazy(() => import('./items'));
 const RateconUpload = lazy(() => import('./ratecon-upload'));
 const ReviewQueue = lazy(() => import('./review-queue'));
+const FactoringPage = lazy(() => import('./factoring'));
 const Settlements = lazy(() => import('./settlements'));
 const DriverProfile = lazy(() => import('./driver-profile'));
 const UsersAdmin = lazy(() => import('./users'));
@@ -654,6 +655,9 @@ export default function LoadOpsDashboard() {
         return <RateconUpload />;
       case '/review-queue':
         return <ReviewQueue />;
+      // Factoring (Love's Financial) — admin queue + manual submit
+      case '/factoring':
+        return <RequireRole roles={["admin"]}><FactoringPage /></RequireRole>;
       // Pre-existing pages that were broken by missing route entries
       case '/settlements':
         return <RequireRole roles={["admin", "finance"]}><Settlements /></RequireRole>;
