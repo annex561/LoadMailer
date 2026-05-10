@@ -311,8 +311,19 @@ export const loads = pgTable("loads", {
   confirmationRespondedAt: timestamp("confirmation_responded_at"),
   bolPath: text("bol_path"),
   bolUploadedAt: timestamp("bol_uploaded_at"),
+  bolVerifiedAt: timestamp("bol_verified_at"),         // when AI sanity check passed
+  bolVerifyAttempts: integer("bol_verify_attempts").default(0), // hard cap to stop loops
+  goodToGoSentAt: timestamp("good_to_go_sent_at"),     // idempotency for the Good to Go SMS
   podPath: text("pod_path"),
   podUploadedAt: timestamp("pod_uploaded_at"),
+  // Factoring lifecycle (Love's Financial). See docs/factoring/loves-financial.md
+  factoringStatus: text("factoring_status").default("not_ready"),
+    // not_ready | ready | submitted | funded | rejected | manual_review
+  factoringSubmittedAt: timestamp("factoring_submitted_at"),
+  factoringFundedAt: timestamp("factoring_funded_at"),
+  factoringLovesInvoiceId: text("factoring_loves_invoice_id"), // LF#### from confirmation
+  factoringScheduleId: text("factoring_schedule_id"),  // Schedule# from Love's
+  factoringAmountAdvanced: real("factoring_amount_advanced"),
   overrideReason: text("override_reason"),
   
   // EV SOP Checklist Fields
@@ -415,6 +426,36 @@ export const rateconCorrections = pgTable("ratecon_corrections", {
 
 export type RateconCorrection = typeof rateconCorrections.$inferSelect;
 export type InsertRateconCorrection = typeof rateconCorrections.$inferInsert;
+
+// One row per packet sent to Love's Financial. Audit + dedup. Unique on
+// load_id so the same load can never be double-submitted.
+export const factoringSubmissions = pgTable("factoring_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").notNull().unique(),       // dedup: one packet per load lifetime
+  factor: text("factor").notNull().default("loves"),   // future: support multiple factors
+  status: text("status").notNull().default("queued"),
+    // queued | submitted | funded | rejected | bounced
+  packetPdfPath: text("packet_pdf_path"),              // where the merged PDF lives in object storage
+  submittedAt: timestamp("submitted_at"),
+  submittedBy: varchar("submitted_by"),                 // user id who clicked submit
+  fundedAt: timestamp("funded_at"),                     // when Love's confirmation arrived
+  amountInvoiced: real("amount_invoiced"),
+  amountAdvanced: real("amount_advanced"),
+  feeCharged: real("fee_charged"),
+  lovesInvoiceId: text("loves_invoice_id"),            // LF#### from Love's
+  lovesScheduleId: text("loves_schedule_id"),          // Schedule# from Love's
+  emailMessageId: text("email_message_id"),            // SMTP Message-ID for tracing
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_factoring_status").on(table.status),
+  index("idx_factoring_load").on(table.loadId),
+  index("idx_factoring_submitted_at").on(table.submittedAt),
+]);
+
+export type FactoringSubmission = typeof factoringSubmissions.$inferSelect;
+export type InsertFactoringSubmission = typeof factoringSubmissions.$inferInsert;
 
 // ============================================================================
 // REVENUE LOOP TABLES - AR Invoices, Collections, Activity Log

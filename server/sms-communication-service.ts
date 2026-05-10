@@ -1066,7 +1066,15 @@ export class SMSCommunicationService {
       return true;
     }
 
-    // ---- MMS photo: attach to current load as BOL or POD ----
+    // ---- MMS photo: attach to current load as BOL/POD ----
+    // The signed-at-delivery BOL serves AS the POD (LAMP workflow), so we
+    // store the photo on bol_path regardless of whether the load was in_transit
+    // or delivered when the photo arrived. This fixes the prior bug where BOL
+    // photos overwrote rateconPath and lost the original RateCon.
+    //
+    // After the photo lands, optionally run an OpenAI Vision sanity check
+    // (BOL_VERIFY_ENABLED=true) to confirm the photo shows a signed BOL —
+    // hard-capped at 3 attempts per load to prevent runaway costs.
     if (mediaUrls.length > 0 && mediaTypes.some((t) => (t || "").startsWith("image/"))) {
       const [active] = await db
         .select()
@@ -1084,21 +1092,84 @@ export class SMSCommunicationService {
         return true;
       }
       const imageUrl = mediaUrls[0];
-      // If load is in_transit (or just picked up), this is the BOL.
-      // If load is already delivered (or status is anything else), it's the POD.
-      const isBol = active.status === "assigned" || active.status === "in_transit";
-      const updates: Record<string, unknown> = { updatedAt: new Date() };
-      if (isBol) {
-        updates.rateconPath = imageUrl; // reuse rateconPath for BOL until BOL column added
-      } else {
-        updates.podPath = imageUrl;
-      }
+
+      // Save photo to bol_path. Stamps bolUploadedAt on first save.
+      const updates: Record<string, unknown> = {
+        bolPath: imageUrl,
+        bolUploadedAt: new Date(),
+        updatedAt: new Date(),
+      };
       await db.update(loads).set(updates).where(eq(loads.id, active.id));
-      await sendReply(
-        isBol
-          ? `BOL received for load ${active.loadNumber}. Drive safe.`
-          : `POD received for load ${active.loadNumber}. Thank you.`,
-      );
+
+      // AI sanity check (optional, env-gated). Caps at 3 attempts to prevent
+      // a runaway loop from racking up OpenAI Vision costs (~$0.005 per call).
+      const verifyEnabled = process.env.BOL_VERIFY_ENABLED === "true";
+      const attempts = (active.bolVerifyAttempts ?? 0) as number;
+      const MAX_ATTEMPTS = 3;
+      let verified = false;
+      let verifyMessage = "";
+
+      if (verifyEnabled && attempts < MAX_ATTEMPTS) {
+        try {
+          const { verifyBolPhoto } = await import("./factoring-bol-verify");
+          const result = await verifyBolPhoto(imageUrl);
+          verified = result.ok;
+          verifyMessage = result.message;
+          await db
+            .update(loads)
+            .set({
+              bolVerifyAttempts: attempts + 1,
+              bolVerifiedAt: verified ? new Date() : null,
+            })
+            .where(eq(loads.id, active.id));
+        } catch (err: any) {
+          console.error("[bol-verify] failed:", err.message);
+          // Verify failed (not the photo, the OpenAI call) — let it through
+          verified = true;
+          verifyMessage = "Verification skipped (service unavailable).";
+        }
+      } else if (!verifyEnabled) {
+        // Verification disabled — accept the photo as-is.
+        verified = true;
+        await db
+          .update(loads)
+          .set({ bolVerifiedAt: new Date() })
+          .where(eq(loads.id, active.id));
+      } else {
+        // Hit attempt cap — stop calling OpenAI, route to manual review.
+        verified = false;
+        verifyMessage = "Max verification attempts reached. Sending to manual review.";
+      }
+
+      // If verified: send Good to Go (only once per load, idempotent).
+      // If NOT verified: tell driver to retake; do NOT mark Good to Go.
+      if (verified) {
+        const alreadySent = !!active.goodToGoSentAt;
+        if (!alreadySent) {
+          await db
+            .update(loads)
+            .set({
+              goodToGoSentAt: new Date(),
+              factoringStatus: "ready", // appears in factoring queue
+            })
+            .where(eq(loads.id, active.id));
+          await sendReply(
+            `Good to Go — load ${active.loadNumber} closed.\n` +
+              `Paperwork received. You're cleared to head to your next load.\n` +
+              `Drive safe.`,
+          );
+        } else {
+          // Already sent Good to Go for this load; just acknowledge.
+          await sendReply(
+            `Updated photo received for load ${active.loadNumber}. Already cleared.`,
+          );
+        }
+      } else {
+        await sendReply(
+          `We couldn't verify a clear signed BOL on that photo${verifyMessage ? ` (${verifyMessage})` : ""}.\n` +
+            `Please retake — make sure the receiver's signature is visible.`,
+        );
+      }
       return true;
     }
 
