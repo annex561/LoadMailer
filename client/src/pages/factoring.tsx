@@ -173,6 +173,12 @@ export default function FactoringPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handlePreview(q.loadId)}
+                        disabled={!q.ready}
+                        title={
+                          q.ready
+                            ? "Render the merged packet PDF without sending"
+                            : "Cannot preview — load is missing required docs (see source labels above)"
+                        }
                         className="w-full sm:w-auto"
                       >
                         Preview Packet
