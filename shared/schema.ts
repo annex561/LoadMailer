@@ -2712,10 +2712,11 @@ export const users = pgTable("users", {
   email: varchar("email").unique(),
   username: text("username").unique(),
   password: text("password"),
+  googleId: varchar("google_id").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  role: text("role").notNull().default("dispatcher"),
+  role: text("role").notNull().default("dispatcher"), // owner | dispatcher | viewer
   companyId: text("company_id").default("1"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
