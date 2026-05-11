@@ -279,7 +279,7 @@ STAGES.forEach((s) => {
   el.innerHTML =
     '<h2>' + s.label + '</h2>' +
     '<label class="btn" for="file-' + s.stage + '">📷 Take / Choose Photo</label>' +
-    '<input type="file" id="file-' + s.stage + '" accept="image/*" capture="environment">' +
+    '<input type="file" id="file-' + s.stage + '" accept="image/*">' +
     '<div class="progress" style="display:none"><div style="width:0%"></div></div>' +
     '<div class="status"></div>' +
     '<img class="preview" style="display:none" />';
