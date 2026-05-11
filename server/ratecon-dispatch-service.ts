@@ -280,8 +280,10 @@ export function buildDriverStageMessages(
         `Load #${inputs.loadNumber} CONFIRMED`,
         DRIVER_SMS_DIVIDER,
         `AT PICKUP`,
-        `Send a clear photo of the signed BOL,`,
-        `or reply PICKED UP when loaded.`,
+        `Upload a clear photo of the signed BOL:`,
+        uploadUrl,
+        ``,
+        `Or reply PICKED UP when loaded.`,
         DRIVER_SMS_DIVIDER,
         trackerLink
           ? `GPS tracking is now ON.\nKeep your phone tracker open:\n${trackerLink}`
@@ -325,15 +327,28 @@ export function buildDriverStageMessages(
   }
 
   // step === "delivered"
-  const lines: string[] = [
-    `Load #${inputs.loadNumber} DELIVERED. Thanks.`,
+  // Short Good-to-Go acknowledgement. NO pay summary — the driver can see
+  // full pay breakdown on their dashboard, and stuffing it into an SMS
+  // gives the driver a wall of dollar amounts on their phone right after
+  // the most stressful part of the job (delivery). Plus per-load deductions
+  // sometimes shift on settlement day; the SMS would lock in a number that
+  // could be wrong by Friday.
+  //
+  // Factoring auto-push: the load is already eligible to appear in the
+  // /factoring queue once status=delivered AND bolPath is populated. This
+  // is handled by the factoring queue route (no extra side-effect needed
+  // from this builder).
+  return [
+    [
+      `Load #${inputs.loadNumber} DELIVERED`,
+      DRIVER_SMS_DIVIDER,
+      `Good to go. Paperwork is being processed and your factoring submission is queued.`,
+      ``,
+      `Full pay breakdown is on your dashboard.`,
+      ``,
+      `Thank you — drive safe.`,
+    ].join("\n"),
   ];
-  if (inputs.payLines && inputs.payLines.length > 0) {
-    lines.push("", ...inputs.payLines);
-  } else {
-    lines.push("", `Pay statement on your weekly settlement.`);
-  }
-  return [lines.join("\n")];
 }
 
 /**
@@ -359,34 +374,11 @@ export async function sendDriverNextStepSms(
   const phone = (driver as any).phoneNumber ?? (driver as any).phone;
   if (!phone) return { ok: false, error: "Driver has no phone", messageSids: [] };
 
-  // For DELIVERED, compute pay so the message includes the breakdown.
-  // For other stages, payLines stays unset.
-  let payLines: string[] | undefined;
-  if (step === "delivered") {
-    try {
-      const { calculatePay } = await import("./pay-calculator");
-      const pay = calculatePay(
-        computeLoadPayInput({ rate: { value: load.rate ?? 0 }, miles: { value: load.miles ?? 0 } }),
-        driverProfileToPayInput(driver),
-      );
-      payLines = [
-        `Pay summary for this load:`,
-        ...pay.lineItems.map((li) => `  ${li.label}: $${li.amount.toFixed(2)}`),
-        ...pay.deductions.map((d) => `  ${d.label}: $${d.amount.toFixed(2)}`),
-        `  -----`,
-        `  Net this load: $${pay.netPay.toFixed(2)}`,
-      ];
-      if (pay.recurringDeductions.length > 0) {
-        payLines.push("", `Weekly deductions (on next statement):`);
-        for (const r of pay.recurringDeductions) {
-          payLines.push(`  ${r.label}: $${r.amount.toFixed(2)}`);
-        }
-      }
-    } catch (err: any) {
-      console.error("[next-step-sms] pay calc failed:", err.message);
-      // Builder will fall back to its generic "Pay statement on weekly settlement" line.
-    }
-  }
+  // Pay breakdown is no longer sent via SMS — the driver sees it on the
+  // dashboard. Per-load dollar amounts shift on weekly settlement (recurring
+  // deductions, fuel advances, etc.) so locking a number in an SMS at delivery
+  // time can be misleading by Friday. payLines parameter on the builder is
+  // kept for back-compat / future override but no caller populates it now.
 
   const messages = buildDriverStageMessages(
     {
@@ -399,7 +391,6 @@ export async function sendDriverNextStepSms(
       destState: load.destState,
       trackingToken: (driver as any).trackingToken,
       baseUrl: process.env.PUBLIC_BASE_URL || process.env.CUSTOM_DOMAIN || undefined,
-      payLines,
     },
     step,
   );

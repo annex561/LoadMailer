@@ -32,8 +32,10 @@ describe("buildDriverStageMessages", () => {
         "Load #LD29505831 CONFIRMED
         ==================
         AT PICKUP
-        Send a clear photo of the signed BOL,
-        or reply PICKED UP when loaded.
+        Upload a clear photo of the signed BOL:
+        https://traqiq.app/u/load-uuid-abc123
+
+        Or reply PICKED UP when loaded.
         ==================
         GPS tracking is now ON.
         Keep your phone tracker open:
@@ -51,8 +53,10 @@ describe("buildDriverStageMessages", () => {
         "Load #LD29505831 CONFIRMED
         ==================
         AT PICKUP
-        Send a clear photo of the signed BOL,
-        or reply PICKED UP when loaded.
+        Upload a clear photo of the signed BOL:
+        https://traqiq.app/u/load-uuid-abc123
+
+        Or reply PICKED UP when loaded.
         ==================
         GPS tracking is now ON. Drive safe."
       `);
@@ -117,40 +121,39 @@ describe("buildDriverStageMessages", () => {
   });
 
   describe('step = "delivered"', () => {
-    it("returns one message with the generic fallback when payLines is unset", () => {
+    it("returns a Good-to-Go acknowledgement with no pay numbers", () => {
       const out = buildDriverStageMessages(baseInputs, "delivered");
       expect(out).toHaveLength(1);
       expect(out[0]).toMatchInlineSnapshot(`
-        "Load #LD29505831 DELIVERED. Thanks.
+        "Load #LD29505831 DELIVERED
+        ==================
+        Good to go. Paperwork is being processed and your factoring submission is queued.
 
-        Pay statement on your weekly settlement."
+        Full pay breakdown is on your dashboard.
+
+        Thank you — drive safe."
       `);
     });
 
-    it("inlines payLines when provided", () => {
+    it("intentionally does NOT inline dollar amounts even when payLines is passed", () => {
+      // Pay numbers shift on weekly settlement (recurring deductions, fuel
+      // advances). Locking a number in an SMS at delivery time can be
+      // misleading by Friday. Pay breakdown lives on the dashboard only.
       const out = buildDriverStageMessages(
         {
           ...baseInputs,
           payLines: [
             "Pay summary for this load:",
             "  Gross: $1,000.00",
-            "  Factoring: -$30.00",
             "  -----",
             "  Net this load: $970.00",
           ],
         },
         "delivered",
       );
-      expect(out).toHaveLength(1);
-      expect(out[0]).toMatchInlineSnapshot(`
-        "Load #LD29505831 DELIVERED. Thanks.
-
-        Pay summary for this load:
-          Gross: $1,000.00
-          Factoring: -$30.00
-          -----
-          Net this load: $970.00"
-      `);
+      expect(out[0]).not.toMatch(/\$\d/);
+      expect(out[0]).not.toContain("Gross");
+      expect(out[0]).not.toContain("Net this load");
     });
   });
 });
