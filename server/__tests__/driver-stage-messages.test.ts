@@ -39,7 +39,7 @@ describe("buildDriverStageMessages", () => {
         ==================
         GPS tracking is now ON.
         Keep your phone tracker open:
-        https://traqiq.app/driver/abc123trackingtoken"
+        https://traqiq.app/driver/abc123trackingtoken#tracking"
       `);
     });
 

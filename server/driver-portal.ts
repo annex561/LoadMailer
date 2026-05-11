@@ -319,7 +319,26 @@ export async function renderHome(token: string): Promise<string> {
   const body = `
     <div class="muted" style="margin-bottom:16px">Hey ${escapeHtml(driver.name)} 👋</div>
 
-    <a class="card emph" href="/my-pay/${token}">
+    <!-- Tracking toggle — surfaced at the top of the home dashboard so drivers
+         can flip on/off without navigating to Profile. Same widget, same JS as
+         the Profile page. Server-side drivers.is_on_duty syncs through the
+         /driver/:token/duty endpoint (added in PR #81). -->
+    <h2 id="tracking" style="margin-top:0">Location Tracking</h2>
+    <div class="trk-card">
+      <div class="trk-row">
+        <span id="trk-state-dot" class="dot off"></span>
+        <div style="flex:1">
+          <div id="trk-state-label" style="font-weight:600">Off</div>
+          <div id="trk-state-meta" class="trk-meta">Dispatch can't see your location.</div>
+        </div>
+        <button type="button" id="trk-toggle" class="btn success" style="min-width:96px">Turn ON</button>
+      </div>
+      <div class="trk-meta" style="margin-top:10px">
+        Sends your GPS to dispatch every minute while this page is open. Allow location when your browser asks. For best results, add this site to your home screen.
+      </div>
+    </div>
+
+    <a class="card emph" href="/my-pay/${token}" style="margin-top:14px">
       <div class="muted" style="color:#bae6fd">This week's take-home</div>
       <div class="big" style="color:#fff">${fmtMoney(net)}</div>
       ${breakdown}
@@ -340,10 +359,99 @@ export async function renderHome(token: string): Promise<string> {
       <a class="qa-tile" href="/driver/${token}/sop">
         <div class="qa-ico">📖</div><div class="qa-lbl">LAMP SOP</div>
       </a>
-      <a class="qa-tile" href="/driver/${token}/profile#tracking">
+      <a class="qa-tile" href="/driver/${token}#tracking">
         <div class="qa-ico">📍</div><div class="qa-lbl">Location</div>
       </a>
     </div>
+
+    <!-- Tracking-toggle JS, identical pattern to the Profile page. Posts to
+         /driver/:token/duty on every flip so the server isOnDuty flag stays
+         in sync with the browser-side GPS state. -->
+    <script>
+    (function(){
+      var TOKEN = ${JSON.stringify(token)};
+      var DRIVER_ID = ${JSON.stringify(driver.id)};
+      var btn = document.getElementById('trk-toggle');
+      var dot = document.getElementById('trk-state-dot');
+      var lbl = document.getElementById('trk-state-label');
+      var meta = document.getElementById('trk-state-meta');
+
+      function paint(){
+        var on = localStorage.getItem('trk_on') === '1';
+        var lastMs = parseInt(localStorage.getItem('trk_last_ms') || '0', 10);
+        var ageS = lastMs ? Math.round((Date.now() - lastMs)/1000) : null;
+        if (!on) {
+          dot.className = 'dot off';
+          lbl.textContent = 'Off';
+          meta.textContent = "Dispatch can't see your location.";
+          btn.textContent = 'Turn ON'; btn.className = 'btn success';
+        } else if (ageS !== null && ageS < 90) {
+          dot.className = 'dot on';
+          lbl.textContent = 'Tracking';
+          meta.textContent = 'Last ping ' + ageS + 's ago';
+          btn.textContent = 'Pause'; btn.className = 'btn secondary';
+        } else {
+          dot.className = 'dot stale';
+          lbl.textContent = 'Tracking (waiting for signal)';
+          meta.textContent = ageS !== null ? 'Last ping ' + ageS + 's ago' : 'No ping yet — keep this page open';
+          btn.textContent = 'Pause'; btn.className = 'btn secondary';
+        }
+      }
+
+      function syncDuty(onDuty){
+        fetch('/driver/' + TOKEN + '/duty', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ onDuty: onDuty }),
+        }).catch(function(){});
+      }
+
+      btn.addEventListener('click', function(){
+        var on = localStorage.getItem('trk_on') === '1';
+        if (on) {
+          localStorage.setItem('trk_on', '0');
+          if (window.__traqiqTracking) window.__traqiqTracking.stop();
+          syncDuty(false);
+          paint();
+          if (window.__traqiqTracking) window.__traqiqTracking.refreshDot();
+          return;
+        }
+        if (!navigator.geolocation) {
+          alert('Your browser does not support GPS. Use a modern mobile browser (Safari, Chrome).');
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(function(pos){
+          localStorage.setItem('trk_on', '1');
+          var c = pos.coords;
+          fetch('/api/driver-location/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              driverId: DRIVER_ID, trackingToken: TOKEN,
+              lat: c.latitude, lon: c.longitude,
+              accuracy: c.accuracy, altitude: c.altitude,
+              speed: c.speed, heading: c.heading,
+              timestamp: new Date().toISOString(),
+            }),
+          }).then(function(r){
+            if (r.ok) localStorage.setItem('trk_last_ms', String(Date.now()));
+            syncDuty(true);
+            if (window.__traqiqTracking) { window.__traqiqTracking.start(); window.__traqiqTracking.refreshDot(); }
+            paint();
+          }).catch(function(){
+            syncDuty(true);
+            if (window.__traqiqTracking) { window.__traqiqTracking.start(); window.__traqiqTracking.refreshDot(); }
+            paint();
+          });
+        }, function(err){
+          alert('Location permission denied. Enable it in your browser settings to share your location with dispatch.');
+        }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+      });
+
+      paint();
+      setInterval(paint, 5000);
+    })();
+    </script>
   `;
   return layout({ title: 'My Dashboard', token, active: 'home', body, driverId: driver.id });
 }
