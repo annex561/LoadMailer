@@ -280,6 +280,8 @@ export function ReviewQueueRow({ row, drivers, onSave, onApprove, onReject }: Pr
             data-testid={`btn-approve-${row.id}`}
             className="w-full sm:w-auto sm:order-3"
             size="lg"
+            disabled={!driverId}
+            title={!driverId ? "Assign a driver first" : undefined}
           >
             Approve &amp; Dispatch
           </Button>
