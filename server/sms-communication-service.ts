@@ -843,33 +843,21 @@ export class SMSCommunicationService {
         .where(eq(loads.id, pending.id));
 
       if (accepted) {
-        // Auto-enable GPS tracking. The geofence cron filters by isOnDuty,
-        // so the driver needs this flag flipped to receive pickup/delivery
-        // proximity prompts. We don't ask them to reply ON separately —
-        // accepting a load IS implicit "on duty."
+        // Side effect: auto-enable GPS tracking. The geofence cron filters by
+        // isOnDuty, so the driver needs this flag flipped to receive
+        // pickup/delivery proximity prompts. Accepting a load is implicit
+        // "on duty" — no separate ON reply needed.
         await db
           .update(driversTable)
           .set({ isOnDuty: true, lastHosCheckAt: new Date() })
           .where(eq(driversTable.id, drv.id));
 
-        // Reply scoped to NEXT step only — pickup. No mention of delivery
-        // (that comes after PICKED UP fires). Driver gets the tracker URL
-        // and clear AT PICKUP instructions, nothing else.
-        const baseUrl = process.env.PUBLIC_BASE_URL || process.env.CUSTOM_DOMAIN || "https://traqiq.app";
-        const trackerLink = drv.trackingToken ? `${baseUrl}/driver/${drv.trackingToken}` : null;
-        const DIVIDER = "==================";
-        const lines = [
-          `Load #${pending.loadNumber} CONFIRMED`,
-          DIVIDER,
-          `AT PICKUP`,
-          `Send a clear photo of the signed BOL,`,
-          `or reply PICKED UP when loaded.`,
-          DIVIDER,
-          trackerLink
-            ? `GPS tracking is now ON.\nKeep your phone tracker open:\n${trackerLink}`
-            : `GPS tracking is now ON. Drive safe.`,
-        ];
-        await sendReply(lines.join("\n"));
+        // Reply text comes from the single source of truth in
+        // ratecon-dispatch-service.sendDriverNextStepSms — same builder used
+        // by the web-confirmation flow (driver-confirmation-routes.ts) so
+        // both entry points produce identical message text.
+        const { sendDriverNextStepSms } = await import("./ratecon-dispatch-service");
+        await sendDriverNextStepSms(pending.id, "accepted");
       } else {
         await sendReply(`Load #${pending.loadNumber} declined. Dispatcher notified.`);
         const { notifyAdminReviewNeeded } = await import("./ratecon-admin-alerts");
@@ -900,69 +888,12 @@ export class SMSCommunicationService {
         .set({ status: "in_transit", bookedAt: new Date(), updatedAt: new Date() })
         .where(eq(loads.id, active.id));
 
-      const DIVIDER = "==================";
-      const baseUrl =
-        process.env.PUBLIC_BASE_URL || process.env.CUSTOM_DOMAIN || "https://traqiq.app";
-      const uploadUrl = `${baseUrl}/u/${active.id}`;
-
-      const fmtDay = (d: any) => {
-        if (!d) return "TBD";
-        const date = d instanceof Date ? d : new Date(d);
-        if (isNaN(date.getTime())) return "TBD";
-        const dow = date.toLocaleDateString("en-US", { weekday: "short" });
-        return `${dow} ${date.getMonth() + 1}/${date.getDate()}`;
-      };
-      const fmtTime = (t: string | null | undefined) => {
-        if (!t) return "";
-        const m = t.match(/^(\d{1,2}):(\d{2})/);
-        if (!m) return t;
-        let h = parseInt(m[1], 10);
-        const min = m[2];
-        const period = h >= 12 ? "PM" : "AM";
-        if (h === 0) h = 12;
-        else if (h > 12) h -= 12;
-        return `${h}:${min} ${period}`;
-      };
-
-      // Message 1 — PICKED UP confirmation + drive safe + tracking note.
-      // Stays scoped to the transition; dropoff details come in message 2
-      // so the dropoff info is the driver's MOST RECENT SMS when they're
-      // approaching the receiver and need the address handy.
-      await sendReply(
-        [
-          `Load #${active.loadNumber} PICKED UP`,
-          DIVIDER,
-          `Drive safe.`,
-          `GPS tracking continues — no action needed.`,
-        ].join("\n"),
-      );
-
-      // Message 2 — DELIVERY details + BOL upload link.
-      // LAMP workflow uses an UPLOAD page (/u/:loadId) rather than texting a
-      // photo, but MMS is still accepted as a fallback so drivers who prefer
-      // to just text the photo aren't blocked.
-      const dropAddr =
-        active.deliveryAddress && active.deliveryAddress.trim()
-          ? active.deliveryAddress
-          : `${active.destCity ?? ""}, ${active.destState ?? ""}`
-              .replace(/^,\s*/, "")
-              .trim();
-
-      await sendReply(
-        [
-          `DELIVER TO:`,
-          dropAddr,
-          fmtDay(active.deliveryDate) +
-            (active.deliveryTime ? `  ${fmtTime(active.deliveryTime)}` : ""),
-          DIVIDER,
-          `AT DELIVERY`,
-          `Upload the signed BOL:`,
-          uploadUrl,
-          ``,
-          `Or text the BOL photo to this number.`,
-          `Reply DELIVERED when offloaded.`,
-        ].join("\n"),
-      );
+      // Reply text comes from the single source of truth — same builder used
+      // by the web-confirmation flow. sendDriverNextStepSms sends both
+      // messages (transition confirmation + DELIVER TO/upload URL) so the
+      // dropoff info is the driver's most-recent SMS when they arrive.
+      const { sendDriverNextStepSms } = await import("./ratecon-dispatch-service");
+      await sendDriverNextStepSms(active.id, "picked-up");
 
       return true;
     }
@@ -989,39 +920,14 @@ export class SMSCommunicationService {
         .set({ status: "delivered", deliveredAt: new Date(), updatedAt: new Date() })
         .where(eq(loads.id, active.id));
 
-      // Compute and send final pay summary
-      try {
-        const { calculatePay } = await import("./pay-calculator");
-        const { driverProfileToPayInput, computeLoadPayInput } = await import(
-          "./ratecon-dispatch-service"
-        );
-        const pay = calculatePay(
-          computeLoadPayInput({
-            rate: { value: active.rate ?? 0 },
-            miles: { value: active.miles ?? 0 },
-          }),
-          driverProfileToPayInput(drv),
-        );
-        const lines = [
-          `Load ${active.loadNumber} marked DELIVERED. Thank you.`,
-          ``,
-          `Pay summary for this load:`,
-          ...pay.lineItems.map((li) => `  ${li.label}: $${li.amount.toFixed(2)}`),
-          ...pay.deductions.map((d) => `  ${d.label}: $${d.amount.toFixed(2)}`),
-          `  -----`,
-          `  Net this load: $${pay.netPay.toFixed(2)}`,
-        ];
-        if (pay.recurringDeductions.length > 0) {
-          lines.push(``, `Weekly deductions (on next statement):`);
-          for (const r of pay.recurringDeductions) {
-            lines.push(`  ${r.label}: $${r.amount.toFixed(2)}`);
-          }
-        }
-        await sendReply(lines.join("\n"));
-      } catch (err: any) {
-        console.error("[sms-pay-summary] failed:", err.message);
-        await sendReply(`Load ${active.loadNumber} marked DELIVERED. (Could not compute pay summary — dispatcher will follow up.)`);
-      }
+      // Reply text (including pay summary) comes from the single source of
+      // truth — same builder used by the web-confirmation flow.
+      // sendDriverNextStepSms("delivered") computes pay via calculatePay()
+      // internally and stitches the lineItems / deductions / recurring lines
+      // into the message.
+      const { sendDriverNextStepSms } = await import("./ratecon-dispatch-service");
+      await sendDriverNextStepSms(active.id, "delivered");
+
       return true;
     }
 
