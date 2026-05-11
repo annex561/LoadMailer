@@ -68,13 +68,22 @@ export async function uploadLoadPhoto(
   const publicId = `${p.stage}_${Date.now()}`;
 
   try {
-    const dataUri = `data:${p.mimeType};base64,${p.buffer.toString('base64')}`;
-    const result = await cloudinary.uploader.upload(dataUri, {
-      folder,
-      public_id: publicId,
-      resource_type: 'image',
-      overwrite: false,
-      tags: ['traqiq', load.loadNumber, p.stage],
+    // Stream the buffer directly to Cloudinary instead of base64-encoding the
+    // whole file into a data URI first. Base64 inflated payloads ~33% and
+    // forced an extra full-file allocation on the server — meaningful on
+    // mobile uploads of 4-12 MB photos.
+    const result = await new Promise<any>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder,
+          public_id: publicId,
+          resource_type: 'image',
+          overwrite: false,
+          tags: ['traqiq', load.loadNumber, p.stage],
+        },
+        (err, res) => (err ? reject(err) : resolve(res)),
+      );
+      stream.end(p.buffer);
     });
 
     const driverId = p.driverId || load.driverId || null;
@@ -288,59 +297,133 @@ STAGES.forEach((s) => {
   input.addEventListener('change', () => handleUpload(s.stage, input.files[0]));
 });
 
-async function handleUpload(stage, file) {
-  if (!file) return;
+// Downscale the image client-side before upload. iPhone photos are routinely
+// 4-12 MB; on LTE that takes 30-60s and the user thinks the app is dead.
+// Resizing to max 2000px on the long edge + JPEG quality 0.85 typically cuts
+// to 300-700 KB with no visible quality loss for BOL/POD purposes.
+function compressImage(file) {
+  return new Promise((resolve) => {
+    if (!/^image\//.test(file.type)) return resolve(file);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 2000;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        const scale = MAX / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+          if (!blob || blob.size >= file.size) return resolve(file);
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+        },
+        'image/jpeg',
+        0.85,
+      );
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+function fmtKB(n) { return n < 1024 * 1024 ? Math.round(n / 1024) + ' KB' : (n / 1024 / 1024).toFixed(1) + ' MB'; }
+
+async function handleUpload(stage, rawFile) {
+  if (!rawFile) return;
   const slot = document.getElementById('slot-' + stage);
   const status = slot.querySelector('.status');
   const bar = slot.querySelector('.progress');
   const barFill = bar.querySelector('div');
   const preview = slot.querySelector('img.preview');
+  const label = slot.querySelector('label.btn');
 
+  // Lock the slot so users don't tap again mid-upload
+  label.style.pointerEvents = 'none';
+  label.style.opacity = '0.6';
+  slot.classList.remove('done');
   bar.style.display = 'block';
-  barFill.style.width = '10%';
+  barFill.style.width = '2%';
   status.className = 'status';
-  status.textContent = 'Uploading…';
+  status.textContent = 'Preparing photo…';
 
+  // Show preview immediately so the user knows the tap registered
   const reader = new FileReader();
-  reader.onload = () => {
-    preview.src = reader.result;
-    preview.style.display = 'block';
-  };
-  reader.readAsDataURL(file);
+  reader.onload = () => { preview.src = reader.result; preview.style.display = 'block'; };
+  reader.readAsDataURL(rawFile);
+
+  let file = rawFile;
+  try {
+    file = await compressImage(rawFile);
+  } catch (_) { /* fall through with original */ }
+
+  status.textContent = 'Uploading ' + fmtKB(file.size) + '…';
+
+  // GPS in parallel — don't block upload waiting for it
+  const coordsPromise = new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => resolve(null),
+      { timeout: 3000, maximumAge: 60000 }
+    );
+  });
+  const coords = await coordsPromise;
 
   const fd = new FormData();
   fd.append('photo', file);
   fd.append('stage', stage);
+  if (coords) { fd.append('lat', String(coords.lat)); fd.append('lng', String(coords.lng)); }
 
+  // XHR for REAL upload progress. fetch() doesn't expose upload progress.
   try {
-    // Attempt to attach GPS for proof-of-location
-    const coords = await new Promise((resolve) => {
-      if (!navigator.geolocation) return resolve(null);
-      navigator.geolocation.getCurrentPosition(
-        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        () => resolve(null),
-        { timeout: 4000, maximumAge: 60000 }
-      );
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/loads/' + LOAD_ID + '/photos');
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.min(95, Math.round((e.loaded / e.total) * 95));
+          barFill.style.width = pct + '%';
+          status.textContent = 'Uploading ' + pct + '%';
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          barFill.style.width = '100%';
+          resolve(null);
+        } else {
+          let msg = 'HTTP ' + xhr.status;
+          try { msg = JSON.parse(xhr.responseText).error || msg; } catch (_) {}
+          reject(new Error(msg));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.ontimeout = () => reject(new Error('Timed out'));
+      xhr.timeout = 120000;
+      xhr.send(fd);
     });
-    if (coords) {
-      fd.append('lat', String(coords.lat));
-      fd.append('lng', String(coords.lng));
-    }
 
-    barFill.style.width = '40%';
-    const res = await fetch('/api/loads/' + LOAD_ID + '/photos', { method: 'POST', body: fd });
-    barFill.style.width = '100%';
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || ('HTTP ' + res.status));
-    }
     slot.classList.add('done');
     status.className = 'status ok';
-    status.textContent = 'Uploaded ✓';
+    status.textContent = '✅ Uploaded — saved to dispatch.';
+    label.textContent = '📷 Replace Photo';
+    label.style.background = '#14532d';
+    label.style.pointerEvents = '';
+    label.style.opacity = '';
+    if (navigator.vibrate) navigator.vibrate(80);
   } catch (err) {
     status.className = 'status error';
-    status.textContent = 'Upload failed: ' + err.message + ' — tap to retry';
+    status.textContent = '❌ Upload failed: ' + err.message + ' — tap the button to retry';
     bar.style.display = 'none';
+    label.style.pointerEvents = '';
+    label.style.opacity = '';
   }
 }
 </script>
