@@ -899,21 +899,71 @@ export class SMSCommunicationService {
         .update(loads)
         .set({ status: "in_transit", bookedAt: new Date(), updatedAt: new Date() })
         .where(eq(loads.id, active.id));
+
+      const DIVIDER = "==================";
+      const baseUrl =
+        process.env.PUBLIC_BASE_URL || process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+      const uploadUrl = `${baseUrl}/u/${active.id}`;
+
+      const fmtDay = (d: any) => {
+        if (!d) return "TBD";
+        const date = d instanceof Date ? d : new Date(d);
+        if (isNaN(date.getTime())) return "TBD";
+        const dow = date.toLocaleDateString("en-US", { weekday: "short" });
+        return `${dow} ${date.getMonth() + 1}/${date.getDate()}`;
+      };
+      const fmtTime = (t: string | null | undefined) => {
+        if (!t) return "";
+        const m = t.match(/^(\d{1,2}):(\d{2})/);
+        if (!m) return t;
+        let h = parseInt(m[1], 10);
+        const min = m[2];
+        const period = h >= 12 ? "PM" : "AM";
+        if (h === 0) h = 12;
+        else if (h > 12) h -= 12;
+        return `${h}:${min} ${period}`;
+      };
+
+      // Message 1 — PICKED UP confirmation + drive safe + tracking note.
+      // Stays scoped to the transition; dropoff details come in message 2
+      // so the dropoff info is the driver's MOST RECENT SMS when they're
+      // approaching the receiver and need the address handy.
       await sendReply(
-        (() => {
-          const DIVIDER = "==================";
-          return [
-            `Load #${active.loadNumber} PICKED UP`,
-            DIVIDER,
-            `Drive safe.`,
-            `GPS tracking continues — no action needed.`,
-            DIVIDER,
-            `AT DELIVERY`,
-            `Send a clear photo of the signed BOL,`,
-            `or reply DELIVERED when offloaded.`,
-          ].join("\n");
-        })(),
+        [
+          `Load #${active.loadNumber} PICKED UP`,
+          DIVIDER,
+          `Drive safe.`,
+          `GPS tracking continues — no action needed.`,
+        ].join("\n"),
       );
+
+      // Message 2 — DELIVERY details + BOL upload link.
+      // LAMP workflow uses an UPLOAD page (/u/:loadId) rather than texting a
+      // photo, but MMS is still accepted as a fallback so drivers who prefer
+      // to just text the photo aren't blocked.
+      const dropAddr =
+        active.deliveryAddress && active.deliveryAddress.trim()
+          ? active.deliveryAddress
+          : `${active.destCity ?? ""}, ${active.destState ?? ""}`
+              .replace(/^,\s*/, "")
+              .trim();
+
+      await sendReply(
+        [
+          `DELIVER TO:`,
+          dropAddr,
+          fmtDay(active.deliveryDate) +
+            (active.deliveryTime ? `  ${fmtTime(active.deliveryTime)}` : ""),
+          DIVIDER,
+          `AT DELIVERY`,
+          `Upload the signed BOL:`,
+          uploadUrl,
+          ``,
+          `Or text the BOL photo to this number.`,
+          `Reply DELIVERED when offloaded.`,
+        ].join("\n"),
+      );
+
       return true;
     }
 
