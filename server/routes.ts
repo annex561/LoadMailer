@@ -4271,6 +4271,33 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // POST /driver/:token/duty
+  // Driver flips their own duty status. Auth = trackingToken in URL path
+  // (same model as the rest of the /driver/:token endpoints). Body:
+  // { onDuty: boolean }. Single field flipped server-side; the geofence
+  // cron + dispatch SMS pipeline read drivers.isOnDuty to decide whether
+  // to engage tracking + proximity notifications for that driver.
+  app.post('/driver/:token/duty', async (req, res) => {
+    try {
+      const { driverFromToken } = await import('./driver-portal');
+      const driver = await driverFromToken(req.params.token);
+      if (!driver) return res.status(404).json({ ok: false, error: 'Invalid driver token' });
+      const onDuty = !!(req.body?.onDuty);
+      const { db } = await import('./db');
+      const { drivers } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      await db
+        .update(drivers)
+        .set({ isOnDuty: onDuty, lastHosCheckAt: new Date() })
+        .where(eq(drivers.id, driver.id));
+      console.log(`[driver-duty] ${driver.name} (${driver.id}) → ${onDuty ? 'ON' : 'OFF'} duty`);
+      res.json({ ok: true, isOnDuty: onDuty });
+    } catch (err: any) {
+      console.error('[driver-duty]', err);
+      res.status(500).json({ ok: false, error: err?.message ?? 'duty toggle failed' });
+    }
+  });
+
   // =================== DRIVER SELF-ONBOARDING ===================
   // Public link a dispatcher shares with a new driver. Form submit creates
   // the driver row, mints a trackingToken, and drops them into their portal.

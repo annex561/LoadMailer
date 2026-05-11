@@ -12,7 +12,14 @@ import { haversineDistance } from './auto-load-matcher';
 import { geocode } from './geocoder';
 import { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES } from './load-photos-service';
 
-const MILES_THRESHOLD = 2;
+// Within MILES_THRESHOLD of the pickup or delivery → fire upload-link SMS.
+// 5mi gives drivers enough lead time to receive the SMS before they pull
+// into the gate. Past 2mi was too tight — by the time the SMS lands they're
+// already at the dock. Configurable via env if a smaller/larger radius is
+// preferred for specific tests.
+const MILES_THRESHOLD = Number(process.env.GEOFENCE_MILES) > 0
+  ? Number(process.env.GEOFENCE_MILES)
+  : 5;
 const MAX_LOCATION_AGE_MIN = 30; // ignore stale fixes
 
 export interface GeofenceTickResult {
@@ -87,11 +94,20 @@ class GeofenceCron {
         const pickup = await geocode(pickupKey);
         const delivery = await geocode(deliveryKey);
 
-        // Pickup check
+        const baseUrl =
+          process.env.PUBLIC_URL || process.env.APP_URL || 'https://traqiq.app';
+        const uploadLink = `${baseUrl}/u/${load.id}`;
+
+        // Pickup check — driver is approaching the shipper. Custom message
+        // tells them WHERE they are (the shipper) and what to do.
         if (!pickupDone && pickup) {
           const mi = haversineDistance(loc.latitude, loc.longitude, pickup[0], pickup[1]);
           if (mi <= MILES_THRESHOLD) {
-            const r = await sendUploadLink(load.id, PICKUP_STAGES);
+            const pickupMsg =
+              `You're near the shipper for Load #${load.loadNumber}.\n` +
+              `Upload the signed BOL when loaded:\n${uploadLink}\n\n` +
+              `Or reply PICKED UP when loaded.`;
+            const r = await sendUploadLink(load.id, PICKUP_STAGES, pickupMsg);
             if (r.ok) {
               await this.markPhase(load.id, 'pickupPhotoRequestedAt');
               result.firedPickup++;
@@ -102,11 +118,16 @@ class GeofenceCron {
           }
         }
 
-        // Delivery check
+        // Delivery check — driver is approaching the receiver. Same shape
+        // but pointed at the delivery dock.
         if (!deliveryDone && delivery) {
           const mi = haversineDistance(loc.latitude, loc.longitude, delivery[0], delivery[1]);
           if (mi <= MILES_THRESHOLD) {
-            const r = await sendUploadLink(load.id, DELIVERY_STAGES);
+            const deliveryMsg =
+              `You're near the receiver for Load #${load.loadNumber}.\n` +
+              `Upload the signed BOL when offloaded:\n${uploadLink}\n\n` +
+              `Or reply DELIVERED when offloaded.`;
+            const r = await sendUploadLink(load.id, DELIVERY_STAGES, deliveryMsg);
             if (r.ok) {
               await this.markPhase(load.id, 'deliveryPhotoRequestedAt');
               result.firedDelivery++;
