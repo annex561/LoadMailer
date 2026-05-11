@@ -272,7 +272,11 @@ export function buildDriverStageMessages(
     process.env.CUSTOM_DOMAIN ||
     "https://traqiq.app";
   const uploadUrl = `${base}/u/${inputs.loadId}`;
-  const trackerLink = inputs.trackingToken ? `${base}/driver/${inputs.trackingToken}` : null;
+  // Anchor to #tracking so the page scrolls to the toggle widget — driver
+  // can tap "Turn ON" with no scrolling needed.
+  const trackerLink = inputs.trackingToken
+    ? `${base}/driver/${inputs.trackingToken}#tracking`
+    : null;
 
   if (step === "accepted") {
     return [

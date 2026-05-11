@@ -30,11 +30,36 @@ import { drivers } from '@shared/schema';
 import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { smsService } from './sms-service';
 
-const HOS_PROMPT =
-  "TRAQ IQ — reply ON if you are on duty today, OFF if you are off duty. " +
-  "On-duty drivers will receive load updates and pickup/delivery photo prompts.";
+// Default schedule moved from 6 AM → 7 AM per user request. Server runs UTC
+// on Railway, so 7 AM UTC fires around 2-3 AM CT — set HOS_CHECK_CRON to
+// match local time if you want a true 7 AM local-time fire (e.g.
+// HOS_CHECK_CRON="0 12 * * *" for 7 AM CT, which is 12:00 UTC).
+const DEFAULT_HOS_SCHEDULE = '0 7 * * *';
 
 const DEFAULT_MAX_SENDS_PER_TICK = 60;
+
+// Renders the morning HOS prompt for a specific driver. Now points at the
+// driver's dashboard with #tracking anchor — they tap one link and land on
+// the toggle widget instead of having to reply ON/OFF via text. Reply path
+// still works as a fallback for drivers who prefer it (handled in
+// sms-communication-service ON/OFF keyword router).
+function buildHosPrompt(trackingToken: string | null | undefined): string {
+  const baseUrl =
+    process.env.PUBLIC_BASE_URL || process.env.CUSTOM_DOMAIN || 'https://traqiq.app';
+  const tapLink = trackingToken ? `${baseUrl}/driver/${trackingToken}#tracking` : null;
+  if (tapLink) {
+    return (
+      `LAMP Dispatch — Good morning!\n` +
+      `Tap to start tracking for today and stay eligible for load offers:\n${tapLink}\n\n` +
+      `Or reply OFF if you're off duty.`
+    );
+  }
+  // Driver has no tracking token yet — fall back to the original reply pattern.
+  return (
+    `LAMP Dispatch — Good morning! Reply ON if you're on duty today, OFF if you're off. ` +
+    `On-duty drivers receive load offers and pickup/delivery prompts.`
+  );
+}
 
 export interface HosTickResult {
   drivers: number;
@@ -64,7 +89,7 @@ class HosCheckCron {
       return;
     }
 
-    const schedule = process.env.HOS_CHECK_CRON || '0 6 * * *';
+    const schedule = process.env.HOS_CHECK_CRON || DEFAULT_HOS_SCHEDULE;
     this.job = cron.schedule(schedule, async () => {
       try {
         await this.tick();
@@ -159,7 +184,7 @@ class HosCheckCron {
       try {
         const r = await smsService.sendSMS({
           to: phone,
-          body: HOS_PROMPT,
+          body: buildHosPrompt(drv.trackingToken),
           skipFooter: true,
         });
         if (r.success) {
