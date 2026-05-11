@@ -208,65 +208,216 @@ export function computeLoadPayInput(parsed: any): PayLoadInput {
  * Used after Accept (web or SMS) → tells driver next step + link to dashboard.
  * Carrier-friendly: minimal text + single short URL only.
  */
+/**
+ * Pure builder for per-stage driver reply messages. Single source of truth
+ * for the text of every "after the driver accepted / picked-up / delivered"
+ * SMS — whether triggered by the web confirmation link OR by the inbound SMS
+ * keyword handler.
+ *
+ * Returns an array of message strings (1 or 2). PICKED UP returns 2 messages
+ * (transition confirmation + dropoff details w/ upload URL) so the dropoff
+ * address is the driver's most-recent SMS when they arrive at the receiver.
+ *
+ * No DB access. No SMS sending. No side effects. Pure function → trivial to
+ * unit-test with vitest snapshots, and the same output can be rendered in the
+ * admin preview/test pages without touching Twilio.
+ *
+ * Section divider style: 18-char "===...==" — matches the dispatch SMS body.
+ */
+const DRIVER_SMS_DIVIDER = "==================";
+
+export interface DriverStageInputs {
+  loadId: string;
+  loadNumber: string;
+  deliveryAddress?: string | null;
+  deliveryDate?: Date | string | null;
+  deliveryTime?: string | null;
+  destCity?: string | null;
+  destState?: string | null;
+  trackingToken?: string | null;
+  baseUrl?: string;
+  /** Pre-computed pay summary lines for the "delivered" message. Caller is
+   *  responsible for running calculatePay() and formatting; we just stitch
+   *  them into the reply. */
+  payLines?: string[];
+}
+
+function fmtDayShort(d: Date | string | null | undefined): string {
+  if (!d) return "TBD";
+  const date = d instanceof Date ? d : new Date(d);
+  if (isNaN(date.getTime())) return "TBD";
+  const dow = date.toLocaleDateString("en-US", { weekday: "short" });
+  return `${dow} ${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function fmtTime12h(t: string | null | undefined): string {
+  if (!t) return "";
+  const m = t.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return t;
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  const period = h >= 12 ? "PM" : "AM";
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${min} ${period}`;
+}
+
+export function buildDriverStageMessages(
+  inputs: DriverStageInputs,
+  step: "accepted" | "picked-up" | "delivered",
+): string[] {
+  const base =
+    inputs.baseUrl ||
+    process.env.PUBLIC_BASE_URL ||
+    process.env.CUSTOM_DOMAIN ||
+    "https://traqiq.app";
+  const uploadUrl = `${base}/u/${inputs.loadId}`;
+  const trackerLink = inputs.trackingToken ? `${base}/driver/${inputs.trackingToken}` : null;
+
+  if (step === "accepted") {
+    return [
+      [
+        `Load #${inputs.loadNumber} CONFIRMED`,
+        DRIVER_SMS_DIVIDER,
+        `AT PICKUP`,
+        `Send a clear photo of the signed BOL,`,
+        `or reply PICKED UP when loaded.`,
+        DRIVER_SMS_DIVIDER,
+        trackerLink
+          ? `GPS tracking is now ON.\nKeep your phone tracker open:\n${trackerLink}`
+          : `GPS tracking is now ON. Drive safe.`,
+      ].join("\n"),
+    ];
+  }
+
+  if (step === "picked-up") {
+    const dropAddr =
+      inputs.deliveryAddress && inputs.deliveryAddress.trim()
+        ? inputs.deliveryAddress
+        : `${inputs.destCity ?? ""}, ${inputs.destState ?? ""}`
+            .replace(/^,\s*/, "")
+            .trim();
+    const deliveryWhen =
+      fmtDayShort(inputs.deliveryDate) +
+      (inputs.deliveryTime ? `  ${fmtTime12h(inputs.deliveryTime)}` : "");
+    return [
+      // Msg 1 — transition confirmation
+      [
+        `Load #${inputs.loadNumber} PICKED UP`,
+        DRIVER_SMS_DIVIDER,
+        `Drive safe.`,
+        `GPS tracking continues — no action needed.`,
+      ].join("\n"),
+      // Msg 2 — dropoff details + upload URL (driver's most-recent SMS)
+      [
+        `DELIVER TO:`,
+        dropAddr,
+        deliveryWhen,
+        DRIVER_SMS_DIVIDER,
+        `AT DELIVERY`,
+        `Upload the signed BOL:`,
+        uploadUrl,
+        ``,
+        `Or text the BOL photo to this number.`,
+        `Reply DELIVERED when offloaded.`,
+      ].join("\n"),
+    ];
+  }
+
+  // step === "delivered"
+  const lines: string[] = [
+    `Load #${inputs.loadNumber} DELIVERED. Thanks.`,
+  ];
+  if (inputs.payLines && inputs.payLines.length > 0) {
+    lines.push("", ...inputs.payLines);
+  } else {
+    lines.push("", `Pay statement on your weekly settlement.`);
+  }
+  return [lines.join("\n")];
+}
+
+/**
+ * Send the appropriate stage reply SMS(s) for a load that has just
+ * transitioned to `step`. Wraps buildDriverStageMessages with the actual
+ * DB lookup + Twilio dispatch. Used by:
+ *   - driver-confirmation-routes.ts (when driver clicks the web link)
+ *   - sms-communication-service.ts handleDispatchKeyword (when driver
+ *     replies via SMS)
+ *
+ * Caller is responsible for any state changes (load.status update, driver
+ * tracking flag, factoring queue entry, etc.) BEFORE invoking this. This
+ * function only owns the OUTGOING text — not the side effects.
+ */
 export async function sendDriverNextStepSms(
   loadId: string,
   step: "accepted" | "picked-up" | "delivered",
-): Promise<{ ok: boolean; error?: string; messageSid?: string }> {
+): Promise<{ ok: boolean; error?: string; messageSids: string[] }> {
   const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
-  if (!load || !load.driverId) return { ok: false, error: "Load or driver missing" };
+  if (!load || !load.driverId) return { ok: false, error: "Load or driver missing", messageSids: [] };
   const [driver] = await db.select().from(drivers).where(eq(drivers.id, load.driverId));
-  if (!driver) return { ok: false, error: "Driver not found" };
+  if (!driver) return { ok: false, error: "Driver not found", messageSids: [] };
   const phone = (driver as any).phoneNumber ?? (driver as any).phone;
-  if (!phone) return { ok: false, error: "Driver has no phone" };
+  if (!phone) return { ok: false, error: "Driver has no phone", messageSids: [] };
 
-  // Post-10DLC: URLs in dispatch SMS are the default. To temporarily fall
-  // back to the keyword-only template (e.g. if Twilio delivery degrades),
-  // set SMS_MINIMAL=true. Old SMS_FULL_BODY=true is still honored for
-  // backwards compatibility but is no longer required.
-  const useFullBody = process.env.SMS_MINIMAL !== "true";
-  const baseUrl = process.env.CUSTOM_DOMAIN || "https://traqiq.app";
-  const url = `${baseUrl}/l/${load.confirmationToken}`;
-
-  let body = "";
-  if (step === "accepted") {
-    body = useFullBody
-      ? `Load ${load.loadNumber} confirmed.\n\n` +
-        `AT PICKUP\n` +
-        `Send BOL photo, or reply PICKED UP.\n\n` +
-        `Upload BOL: ${url}`
-      : `Load ${load.loadNumber} confirmed.\n\n` +
-        `AT PICKUP\n` +
-        `Send BOL photo, or reply PICKED UP.`;
-  } else if (step === "picked-up") {
-    body = useFullBody
-      ? `Load ${load.loadNumber} PICKED UP. Drive safe.\n\n` +
-        `AT DELIVERY\n` +
-        `Send POD photo, or reply DELIVERED.\n\n` +
-        `Upload POD: ${url}`
-      : `Load ${load.loadNumber} PICKED UP. Drive safe.\n\n` +
-        `AT DELIVERY\n` +
-        `Send POD photo, or reply DELIVERED.`;
-  } else if (step === "delivered") {
-    body = useFullBody
-      ? `Load ${load.loadNumber} DELIVERED. Thanks.\n\n` +
-        `Pay statement: ${url}`
-      : `Load ${load.loadNumber} DELIVERED. Thanks.\n\n` +
-        `Pay statement on your weekly settlement.`;
+  // For DELIVERED, compute pay so the message includes the breakdown.
+  // For other stages, payLines stays unset.
+  let payLines: string[] | undefined;
+  if (step === "delivered") {
+    try {
+      const { calculatePay } = await import("./pay-calculator");
+      const pay = calculatePay(
+        computeLoadPayInput({ rate: { value: load.rate ?? 0 }, miles: { value: load.miles ?? 0 } }),
+        driverProfileToPayInput(driver),
+      );
+      payLines = [
+        `Pay summary for this load:`,
+        ...pay.lineItems.map((li) => `  ${li.label}: $${li.amount.toFixed(2)}`),
+        ...pay.deductions.map((d) => `  ${d.label}: $${d.amount.toFixed(2)}`),
+        `  -----`,
+        `  Net this load: $${pay.netPay.toFixed(2)}`,
+      ];
+      if (pay.recurringDeductions.length > 0) {
+        payLines.push("", `Weekly deductions (on next statement):`);
+        for (const r of pay.recurringDeductions) {
+          payLines.push(`  ${r.label}: $${r.amount.toFixed(2)}`);
+        }
+      }
+    } catch (err: any) {
+      console.error("[next-step-sms] pay calc failed:", err.message);
+      // Builder will fall back to its generic "Pay statement on weekly settlement" line.
+    }
   }
 
-  // Compliance: brand prefix + STOP suffix (idempotent).
+  const messages = buildDriverStageMessages(
+    {
+      loadId: load.id,
+      loadNumber: load.loadNumber,
+      deliveryAddress: load.deliveryAddress,
+      deliveryDate: load.deliveryDate,
+      deliveryTime: load.deliveryTime,
+      destCity: load.destCity,
+      destState: load.destState,
+      trackingToken: (driver as any).trackingToken,
+      baseUrl: process.env.PUBLIC_BASE_URL || process.env.CUSTOM_DOMAIN || undefined,
+      payLines,
+    },
+    step,
+  );
+
   const { smsService, withBrandAndOptOut } = await import("./sms-service");
-  body = withBrandAndOptOut(body);
-  // When full-body mode is on, allow the driver-dashboard footer to auto-append
-  // (it adds "👤 My Dashboard: https://traqiq.app/driver/<token>" — the driver
-  // profile link the user asked to restore).
-  const result = await smsService.sendSMS({ to: phone, body, skipFooter: !useFullBody });
-  if (!result.success) {
-    console.error(`[next-step-sms] ❌ ${result.error}`);
-    return { ok: false, error: result.error };
+  const sids: string[] = [];
+  for (const raw of messages) {
+    // Brand prefix + STOP suffix (idempotent) — required for 10DLC compliance.
+    const body = withBrandAndOptOut(raw);
+    const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
+    if (!result.success) {
+      console.error(`[next-step-sms] ❌ ${step} failed: ${result.error}`);
+      return { ok: false, error: result.error, messageSids: sids };
+    }
+    if (result.messageSid) sids.push(result.messageSid);
   }
-  console.log(`[next-step-sms] ✅ ${step} sent to ${phone} (SID: ${result.messageSid})`);
-  return { ok: true, messageSid: result.messageSid };
+  console.log(`[next-step-sms] ✅ ${step} sent to ${phone} (${sids.length} message${sids.length === 1 ? "" : "s"}, sids: ${sids.join(",")})`);
+  return { ok: true, messageSids: sids };
 }
 
 /**
