@@ -220,13 +220,14 @@ export function renderUploadPage(
   <h1>📸 Upload Photos</h1>
   <div class="meta">Load <b>${loadNumber}</b> · LAMP Logistics</div>
 
-  <div class="slot" id="checkin-slot">
-    <h2>📍 Check-In</h2>
+  <div id="slots"></div>
+
+  <details id="checkin-slot" style="margin-top:18px;background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px 14px">
+    <summary style="cursor:pointer;color:#94a3b8;font-size:14px;font-weight:600;list-style:none">📍 Manual check-in (optional)</summary>
+    <div style="font-size:12px;color:#64748b;margin:8px 0 10px">Only use if dispatch asks for one. Normal flow is just upload the BOL above.</div>
     <div id="checkin-buttons" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
     <div class="status" id="checkin-status"></div>
-  </div>
-
-  <div id="slots"></div>
+  </details>
   <footer>Photos auto-save. You can close this page when done.</footer>
 
 <script>
