@@ -832,6 +832,7 @@ export class SMSCommunicationService {
         .limit(1);
       if (!pending) return false;
       const accepted = body === "YES" || body === "Y";
+
       await db
         .update(loads)
         .set({
@@ -840,12 +841,37 @@ export class SMSCommunicationService {
           status: accepted ? "assigned" : "cancelled",
         })
         .where(eq(loads.id, pending.id));
-      await sendReply(
-        accepted
-          ? `Load ${pending.loadNumber} confirmed. Reply PICKED UP when loaded, DELIVERED when offloaded. Send a photo of BOL/POD anytime to attach to this load.`
-          : `Load ${pending.loadNumber} declined. Dispatcher notified.`,
-      );
-      if (!accepted) {
+
+      if (accepted) {
+        // Auto-enable GPS tracking. The geofence cron filters by isOnDuty,
+        // so the driver needs this flag flipped to receive pickup/delivery
+        // proximity prompts. We don't ask them to reply ON separately —
+        // accepting a load IS implicit "on duty."
+        await db
+          .update(driversTable)
+          .set({ isOnDuty: true, lastHosCheckAt: new Date() })
+          .where(eq(driversTable.id, drv.id));
+
+        // Reply scoped to NEXT step only — pickup. No mention of delivery
+        // (that comes after PICKED UP fires). Driver gets the tracker URL
+        // and clear AT PICKUP instructions, nothing else.
+        const baseUrl = process.env.PUBLIC_BASE_URL || process.env.CUSTOM_DOMAIN || "https://traqiq.app";
+        const trackerLink = drv.trackingToken ? `${baseUrl}/driver/${drv.trackingToken}` : null;
+        const DIVIDER = "==================";
+        const lines = [
+          `Load #${pending.loadNumber} CONFIRMED`,
+          DIVIDER,
+          `AT PICKUP`,
+          `Send a clear photo of the signed BOL,`,
+          `or reply PICKED UP when loaded.`,
+          DIVIDER,
+          trackerLink
+            ? `GPS tracking is now ON.\nKeep your phone tracker open:\n${trackerLink}`
+            : `GPS tracking is now ON. Drive safe.`,
+        ];
+        await sendReply(lines.join("\n"));
+      } else {
+        await sendReply(`Load #${pending.loadNumber} declined. Dispatcher notified.`);
         const { notifyAdminReviewNeeded } = await import("./ratecon-admin-alerts");
         notifyAdminReviewNeeded({
           companyId: pending.companyId ?? null,
@@ -874,7 +900,19 @@ export class SMSCommunicationService {
         .set({ status: "in_transit", bookedAt: new Date(), updatedAt: new Date() })
         .where(eq(loads.id, active.id));
       await sendReply(
-        `Load ${active.loadNumber} marked PICKED UP. Drive safe. Reply DELIVERED when offloaded, or send a photo of the BOL anytime.`,
+        (() => {
+          const DIVIDER = "==================";
+          return [
+            `Load #${active.loadNumber} PICKED UP`,
+            DIVIDER,
+            `Drive safe.`,
+            `GPS tracking continues — no action needed.`,
+            DIVIDER,
+            `AT DELIVERY`,
+            `Send a clear photo of the signed BOL,`,
+            `or reply DELIVERED when offloaded.`,
+          ].join("\n");
+        })(),
       );
       return true;
     }
