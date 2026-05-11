@@ -399,15 +399,22 @@ export function registerRateconIntakeRoutes(app: Express) {
   app.post("/api/ratecon-intake/:id/approve-and-dispatch", async (req, res) => {
     try {
       const userId = (req as any).user?.id ?? null;
-      // If client sent a driverId in the body, persist it first so that
+      // If client sent a real driverId in the body, persist it first so that
       // the user doesn't need to click Save before clicking Approve & Dispatch.
+      //
+      // BUG FIX: previously `if (driverIdFromBody !== undefined)` triggered
+      // the update even when the client sent `null` (its default when no
+      // dropdown selection), which DESTROYED any previously-matched driver
+      // and forced the subsequent dispatch step to fail with "No driver
+      // assigned." Treat `null` / `""` as "no change requested" — only
+      // persist on a real string.
       const driverIdFromBody: string | null | undefined = req.body?.driverId;
-      if (driverIdFromBody !== undefined) {
+      if (typeof driverIdFromBody === "string" && driverIdFromBody.length > 0) {
         await db
           .update(rateconIntake)
           .set({
-            matchedDriverId: driverIdFromBody || null,
-            matchedDriverConfidence: driverIdFromBody ? 1.0 : 0,
+            matchedDriverId: driverIdFromBody,
+            matchedDriverConfidence: 1.0,
             updatedAt: new Date(),
           })
           .where(eq(rateconIntake.id, req.params.id));
