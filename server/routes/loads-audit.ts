@@ -175,6 +175,90 @@ export function registerLoadsAuditRoutes(app: Express) {
     }
   });
 
+  // POST /api/admin/loads/delete-permanent
+  // Body: { loadIds: string[], confirm: 'PERMANENT_DELETE_I_UNDERSTAND' }
+  //
+  // Hard-deletes the given loads. THIS IS IRREVERSIBLE — the rows are gone
+  // from the DB. Belt-and-suspenders to make accidental fire impossible:
+  //
+  //   1. Loads MUST already be status='archived'. Active loads cannot be
+  //      hard-deleted from this endpoint. Forces the two-step
+  //      archive-then-delete flow.
+  //   2. The confirm string must match exactly. The UI prompts the user to
+  //      type DELETE which it then translates into the long-form string,
+  //      so a casual click can't trigger this.
+  //   3. If a load has FK dependents (invoices, factoring submissions,
+  //      driver messages, etc.) the DELETE will throw a Postgres FK error
+  //      and we surface the error per-load. Caller decides what to do.
+  app.post("/api/admin/loads/delete-permanent", requireRole("admin"), async (req, res) => {
+    try {
+      const { loadIds, confirm } = (req.body ?? {}) as {
+        loadIds?: string[];
+        confirm?: string;
+      };
+      if (!Array.isArray(loadIds) || loadIds.length === 0) {
+        return res.status(400).json({ ok: false, error: "loadIds (array) is required" });
+      }
+      if (confirm !== "PERMANENT_DELETE_I_UNDERSTAND") {
+        return res.status(400).json({
+          ok: false,
+          error: "confirm must equal 'PERMANENT_DELETE_I_UNDERSTAND'",
+        });
+      }
+      if (loadIds.length > 200) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "Max 200 loads per request — split into batches" });
+      }
+
+      // Pull the rows so we can verify they're all archived BEFORE deleting.
+      const rows = await db.select().from(loads).where(inArray(loads.id, loadIds));
+      const notArchived = rows
+        .filter((r: any) => r.status !== "archived")
+        .map((r: any) => ({ id: r.id, loadNumber: r.loadNumber, status: r.status }));
+      if (notArchived.length > 0) {
+        return res.status(400).json({
+          ok: false,
+          error:
+            "Hard delete refused — some selected loads are not archived. Archive them first via the Loads Cleanup page, then come back to delete.",
+          notArchived,
+        });
+      }
+
+      let deleted = 0;
+      const blocked: Array<{ id: string; loadNumber: string; reason: string }> = [];
+      for (const r of rows as any[]) {
+        try {
+          await db.delete(loads).where(eq(loads.id, r.id));
+          deleted++;
+        } catch (err: any) {
+          // Most common: FK constraint violation from dependent rows
+          // (invoices, factoring_submissions, etc.). Surface the constraint
+          // name so the user knows what's referencing this load.
+          const msg = err?.cause?.message || err?.message || String(err);
+          blocked.push({ id: r.id, loadNumber: r.loadNumber, reason: msg.slice(0, 200) });
+          console.error(`[loads-delete-permanent] ${r.id} blocked: ${msg}`);
+        }
+      }
+
+      console.log(
+        `[loads-delete-permanent] deleted ${deleted}/${rows.length} (blocked ${blocked.length})`,
+      );
+      res.json({
+        ok: true,
+        deleted,
+        requested: loadIds.length,
+        blocked,
+        note: deleted > 0
+          ? `${deleted} load(s) permanently deleted. ${blocked.length} blocked by FK constraints.`
+          : "No loads deleted. See 'blocked' for reasons.",
+      });
+    } catch (err: any) {
+      console.error("[loads-delete-permanent] failed:", err);
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // POST /api/admin/loads/archive-selected
   // Body: { loadIds: string[] }
   // Archives the explicitly-selected load IDs (status = 'archived',

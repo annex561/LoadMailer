@@ -36,7 +36,12 @@ export default function LoadsCleanupPage() {
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [search, setSearch] = useState("");
   const [archiving, setArchiving] = useState(false);
-  const [lastResult, setLastResult] = useState<{ archived: number; requested: number } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [lastResult, setLastResult] = useState<
+    | { kind: "archived"; archived: number; requested: number }
+    | { kind: "deleted"; deleted: number; requested: number; blocked: any[] }
+    | null
+  >(null);
 
   const { data, isLoading, refetch } = useQuery<ListResponse>({
     queryKey: ["/api/admin/loads/all"],
@@ -108,7 +113,7 @@ export default function LoadsCleanupPage() {
       });
       const data = await res.json();
       if (data.ok) {
-        setLastResult({ archived: data.archived, requested: data.requested });
+        setLastResult({ kind: "archived", archived: data.archived, requested: data.requested });
         setSelected(new Set());
         refetch();
       } else {
@@ -118,6 +123,64 @@ export default function LoadsCleanupPage() {
       alert(`Archive failed:\n${e?.message || e}`);
     } finally {
       setArchiving(false);
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (selected.size === 0) return;
+    const typed = prompt(
+      `PERMANENTLY DELETE ${selected.size} load(s)?\n\n` +
+        `This is IRREVERSIBLE. The rows will be removed from the database.\n` +
+        `Only archived loads can be hard-deleted.\n\n` +
+        `Type DELETE to confirm:`,
+    );
+    if (typed !== "DELETE") {
+      if (typed !== null) alert("Cancelled — confirmation text did not match.");
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/admin/loads/delete-permanent", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          loadIds: Array.from(selected),
+          confirm: "PERMANENT_DELETE_I_UNDERSTAND",
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setLastResult({
+          kind: "deleted",
+          deleted: data.deleted,
+          requested: data.requested,
+          blocked: data.blocked || [],
+        });
+        setSelected(new Set());
+        refetch();
+        if (data.blocked && data.blocked.length > 0) {
+          alert(
+            `Deleted ${data.deleted} of ${data.requested}.\n\n` +
+              `${data.blocked.length} blocked by foreign-key constraints (other tables still reference these loads):\n\n` +
+              data.blocked
+                .slice(0, 5)
+                .map((b: any) => `${b.loadNumber}: ${b.reason.slice(0, 100)}`)
+                .join("\n"),
+          );
+        }
+      } else {
+        alert(
+          `Permanent delete failed:\n${data.error || "unknown"}\n\n` +
+            (data.notArchived
+              ? `${data.notArchived.length} of your selection are not archived. Archive them first.`
+              : ""),
+        );
+      }
+    } catch (e: any) {
+      alert(`Permanent delete failed:\n${e?.message || e}`);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -148,7 +211,16 @@ export default function LoadsCleanupPage() {
 
       {lastResult && (
         <div className="p-3 rounded-md border border-emerald-500/40 bg-emerald-500/5 text-sm">
-          ✅ Archived {lastResult.archived} of {lastResult.requested} load(s).
+          {lastResult.kind === "archived" ? (
+            <>✅ Archived {lastResult.archived} of {lastResult.requested} load(s).</>
+          ) : (
+            <>
+              ✅ Permanently deleted {lastResult.deleted} of {lastResult.requested} load(s).
+              {lastResult.blocked.length > 0 && (
+                <> {lastResult.blocked.length} blocked by foreign-key constraints (see browser alert).</>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -185,19 +257,35 @@ export default function LoadsCleanupPage() {
       </div>
 
       {/* Selected count + action */}
-      <div className="flex items-center justify-between gap-3 p-3 bg-card border rounded-md sticky top-0 z-10">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-card border rounded-md sticky top-0 z-10">
         <div className="text-sm">
           <strong>{selected.size}</strong> of {filtered.length} selected
         </div>
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled={selected.size === 0 || archiving}
-          onClick={handleArchive}
-        >
-          <Trash2 className="w-4 h-4 mr-1" />
-          {archiving ? "Archiving…" : `Archive Selected (${selected.size})`}
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          {filterMode === "archived" ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={selected.size === 0 || deleting}
+              onClick={handlePermanentDelete}
+              className="bg-red-700 hover:bg-red-800"
+              title="Hard-delete archived loads. IRREVERSIBLE. Only works on rows that are already status=archived."
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              {deleting ? "Deleting…" : `⚠ Permanently Delete (${selected.size})`}
+            </Button>
+          ) : (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={selected.size === 0 || archiving}
+              onClick={handleArchive}
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              {archiving ? "Archiving…" : `Archive Selected (${selected.size})`}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
