@@ -614,11 +614,23 @@ const dhPills = document.getElementById('dh-pills');
     }
   }
 
+  // Notify server when the local toggle flips so the geofence cron and the
+  // dispatch SMS pipeline (both gated by drivers.isOnDuty) stay in sync
+  // with the driver's actual duty state.
+  function syncDuty(onDuty){
+    fetch('/driver/' + TOKEN + '/duty', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ onDuty: onDuty }),
+    }).catch(function(){ /* best-effort; server has rate limiting */ });
+  }
+
   btn.addEventListener('click', function(){
     var on = localStorage.getItem('trk_on') === '1';
     if (on) {
       localStorage.setItem('trk_on', '0');
       if (window.__traqiqTracking) window.__traqiqTracking.stop();
+      syncDuty(false);
       paint();
       if (window.__traqiqTracking) window.__traqiqTracking.refreshDot();
       return;
@@ -645,10 +657,12 @@ const dhPills = document.getElementById('dh-pills');
       }).then(function(r){
         if (r.ok) localStorage.setItem('trk_last_ms', String(Date.now()));
         else r.text().then(function(t){ console.warn('Initial GPS push rejected', r.status, t); });
+        syncDuty(true);
         if (window.__traqiqTracking) { window.__traqiqTracking.start(); window.__traqiqTracking.refreshDot(); }
         paint();
       }).catch(function(){
         // Even if the first POST fails, still start the watcher — it'll retry on next coord change
+        syncDuty(true);
         if (window.__traqiqTracking) { window.__traqiqTracking.start(); window.__traqiqTracking.refreshDot(); }
         paint();
       });

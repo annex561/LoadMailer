@@ -194,7 +194,11 @@ export const drivers = pgTable("drivers", {
   trackingToken: varchar("tracking_token", { length: 64 }).unique(),
 
   // Daily HOS (Hours of Service) check — driver flips on/off duty via daily SMS
-  isOnDuty: boolean("is_on_duty").notNull().default(false),
+  // Default ON: tracking should be active by default for every new driver
+  // so the geofence cron treats them as working from day one. Drivers can
+  // flip off-duty manually from their dashboard, or auto-resets to off via
+  // the ON/OFF SMS keyword handler.
+  isOnDuty: boolean("is_on_duty").notNull().default(true),
   lastHosCheckAt: timestamp("last_hos_check_at"),
 
   // Settlement / pay config
