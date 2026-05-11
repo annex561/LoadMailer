@@ -140,6 +140,91 @@ function summarize(rows: any[]) {
 }
 
 export function registerLoadsAuditRoutes(app: Express) {
+  // GET /api/admin/loads/all
+  // Returns every load row (lightweight projection) so the cleanup UI can
+  // render a checkbox table. Each row carries the bad-flag verdict so the UI
+  // can color/sort accordingly. No pagination — we cap at 1000 for sanity.
+  app.get("/api/admin/loads/all", requireRole("admin"), async (_req, res) => {
+    try {
+      const rows = await db.select().from(loads).limit(1000);
+      const list = rows.map((r: any) => {
+        const verdict = isBadLoad(r);
+        return {
+          id: r.id,
+          loadNumber: r.loadNumber,
+          brokerName: r.brokerName,
+          origin: r.originCity && r.originState
+            ? `${r.originCity}, ${r.originState}`
+            : (r.pickupAddress || ""),
+          destination: r.destCity && r.destState
+            ? `${r.destCity}, ${r.destState}`
+            : (r.deliveryAddress || ""),
+          rate: r.rate,
+          status: r.status,
+          driverId: r.driverId,
+          createdAt: r.createdAt,
+          deliveredAt: r.deliveredAt,
+          bad: verdict.bad,
+          reasons: verdict.reasons,
+        };
+      });
+      res.json({ ok: true, total: list.length, loads: list });
+    } catch (err: any) {
+      console.error("[loads-all] failed:", err);
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // POST /api/admin/loads/archive-selected
+  // Body: { loadIds: string[] }
+  // Archives the explicitly-selected load IDs (status = 'archived',
+  // override_reason captures the prior status for recovery).
+  // No confirm-token gate here — the user explicitly checked each box in
+  // the UI, so accidental fire is already impossible. Returns counts.
+  app.post("/api/admin/loads/archive-selected", requireRole("admin"), async (req, res) => {
+    try {
+      const { loadIds } = (req.body ?? {}) as { loadIds?: string[] };
+      if (!Array.isArray(loadIds) || loadIds.length === 0) {
+        return res.status(400).json({ ok: false, error: "loadIds (array) is required" });
+      }
+      if (loadIds.length > 500) {
+        return res.status(400).json({ ok: false, error: "Max 500 loads per request — split into batches" });
+      }
+
+      const rows = await db.select().from(loads).where(inArray(loads.id, loadIds));
+      let archived = 0;
+      const errors: string[] = [];
+      for (const r of rows as any[]) {
+        const reason = `manually-archived (was ${r.status || "?"}${r.overrideReason ? "; " + r.overrideReason : ""})`;
+        try {
+          await db
+            .update(loads)
+            .set({
+              status: "archived",
+              overrideReason: reason,
+              updatedAt: new Date(),
+            })
+            .where(eq(loads.id, r.id));
+          archived++;
+        } catch (err: any) {
+          errors.push(`${r.id}: ${err.message}`);
+        }
+      }
+
+      console.log(`[loads-archive-selected] archived ${archived}/${loadIds.length}`);
+      res.json({
+        ok: true,
+        archived,
+        requested: loadIds.length,
+        notFound: loadIds.length - rows.length,
+        errors,
+      });
+    } catch (err: any) {
+      console.error("[loads-archive-selected] failed:", err);
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // GET — preview, no mutations
   app.get("/api/admin/loads/audit", requireRole("admin"), async (req, res) => {
     try {

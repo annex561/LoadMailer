@@ -78,6 +78,7 @@ const menuGroups: MenuGroup[] = [
     adminOnly: true,
     items: [
       { name: "Ops Monitor", href: "/ops", adminOnly: true },
+      { name: "Loads Cleanup", href: "/loads-cleanup", adminOnly: true },
     ]
   },
   {
