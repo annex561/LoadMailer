@@ -1023,7 +1023,11 @@ export async function registerRoutes(app: Express): Promise<void> {
   app.post('/api/loads/:id/photos', async (req, res) => {
     try {
       const multer = (await import('multer')).default;
-      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+      // 30 MB cap. iPhone HEIC photos are typically 2-4 MB but native JPEG
+      // from the gallery can hit 12-15 MB; we leave headroom for ProRAW etc.
+      // Cloudinary resizes server-side via transformation params, so we
+      // accept large originals and let the cloud do the heavy lifting.
+      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
       upload.single('photo')(req, res, async (err: any) => {
         if (err) return res.status(400).json({ ok: false, error: err.message });
         const file = (req as any).file;
