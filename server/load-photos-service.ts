@@ -310,36 +310,56 @@ STAGES.forEach((s) => {
 // must use regex, double-escape every backslash.
 function compressImage(file) {
   return new Promise((resolve) => {
-    if (!file.type || file.type.indexOf('image/') !== 0) return resolve(file);
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const MAX = 2000;
-      let { width, height } = img;
-      if (width > MAX || height > MAX) {
-        const scale = MAX / Math.max(width, height);
-        width = Math.round(width * scale);
-        height = Math.round(height * scale);
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => {
-          URL.revokeObjectURL(url);
-          if (!blob || blob.size >= file.size) return resolve(file);
-          const dot = file.name.lastIndexOf('.');
-          const base = dot > 0 ? file.name.slice(0, dot) : file.name;
-          resolve(new File([blob], base + '.jpg', { type: 'image/jpeg' }));
-        },
-        'image/jpeg',
-        0.85,
-      );
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
-    img.src = url;
+    // Defensive: ALWAYS resolve within 10s no matter what. iOS Safari has
+    // known issues with canvas.toBlob() on HEIC/large photos — sometimes
+    // returns null silently, sometimes the callback never fires. Without
+    // a hard timeout the whole upload hangs at 'Preparing photo…' forever.
+    let done = false;
+    const finish = (out) => { if (done) return; done = true; resolve(out); };
+    setTimeout(() => finish(file), 10000);
+
+    if (!file.type || file.type.indexOf('image/') !== 0) return finish(file);
+    // Skip compression for already-small files — saves time + avoids the
+    // iOS canvas memory cap on the larger photos that broke things.
+    if (file.size < 1.5 * 1024 * 1024) return finish(file);
+
+    try {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      const cleanup = () => { try { URL.revokeObjectURL(url); } catch (_) {} };
+      img.onload = () => {
+        try {
+          const MAX = 2000;
+          let { width, height } = img;
+          if (!width || !height) { cleanup(); return finish(file); }
+          if (width > MAX || height > MAX) {
+            const scale = MAX / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              cleanup();
+              if (!blob || blob.size >= file.size) return finish(file);
+              const dot = file.name.lastIndexOf('.');
+              const base = dot > 0 ? file.name.slice(0, dot) : file.name;
+              finish(new File([blob], base + '.jpg', { type: 'image/jpeg' }));
+            },
+            'image/jpeg',
+            0.85,
+          );
+        } catch (_) { cleanup(); finish(file); }
+      };
+      img.onerror = () => { cleanup(); finish(file); };
+      img.src = url;
+    } catch (_) {
+      finish(file);
+    }
   });
 }
 
