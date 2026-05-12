@@ -302,9 +302,15 @@ STAGES.forEach((s) => {
 // 4-12 MB; on LTE that takes 30-60s and the user thinks the app is dead.
 // Resizing to max 2000px on the long edge + JPEG quality 0.85 typically cuts
 // to 300-700 KB with no visible quality loss for BOL/POD purposes.
+// NOTE: this entire script lives inside a server-side template literal
+// (renderUploadPage). Any backslash in a regex is consumed by the template
+// literal parser before reaching the browser ('\\.' -> '.', '\\/' -> '/'),
+// which silently turned earlier regex literals into broken JS and made the
+// upload page render blank. Use string ops, NOT regex, in this file. If you
+// must use regex, double-escape every backslash.
 function compressImage(file) {
   return new Promise((resolve) => {
-    if (!/^image\//.test(file.type)) return resolve(file);
+    if (!file.type || file.type.indexOf('image/') !== 0) return resolve(file);
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
@@ -324,7 +330,9 @@ function compressImage(file) {
         (blob) => {
           URL.revokeObjectURL(url);
           if (!blob || blob.size >= file.size) return resolve(file);
-          resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+          const dot = file.name.lastIndexOf('.');
+          const base = dot > 0 ? file.name.slice(0, dot) : file.name;
+          resolve(new File([blob], base + '.jpg', { type: 'image/jpeg' }));
         },
         'image/jpeg',
         0.85,
