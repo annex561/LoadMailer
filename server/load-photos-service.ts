@@ -80,6 +80,15 @@ export async function uploadLoadPhoto(
           resource_type: 'image',
           overwrite: false,
           tags: ['traqiq', load.loadNumber, p.stage],
+          // Server-side resize + quality optimization. Replaces the
+          // unreliable client-side canvas compression that hung on iOS
+          // Safari for HEIC photos. Cloudinary auto-converts HEIC to
+          // JPEG, caps long edge at 2000px, and picks 'good' quality.
+          // The original is never stored — only the optimized variant.
+          transformation: [
+            { width: 2000, height: 2000, crop: 'limit' },
+            { quality: 'auto:good', fetch_format: 'auto' },
+          ],
         },
         (err, res) => (err ? reject(err) : resolve(res)),
       );
@@ -298,70 +307,18 @@ STAGES.forEach((s) => {
   input.addEventListener('change', () => handleUpload(s.stage, input.files[0]));
 });
 
-// Downscale the image client-side before upload. iPhone photos are routinely
-// 4-12 MB; on LTE that takes 30-60s and the user thinks the app is dead.
-// Resizing to max 2000px on the long edge + JPEG quality 0.85 typically cuts
-// to 300-700 KB with no visible quality loss for BOL/POD purposes.
 // NOTE: this entire script lives inside a server-side template literal
 // (renderUploadPage). Any backslash in a regex is consumed by the template
 // literal parser before reaching the browser ('\\.' -> '.', '\\/' -> '/'),
 // which silently turned earlier regex literals into broken JS and made the
 // upload page render blank. Use string ops, NOT regex, in this file. If you
 // must use regex, double-escape every backslash.
-function compressImage(file) {
-  return new Promise((resolve) => {
-    // Defensive: ALWAYS resolve within 10s no matter what. iOS Safari has
-    // known issues with canvas.toBlob() on HEIC/large photos — sometimes
-    // returns null silently, sometimes the callback never fires. Without
-    // a hard timeout the whole upload hangs at 'Preparing photo…' forever.
-    let done = false;
-    const finish = (out) => { if (done) return; done = true; resolve(out); };
-    setTimeout(() => finish(file), 10000);
-
-    if (!file.type || file.type.indexOf('image/') !== 0) return finish(file);
-    // Skip compression for already-small files — saves time + avoids the
-    // iOS canvas memory cap on the larger photos that broke things.
-    if (file.size < 1.5 * 1024 * 1024) return finish(file);
-
-    try {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      const cleanup = () => { try { URL.revokeObjectURL(url); } catch (_) {} };
-      img.onload = () => {
-        try {
-          const MAX = 2000;
-          let { width, height } = img;
-          if (!width || !height) { cleanup(); return finish(file); }
-          if (width > MAX || height > MAX) {
-            const scale = MAX / Math.max(width, height);
-            width = Math.round(width * scale);
-            height = Math.round(height * scale);
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob(
-            (blob) => {
-              cleanup();
-              if (!blob || blob.size >= file.size) return finish(file);
-              const dot = file.name.lastIndexOf('.');
-              const base = dot > 0 ? file.name.slice(0, dot) : file.name;
-              finish(new File([blob], base + '.jpg', { type: 'image/jpeg' }));
-            },
-            'image/jpeg',
-            0.85,
-          );
-        } catch (_) { cleanup(); finish(file); }
-      };
-      img.onerror = () => { cleanup(); finish(file); };
-      img.src = url;
-    } catch (_) {
-      finish(file);
-    }
-  });
-}
+//
+// Client-side compression was REMOVED because canvas.toBlob() hung on iOS
+// Safari for HEIC photos — drivers got stuck on 'Preparing photo…' forever
+// even with a timeout fallback. We now upload the original file and let
+// Cloudinary's server-side transformation do the resize + format conversion.
+// One fewer iOS gotcha, more reliable progress.
 
 function fmtKB(n) { return n < 1024 * 1024 ? Math.round(n / 1024) + ' KB' : (n / 1024 / 1024).toFixed(1) + ' MB'; }
 
@@ -381,19 +338,17 @@ async function handleUpload(stage, rawFile) {
   bar.style.display = 'block';
   barFill.style.width = '2%';
   status.className = 'status';
-  status.textContent = 'Preparing photo…';
+  status.textContent = 'Starting upload (' + fmtKB(rawFile.size) + ')…';
 
   // Show preview immediately so the user knows the tap registered
   const reader = new FileReader();
   reader.onload = () => { preview.src = reader.result; preview.style.display = 'block'; };
   reader.readAsDataURL(rawFile);
 
-  let file = rawFile;
-  try {
-    file = await compressImage(rawFile);
-  } catch (_) { /* fall through with original */ }
-
-  status.textContent = 'Uploading ' + fmtKB(file.size) + '…';
+  // Upload the original file directly — Cloudinary resizes + converts
+  // HEIC->JPEG server-side via the transformation params in
+  // uploadLoadPhoto(). No client-side canvas step that can hang on iOS.
+  const file = rawFile;
 
   // GPS in parallel — don't block upload waiting for it
   const coordsPromise = new Promise((resolve) => {
