@@ -20,13 +20,11 @@
  */
 
 import { describe, it, expect } from "vitest";
-
-// The predicate as it lives in server/ratecon-intake-routes.ts. If you change
-// the route, change this in lockstep. Kept inline here so the test fails
-// loudly when somebody copy-pastes the old predicate back.
-function shouldPersistDriverIdFromBody(body: unknown): boolean {
-  return typeof body === "string" && (body as string).length > 0;
-}
+// Import the EXACT predicate the route uses. Previously this test had its
+// own inline copy — if the route diverged, the test would silently pass
+// against the stale copy. Per code review feedback, the predicate is now
+// exported from the route module and imported here.
+import { shouldPersistDriverIdFromBody } from "../ratecon-intake-routes";
 
 describe("approve-and-dispatch — driverId-from-body persistence predicate", () => {
   it("does NOT persist when body driverId is undefined", () => {
