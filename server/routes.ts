@@ -992,27 +992,17 @@ export async function registerRoutes(app: Express): Promise<void> {
 
   // ========== Driver photo uploads (Cloudinary) ==========
 
-  // Serve the upload-page client script from disk. Real .js file (not a
-  // template-literal-wrapped inline block), so regex and backslashes are
-  // never mangled. Long-lived cache header is fine since the file is part
-  // of the deploy and changes only on redeploy.
-  const fsMod = await import('fs');
-  const pathMod = await import('path');
-  const urlMod = await import('url');
-  const here = pathMod.dirname(urlMod.fileURLToPath(import.meta.url));
-  const uploadJsPath = pathMod.join(here, 'upload-page.client.js');
-  let uploadJsCache: string | null = null;
-  try {
-    uploadJsCache = fsMod.readFileSync(uploadJsPath, 'utf8');
-  } catch (e: any) {
-    console.error('[upload-assets] failed to load upload-page.client.js:', e?.message);
-  }
+  // Serve the upload-page client script. Imported from an AUTO-GENERATED
+  // TS module so esbuild bundles the JS source into dist/ — we can't rely
+  // on fs.readFileSync(.js file) because Railway's bundle doesn't ship
+  // standalone .js asset files (same gotcha as the factoring signature
+  // PNG that we base64-inlined in PR #68).
+  const { UPLOAD_PAGE_CLIENT_JS } = await import('./upload-page-client-source');
   app.get('/u-assets/upload.js', (_req, res) => {
-    if (!uploadJsCache) return res.status(500).type('text/plain').send('upload.js missing');
     res
       .type('application/javascript')
       .set('Cache-Control', 'public, max-age=300') // 5 min — short enough to roll out fixes fast
-      .send(uploadJsCache);
+      .send(UPLOAD_PAGE_CLIENT_JS);
   });
 
   // Tokenized upload page — SMS link sends driver here. The param can be
