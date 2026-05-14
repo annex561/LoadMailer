@@ -47,14 +47,19 @@
       ciStatus.className = 'status';
       ciStatus.textContent = 'Sending ' + c.label + '...';
       try {
-        var coords = await new Promise(function (resolve) {
-          if (!navigator.geolocation) return resolve(null);
-          navigator.geolocation.getCurrentPosition(
-            function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude }); },
-            function () { resolve(null); },
-            { timeout: 4000, maximumAge: 60000 }
-          );
-        });
+        // Hard-cap GPS so the check-in proceeds even if the permission
+        // prompt hangs (see comment in handleUpload — same gotcha).
+        var coords = await Promise.race([
+          new Promise(function (resolve) {
+            if (!navigator.geolocation) return resolve(null);
+            navigator.geolocation.getCurrentPosition(
+              function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude }); },
+              function () { resolve(null); },
+              { timeout: 2000, maximumAge: 60000 }
+            );
+          }),
+          new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 2000); }),
+        ]);
         var body = Object.assign({ stage: c.stage }, coords || {});
         var headers = { 'Content-Type': 'application/json' };
         if (TOKEN) headers['X-Upload-Token'] = TOKEN;
@@ -133,15 +138,23 @@
     // canvas step that can hang on iOS.
     var file = rawFile;
 
-    // GPS in parallel — don't block upload waiting for it
-    var coords = await new Promise(function (resolve) {
-      if (!navigator.geolocation) return resolve(null);
-      navigator.geolocation.getCurrentPosition(
-        function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude }); },
-        function () { resolve(null); },
-        { timeout: 3000, maximumAge: 60000 }
-      );
-    });
+    // GPS is best-effort. The `timeout` option on getCurrentPosition
+    // only applies AFTER the iOS permission prompt is dismissed — if the
+    // driver hasn't tapped Allow/Deny yet, the call hangs indefinitely
+    // and the entire upload waits behind it. (This was the "stuck on
+    // Starting upload…" bug.) Hard-cap with Promise.race so the upload
+    // always proceeds within 2s, with or without coordinates.
+    var coords = await Promise.race([
+      new Promise(function (resolve) {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude }); },
+          function () { resolve(null); },
+          { timeout: 2000, maximumAge: 60000 }
+        );
+      }),
+      new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 2000); }),
+    ]);
 
     var fd = new FormData();
     fd.append('photo', file);
