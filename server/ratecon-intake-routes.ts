@@ -5,6 +5,24 @@ import { db } from "./db";
 import { rateconIntake, rateconCorrections } from "@shared/schema";
 import { desc, eq } from "drizzle-orm";
 
+/**
+ * Decides whether the `driverId` value sent in the approve-and-dispatch
+ * body should be persisted onto rateconIntake.matchedDriverId.
+ *
+ * Only a real non-empty string overwrites the persisted matched driver.
+ * `null`, `undefined`, `""`, and non-string values are treated as
+ * "no change requested" — the previously matched driver survives.
+ *
+ * IMPORTANT: this predicate is the regression-pinned guard for
+ * https://github.com/annex561/LoadMailer/pull/86 . The test at
+ * server/__tests__/approve-dispatch-driver-id.test.ts imports it
+ * directly so the test always exercises the SAME predicate the route
+ * uses. Do NOT inline a copy inside the route handler.
+ */
+export function shouldPersistDriverIdFromBody(body: unknown): boolean {
+  return typeof body === "string" && (body as string).length > 0;
+}
+
 // Walks two parsed-RateCon JSON blobs and returns the dot-paths that differ.
 // Used to record exactly which fields the dispatcher had to fix so the parser
 // can learn from the diff.
@@ -408,12 +426,12 @@ export function registerRateconIntakeRoutes(app: Express) {
       // and forced the subsequent dispatch step to fail with "No driver
       // assigned." Treat `null` / `""` as "no change requested" — only
       // persist on a real string.
-      const driverIdFromBody: string | null | undefined = req.body?.driverId;
-      if (typeof driverIdFromBody === "string" && driverIdFromBody.length > 0) {
+      const driverIdFromBody: unknown = req.body?.driverId;
+      if (shouldPersistDriverIdFromBody(driverIdFromBody)) {
         await db
           .update(rateconIntake)
           .set({
-            matchedDriverId: driverIdFromBody,
+            matchedDriverId: driverIdFromBody as string,
             matchedDriverConfidence: 1.0,
             updatedAt: new Date(),
           })

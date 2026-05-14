@@ -64,6 +64,21 @@ export async function uploadLoadPhoto(
   const load = await db.query.loads.findFirst({ where: eq(loads.id, p.loadId) });
   if (!load) return { ok: false, error: 'Load not found' };
 
+  // BUG FIX: previously the upload went to Cloudinary even when no driver
+  // was associated with the load, then silently skipped the DB write —
+  // the photo got orphaned in cloud storage with no dispatch record. The
+  // driver saw a green ✅ but dispatch never saw the photo. Fail fast
+  // here instead so the driver sees a real error and dispatch isn't
+  // missing photos for live loads.
+  const driverId = p.driverId || load.driverId || null;
+  if (!driverId) {
+    console.error(`[load-photos] refusing upload for load ${p.loadId} — no driver assigned`);
+    return {
+      ok: false,
+      error: 'No driver assigned to this load. Contact dispatch before uploading.',
+    };
+  }
+
   const folder = `traqiq/loads/${load.loadNumber}`;
   const publicId = `${p.stage}_${Date.now()}`;
 
@@ -95,33 +110,26 @@ export async function uploadLoadPhoto(
       stream.end(p.buffer);
     });
 
-    const driverId = p.driverId || load.driverId || null;
-
-    let docId: string | null = null;
-    if (driverId) {
-      const [doc] = await db
-        .insert(loadDocuments)
-        .values({
-          loadId: p.loadId,
-          driverId,
-          documentType: p.stage,
-          fileName: p.originalName,
-          fileUrl: result.secure_url,
-          fileSize: result.bytes,
-          mimeType: p.mimeType,
-          notes: p.notes || null,
-          approvalStatus: 'pending',
-        } as any)
-        .returning();
-      docId = doc.id;
-    } else {
-      // Still record the upload even without a driver; use first driver_id NOT NULL hack
-      console.warn(`[load-photos] no driverId for load ${p.loadId}, skipping doc row`);
-    }
+    // driverId was guaranteed non-null by the early-return above.
+    const [doc] = await db
+      .insert(loadDocuments)
+      .values({
+        loadId: p.loadId,
+        driverId,
+        documentType: p.stage,
+        fileName: p.originalName,
+        fileUrl: result.secure_url,
+        fileSize: result.bytes,
+        mimeType: p.mimeType,
+        notes: p.notes || null,
+        approvalStatus: 'pending',
+      } as any)
+      .returning();
+    const docId = doc.id;
 
     // Piggyback: record a driver_locations row if GPS was supplied. Feeds the
     // geofence cron so we know where the driver is between uploads too.
-    if (driverId && typeof p.lat === 'number' && typeof p.lng === 'number') {
+    if (typeof p.lat === 'number' && typeof p.lng === 'number') {
       try {
         await db.insert(driverLocations).values({
           driverId,
@@ -179,8 +187,13 @@ export async function sendUploadLink(
   const baseUrl =
     process.env.PUBLIC_URL || process.env.APP_URL || 'https://traqiq.app';
 
+  // New SMS links use signed tokens (HMAC-SHA256 over loadId+expiry).
+  // Default 14-day TTL covers pickup-to-delivery + slack. The route
+  // accepts both signed-token and legacy-UUID URLs during rollout.
+  const { signUploadToken } = await import('./upload-token');
+  const token = signUploadToken(loadId);
   const stagesParam = stages.join(',');
-  const link = `${baseUrl}/u/${loadId}?stages=${stagesParam}`;
+  const link = `${baseUrl}/u/${token}?stages=${stagesParam}`;
 
   const stageLabels = stages.map((s) => STAGE_LABELS[s]).join(' + ');
   const msg =
@@ -195,10 +208,21 @@ export function renderUploadPage(
   loadId: string,
   stages: PhotoStage[],
   loadNumber: string,
+  uploadToken?: string | null,
 ): string {
-  const stagesJson = JSON.stringify(
-    stages.map((s) => ({ stage: s, label: STAGE_LABELS[s] })),
-  );
+  // Per code review: inline <script> inside a template literal had its
+  // backslash escapes consumed by the template literal parser, which
+  // turned regex literals into broken JS and blanked the page. The page
+  // now embeds a tiny JSON island for configuration and loads the real
+  // client script from a separate /u-assets/upload.js asset.
+  const configJson = JSON.stringify({
+    loadId,
+    stages: stages.map((s) => ({ stage: s, label: STAGE_LABELS[s] })),
+    token: uploadToken || null,
+  })
+    // Escape </script> in user-controlled fields just in case; loadNumber
+    // is server-controlled but defensive doesn't hurt.
+    .replace(/</g, "\\u003c");
 
   return `<!doctype html>
 <html lang="en"><head>
@@ -239,177 +263,7 @@ export function renderUploadPage(
   </details>
   <footer>Photos auto-save. You can close this page when done.</footer>
 
-<script>
-const LOAD_ID = ${JSON.stringify(loadId)};
-const STAGES = ${stagesJson};
-const root = document.getElementById('slots');
-
-// ---------- Check-In buttons ----------
-const CHECKINS = [
-  { stage: 'at_pickup',   label: '🚚 At Pickup' },
-  { stage: 'loaded',      label: '📦 Loaded' },
-  { stage: 'at_delivery', label: '🏁 At Delivery' },
-  { stage: 'unloaded',    label: '✅ Unloaded' },
-];
-const ciRoot = document.getElementById('checkin-buttons');
-const ciStatus = document.getElementById('checkin-status');
-CHECKINS.forEach((c) => {
-  const b = document.createElement('button');
-  b.textContent = c.label;
-  b.style.cssText = 'background:#334155;color:#f1f5f9;border:1px solid #475569;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer';
-  b.onclick = async () => {
-    b.disabled = true;
-    ciStatus.className = 'status';
-    ciStatus.textContent = 'Sending ' + c.label + '...';
-    try {
-      const coords = await new Promise((resolve) => {
-        if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(
-          (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-          () => resolve(null),
-          { timeout: 4000, maximumAge: 60000 }
-        );
-      });
-      const body = { stage: c.stage, ...(coords || {}) };
-      const res = await fetch('/api/loads/' + LOAD_ID + '/checkin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      b.style.background = '#14532d';
-      b.style.borderColor = '#22c55e';
-      b.textContent = '✅ ' + c.label;
-      ciStatus.className = 'status ok';
-      ciStatus.textContent = c.label + ' recorded.';
-    } catch (err) {
-      b.disabled = false;
-      ciStatus.className = 'status error';
-      ciStatus.textContent = 'Failed: ' + err.message;
-    }
-  };
-  ciRoot.appendChild(b);
-});
-
-STAGES.forEach((s) => {
-  const el = document.createElement('div');
-  el.className = 'slot';
-  el.id = 'slot-' + s.stage;
-  el.innerHTML =
-    '<h2>' + s.label + '</h2>' +
-    '<label class="btn" for="file-' + s.stage + '">📷 Take / Choose Photo</label>' +
-    '<input type="file" id="file-' + s.stage + '" accept="image/*">' +
-    '<div class="progress" style="display:none"><div style="width:0%"></div></div>' +
-    '<div class="status"></div>' +
-    '<img class="preview" style="display:none" />';
-  root.appendChild(el);
-  const input = el.querySelector('input');
-  input.addEventListener('change', () => handleUpload(s.stage, input.files[0]));
-});
-
-// NOTE: this entire script lives inside a server-side template literal
-// (renderUploadPage). Any backslash in a regex is consumed by the template
-// literal parser before reaching the browser ('\\.' -> '.', '\\/' -> '/'),
-// which silently turned earlier regex literals into broken JS and made the
-// upload page render blank. Use string ops, NOT regex, in this file. If you
-// must use regex, double-escape every backslash.
-//
-// Client-side compression was REMOVED because canvas.toBlob() hung on iOS
-// Safari for HEIC photos — drivers got stuck on 'Preparing photo…' forever
-// even with a timeout fallback. We now upload the original file and let
-// Cloudinary's server-side transformation do the resize + format conversion.
-// One fewer iOS gotcha, more reliable progress.
-
-function fmtKB(n) { return n < 1024 * 1024 ? Math.round(n / 1024) + ' KB' : (n / 1024 / 1024).toFixed(1) + ' MB'; }
-
-async function handleUpload(stage, rawFile) {
-  if (!rawFile) return;
-  const slot = document.getElementById('slot-' + stage);
-  const status = slot.querySelector('.status');
-  const bar = slot.querySelector('.progress');
-  const barFill = bar.querySelector('div');
-  const preview = slot.querySelector('img.preview');
-  const label = slot.querySelector('label.btn');
-
-  // Lock the slot so users don't tap again mid-upload
-  label.style.pointerEvents = 'none';
-  label.style.opacity = '0.6';
-  slot.classList.remove('done');
-  bar.style.display = 'block';
-  barFill.style.width = '2%';
-  status.className = 'status';
-  status.textContent = 'Starting upload (' + fmtKB(rawFile.size) + ')…';
-
-  // Show preview immediately so the user knows the tap registered
-  const reader = new FileReader();
-  reader.onload = () => { preview.src = reader.result; preview.style.display = 'block'; };
-  reader.readAsDataURL(rawFile);
-
-  // Upload the original file directly — Cloudinary resizes + converts
-  // HEIC->JPEG server-side via the transformation params in
-  // uploadLoadPhoto(). No client-side canvas step that can hang on iOS.
-  const file = rawFile;
-
-  // GPS in parallel — don't block upload waiting for it
-  const coordsPromise = new Promise((resolve) => {
-    if (!navigator.geolocation) return resolve(null);
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => resolve(null),
-      { timeout: 3000, maximumAge: 60000 }
-    );
-  });
-  const coords = await coordsPromise;
-
-  const fd = new FormData();
-  fd.append('photo', file);
-  fd.append('stage', stage);
-  if (coords) { fd.append('lat', String(coords.lat)); fd.append('lng', String(coords.lng)); }
-
-  // XHR for REAL upload progress. fetch() doesn't expose upload progress.
-  try {
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/loads/' + LOAD_ID + '/photos');
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const pct = Math.min(95, Math.round((e.loaded / e.total) * 95));
-          barFill.style.width = pct + '%';
-          status.textContent = 'Uploading ' + pct + '%';
-        }
-      };
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          barFill.style.width = '100%';
-          resolve(null);
-        } else {
-          let msg = 'HTTP ' + xhr.status;
-          try { msg = JSON.parse(xhr.responseText).error || msg; } catch (_) {}
-          reject(new Error(msg));
-        }
-      };
-      xhr.onerror = () => reject(new Error('Network error'));
-      xhr.ontimeout = () => reject(new Error('Timed out'));
-      xhr.timeout = 120000;
-      xhr.send(fd);
-    });
-
-    slot.classList.add('done');
-    status.className = 'status ok';
-    status.textContent = '✅ Uploaded — saved to dispatch.';
-    label.textContent = '📷 Replace Photo';
-    label.style.background = '#14532d';
-    label.style.pointerEvents = '';
-    label.style.opacity = '';
-    if (navigator.vibrate) navigator.vibrate(80);
-  } catch (err) {
-    status.className = 'status error';
-    status.textContent = '❌ Upload failed: ' + err.message + ' — tap the button to retry';
-    bar.style.display = 'none';
-    label.style.pointerEvents = '';
-    label.style.opacity = '';
-  }
-}
-</script>
+<script id="upload-config" type="application/json">${configJson}</script>
+<script src="/u-assets/upload.js" defer></script>
 </body></html>`;
 }

@@ -240,6 +240,11 @@ export interface DriverStageInputs {
    *  responsible for running calculatePay() and formatting; we just stitch
    *  them into the reply. */
   payLines?: string[];
+  /** Optional HMAC-signed upload token. When present the upload-page URL
+   *  embeds it instead of the bare loadId, so anyone scraping the URL
+   *  out of an SMS gateway log can't POST photos against the load. The
+   *  server route accepts both forms during rollout. */
+  uploadToken?: string | null;
 }
 
 function fmtDayShort(d: Date | string | null | undefined): string {
@@ -271,7 +276,9 @@ export function buildDriverStageMessages(
     process.env.PUBLIC_BASE_URL ||
     process.env.CUSTOM_DOMAIN ||
     "https://traqiq.app";
-  const uploadUrl = `${base}/u/${inputs.loadId}`;
+  // Prefer the signed token if the caller minted one. Falls back to the
+  // bare loadId so existing test fixtures and ad-hoc calls keep working.
+  const uploadUrl = `${base}/u/${inputs.uploadToken || inputs.loadId}`;
   // Anchor to #tracking so the page scrolls to the toggle widget — driver
   // can tap "Turn ON" with no scrolling needed.
   const trackerLink = inputs.trackingToken
@@ -384,6 +391,11 @@ export async function sendDriverNextStepSms(
   // time can be misleading by Friday. payLines parameter on the builder is
   // kept for back-compat / future override but no caller populates it now.
 
+  // Mint a signed upload token bound to this load. Embedded in the
+  // upload-page URL so the page POSTs can be verified server-side.
+  const { signUploadToken } = await import("./upload-token");
+  const uploadToken = signUploadToken(load.id);
+
   const messages = buildDriverStageMessages(
     {
       loadId: load.id,
@@ -395,6 +407,7 @@ export async function sendDriverNextStepSms(
       destState: load.destState,
       trackingToken: (driver as any).trackingToken,
       baseUrl: process.env.PUBLIC_BASE_URL || process.env.CUSTOM_DOMAIN || undefined,
+      uploadToken,
     },
     step,
   );

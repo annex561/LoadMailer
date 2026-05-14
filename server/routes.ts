@@ -991,15 +991,71 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // ========== Driver photo uploads (Cloudinary) ==========
-  // Tokenized upload page — SMS link sends driver here
-  app.get('/u/:loadId', async (req, res) => {
+
+  // Serve the upload-page client script from disk. Real .js file (not a
+  // template-literal-wrapped inline block), so regex and backslashes are
+  // never mangled. Long-lived cache header is fine since the file is part
+  // of the deploy and changes only on redeploy.
+  const fsMod = await import('fs');
+  const pathMod = await import('path');
+  const urlMod = await import('url');
+  const here = pathMod.dirname(urlMod.fileURLToPath(import.meta.url));
+  const uploadJsPath = pathMod.join(here, 'upload-page.client.js');
+  let uploadJsCache: string | null = null;
+  try {
+    uploadJsCache = fsMod.readFileSync(uploadJsPath, 'utf8');
+  } catch (e: any) {
+    console.error('[upload-assets] failed to load upload-page.client.js:', e?.message);
+  }
+  app.get('/u-assets/upload.js', (_req, res) => {
+    if (!uploadJsCache) return res.status(500).type('text/plain').send('upload.js missing');
+    res
+      .type('application/javascript')
+      .set('Cache-Control', 'public, max-age=300') // 5 min — short enough to roll out fixes fast
+      .send(uploadJsCache);
+  });
+
+  // Tokenized upload page — SMS link sends driver here. The param can be
+  // either (a) a legacy raw load UUID, or (b) a signed HMAC token. The
+  // signed-token path is what new SMS links use; legacy is kept working
+  // during rollout. Flip UPLOAD_TOKEN_REQUIRED=true once all in-flight
+  // SMS have rolled over, and legacy URLs will be rejected.
+  app.get('/u/:param', async (req, res) => {
     try {
       const { db } = await import('./db');
       const { loads } = await import('@shared/schema');
       const { eq } = await import('drizzle-orm');
       const { renderUploadPage, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
+      const { verifyUploadToken, looksLikeSignedToken, signUploadToken, isTokenRequired } = await import('./upload-token');
 
-      const load = await db.query.loads.findFirst({ where: eq(loads.id, req.params.loadId) });
+      const raw = req.params.param;
+      let loadId: string | null = null;
+      let tokenForClient: string | null = null;
+
+      if (looksLikeSignedToken(raw)) {
+        const v = verifyUploadToken(raw);
+        if (v.kind === 'expired') {
+          return res.status(410).type('html').send('<h1>Link expired</h1><p>Contact dispatch for a new link.</p>');
+        }
+        if (v.kind === 'invalid') {
+          console.warn('[upload-page] invalid token:', v.reason);
+          return res.status(401).type('html').send('<h1>Invalid link</h1>');
+        }
+        loadId = v.loadId;
+        tokenForClient = raw; // pass through; client will echo on every POST
+      } else {
+        // Legacy: bare load UUID in the path. Allowed unless tokens are
+        // required. Mint a fresh short-lived token so the client can use
+        // the same Authorization path even on legacy URLs — makes the
+        // server-side POST handler uniform.
+        if (isTokenRequired()) {
+          return res.status(401).type('html').send('<h1>This link requires a fresh signed URL. Contact dispatch.</h1>');
+        }
+        loadId = raw;
+        tokenForClient = signUploadToken(raw, 24 * 60 * 60 * 1000); // 24h
+      }
+
+      const load = await db.query.loads.findFirst({ where: eq(loads.id, loadId!) });
       if (!load) return res.status(404).type('html').send('<h1>Load not found</h1>');
 
       const qsStages = (req.query.stages as string | undefined) || '';
@@ -1012,26 +1068,67 @@ export async function registerRoutes(app: Express): Promise<void> {
       if (stages.length === 0) {
         stages = [...PICKUP_STAGES, ...DELIVERY_STAGES];
       }
-      res.type('html').send(renderUploadPage(load.id, stages as any, load.loadNumber));
+      res.type('html').send(renderUploadPage(load.id, stages as any, load.loadNumber, tokenForClient));
     } catch (err: any) {
       console.error('Upload page error:', err);
       res.status(500).type('html').send('<h1>Error loading page</h1>');
     }
   });
 
+  // Multer is hoisted to register-routes scope (one instance per server
+  // boot) — was previously re-created on every request. 30 MB cap leaves
+  // headroom for iPhone gallery JPEGs (12-15 MB typical) while keeping
+  // ProRAW (~25-50 MB) out — we'd rather reject quickly than burn
+  // Cloudinary bandwidth on giant raws.
+  const multerMod = (await import('multer')).default;
+  const photoMulter = multerMod({
+    storage: multerMod.memoryStorage(),
+    limits: { fileSize: 30 * 1024 * 1024 },
+  });
+
   // Multipart photo upload
   app.post('/api/loads/:id/photos', async (req, res) => {
     try {
-      const multer = (await import('multer')).default;
-      // 30 MB cap. iPhone HEIC photos are typically 2-4 MB but native JPEG
-      // from the gallery can hit 12-15 MB; we leave headroom for ProRAW etc.
-      // Cloudinary resizes server-side via transformation params, so we
-      // accept large originals and let the cloud do the heavy lifting.
-      const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
-      upload.single('photo')(req, res, async (err: any) => {
-        if (err) return res.status(400).json({ ok: false, error: err.message });
+      photoMulter.single('photo')(req, res, async (err: any) => {
+        if (err) {
+          // Translate multer error codes into driver-friendly messages.
+          // Default err.message ("File too large") gives no actionable hint
+          // about the cap or what the driver should do next.
+          const code = err.code || '';
+          const friendly =
+            code === 'LIMIT_FILE_SIZE'
+              ? 'Photo over 30 MB — please retake at a lower resolution or use Photo Library instead of ProRAW.'
+              : code === 'LIMIT_UNEXPECTED_FILE'
+              ? 'Unexpected upload field. Reload the page and try again.'
+              : err.message || 'Upload failed during transfer.';
+          return res.status(400).json({ ok: false, error: friendly, code });
+        }
+
+        // Token check. The page injects a signed token into every request
+        // via the X-Upload-Token header. If the token is present we verify
+        // it and require the bound loadId to match the route param. If no
+        // token is present we fall through to legacy behavior (allowed
+        // unless UPLOAD_TOKEN_REQUIRED=true), so already-sent SMS keep
+        // working through the rollout.
+        const { verifyUploadToken, isTokenRequired } = await import('./upload-token');
+        const token = req.headers['x-upload-token'];
+        if (typeof token === 'string' && token.length > 0) {
+          const v = verifyUploadToken(token);
+          if (v.kind === 'expired') {
+            return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+          }
+          if (v.kind === 'invalid') {
+            return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+          }
+          if (v.loadId !== req.params.id) {
+            return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+          }
+        } else if (isTokenRequired()) {
+          return res.status(401).json({ ok: false, error: 'Upload token required.' });
+        }
+
         const file = (req as any).file;
-        if (!file) return res.status(400).json({ ok: false, error: 'No file' });
+        if (!file) return res.status(400).json({ ok: false, error: 'No file received — please pick a photo and try again.' });
         const { uploadLoadPhoto } = await import('./load-photos-service');
         const stage = (req.body.stage || '').toString();
         if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {

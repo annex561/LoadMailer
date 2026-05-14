@@ -23,34 +23,61 @@
  */
 
 import { describe, it, expect } from "vitest";
+import fs from "fs";
+import path from "path";
 import { renderUploadPage, PICKUP_STAGES } from "../load-photos-service";
 
-function extractScript(html: string): string {
-  const m = html.match(/<script>([\s\S]*?)<\/script>/);
-  if (!m) throw new Error("No <script> block in renderUploadPage output");
-  return m[1];
-}
+describe("upload page — client script integrity", () => {
+  const clientJsPath = path.join(__dirname, "..", "upload-page.client.js");
+  const clientJs = fs.readFileSync(clientJsPath, "utf8");
 
-describe("renderUploadPage — inline <script> integrity", () => {
+  it("client script parses as valid JavaScript", () => {
+    // The script is loaded byte-for-byte from disk by the server and
+    // served at /u-assets/upload.js. If it has a syntax error, the
+    // upload page renders blank for every driver. new Function() catches
+    // any syntax error in this file before deploy.
+    expect(() => new Function(clientJs)).not.toThrow();
+  });
+
+  it("client script contains the slot-rendering loop (sanity)", () => {
+    expect(clientJs).toContain("STAGES.forEach");
+    expect(clientJs).toContain("handleUpload");
+  });
+
+  it("client script reads config from the JSON island", () => {
+    // The page provides config via a <script type=application/json>
+    // element. If somebody refactors to a different mechanism, this
+    // test will surface the mismatch.
+    expect(clientJs).toContain("upload-config");
+  });
+});
+
+describe("renderUploadPage — html shell", () => {
   const html = renderUploadPage(
     "abc-load-id",
     [...PICKUP_STAGES] as any,
     "LD12345",
+    "token-here",
   );
-  const script = extractScript(html);
 
-  it("parses as valid JavaScript", () => {
-    // new Function(...) runs the JS parser in 'function body' mode without
-    // executing. Catches every kind of syntax error: unterminated regex,
-    // missing brace, busted template literal, lost backslash, etc.
-    expect(() => new Function(script)).not.toThrow();
+  it("embeds the upload-config JSON island", () => {
+    expect(html).toContain('<script id="upload-config"');
+    expect(html).toContain('"loadId":"abc-load-id"');
+    expect(html).toContain('"token":"token-here"');
   });
 
-  it("contains the slot-rendering loop (sanity)", () => {
-    // If somebody refactors the page and accidentally removes the STAGES
-    // loop, drivers will see an empty upload page even with valid JS. Catch
-    // that here too.
-    expect(script).toContain("STAGES.forEach");
-    expect(script).toContain("handleUpload");
+  it("references the external script asset", () => {
+    expect(html).toContain('<script src="/u-assets/upload.js"');
+  });
+
+  it("does NOT contain an inline <script> block with raw JS", () => {
+    // Guards against regression: previously inline <script> blocks
+    // here suffered template-literal escape eating. The page should
+    // contain ONLY the JSON island script and the external asset.
+    const scriptOpens = html.match(/<script(\s[^>]*)?>/gi) || [];
+    // Expect exactly 2: the JSON island (with id=upload-config) and the
+    // external src. Both have explicit attributes — no bare <script>.
+    expect(scriptOpens.length).toBe(2);
+    expect(scriptOpens.every((t) => /id=|src=/.test(t))).toBe(true);
   });
 });
