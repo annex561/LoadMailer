@@ -26,10 +26,19 @@ import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
 import { renderUploadPage, PICKUP_STAGES } from "../load-photos-service";
+import { UPLOAD_PAGE_CLIENT_JS } from "../upload-page-client-source";
 
 describe("upload page — client script integrity", () => {
   const clientJsPath = path.join(__dirname, "..", "upload-page.client.js");
-  const clientJs = fs.readFileSync(clientJsPath, "utf8");
+  const clientJsFromFile = fs.readFileSync(clientJsPath, "utf8");
+  const clientJs = UPLOAD_PAGE_CLIENT_JS;
+
+  it("inlined string is in sync with the .js source", () => {
+    // The inlined TS module is generated from the .js file. If they
+    // drift, regenerate with the embed script. This test fails loudly
+    // so production never serves a stale bundled copy.
+    expect(clientJs).toBe(clientJsFromFile);
+  });
 
   it("client script parses as valid JavaScript", () => {
     // The script is loaded byte-for-byte from disk by the server and
