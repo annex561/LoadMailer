@@ -150,17 +150,100 @@ export const STAGE_REPLY_LABEL: Record<PhotoStage, string> = {
   delivery_signed_bol: 'Signed BOL',
 };
 
+// "WRONG" reply rolls back the most recent fulfilled upload for this
+// driver: marks the load_documents row as rejected and clears the
+// pending_uploads.fulfilled_at so the driver can retry on the correct
+// load. Returns the user-facing TwiML reply.
+export async function handleWrongReply(
+  driverPhone: string,
+): Promise<{ handled: boolean; reply?: string }> {
+  if (!isMMSUploadEnabled()) return { handled: false };
+  const candidates = phoneVariants(driverPhone);
+  // Find the most-recently-fulfilled pending row for this phone.
+  const [recent] = await db
+    .select({
+      id: pendingUploads.id,
+      loadId: pendingUploads.loadId,
+      stage: pendingUploads.stage,
+      fulfilledMessageSid: pendingUploads.fulfilledMessageSid,
+    })
+    .from(pendingUploads)
+    .where(inArray(pendingUploads.driverPhone, candidates))
+    .orderBy(desc(pendingUploads.fulfilledAt))
+    .limit(1);
+  if (!recent || !recent.fulfilledMessageSid) {
+    return {
+      handled: true,
+      reply: 'No recent upload found to flag as wrong. Contact dispatch.',
+    };
+  }
+  // Mark the load_documents row as rejected so dispatch sees it in the
+  // review queue. The factoring pipeline filters out approval_status
+  // !== 'approved', so a rejected photo never goes downstream.
+  try {
+    const { loadDocuments, loads } = await import('@shared/schema');
+    const stage = recent.stage as PhotoStage;
+    await db
+      .update(loadDocuments)
+      .set({
+        approvalStatus: 'rejected',
+        rejectionReason: 'Driver flagged as wrong load',
+        rejectedAt: new Date(),
+      } as any)
+      .where(
+        and(
+          eq(loadDocuments.loadId, recent.loadId),
+          eq(loadDocuments.documentType, stage),
+        ),
+      );
+    // Clear fulfilled state so a fresh upload can replace it.
+    await db
+      .update(pendingUploads)
+      .set({ fulfilledAt: null, fulfilledMessageSid: null } as any)
+      .where(eq(pendingUploads.id, recent.id));
+    // Look up the load number for the reply.
+    const [loadRow] = await db
+      .select({ loadNumber: loads.loadNumber })
+      .from(loads)
+      .where(eq(loads.id, recent.loadId))
+      .limit(1);
+    const loadNumber = loadRow?.loadNumber ?? recent.loadId;
+    return {
+      handled: true,
+      reply: `Flagged the last photo as wrong load (was load ${loadNumber}). Dispatch has been notified. Please resend the correct photo.`,
+    };
+  } catch (err: any) {
+    console.error('[mms-upload] handleWrongReply failed:', err.message);
+    return {
+      handled: true,
+      reply: 'Could not flag the photo. Contact dispatch to correct it manually.',
+    };
+  }
+}
+
 // Main entry — used by /api/sms/webhook.
 // Returns the TwiML reply body the webhook should send back, plus a flag
 // telling the webhook whether to fall through to the legacy SMS handler.
 export async function processMMSReply(p: {
   from: string;
   messageSid: string;
+  body?: string;
   mediaUrl?: string;
   mediaContentType?: string;
   numMedia: number;
 }): Promise<{ handled: boolean; reply?: string }> {
   if (!isMMSUploadEnabled()) return { handled: false };
+
+  // "WRONG" reply path — driver telling us we attached a photo to the
+  // wrong load. Trim/case-insensitive match on the body, ignore any
+  // surrounding text so common variants ("wrong load", "WRONG!", " wrong ")
+  // all hit. Must precede the media check so a text-only WRONG reply
+  // doesn't bail out at the numMedia gate.
+  const body = (p.body || '').trim().toUpperCase();
+  if (/^WRONG\b/.test(body)) {
+    return handleWrongReply(p.from);
+  }
+
   if (p.numMedia < 1 || !p.mediaUrl) return { handled: false };
 
   // Dedup: same MessageSid already fulfilled? Twilio retries on 5xx.
@@ -185,6 +268,18 @@ export async function processMMSReply(p: {
     };
   }
 
+  // Look up the user-facing load number for the confirmation reply. The
+  // driver needs to see exactly which load their photo was bound to so
+  // they can flag a mistake before the BOL flows downstream into the
+  // factoring submission. Cheap and worth the round-trip.
+  const { loads } = await import('@shared/schema');
+  const [loadRow] = await db
+    .select({ loadNumber: loads.loadNumber })
+    .from(loads)
+    .where(eq(loads.id, pending.loadId))
+    .limit(1);
+  const loadNumber = loadRow?.loadNumber ?? pending.loadId;
+
   const media = await downloadTwilioMedia(p.mediaUrl);
   const result = await uploadLoadPhoto({
     loadId: pending.loadId,
@@ -194,14 +289,19 @@ export async function processMMSReply(p: {
     originalName: `mms-${p.messageSid}.jpg`,
   });
   if (!result.ok) {
-    return { handled: true, reply: `Upload failed: ${result.error}` };
+    return { handled: true, reply: `Upload failed for load ${loadNumber}: ${result.error}` };
   }
   await markFulfilled(pending.id, p.messageSid);
 
   const next = nextStage(pending.stage);
   const label = STAGE_REPLY_LABEL[pending.stage];
+  // Fix A (CLAUDE.md user request): echo the load number in every
+  // confirmation so the driver can spot a wrong-load attachment
+  // immediately. The factoring/RateCon flow depends on photos being on
+  // the correct load_id, and the driver is the last line of defense
+  // before the BOL goes downstream.
   const reply = next
-    ? `✅ Got it — ${label} saved. Next: reply with a photo of the ${STAGE_REPLY_LABEL[next]}.`
-    : `✅ Got it — ${label} saved. All photos received. Thank you.`;
+    ? `✅ ${label} saved for load ${loadNumber}. Next: reply with a photo of the ${STAGE_REPLY_LABEL[next]}. Reply WRONG if this load number is incorrect.`
+    : `✅ ${label} saved for load ${loadNumber}. All photos received. Reply WRONG if this load number is incorrect.`;
   return { handled: true, reply };
 }

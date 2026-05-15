@@ -14,10 +14,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Sequential-response mock for db.select. processMMSReply calls db.select
-// three times in a fixed order:
+// four times in a fixed order:
 //   1. dedup lookup by fulfilled_message_sid          → array of {id} or []
 //   2. findPendingForPhone (via .orderBy().limit())   → array of pending row or []
 //   3. countRecentForLoad (via select({c}).where())   → array of {c: number}
+//   4. loads.loadNumber lookup for the user-facing reply → [{loadNumber: '...'}]
 // Tests push expected return shapes into selectQueue before calling
 // processMMSReply. The mock pops in order.
 const selectQueue: any[] = [];
@@ -147,10 +148,11 @@ describe('MMS BOL upload — financial safety guards', () => {
   describe('routing + dedup', () => {
     it('routes to the pending stage and writes one document', async () => {
       process.env.MMS_UPLOAD_ENABLED = 'true';
-      // db.select calls in order: dedup-lookup, findPendingForPhone, countRecentForLoad
+      // db.select calls in order: dedup, findPendingForPhone, countRecentForLoad, loadNumber-lookup
       selectQueue.push([]); // dedup miss
       selectQueue.push([{ id: 'p1', loadId: 'load-1', stage: 'pickup_bol' }]);
       selectQueue.push([{ c: 0 }]); // count under cap
+      selectQueue.push([{ loadNumber: 'LD-1' }]); // user-facing load number
 
       const r = await svc.processMMSReply({
         from: '+15551110000',
@@ -160,8 +162,10 @@ describe('MMS BOL upload — financial safety guards', () => {
       });
 
       expect(r.handled).toBe(true);
-      expect(r.reply).toMatch(/Got it/);
+      // Fix A: reply must name the load number so the driver can verify.
+      expect(r.reply).toMatch(/LD-1/);
       expect(r.reply).toMatch(/Securement/);
+      expect(r.reply).toMatch(/WRONG/); // "Reply WRONG if this load number is incorrect"
 
       const { uploadLoadPhoto } = await import('../load-photos-service');
       const calls = (uploadLoadPhoto as any).mock.calls;
@@ -219,6 +223,76 @@ describe('MMS BOL upload — financial safety guards', () => {
 
     it('PER_LOAD_HOURLY_CAP constant is exported and >= 1', () => {
       expect(svc.PER_LOAD_HOURLY_CAP).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('WRONG reply (Fix A — driver flags incorrect-load attachment)', () => {
+    it('triggers WRONG handler on body="WRONG" with no media', async () => {
+      process.env.MMS_UPLOAD_ENABLED = 'true';
+      // handleWrongReply selects: recent fulfilled row, then loadNumber.
+      selectQueue.push([{
+        id: 'p1', loadId: 'load-1', stage: 'pickup_bol',
+        fulfilledMessageSid: 'SM-prev',
+      }]);
+      selectQueue.push([{ loadNumber: 'LD-1' }]);
+
+      const r = await svc.processMMSReply({
+        from: '+15551110000',
+        messageSid: 'SM-wrong',
+        body: 'WRONG',
+        numMedia: 0,
+      });
+      expect(r.handled).toBe(true);
+      expect(r.reply).toMatch(/Flagged the last photo/);
+      expect(r.reply).toMatch(/LD-1/);
+      // Should have rejected the load_documents row and cleared pending.
+      const rejections = dbState.updates.filter(
+        (u) => u.approvalStatus === 'rejected',
+      );
+      expect(rejections.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('matches case-insensitive "wrong" and "wrong load" variants', async () => {
+      process.env.MMS_UPLOAD_ENABLED = 'true';
+      selectQueue.push([{
+        id: 'p1', loadId: 'load-1', stage: 'pickup_bol',
+        fulfilledMessageSid: 'SM-prev',
+      }]);
+      selectQueue.push([{ loadNumber: 'LD-1' }]);
+      const r = await svc.processMMSReply({
+        from: '+15551110000',
+        messageSid: 'SM-wrong2',
+        body: 'wrong load',
+        numMedia: 0,
+      });
+      expect(r.handled).toBe(true);
+      expect(r.reply).toMatch(/Flagged the last photo/);
+    });
+
+    it('does NOT trigger WRONG handler on a regular reply containing "wrong" mid-sentence', async () => {
+      process.env.MMS_UPLOAD_ENABLED = 'true';
+      // No queue entries needed — regex match fails fast, falls through.
+      const r = await svc.processMMSReply({
+        from: '+15551110000',
+        messageSid: 'SM-x',
+        body: 'something went wrong with the GPS',
+        numMedia: 0,
+      });
+      // Body has no media AND no leading WRONG token, so returns false.
+      expect(r.handled).toBe(false);
+    });
+
+    it('with no prior fulfilled upload, surfaces a helpful message', async () => {
+      process.env.MMS_UPLOAD_ENABLED = 'true';
+      selectQueue.push([]); // no recent pending row for this phone
+      const r = await svc.processMMSReply({
+        from: '+15551110000',
+        messageSid: 'SM-wrong3',
+        body: 'WRONG',
+        numMedia: 0,
+      });
+      expect(r.handled).toBe(true);
+      expect(r.reply).toMatch(/No recent upload found/);
     });
   });
 

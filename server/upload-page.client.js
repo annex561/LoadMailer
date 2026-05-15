@@ -152,16 +152,39 @@
     // Show progress immediately so the driver knows the tap registered.
     status.textContent = 'Sending photo…';
 
+    // Heartbeat so the driver sees SOMETHING moving even when the network
+    // hasn't flushed any progress events yet. iOS Safari + HTTP/2 can
+    // delay or coalesce `upload.onprogress` events (especially when
+    // lengthComputable is false), leaving the bar frozen at the initial
+    // 2% for many seconds — drivers tap repeatedly thinking it's broken.
+    // The heartbeat ticks every 750ms during the first 8s, then stops.
+    var lastProgressAt = Date.now();
+    var hb = setInterval(function () {
+      // If real progress events have fired in the last 1.5s, leave it.
+      if (Date.now() - lastProgressAt < 1500) return;
+      // Otherwise nudge the status so the driver knows we're alive.
+      var t = Math.floor((Date.now() - startedAt) / 1000);
+      status.textContent = 'Sending photo… (' + t + 's)';
+    }, 750);
+    var startedAt = Date.now();
+
     try {
       await new Promise(function (resolve, reject) {
         var xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/loads/' + LOAD_ID + '/photos');
         if (TOKEN) xhr.setRequestHeader('X-Upload-Token', TOKEN);
         xhr.upload.onprogress = function (e) {
+          lastProgressAt = Date.now();
           if (e.lengthComputable) {
             var pct = Math.min(95, Math.round((e.loaded / e.total) * 95));
             barFill.style.width = pct + '%';
             status.textContent = 'Uploading ' + pct + '%';
+          } else {
+            // No total — at least move the bar a bit and update text so
+            // the driver knows bytes are flowing.
+            var current = parseInt(barFill.style.width, 10) || 2;
+            barFill.style.width = Math.min(90, current + 3) + '%';
+            status.textContent = 'Uploading…';
           }
         };
         xhr.onload = function () {
@@ -182,15 +205,40 @@
         xhr.send(fd);
       });
 
+      clearInterval(hb);
       slot.classList.add('done');
       status.className = 'status ok';
-      status.textContent = '✅ Uploaded — saved to dispatch.';
+      status.textContent = '✅ Uploaded — saved to dispatch. Tap photo to verify.';
       label.textContent = '📷 Replace Photo';
       label.style.background = '#14532d';
       label.style.pointerEvents = '';
       label.style.opacity = '';
+      // Tap-to-preview (CLAUDE.md user request). The local FileReader
+      // preview was already rendered above; wrap it in a link so tapping
+      // it opens the local image full-size for the driver to verify
+      // which photo went to this load. Cloudinary URL would be ideal
+      // but it isn't returned synchronously — the local preview is
+      // good enough for verify-on-the-spot.
+      if (preview && preview.src) {
+        preview.style.cursor = 'zoom-in';
+        preview.onclick = function () {
+          var w = window.open('', '_blank');
+          if (w) {
+            w.document.title = 'Uploaded photo';
+            w.document.body.style.margin = '0';
+            w.document.body.style.background = '#000';
+            var img = w.document.createElement('img');
+            img.src = preview.src;
+            img.style.width = '100%';
+            img.style.height = 'auto';
+            img.style.display = 'block';
+            w.document.body.appendChild(img);
+          }
+        };
+      }
       if (navigator.vibrate) navigator.vibrate(80);
     } catch (err) {
+      clearInterval(hb);
       status.className = 'status error';
       status.textContent = '❌ Upload failed: ' + err.message + ' — tap the button to retry';
       bar.style.display = 'none';
