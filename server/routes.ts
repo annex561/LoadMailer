@@ -6980,6 +6980,31 @@ TRAQ IQ Dispatch Team
         }
       }
 
+      // MMS BOL upload branch. Default OFF (MMS_UPLOAD_ENABLED env var).
+      // When a pending_uploads row exists for this driver's phone, route
+      // the photo to the expected (load, stage) and reply with confirmation.
+      // Falls through to the legacy SMS handler when not handled (flag off,
+      // no media, no pending). See ~/.claude/plans/mms-bol-upload-CONTEXT.md.
+      try {
+        const { processMMSReply } = await import('./mms-upload-service');
+        const mmsResult = await processMMSReply({
+          from: From,
+          messageSid: MessageSid,
+          mediaUrl: mediaUrls[0],
+          mediaContentType: mediaTypes[0],
+          numMedia,
+        });
+        if (mmsResult.handled) {
+          res.set('Content-Type', 'text/xml');
+          const safe = (mmsResult.reply || 'OK').replace(/]]>/g, ']]]]><![CDATA[>');
+          return res.send(
+            `<?xml version="1.0" encoding="UTF-8"?><Response><Message><![CDATA[${safe}]]></Message></Response>`,
+          );
+        }
+      } catch (mmsErr) {
+        console.error('❌ MMS branch error (falling through to legacy):', mmsErr);
+      }
+
       // Respond to Twilio IMMEDIATELY with empty TwiML to avoid the 15-second timeout.
       // Processing is done async below — getAllLoads() alone can take 13+ seconds.
       // Using empty <Response> instead of <Message> to avoid sending a duplicate

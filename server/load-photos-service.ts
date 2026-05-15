@@ -184,6 +184,23 @@ export async function sendUploadLink(
   });
   if (!driver?.phone) return { ok: false, sent: 0, error: 'Driver phone missing' };
 
+  // MMS path — default OFF. Driver replies with photo instead of tapping a
+  // link. The inbound /api/sms/webhook handler routes the photo to the
+  // correct (load, stage) using pending_uploads rows written here. See
+  // ~/.claude/plans/mms-bol-upload-CONTEXT.md.
+  if (process.env.MMS_UPLOAD_ENABLED === 'true') {
+    const { createPendingUpload, STAGE_REPLY_LABEL } = await import('./mms-upload-service');
+    for (const stage of stages) {
+      await createPendingUpload({ driverPhone: driver.phone, loadId, stage });
+    }
+    const firstLabel = STAGE_REPLY_LABEL[stages[0]];
+    const mmsMsg =
+      customMessage ||
+      `📸 LAMP: Load ${load.loadNumber} — reply to this text with a photo of the ${firstLabel}.`;
+    const r = await smsLoadService.sendSMS(driver.phone, mmsMsg);
+    return { ok: r.success, sent: r.success ? 1 : 0, error: r.error };
+  }
+
   const baseUrl =
     process.env.PUBLIC_URL || process.env.APP_URL || 'https://traqiq.app';
 
