@@ -138,28 +138,19 @@
     // canvas step that can hang on iOS.
     var file = rawFile;
 
-    // GPS is best-effort. The `timeout` option on getCurrentPosition
-    // only applies AFTER the iOS permission prompt is dismissed — if the
-    // driver hasn't tapped Allow/Deny yet, the call hangs indefinitely
-    // and the entire upload waits behind it. (This was the "stuck on
-    // Starting upload…" bug.) Hard-cap with Promise.race so the upload
-    // always proceeds within 2s, with or without coordinates.
-    var coords = await Promise.race([
-      new Promise(function (resolve) {
-        if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(
-          function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude }); },
-          function () { resolve(null); },
-          { timeout: 2000, maximumAge: 60000 }
-        );
-      }),
-      new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 2000); }),
-    ]);
-
+    // No geolocation here. Even with a Promise.race hard-cap, iOS Safari
+    // pauses setTimeout while the geo permission prompt is on-screen, so
+    // the "2-second cap" never fires until the driver dismisses the
+    // prompt — which they don't, because the prompt is buried behind the
+    // photo picker. That manifested as the photo upload being stuck on
+    // "Starting upload (X KB)…" forever. The piggyback driver_locations
+    // row is a nice-to-have, not worth keeping the upload hostage.
     var fd = new FormData();
     fd.append('photo', file);
     fd.append('stage', stage);
-    if (coords) { fd.append('lat', String(coords.lat)); fd.append('lng', String(coords.lng)); }
+
+    // Show progress immediately so the driver knows the tap registered.
+    status.textContent = 'Sending photo…';
 
     try {
       await new Promise(function (resolve, reject) {

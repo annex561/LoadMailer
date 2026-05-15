@@ -59,6 +59,32 @@ describe("upload page — client script integrity", () => {
     // test will surface the mismatch.
     expect(clientJs).toContain("upload-config");
   });
+
+  it("handleUpload does NOT call navigator.geolocation (regression: PRs #88-#92)", () => {
+    // History: the photo upload path used to call navigator.geolocation
+    // (with a 2-second Promise.race "hard cap") to piggyback a
+    // driver_locations row alongside each photo. iOS Safari pauses
+    // setTimeout while a system permission prompt is on-screen, so the
+    // 2s cap NEVER fires until the driver dismisses the prompt — which
+    // they don't, because the geolocation prompt is buried behind the
+    // photo picker. Result: BOL upload hung forever at "Starting upload
+    // (X KB)…". Eight PRs (#83-#92) failed to fix it because each
+    // tried to patch a different layer.
+    //
+    // Fix: rip geolocation out of the photo upload path entirely. The
+    // optional GPS piggyback is a nice-to-have, not a load-bearing
+    // feature, and not worth blocking the BOL on. Check-ins (the
+    // separate buttons under "Manual check-in") MAY still call
+    // geolocation because the driver tapped them deliberately and the
+    // prompt is not buried under another modal.
+    //
+    // Scope this test to the handleUpload function body only.
+    const m = clientJs.match(/async function handleUpload\([^)]*\)\s*\{([\s\S]*?)\n\s\s\}/);
+    expect(m, "could not locate handleUpload body in client JS").toBeTruthy();
+    const handleUploadBody = m![1];
+    expect(handleUploadBody).not.toContain("navigator.geolocation");
+    expect(handleUploadBody).not.toContain("getCurrentPosition");
+  });
 });
 
 describe("renderUploadPage — html shell", () => {
