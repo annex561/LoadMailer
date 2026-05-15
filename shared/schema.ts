@@ -831,6 +831,21 @@ export const loadDocuments = pgTable("load_documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Pending Uploads - context-based routing for MMS BOL replies. Written when
+// dispatch sends the request SMS. Inbound MMS handler matches on
+// (driver_phone, unfulfilled, not-expired) to know where the photo belongs.
+// See ~/.claude/plans/mms-bol-upload-CONTEXT.md.
+export const pendingUploads = pgTable("pending_uploads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  driverPhone: text("driver_phone").notNull(),
+  loadId: varchar("load_id").references(() => loads.id).notNull(),
+  stage: text("stage").notNull(), // 'pickup_bol' | 'pickup_securement' | 'delivery_pod' | 'delivery_signed_bol'
+  expiresAt: timestamp("expires_at").notNull(),
+  fulfilledAt: timestamp("fulfilled_at"),
+  fulfilledMessageSid: text("fulfilled_message_sid").unique(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Document Annotations - Canvas-based annotations on documents for review workflow
 export const documentAnnotations = pgTable("document_annotations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
