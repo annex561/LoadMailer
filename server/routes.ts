@@ -6990,6 +6990,7 @@ TRAQ IQ Dispatch Team
         const mmsResult = await processMMSReply({
           from: From,
           messageSid: MessageSid,
+          body: Body,
           mediaUrl: mediaUrls[0],
           mediaContentType: mediaTypes[0],
           numMedia,

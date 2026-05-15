@@ -194,9 +194,13 @@ export async function sendUploadLink(
       await createPendingUpload({ driverPhone: driver.phone, loadId, stage });
     }
     const firstLabel = STAGE_REPLY_LABEL[stages[0]];
+    // Fix B (CLAUDE.md user request): always name the load number in the
+    // prompt so the driver knows which load they're uploading to BEFORE
+    // they reply. Prevents wrong-load attachment when a driver has
+    // multiple loads in flight.
     const mmsMsg =
       customMessage ||
-      `📸 LAMP: Load ${load.loadNumber} — reply to this text with a photo of the ${firstLabel}.`;
+      `📸 LAMP Load ${load.loadNumber} — reply to this text with a photo of the ${firstLabel} for load ${load.loadNumber}.`;
     const r = await smsLoadService.sendSMS(driver.phone, mmsMsg);
     return { ok: r.success, sent: r.success ? 1 : 0, error: r.error };
   }

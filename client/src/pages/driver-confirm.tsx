@@ -195,15 +195,41 @@ export default function DriverConfirmPage() {
           <CardHeader className="pb-2"><CardTitle className="text-base">📄 Bill of Lading (BOL)</CardTitle></CardHeader>
           <CardContent className="pt-0 text-sm space-y-2">
             {data.bolPath ? (
-              <p className="text-green-600">✅ BOL uploaded</p>
+              <div className="space-y-2">
+                <p className="text-green-600">✅ BOL uploaded</p>
+                {/* Tap-to-preview (CLAUDE.md user request). Driver needs to
+                    verify the right photo went to this load before
+                    factoring picks it up downstream. */}
+                <a
+                  href={data.bolPath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                  data-testid="link-bol-preview"
+                >
+                  <img
+                    src={data.bolPath}
+                    alt="Uploaded BOL preview — tap to view full size"
+                    className="w-full max-h-64 object-contain rounded border border-border bg-muted"
+                    onError={(e) => {
+                      // Legacy Twilio URLs expire / require auth. If the
+                      // preview won't load, hide the broken image and
+                      // surface a link the driver can still tap.
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="text-xs text-muted-foreground underline">
+                    Tap to view full size
+                  </span>
+                </a>
+              </div>
             ) : (
-              <p className="text-muted-foreground">Take a photo of the signed BOL at pickup.</p>
+              <p className="text-muted-foreground">Take a photo or pick from your library of the signed BOL at pickup.</p>
             )}
             <input
               ref={bolInputRef}
               type="file"
               accept="image/*,application/pdf"
-              capture="environment"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -229,15 +255,35 @@ export default function DriverConfirmPage() {
           <CardHeader className="pb-2"><CardTitle className="text-base">📄 Proof of Delivery (POD)</CardTitle></CardHeader>
           <CardContent className="pt-0 text-sm space-y-2">
             {data.podPath ? (
-              <p className="text-green-600">✅ POD uploaded</p>
+              <div className="space-y-2">
+                <p className="text-green-600">✅ POD uploaded</p>
+                <a
+                  href={data.podPath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                  data-testid="link-pod-preview"
+                >
+                  <img
+                    src={data.podPath}
+                    alt="Uploaded POD preview — tap to view full size"
+                    className="w-full max-h-64 object-contain rounded border border-border bg-muted"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <span className="text-xs text-muted-foreground underline">
+                    Tap to view full size
+                  </span>
+                </a>
+              </div>
             ) : (
-              <p className="text-muted-foreground">Take a photo of the signed POD at delivery.</p>
+              <p className="text-muted-foreground">Take a photo or pick from your library of the signed POD at delivery.</p>
             )}
             <input
               ref={podInputRef}
               type="file"
               accept="image/*,application/pdf"
-              capture="environment"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
