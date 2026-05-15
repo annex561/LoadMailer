@@ -1128,8 +1128,28 @@ export class SMSCommunicationService {
         try {
           const { verifyBolPhoto } = await import("./factoring-bol-verify");
           const result = await verifyBolPhoto(imageUrl);
-          verified = result.ok;
-          verifyMessage = result.message;
+          // Soft-pass on infrastructure errors. verifyBolPhoto returns
+          // `{ ok: false, message: "Verifier error: ..." }` when the OpenAI
+          // call itself fails — including the common case where OpenAI
+          // can't download a Twilio media URL because the URL requires
+          // basic auth and OpenAI has no way to supply it. That is NOT a
+          // signal that the driver's photo is bad; rejecting them for it
+          // causes them to retake a perfectly fine BOL repeatedly. Treat
+          // any "Verifier error:" message the same as the catch block:
+          // accept the photo, mark verification skipped, move on.
+          const isInfraError =
+            !result.ok && /^Verifier error:/i.test(result.message || "");
+          if (isInfraError) {
+            console.warn(
+              "[bol-verify] infra error — soft-passing:",
+              result.message,
+            );
+            verified = true;
+            verifyMessage = "Verification skipped (service unavailable).";
+          } else {
+            verified = result.ok;
+            verifyMessage = result.message;
+          }
           await db
             .update(loads)
             .set({

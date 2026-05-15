@@ -238,6 +238,42 @@ describe('MMS BOL upload — financial safety guards', () => {
     });
   });
 
+  describe('phone normalization (regression: format-mismatch caused fall-through to legacy verifier)', () => {
+    it('phoneVariants generates all common storage shapes for a US number', () => {
+      const variants = svc.phoneVariants('+15551234567');
+      expect(variants).toContain('+15551234567');
+      expect(variants).toContain('15551234567');
+      expect(variants).toContain('5551234567');
+      expect(variants).toContain('(555) 123-4567');
+      expect(variants).toContain('555-123-4567');
+    });
+
+    it('phoneVariants handles non-E.164 inputs (10-digit)', () => {
+      const variants = svc.phoneVariants('5551234567');
+      expect(variants).toContain('+15551234567');
+      expect(variants).toContain('5551234567');
+    });
+
+    it('phoneVariants handles pretty inputs', () => {
+      const variants = svc.phoneVariants('(555) 123-4567');
+      expect(variants).toContain('+15551234567');
+      expect(variants).toContain('5551234567');
+    });
+
+    it('toE164 normalizes any common US shape to +1XXXXXXXXXX', () => {
+      expect(svc.toE164('+15551234567')).toBe('+15551234567');
+      expect(svc.toE164('15551234567')).toBe('+15551234567');
+      expect(svc.toE164('5551234567')).toBe('+15551234567');
+      expect(svc.toE164('(555) 123-4567')).toBe('+15551234567');
+      expect(svc.toE164('555-123-4567')).toBe('+15551234567');
+    });
+
+    it('toE164 leaves unrecognized inputs unchanged (no destruction)', () => {
+      expect(svc.toE164('')).toBe('');
+      expect(svc.toE164('not-a-phone')).toBe('not-a-phone');
+    });
+  });
+
   describe('stage progression', () => {
     it('nextStage walks the full chain', () => {
       expect(svc.nextStage('pickup_bol')).toBe('pickup_securement');

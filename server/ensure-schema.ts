@@ -320,7 +320,36 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ hos_check_log table: ${e.message}`);
     }
 
-    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log created)`);
+    // pending_uploads — context-based MMS BOL upload routing (PR #94).
+    // Written when sendUploadLink fires with MMS_UPLOAD_ENABLED=true, read
+    // by processMMSReply when an inbound MMS arrives. The migration SQL at
+    // migrations/0003_mms_pending_uploads.sql is the source of truth; this
+    // block mirrors it because the project relies on runtime ensureSchema
+    // rather than a separate drizzle-kit migrate step (see history of
+    // schema-completeness.test.ts). Without this block, the table never
+    // exists in production, the dedup lookup in processMMSReply throws a
+    // DrizzleQueryError, and every inbound MMS falls through to the
+    // legacy BOL verifier instead of the new path.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS pending_uploads (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          driver_phone TEXT NOT NULL,
+          load_id VARCHAR NOT NULL REFERENCES loads(id),
+          stage TEXT NOT NULL,
+          expires_at TIMESTAMP NOT NULL,
+          fulfilled_at TIMESTAMP,
+          fulfilled_message_sid TEXT UNIQUE,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_pending_uploads_phone_unfulfilled ON pending_uploads (driver_phone, created_at DESC) WHERE fulfilled_at IS NULL`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_pending_uploads_load_recent ON pending_uploads (load_id, created_at DESC)`);
+    } catch (e: any) {
+      log(`⚠️ pending_uploads table: ${e.message}`);
+    }
+
+    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log + pending_uploads created)`);
   } catch (err: any) {
     log(`⚠️ ensureSchema error: ${err.message}`);
   }
