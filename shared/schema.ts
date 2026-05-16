@@ -825,7 +825,21 @@ export const loadDocuments = pgTable("load_documents", {
   // Required Document Tracking - Flag critical documents
   isRequired: boolean("is_required").notNull().default(false), // Is this document required for load completion?
   requiredCategory: text("required_category"), // Which doc type is required for this load
-  
+
+  // OCR Address Verification (Phase 2 wrong-load fix, ADDRESS_VERIFY_ENABLED).
+  // After a driver's MMS BOL is saved, we OCR the SHIP FROM / SHIP TO and
+  // compare against the load's pickup/delivery addresses. The driver gets a
+  // mismatch SMS with OVERRIDE option; dispatcher review is the final gate
+  // either way (factoring requires approvalStatus='approved' from a human).
+  ocrStatus: text("ocr_status"), // 'unchecked' | 'matched' | 'mismatch' | 'unreadable' | 'override' | 'disabled' | 'error'
+  ocrExtractedPickup: text("ocr_extracted_pickup"), // Short label "Rossville, GA 30741" — what OCR saw
+  ocrExtractedDropoff: text("ocr_extracted_dropoff"),
+  ocrAttemptedAt: timestamp("ocr_attempted_at"),
+  // Set when the driver explicitly replies OVERRIDE to a mismatch SMS,
+  // acknowledging that they understand factoring may reject the BOL.
+  overrideAcknowledgedAt: timestamp("override_acknowledged_at"),
+  overrideMessageSid: text("override_message_sid"),
+
   // Timestamps
   uploadedAt: timestamp("uploaded_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),

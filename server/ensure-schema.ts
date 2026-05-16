@@ -320,6 +320,26 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ hos_check_log table: ${e.message}`);
     }
 
+    // load_documents — Phase 2 OCR address verification columns.
+    // ADDRESS_VERIFY_ENABLED writes here; downstream review UI reads
+    // ocr_status to surface mismatches and overrides. ALTER TABLE ADD
+    // COLUMN IF NOT EXISTS is idempotent — safe on every boot.
+    try {
+      const ocrCols: [string, string][] = [
+        ['ocr_status', 'TEXT'],
+        ['ocr_extracted_pickup', 'TEXT'],
+        ['ocr_extracted_dropoff', 'TEXT'],
+        ['ocr_attempted_at', 'TIMESTAMP'],
+        ['override_acknowledged_at', 'TIMESTAMP'],
+        ['override_message_sid', 'TEXT'],
+      ];
+      for (const [col, def] of ocrCols) {
+        await pool.query(`ALTER TABLE load_documents ADD COLUMN IF NOT EXISTS ${col} ${def}`);
+      }
+    } catch (e: any) {
+      log(`⚠️ load_documents OCR columns: ${e.message}`);
+    }
+
     // pending_uploads — context-based MMS BOL upload routing (PR #94).
     // Written when sendUploadLink fires with MMS_UPLOAD_ENABLED=true, read
     // by processMMSReply when an inbound MMS arrives. The migration SQL at
