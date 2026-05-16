@@ -11,7 +11,7 @@
 
 import type { Express } from "express";
 import { db } from "../db";
-import { loads, factoringSubmissions, rateconIntake } from "@shared/schema";
+import { loads, factoringSubmissions, rateconIntake, loadDocuments } from "@shared/schema";
 import { and, desc, eq, isNotNull, isNull, ne, inArray } from "drizzle-orm";
 import { requireRole } from "../auth";
 import { buildFactoringPacket, submitToLoves, pastTodayCutoff } from "../factoring-loves";
@@ -51,8 +51,43 @@ export function registerFactoringRoutes(app: Express) {
         : [];
       const intakeByLoad = new Map<string, any>(intakes.map((i: any) => [i.loadId, i]));
 
+      // Phase 1 wrong-load-to-factoring guard: queue must reflect the same
+      // gate the packet builder enforces — a load is "ready" ONLY if a
+      // dispatcher has approved a BOL/POD document for it. Without this,
+      // the dispatcher sees a green "ready" badge on loads whose BOL is
+      // still pending review and may click submit blind, defeating the
+      // whole review step.
+      const approvedDocs = rows.length
+        ? await db
+            .select({
+              loadId: loadDocuments.loadId,
+              documentType: loadDocuments.documentType,
+            })
+            .from(loadDocuments)
+            .where(
+              and(
+                inArray(
+                  loadDocuments.loadId,
+                  rows.map((r: any) => r.id),
+                ),
+                eq(loadDocuments.approvalStatus, "approved"),
+                inArray(loadDocuments.documentType, [
+                  "pickup_bol",
+                  "delivery_signed_bol",
+                  "delivery_pod",
+                  "bol",
+                  "pod",
+                ]),
+              ),
+            )
+        : [];
+      const approvedByLoad = new Map<string, string>(
+        approvedDocs.map((d: any) => [d.loadId, d.documentType]),
+      );
+
       const queue = rows.map((l: any) => {
         const intake: any = intakeByLoad.get(l.id);
+        const approvedBolType = approvedByLoad.get(l.id);
         // Where will the packet builder actually pull each doc from?
         // Mirror the resolution logic in factoring-loves.ts so the UI
         // shows the same answer the builder will use.
@@ -70,16 +105,22 @@ export function registerFactoringRoutes(app: Express) {
           rateconSource = "ratecon_intake.pdf_path (intake fallback)";
         }
 
+        // BOL source must be a dispatcher-APPROVED load_documents row to
+        // count toward `ready`. Raw bolPath / podPath populated but not
+        // yet approved is reported as a pending-review issue, not ready.
         let bolSource: string | null = null;
-        if (l.bolPath) bolSource = "loads.bol_path (driver MMS)";
-        else if (l.podPath) bolSource = "loads.pod_path";
-        else if (rateconPathLooksLikeImage && l.rateconPath) {
-          bolSource = "loads.ratecon_path (legacy BOL overwrite)";
+        const bolIssues: string[] = [];
+        if (approvedBolType) {
+          bolSource = `load_documents.${approvedBolType} (approved)`;
+        } else if (l.bolPath || l.podPath || (rateconPathLooksLikeImage && l.rateconPath)) {
+          bolIssues.push("BOL/POD on file but awaiting dispatcher approval");
+        } else {
+          bolIssues.push("no BOL/POD on file");
         }
 
         const issues: string[] = [];
         if (!rateconSource) issues.push("no Rate Confirmation found");
-        if (!bolSource) issues.push("no BOL/POD on file");
+        issues.push(...bolIssues);
         if (!l.rate || l.rate <= 0) issues.push("no rate amount");
 
         const ready = !!rateconSource && !!bolSource && !!l.rate;

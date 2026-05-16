@@ -130,25 +130,30 @@ describe("buildDriverStageMessages", () => {
   // mode is the load-bearing path. These tests pin the wording so the link
   // can't accidentally come back when the flag is on.
   describe("mmsReplyMode = true", () => {
-    it("accepted: replaces upload link with reply prompt naming the load #", () => {
+    it("accepted: defers the photo prompt to geofence-arrival, does NOT tell the driver to reply now", () => {
       const out = buildDriverStageMessages(
         { ...baseInputs, mmsReplyMode: true },
         "accepted",
       );
       expect(out).toHaveLength(1);
-      // Link must NOT appear — that's the whole point of this mode.
+      // Link must NOT appear — the web upload page is the wrong-load risk too.
       expect(out[0]).not.toContain("https://traqiq.app/u/");
       expect(out[0]).not.toContain("Upload a clear photo");
-      // Reply prompt must name the load number so the driver knows which
-      // load they're replying about (matches the user's Fix B request).
+      // Phase 1 regression guard: the SMS at acceptance must NOT instruct
+      // the driver to reply with a photo immediately. No pending_uploads
+      // row exists yet — a photo sent now would bind to the wrong load if
+      // the driver is on >1 load. The geofence-arrival SMS (sent later
+      // when the driver is physically at the shipper) is the one that
+      // carries the actual reply prompt.
+      expect(out[0]).not.toContain("Reply to this text with a photo");
       expect(out[0]).toContain(
-        "Reply to this text with a photo of the signed BOL for load #LD29505831",
+        "We'll text you when you arrive at the pickup so you can send the signed BOL.",
       );
-      // PICKED UP shortcut still works.
+      // PICKED UP shortcut still works as a manual override.
       expect(out[0]).toContain("Or reply PICKED UP when loaded.");
     });
 
-    it("picked-up: replaces delivery upload link with reply prompt", () => {
+    it("picked-up: defers the delivery photo prompt to geofence-arrival, does NOT prompt immediately", () => {
       const out = buildDriverStageMessages(
         { ...baseInputs, mmsReplyMode: true },
         "picked-up",
@@ -157,8 +162,9 @@ describe("buildDriverStageMessages", () => {
       expect(out[1]).not.toContain("https://traqiq.app/u/");
       expect(out[1]).not.toContain("Upload the signed BOL");
       expect(out[1]).not.toContain("Or text the BOL photo to this number.");
+      expect(out[1]).not.toContain("Reply to this text with a photo");
       expect(out[1]).toContain(
-        "Reply to this text with a photo of the signed BOL for load #LD29505831",
+        "We'll text you when you arrive at the delivery so you can send the signed BOL.",
       );
       expect(out[1]).toContain("Reply DELIVERED when offloaded.");
     });
