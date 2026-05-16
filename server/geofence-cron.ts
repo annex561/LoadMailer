@@ -98,15 +98,22 @@ class GeofenceCron {
           process.env.PUBLIC_URL || process.env.APP_URL || 'https://traqiq.app';
         const uploadLink = `${baseUrl}/u/${load.id}`;
 
+        // MMS-reply mode swaps the link-bearing custom message for `undefined`
+        // so sendUploadLink builds its default "reply with photo of load #X"
+        // MMS prompt and writes the pending_uploads row. Driver replies with
+        // the photo instead of clicking the broken /u/<token> page.
+        const mmsMode = process.env.MMS_UPLOAD_ENABLED === 'true';
+
         // Pickup check — driver is approaching the shipper. Custom message
         // tells them WHERE they are (the shipper) and what to do.
         if (!pickupDone && pickup) {
           const mi = haversineDistance(loc.latitude, loc.longitude, pickup[0], pickup[1]);
           if (mi <= MILES_THRESHOLD) {
-            const pickupMsg =
-              `You're near the shipper for Load #${load.loadNumber}.\n` +
-              `Upload the signed BOL when loaded:\n${uploadLink}\n\n` +
-              `Or reply PICKED UP when loaded.`;
+            const pickupMsg = mmsMode
+              ? undefined
+              : `You're near the shipper for Load #${load.loadNumber}.\n` +
+                `Upload the signed BOL when loaded:\n${uploadLink}\n\n` +
+                `Or reply PICKED UP when loaded.`;
             const r = await sendUploadLink(load.id, PICKUP_STAGES, pickupMsg);
             if (r.ok) {
               await this.markPhase(load.id, 'pickupPhotoRequestedAt');
@@ -123,10 +130,11 @@ class GeofenceCron {
         if (!deliveryDone && delivery) {
           const mi = haversineDistance(loc.latitude, loc.longitude, delivery[0], delivery[1]);
           if (mi <= MILES_THRESHOLD) {
-            const deliveryMsg =
-              `You're near the receiver for Load #${load.loadNumber}.\n` +
-              `Upload the signed BOL when offloaded:\n${uploadLink}\n\n` +
-              `Or reply DELIVERED when offloaded.`;
+            const deliveryMsg = mmsMode
+              ? undefined
+              : `You're near the receiver for Load #${load.loadNumber}.\n` +
+                `Upload the signed BOL when offloaded:\n${uploadLink}\n\n` +
+                `Or reply DELIVERED when offloaded.`;
             const r = await sendUploadLink(load.id, DELIVERY_STAGES, deliveryMsg);
             if (r.ok) {
               await this.markPhase(load.id, 'deliveryPhotoRequestedAt');
