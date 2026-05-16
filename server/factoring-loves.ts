@@ -382,6 +382,53 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
 
   console.log(`[factoring-loves] sending packet for load ${load.loadNumber} to ${SCHEDULES_LS}`);
 
+  // DRY-RUN MODE — never actually email Love's. Logs the metadata
+  // and synthesizes a success-shaped response so the downstream chain
+  // (factoringSubmissions DB update, factoringStatus on the load)
+  // proceeds as if the packet had been accepted. See server/dry-run.ts.
+  //
+  // This is the highest-stakes outbound in the codebase: a real send
+  // commits a factoring submission to Love's that affects driver
+  // payment timing. Dry-run lets the user validate the packet build
+  // + dispatcher gate + emit-the-email step without actually emailing.
+  const { isDryRunOutbound, logDryRun, dryRunFakeId } = await import("./dry-run");
+  if (isDryRunOutbound()) {
+    logDryRun({
+      vendor: "loves-factoring",
+      action: "sendPacket",
+      payload: {
+        loadId,
+        loadNumber: load.loadNumber,
+        to: SCHEDULES_LS,
+        subject,
+        attachmentBytes: packet.pdfBytes.length,
+        attachmentName: `${LAMP.clientCode}_Load_${load.loadNumber}_packet.pdf`,
+      },
+    });
+    submissionTimestamps.push(Date.now());
+    const fakeMessageId = dryRunFakeId("loves");
+    // Mirror the success path's DB writes so dry-run leaves the same
+    // observable state (factoringStatus='submitted') as a real send.
+    // Lets the user verify the queue UI updates correctly.
+    await db
+      .update(factoringSubmissions)
+      .set({
+        status: "submitted",
+        submittedAt: new Date(),
+        emailMessageId: fakeMessageId,
+      } as any)
+      .where(eq(factoringSubmissions.loadId, loadId));
+    await db
+      .update(loads)
+      .set({ factoringStatus: "submitted" } as any)
+      .where(eq(loads.id, loadId));
+    return {
+      ok: true,
+      submissionId: undefined,
+      emailMessageId: fakeMessageId,
+    };
+  }
+
   try {
     const info = await factoringMailer.sendMail({
       from: `"${LAMP.dba}" <${fromAddr}>`,

@@ -194,6 +194,26 @@ export class SMSLoadService {
       return { success: false, error: 'SMS_DISABLED=true — outbound SMS halted' };
     }
 
+    // DRY-RUN MODE — set DRY_RUN_OUTBOUND=true to validate the full flow
+    // in production without spending real Twilio money. Returns success
+    // so the downstream chain (markFulfilled, status updates, etc.)
+    // continues as if the SMS sent. Different from SMS_DISABLED which
+    // halts the chain. See server/dry-run.ts.
+    const { isDryRunOutbound, logDryRun, dryRunFakeId } = await import('./dry-run');
+    if (isDryRunOutbound()) {
+      logDryRun({
+        vendor: 'twilio',
+        action: 'sendSMS',
+        payload: {
+          to,
+          bodyPreview: body.slice(0, 200) + (body.length > 200 ? '... [+' + (body.length - 200) + ' chars]' : ''),
+          bodyLength: body.length,
+          skipFooter,
+        },
+      });
+      return { success: true, messageSid: dryRunFakeId('twilio') };
+    }
+
     // A2P 10DLC: never send to a driver who has replied STOP. This is a hard guard
     // — Twilio also enforces this, but we double-check to keep our audit clean.
     const optedOut = await findOptedOutDriver(to);

@@ -53,6 +53,21 @@ export function isAddressVerifyEnabled(): boolean {
 }
 
 export async function extractBolAddresses(imageUrl: string): Promise<ExtractResult> {
+  // DRY-RUN MODE — skip the OpenAI call entirely. Returns ok:false so
+  // the caller treats it as "OCR couldn't run" → falls back to
+  // dispatcher review (Phase 1 gate). This lets the user exercise the
+  // full inbound MMS chain without spending OpenAI dollars per photo.
+  // See server/dry-run.ts.
+  const { isDryRunOutbound, logDryRun } = await import("./dry-run");
+  if (isDryRunOutbound()) {
+    logDryRun({
+      vendor: "openai",
+      action: "extractBolAddresses",
+      payload: { imageUrl },
+    });
+    return { ok: false, error: "dry-run mode: OCR skipped (falls back to dispatcher review)" };
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return { ok: false, error: "OPENAI_API_KEY not set" };
   }

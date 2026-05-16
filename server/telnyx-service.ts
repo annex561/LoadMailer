@@ -53,6 +53,24 @@ export async function sendTelnyxSms(params: { to: string; body: string }): Promi
     return { success: false, error: "SMS_DISABLED=true — outbound SMS halted" };
   }
 
+  // DRY-RUN MODE — same gate as Twilio (server/sms-service.ts). When
+  // DRY_RUN_OUTBOUND=true the downstream chain proceeds as if the SMS
+  // sent successfully. See server/dry-run.ts for why this is different
+  // from SMS_DISABLED.
+  const { isDryRunOutbound, logDryRun, dryRunFakeId } = await import("./dry-run");
+  if (isDryRunOutbound()) {
+    logDryRun({
+      vendor: "telnyx",
+      action: "sendSMS",
+      payload: {
+        to,
+        bodyPreview: body.slice(0, 200) + (body.length > 200 ? "... [+" + (body.length - 200) + " chars]" : ""),
+        bodyLength: body.length,
+      },
+    });
+    return { success: true, messageSid: dryRunFakeId("telnyx") };
+  }
+
   const apiKey = process.env.TELNYX_API_KEY;
   const profileId = process.env.TELNYX_MESSAGING_PROFILE_ID;
   const fromNumber = process.env.TELNYX_PHONE_NUMBER || "";
