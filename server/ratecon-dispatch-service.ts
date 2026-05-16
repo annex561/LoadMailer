@@ -245,6 +245,13 @@ export interface DriverStageInputs {
    *  out of an SMS gateway log can't POST photos against the load. The
    *  server route accepts both forms during rollout. */
   uploadToken?: string | null;
+  /** When true, the SMS swaps the "Upload a clear photo: <link>" line for
+   *  a "reply to this text with a photo" prompt — the link is omitted
+   *  entirely. The caller must have written pending_uploads rows for the
+   *  expected (driverPhone, loadId, stage) BEFORE sending so the inbound
+   *  MMS webhook can route the reply to the right slot. Gated upstream
+   *  by MMS_UPLOAD_ENABLED. */
+  mmsReplyMode?: boolean;
 }
 
 function fmtDayShort(d: Date | string | null | undefined): string {
@@ -286,13 +293,20 @@ export function buildDriverStageMessages(
     : null;
 
   if (step === "accepted") {
+    const bolLines = inputs.mmsReplyMode
+      ? [
+          `Reply to this text with a photo of the signed BOL for load #${inputs.loadNumber}.`,
+        ]
+      : [
+          `Upload a clear photo of the signed BOL:`,
+          uploadUrl,
+        ];
     return [
       [
         `Load #${inputs.loadNumber} CONFIRMED`,
         DRIVER_SMS_DIVIDER,
         `AT PICKUP`,
-        `Upload a clear photo of the signed BOL:`,
-        uploadUrl,
+        ...bolLines,
         ``,
         `Or reply PICKED UP when loaded.`,
         DRIVER_SMS_DIVIDER,
@@ -328,10 +342,16 @@ export function buildDriverStageMessages(
         deliveryWhen,
         DRIVER_SMS_DIVIDER,
         `AT DELIVERY`,
-        `Upload the signed BOL:`,
-        uploadUrl,
-        ``,
-        `Or text the BOL photo to this number.`,
+        ...(inputs.mmsReplyMode
+          ? [
+              `Reply to this text with a photo of the signed BOL for load #${inputs.loadNumber}.`,
+            ]
+          : [
+              `Upload the signed BOL:`,
+              uploadUrl,
+              ``,
+              `Or text the BOL photo to this number.`,
+            ]),
         `Reply DELIVERED when offloaded.`,
       ].join("\n"),
     ];
@@ -396,6 +416,32 @@ export async function sendDriverNextStepSms(
   const { signUploadToken } = await import("./upload-token");
   const uploadToken = signUploadToken(load.id);
 
+  // MMS-reply mode: when MMS_UPLOAD_ENABLED=true the driver replies to
+  // the SMS with the BOL photo instead of clicking the /u/<token> link.
+  // Write a pending_uploads row for the expected stage so the inbound
+  // MMS webhook routes the photo to the right (load, stage).
+  // pickup_bol on "accepted", delivery_signed_bol on "picked-up" — these
+  // mirror what the SMS text asks the driver to send (the signed BOL).
+  const { isMMSUploadEnabled, createPendingUpload } = await import("./mms-upload-service");
+  const mmsReplyMode = isMMSUploadEnabled();
+  if (mmsReplyMode) {
+    const stageForStep: Record<typeof step, "pickup_bol" | "delivery_signed_bol" | null> = {
+      accepted: "pickup_bol",
+      "picked-up": "delivery_signed_bol",
+      delivered: null,
+    };
+    const pendingStage = stageForStep[step];
+    if (pendingStage) {
+      try {
+        await createPendingUpload({ driverPhone: phone, loadId: load.id, stage: pendingStage });
+      } catch (err) {
+        console.error(`[next-step-sms] failed to write pending_uploads row for ${pendingStage}:`, err);
+        // Fall through: send the SMS anyway. Driver can still text the
+        // photo to dispatch and the dispatcher can attach it manually.
+      }
+    }
+  }
+
   const messages = buildDriverStageMessages(
     {
       loadId: load.id,
@@ -408,6 +454,7 @@ export async function sendDriverNextStepSms(
       trackingToken: (driver as any).trackingToken,
       baseUrl: process.env.PUBLIC_BASE_URL || process.env.CUSTOM_DOMAIN || undefined,
       uploadToken,
+      mmsReplyMode,
     },
     step,
   );

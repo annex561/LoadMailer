@@ -120,6 +120,71 @@ describe("buildDriverStageMessages", () => {
     });
   });
 
+  // Regression guards for the MMS-reply mode (gated upstream by
+  // MMS_UPLOAD_ENABLED). When the flag is on, the driver replies to the SMS
+  // with the BOL photo instead of clicking the /u/<token> link. The link
+  // is omitted entirely — the inbound MMS webhook routes the photo via the
+  // pending_uploads row the caller wrote before sending.
+  //
+  // The web upload page has hung in production through PRs #83-#97. This
+  // mode is the load-bearing path. These tests pin the wording so the link
+  // can't accidentally come back when the flag is on.
+  describe("mmsReplyMode = true", () => {
+    it("accepted: replaces upload link with reply prompt naming the load #", () => {
+      const out = buildDriverStageMessages(
+        { ...baseInputs, mmsReplyMode: true },
+        "accepted",
+      );
+      expect(out).toHaveLength(1);
+      // Link must NOT appear — that's the whole point of this mode.
+      expect(out[0]).not.toContain("https://traqiq.app/u/");
+      expect(out[0]).not.toContain("Upload a clear photo");
+      // Reply prompt must name the load number so the driver knows which
+      // load they're replying about (matches the user's Fix B request).
+      expect(out[0]).toContain(
+        "Reply to this text with a photo of the signed BOL for load #LD29505831",
+      );
+      // PICKED UP shortcut still works.
+      expect(out[0]).toContain("Or reply PICKED UP when loaded.");
+    });
+
+    it("picked-up: replaces delivery upload link with reply prompt", () => {
+      const out = buildDriverStageMessages(
+        { ...baseInputs, mmsReplyMode: true },
+        "picked-up",
+      );
+      expect(out).toHaveLength(2);
+      expect(out[1]).not.toContain("https://traqiq.app/u/");
+      expect(out[1]).not.toContain("Upload the signed BOL");
+      expect(out[1]).not.toContain("Or text the BOL photo to this number.");
+      expect(out[1]).toContain(
+        "Reply to this text with a photo of the signed BOL for load #LD29505831",
+      );
+      expect(out[1]).toContain("Reply DELIVERED when offloaded.");
+    });
+
+    it("delivered: unchanged (no upload prompt in this step)", () => {
+      const off = buildDriverStageMessages(baseInputs, "delivered");
+      const on = buildDriverStageMessages(
+        { ...baseInputs, mmsReplyMode: true },
+        "delivered",
+      );
+      expect(on).toEqual(off);
+    });
+
+    it("flag OFF (default): legacy link path is preserved", () => {
+      // Defense in depth: if mmsReplyMode is missing or false, the SMS still
+      // carries the /u/<token> link so already-deployed environments without
+      // the env var keep working.
+      const out = buildDriverStageMessages(baseInputs, "accepted");
+      expect(out[0]).toContain("https://traqiq.app/u/load-uuid-abc123");
+      expect(out[0]).toContain("Upload a clear photo of the signed BOL:");
+      expect(out[0]).not.toContain(
+        "Reply to this text with a photo of the signed BOL",
+      );
+    });
+  });
+
   describe('step = "delivered"', () => {
     it("returns a Good-to-Go acknowledgement with no pay numbers", () => {
       const out = buildDriverStageMessages(baseInputs, "delivered");
