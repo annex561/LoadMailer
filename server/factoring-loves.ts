@@ -14,8 +14,8 @@
 
 import nodemailer from "nodemailer";
 import { db } from "./db";
-import { loads, factoringSubmissions, rateconIntake } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { loads, factoringSubmissions, rateconIntake, loadDocuments } from "@shared/schema";
+import { and, eq, inArray } from "drizzle-orm";
 import { generateBillOfSale, generateInvoice, mergePacketPdfs, LAMP } from "./factoring-pdf-templates";
 
 const SCHEDULES_LS = "schedulesLS@loves.com";
@@ -174,20 +174,60 @@ export async function buildFactoringPacket(loadId: string): Promise<PacketResult
   }
 
   // ---- Resolve BOL/POD source ----
-  // Primary: load.bolPath (new field from this PR)
-  // Fallback 1: load.podPath (older code path)
-  // Fallback 2: load.rateconPath IF it's actually an image (legacy bug data)
+  // Phase 1 wrong-load-to-factoring guard: require a dispatcher-APPROVED
+  // BOL/POD load_documents row before any BOL is included in the packet.
+  // Without this gate, raw inbound MMS photos (which save with
+  // approvalStatus='pending') would flow straight to Love's, and a
+  // wrong-load attachment would cost a real factoring rejection +
+  // payment delay. Dispatcher must review and approve via the existing
+  // EnhancedDocumentViewer UI before the packet builder accepts the BOL.
+  //
+  // Primary source (post-gate): the most recent APPROVED load_documents
+  //   row whose documentType is a BOL/POD stage.
+  // Fallback 1: load.bolPath when an approved doc exists for THIS load
+  //   (legacy field, kept in sync by older flows).
+  // Fallback 2: load.podPath (same gate).
+  // Fallback 3: load.rateconPath IF it's an image (legacy bug data) AND
+  //   an approved doc exists. We do NOT bypass the approval gate even for
+  //   legacy paths — money safety wins.
+  const approvedBolDocs = await db
+    .select({ id: loadDocuments.id, fileUrl: loadDocuments.fileUrl, documentType: loadDocuments.documentType })
+    .from(loadDocuments)
+    .where(
+      and(
+        eq(loadDocuments.loadId, loadId),
+        eq(loadDocuments.approvalStatus, "approved"),
+        inArray(loadDocuments.documentType, [
+          "pickup_bol",
+          "delivery_signed_bol",
+          "delivery_pod",
+          "bol",
+          "pod",
+        ]),
+      ),
+    )
+    .limit(1);
+  const hasApprovedBolDoc = approvedBolDocs.length > 0;
+
   let bolPathToUse: string | null = null;
   let bolSource = "";
-  if (load.bolPath) {
-    bolPathToUse = load.bolPath;
-    bolSource = "load.bolPath";
+  if (hasApprovedBolDoc) {
+    bolPathToUse = approvedBolDocs[0].fileUrl;
+    bolSource = `load_documents.${approvedBolDocs[0].documentType} (approved by dispatcher)`;
+  } else if (load.bolPath) {
+    // bolPath populated but no approved load_documents row — refuse.
+    // Dispatcher review is the guardrail; honor it here.
+    warnings.push(
+      "BOL on file (loads.bolPath) but no dispatcher-approved load_documents row — refusing to include in packet. Approve the BOL in the dispatcher review UI to unblock.",
+    );
   } else if (load.podPath) {
-    bolPathToUse = load.podPath;
-    bolSource = "load.podPath";
+    warnings.push(
+      "POD on file (loads.podPath) but no dispatcher-approved load_documents row — refusing to include in packet.",
+    );
   } else if (rateconIsLegacyBolImage && load.rateconPath) {
-    bolPathToUse = load.rateconPath;
-    bolSource = "load.rateconPath (legacy BOL overwrite)";
+    warnings.push(
+      "Legacy BOL image in rateconPath but no dispatcher-approved load_documents row — refusing to include in packet.",
+    );
   }
 
   if (bolPathToUse) {

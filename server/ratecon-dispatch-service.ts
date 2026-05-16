@@ -293,9 +293,14 @@ export function buildDriverStageMessages(
     : null;
 
   if (step === "accepted") {
+    // mmsReplyMode wording: do NOT promise the driver they can reply with
+    // a photo immediately — there's no pending_uploads row yet. Geofence-cron
+    // writes the row when the driver arrives, and at that point sends a
+    // second SMS with the reply prompt. Pre-arrival photos here would bind
+    // to the wrong load if the driver is on >1 load. (Phase 1 fix.)
     const bolLines = inputs.mmsReplyMode
       ? [
-          `Reply to this text with a photo of the signed BOL for load #${inputs.loadNumber}.`,
+          `We'll text you when you arrive at the pickup so you can send the signed BOL.`,
         ]
       : [
           `Upload a clear photo of the signed BOL:`,
@@ -344,7 +349,10 @@ export function buildDriverStageMessages(
         `AT DELIVERY`,
         ...(inputs.mmsReplyMode
           ? [
-              `Reply to this text with a photo of the signed BOL for load #${inputs.loadNumber}.`,
+              // Same Phase 1 fix as "accepted" step: no pending_uploads row
+              // exists yet at pickup-time, so we defer the photo prompt to
+              // geofence-arrival at the delivery dock.
+              `We'll text you when you arrive at the delivery so you can send the signed BOL.`,
             ]
           : [
               `Upload the signed BOL:`,
@@ -418,29 +426,24 @@ export async function sendDriverNextStepSms(
 
   // MMS-reply mode: when MMS_UPLOAD_ENABLED=true the driver replies to
   // the SMS with the BOL photo instead of clicking the /u/<token> link.
-  // Write a pending_uploads row for the expected stage so the inbound
-  // MMS webhook routes the photo to the right (load, stage).
-  // pickup_bol on "accepted", delivery_signed_bol on "picked-up" — these
-  // mirror what the SMS text asks the driver to send (the signed BOL).
-  const { isMMSUploadEnabled, createPendingUpload } = await import("./mms-upload-service");
+  //
+  // Phase 1 of the wrong-load-attachment fix (after user caught the bug
+  // while driving): we do NOT pre-create a pending_uploads row at
+  // acceptance or pick-up. Pending rows are only written by geofence-cron
+  // at the moment the driver physically arrives at the shipper/receiver
+  // — that is the only moment we know which load the next photo belongs
+  // to, because a driver can only be at one pickup address at a time.
+  //
+  // Pre-creating rows here was the wrong-load source: a driver on two
+  // loads got two pending rows and the inbound photo bound to whichever
+  // was created last (findPendingForPhone orders DESC createdAt).
+  //
+  // The SMS wording also changes downstream in buildDriverStageMessages
+  // when mmsReplyMode=true: we tell the driver "we'll text you when you
+  // arrive at the pickup" instead of "reply with a photo now" — to match
+  // the new flow.
+  const { isMMSUploadEnabled } = await import("./mms-upload-service");
   const mmsReplyMode = isMMSUploadEnabled();
-  if (mmsReplyMode) {
-    const stageForStep: Record<typeof step, "pickup_bol" | "delivery_signed_bol" | null> = {
-      accepted: "pickup_bol",
-      "picked-up": "delivery_signed_bol",
-      delivered: null,
-    };
-    const pendingStage = stageForStep[step];
-    if (pendingStage) {
-      try {
-        await createPendingUpload({ driverPhone: phone, loadId: load.id, stage: pendingStage });
-      } catch (err) {
-        console.error(`[next-step-sms] failed to write pending_uploads row for ${pendingStage}:`, err);
-        // Fall through: send the SMS anyway. Driver can still text the
-        // photo to dispatch and the dispatcher can attach it manually.
-      }
-    }
-  }
 
   const messages = buildDriverStageMessages(
     {

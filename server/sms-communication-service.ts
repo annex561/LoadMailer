@@ -1091,6 +1091,22 @@ export class SMSCommunicationService {
     // (BOL_VERIFY_ENABLED=true) to confirm the photo shows a signed BOL —
     // hard-capped at 3 attempts per load to prevent runaway costs.
     if (mediaUrls.length > 0 && mediaTypes.some((t) => (t || "").startsWith("image/"))) {
+      // Phase 1 wrong-load-attachment guard: when MMS_UPLOAD_ENABLED=true,
+      // the supported path is processMMSReply -> findPendingForPhone (called
+      // earlier in the webhook, see routes.ts /api/sms/webhook). If we
+      // reach THIS legacy fallback it means processMMSReply returned
+      // {handled:false} because no pending_uploads row matched — which is
+      // exactly the wrong-load scenario. The legacy "attach to most-recent
+      // load" behavior below would silently bind the photo to the newest
+      // load even if the driver meant an older one. Refuse instead.
+      // Driver gets a clear "we don't know which load" reply and can wait
+      // for the geofence prompt or contact dispatch.
+      if (process.env.MMS_UPLOAD_ENABLED === "true") {
+        await sendReply(
+          "Photo received but no active upload request found. Please wait until we text you a BOL request (we send one when you arrive at the pickup or delivery), then reply with the photo. If you need to send one now, contact dispatch.",
+        );
+        return true;
+      }
       const [active] = await db
         .select()
         .from(loads)
