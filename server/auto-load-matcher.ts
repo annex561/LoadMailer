@@ -9,6 +9,142 @@
  */
 
 import { storage } from "./storage";
+import { db } from "./db";
+import { loads as loadsTable, customers } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
+
+// Auto-matcher loads come from Google Sheets and lack a real broker
+// identity — group them under a single synthetic customer so the FK on
+// loads.customer_id is satisfied. Created once on first dispatch.
+const AUTO_MATCH_CUSTOMER_NAME = "Google Sheets Auto-Match";
+
+async function ensureAutoMatchCustomer(companyId: string | null): Promise<string> {
+  const [existing] = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.name, AUTO_MATCH_CUSTOMER_NAME))
+    .limit(1);
+  if (existing) return existing.id;
+  if (!companyId) {
+    throw new Error("Cannot create auto-match customer — no companyId on driver");
+  }
+  const [created] = await db
+    .insert(customers)
+    .values({
+      companyId,
+      name: AUTO_MATCH_CUSTOMER_NAME,
+      contactPerson: "",
+      email: "",
+      phone: "",
+      address: "",
+      status: "active",
+    })
+    .returning();
+  return created.id;
+}
+
+// Parse the Google Sheets pickupDate field (typically "M/D/YYYY" or
+// "ASAP"). Falls back to "today" if unparseable — the auto-matcher's
+// purpose is same-day dispatch so a sensible default beats refusing
+// to persist.
+function parsePickupDate(input: string): Date {
+  if (!input || input.trim().toUpperCase() === "ASAP") return new Date();
+  const d = new Date(input);
+  return isNaN(d.getTime()) ? new Date() : d;
+}
+
+// Persist a database row for an auto-matched load so the YES handler
+// (sms-communication-service.handleDispatchKeyword) can find it when
+// the driver replies. Idempotent: if a row already exists with this
+// loadNumber, reuse it instead of failing on the unique constraint.
+//
+// Required fields on `loads` (NOT NULL): loadNumber, customerId,
+// description, pickupAddress, pickupDate, pickupTime, deliveryAddress,
+// deliveryDate, deliveryTime. Google Sheets data is sparse — we use
+// city names as addresses and 12:00 as a default time. The dispatcher
+// can edit any of this from the admin UI; the load row only needs to
+// be findable by the YES handler.
+//
+// Returns ok:true with `created` flag so the caller can log
+// create-vs-reuse. Returns ok:false on any persist error — caller is
+// expected to refuse to send the SMS in that case (otherwise the
+// driver gets a "YES but nothing happens" dead loop).
+async function persistLoadForAutoMatch(p: {
+  loadId: string;
+  driver: any;
+  origin: string;
+  destination: string;
+  pickupDate: string;
+  rate: number;
+  miles: number;
+  weight?: string;
+  equipment?: string;
+  brokerName?: string;
+  companyName?: string;
+}): Promise<{ ok: true; created: boolean } | { ok: false; error: string }> {
+  try {
+    // Idempotency check first — if the auto-matcher re-runs (e.g. on
+    // a cron tick before the in-memory cleanup), reuse the existing row.
+    const [existing] = await db
+      .select()
+      .from(loadsTable)
+      .where(eq(loadsTable.loadNumber, p.loadId))
+      .limit(1);
+    if (existing) {
+      // If the driver assignment changed, that's a separate concern —
+      // the YES handler keys on (driver, pending) so a re-dispatch to
+      // a different driver would not break anything. But we don't
+      // overwrite existing data here — the dispatcher may have edited.
+      return { ok: true, created: false };
+    }
+
+    const companyId = (p.driver as any).companyId ?? null;
+    const customerId = await ensureAutoMatchCustomer(companyId);
+    const pickup = parsePickupDate(p.pickupDate);
+    // Delivery date — Google Sheets doesn't ship one. Default to pickup
+    // + 1 day, which keeps the date-required NOT NULL constraint
+    // satisfied without making up a wildly wrong delivery promise.
+    const delivery = new Date(pickup.getTime() + 24 * 60 * 60 * 1000);
+
+    await db.insert(loadsTable).values({
+      companyId,
+      loadNumber: p.loadId,
+      customerId,
+      driverId: p.driver.id,
+      description: p.equipment || "Auto-matched from Google Sheets",
+      pickupAddress: p.origin || "TBD",
+      pickupDate: pickup,
+      pickupTime: "12:00",
+      deliveryAddress: p.destination || "TBD",
+      deliveryDate: delivery,
+      deliveryTime: "12:00",
+      // City fields used by buildDriverStageMessages "picked-up" SMS for
+      // the "DELIVER TO:" line when full deliveryAddress is missing.
+      originCity: p.origin || null,
+      originState: null,
+      destCity: p.destination || null,
+      destState: null,
+      status: "assigned",
+      equipmentType: "dry_van",
+      rate: p.rate || 0,
+      miles: p.miles || null,
+      weight: p.weight ? Number(p.weight) || null : null,
+      brokerName: p.brokerName || p.companyName || "Google Sheets",
+      assignedDriverName: p.driver.name,
+      sourceBoard: "google_sheets",
+      // CRITICAL: confirmationStatus='pending' is what handleDispatchKeyword
+      // queries on. Without this, the driver's YES reply finds no
+      // matching load and the CONFIRMED follow-up SMS never fires.
+      confirmationStatus: "pending" as const,
+      confirmationToken: nanoid(24),
+    } as any);
+
+    return { ok: true, created: true };
+  } catch (err: any) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -323,24 +459,59 @@ async function runMatcher(): Promise<void> {
       // ── AUTO-DISPATCH: send SMS immediately, no dispatcher click needed ──
       if (bestDriver?.phone) {
         try {
-          const { smsLoadService } = await import('./sms-service');
-          const smsLoad = {
-            loadNumber: loadId,
-            load_number: loadId,
+          // BUG FIX (user caught while live-testing Phase 2): persist a
+          // loads row to the DB BEFORE sending the SMS. Previously the
+          // auto-matcher only stored hotLoad in the in-memory `hotLoads`
+          // Map, so when the driver replied YES the handleDispatchKeyword
+          // handler queried the `loads` table for confirmationStatus=
+          // 'pending', found nothing, and returned silently — no
+          // CONFIRMED follow-up SMS, no upload prompt, dead loop.
+          // The DB row is the single source of truth for the YES handler;
+          // hotLoads stays for the existing dispatcher UI consumers.
+          const persisted = await persistLoadForAutoMatch({
+            loadId,
+            driver: bestDriver,
+            origin: hotLoad.origin,
+            destination: hotLoad.destination,
+            pickupDate: hotLoad.pickupDate,
             rate,
-            rate_total: rate,
-            originCity: hotLoad.origin,
-            origin_city: hotLoad.origin,
-            destCity: hotLoad.destination,
-            dest_city: hotLoad.destination,
-          };
-          const smsDriver = { phone: bestDriver.phone, name: bestDriver.name };
-          const result = await smsLoadService.sendBookingRequest(smsLoad, smsDriver);
-          if (result.success) {
-            hotLoad.status = 'dispatched';
-            console.log(`[AutoMatcher] ✅ Auto-dispatched load ${loadId} → ${bestDriver.name} (${bestDriver.phone})`);
+            miles,
+            weight: hotLoad.weight,
+            equipment: hotLoad.equipment,
+            brokerName: hotLoad.broker,
+            companyName: hotLoad.company,
+          });
+          if (!persisted.ok) {
+            // Refuse to send the SMS if we can't persist the load —
+            // otherwise the driver would get a YES-but-nothing-happens
+            // experience exactly like the bug we just fixed. Better to
+            // skip dispatch entirely; the dispatcher will see this load
+            // in the queue and can route it manually.
+            console.error(
+              `[AutoMatcher] ❌ Refusing to dispatch ${loadId} — DB persist failed: ${persisted.error}. Driver will NOT receive an SMS.`,
+            );
           } else {
-            console.warn(`[AutoMatcher] ⚠️ SMS failed for ${loadId}: ${result.error}`);
+            const { smsLoadService } = await import('./sms-service');
+            const smsLoad = {
+              loadNumber: loadId,
+              load_number: loadId,
+              rate,
+              rate_total: rate,
+              originCity: hotLoad.origin,
+              origin_city: hotLoad.origin,
+              destCity: hotLoad.destination,
+              dest_city: hotLoad.destination,
+            };
+            const smsDriver = { phone: bestDriver.phone, name: bestDriver.name };
+            const result = await smsLoadService.sendBookingRequest(smsLoad, smsDriver);
+            if (result.success) {
+              hotLoad.status = 'dispatched';
+              console.log(
+                `[AutoMatcher] ✅ Auto-dispatched load ${loadId} → ${bestDriver.name} (${bestDriver.phone}); DB row ${persisted.created ? 'created' : 'reused'}`,
+              );
+            } else {
+              console.warn(`[AutoMatcher] ⚠️ SMS failed for ${loadId}: ${result.error}`);
+            }
           }
         } catch (smsErr: any) {
           console.error(`[AutoMatcher] SMS error for ${loadId}:`, smsErr.message);
