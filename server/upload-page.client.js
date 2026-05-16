@@ -134,92 +134,122 @@
     reader.onload = function () { preview.src = reader.result; preview.style.display = 'block'; };
     reader.readAsDataURL(rawFile);
 
-    // Cloudinary resizes + converts HEIC -> JPEG server-side. No client
-    // canvas step that can hang on iOS.
+    // Direct-to-Cloudinary upload. PRs #83-#96 patched the server-side
+    // multer path and it still hung on rural-LTE iPhones. The byte path
+    // now goes phone -> Cloudinary edge directly, never through our
+    // Railway service. After Cloudinary accepts the file we POST just
+    // the resulting secure_url back to /api/loads/:id/photos so the
+    // load_documents row gets written tied to this load_id.
     var file = rawFile;
 
-    // No geolocation here. Even with a Promise.race hard-cap, iOS Safari
-    // pauses setTimeout while the geo permission prompt is on-screen, so
-    // the "2-second cap" never fires until the driver dismisses the
-    // prompt — which they don't, because the prompt is buried behind the
-    // photo picker. That manifested as the photo upload being stuck on
-    // "Starting upload (X KB)…" forever. The piggyback driver_locations
-    // row is a nice-to-have, not worth keeping the upload hostage.
-    var fd = new FormData();
-    fd.append('photo', file);
-    fd.append('stage', stage);
-
-    // Show progress immediately so the driver knows the tap registered.
-    status.textContent = 'Sending photo…';
-
-    // Heartbeat so the driver sees SOMETHING moving even when the network
-    // hasn't flushed any progress events yet. iOS Safari + HTTP/2 can
-    // delay or coalesce `upload.onprogress` events (especially when
-    // lengthComputable is false), leaving the bar frozen at the initial
-    // 2% for many seconds — drivers tap repeatedly thinking it's broken.
-    // The heartbeat ticks every 750ms during the first 8s, then stops.
-    var lastProgressAt = Date.now();
-    var hb = setInterval(function () {
-      // If real progress events have fired in the last 1.5s, leave it.
-      if (Date.now() - lastProgressAt < 1500) return;
-      // Otherwise nudge the status so the driver knows we're alive.
-      var t = Math.floor((Date.now() - startedAt) / 1000);
-      status.textContent = 'Sending photo… (' + t + 's)';
-    }, 750);
+    status.textContent = 'Preparing upload…';
     var startedAt = Date.now();
 
     try {
-      await new Promise(function (resolve, reject) {
+      // Step 1: get signed upload params from our server.
+      var sigRes = await fetch('/api/loads/' + LOAD_ID + '/photos/cloudinary-signature?stage=' + encodeURIComponent(stage), {
+        method: 'GET',
+        headers: TOKEN ? { 'X-Upload-Token': TOKEN } : {},
+      });
+      if (!sigRes.ok) {
+        var sigErrMsg = 'HTTP ' + sigRes.status;
+        try { sigErrMsg = (await sigRes.json()).error || sigErrMsg; } catch (_) {}
+        throw new Error('Signature failed: ' + sigErrMsg);
+      }
+      var sig = await sigRes.json();
+      if (!sig.cloudName || !sig.signature) {
+        throw new Error('Bad signature payload from server');
+      }
+
+      status.textContent = 'Uploading 0%';
+      barFill.style.width = '5%';
+
+      // Step 2: POST file to Cloudinary directly. Cloudinary's HTTPS
+      // endpoint sends proper Content-Length and fires lengthComputable
+      // progress events reliably on iOS Safari.
+      var cloudUrl = 'https://api.cloudinary.com/v1_1/' + sig.cloudName + '/image/upload';
+      var cldFd = new FormData();
+      cldFd.append('file', file);
+      cldFd.append('api_key', sig.apiKey);
+      cldFd.append('timestamp', String(sig.timestamp));
+      cldFd.append('signature', sig.signature);
+      cldFd.append('folder', sig.folder);
+      cldFd.append('public_id', sig.publicId);
+      cldFd.append('tags', sig.tags);
+
+      var cldResult = await new Promise(function (resolve, reject) {
         var xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/loads/' + LOAD_ID + '/photos');
-        if (TOKEN) xhr.setRequestHeader('X-Upload-Token', TOKEN);
+        xhr.open('POST', cloudUrl);
         xhr.upload.onprogress = function (e) {
-          lastProgressAt = Date.now();
           if (e.lengthComputable) {
             var pct = Math.min(95, Math.round((e.loaded / e.total) * 95));
             barFill.style.width = pct + '%';
             status.textContent = 'Uploading ' + pct + '%';
-          } else {
-            // No total — at least move the bar a bit and update text so
-            // the driver knows bytes are flowing.
-            var current = parseInt(barFill.style.width, 10) || 2;
-            barFill.style.width = Math.min(90, current + 3) + '%';
-            status.textContent = 'Uploading…';
           }
         };
         xhr.onload = function () {
           if (xhr.status >= 200 && xhr.status < 300) {
-            barFill.style.width = '100%';
-            resolve(null);
+            try {
+              var json = JSON.parse(xhr.responseText);
+              resolve(json);
+            } catch (e) {
+              reject(new Error('Cloudinary returned non-JSON response'));
+            }
           } else {
-            var msg = 'HTTP ' + xhr.status;
-            try { msg = JSON.parse(xhr.responseText).error || msg; } catch (_) {}
+            var msg = 'Cloudinary HTTP ' + xhr.status;
+            try { msg = JSON.parse(xhr.responseText).error.message || msg; } catch (_) {}
             reject(new Error(msg));
           }
         };
-        xhr.onerror = function () { reject(new Error('Network error')); };
-        xhr.ontimeout = function () { reject(new Error('Timed out')); };
-        // 180s — rural-LTE upload of 15 MB at 1 Mbps is ~120s, so 120s
-        // was right at the boundary. Drivers in weak coverage hit it.
+        xhr.onerror = function () { reject(new Error('Network error reaching Cloudinary')); };
+        xhr.ontimeout = function () { reject(new Error('Cloudinary upload timed out')); };
         xhr.timeout = 180000;
-        xhr.send(fd);
+        xhr.send(cldFd);
       });
 
-      clearInterval(hb);
+      status.textContent = 'Saving to dispatch…';
+      barFill.style.width = '97%';
+
+      // Step 3: tell our server "this photo at this URL belongs to this
+      // load + stage." JSON, no multer.
+      var saveRes = await fetch('/api/loads/' + LOAD_ID + '/photos', {
+        method: 'POST',
+        headers: Object.assign(
+          { 'Content-Type': 'application/json' },
+          TOKEN ? { 'X-Upload-Token': TOKEN } : {},
+        ),
+        body: JSON.stringify({
+          stage: stage,
+          cloudinaryUrl: cldResult.secure_url,
+          cloudinaryPublicId: cldResult.public_id,
+          fileSize: cldResult.bytes,
+          mimeType: cldResult.resource_type === 'image' ? ('image/' + (cldResult.format || 'jpeg')) : 'image/jpeg',
+          originalName: file.name || (stage + '.jpg'),
+        }),
+      });
+      if (!saveRes.ok) {
+        var saveErrMsg = 'HTTP ' + saveRes.status;
+        try { saveErrMsg = (await saveRes.json()).error || saveErrMsg; } catch (_) {}
+        throw new Error('Save failed: ' + saveErrMsg);
+      }
+      barFill.style.width = '100%';
+      // Stash the actual Cloudinary URL on the preview so tap-to-preview
+      // opens the saved image, not the local FileReader copy.
+      preview.dataset.cloudinaryUrl = cldResult.secure_url;
+
       slot.classList.add('done');
       status.className = 'status ok';
-      status.textContent = '✅ Uploaded — saved to dispatch. Tap photo to verify.';
+      var elapsed = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
+      status.textContent = '✅ Uploaded in ' + elapsed + 's — saved to dispatch. Tap photo to verify.';
       label.textContent = '📷 Replace Photo';
       label.style.background = '#14532d';
       label.style.pointerEvents = '';
       label.style.opacity = '';
-      // Tap-to-preview (CLAUDE.md user request). The local FileReader
-      // preview was already rendered above; wrap it in a link so tapping
-      // it opens the local image full-size for the driver to verify
-      // which photo went to this load. Cloudinary URL would be ideal
-      // but it isn't returned synchronously — the local preview is
-      // good enough for verify-on-the-spot.
-      if (preview && preview.src) {
+      // Tap-to-preview. After the direct upload, we know the real
+      // Cloudinary URL — prefer that over the local FileReader copy so
+      // tapping opens the saved image (matches what dispatch sees).
+      var previewUrl = preview.dataset.cloudinaryUrl || preview.src;
+      if (previewUrl) {
         preview.style.cursor = 'zoom-in';
         preview.onclick = function () {
           var w = window.open('', '_blank');
@@ -228,7 +258,7 @@
             w.document.body.style.margin = '0';
             w.document.body.style.background = '#000';
             var img = w.document.createElement('img');
-            img.src = preview.src;
+            img.src = previewUrl;
             img.style.width = '100%';
             img.style.height = 'auto';
             img.style.display = 'block';
@@ -238,7 +268,6 @@
       }
       if (navigator.vibrate) navigator.vibrate(80);
     } catch (err) {
-      clearInterval(hb);
       status.className = 'status error';
       status.textContent = '❌ Upload failed: ' + err.message + ' — tap the button to retry';
       bar.style.display = 'none';
