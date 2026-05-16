@@ -2,12 +2,37 @@
 // Gated by MMS_UPLOAD_ENABLED. See ~/.claude/plans/mms-bol-upload-CONTEXT.md.
 
 import { db } from './db';
-import { pendingUploads } from '@shared/schema';
+import { pendingUploads, loadDocuments } from '@shared/schema';
 import { and, eq, isNull, gt, desc, sql, inArray } from 'drizzle-orm';
 import { uploadLoadPhoto, type PhotoStage } from './load-photos-service';
 
 export function isMMSUploadEnabled(): boolean {
   return process.env.MMS_UPLOAD_ENABLED === 'true';
+}
+
+// Per-driver-per-hour cap on OpenAI vision calls (defense in depth
+// against a runaway loop racking up cost). In-memory; resets on
+// process restart, which is fine — this is a budget tripwire, not a
+// strict billing meter. If a single phone exceeds the cap, subsequent
+// OCR attempts are skipped (treated as ocr_status='disabled' for that
+// document) and dispatcher review remains the final gate either way.
+const PER_DRIVER_OCR_PER_HOUR = 10;
+const ocrTimestamps: Map<string, number[]> = new Map();
+
+export function canRunOcrForDriver(phone: string): boolean {
+  const now = Date.now();
+  const oneHourAgo = now - 60 * 60 * 1000;
+  const arr = ocrTimestamps.get(phone) ?? [];
+  // Drop expired entries.
+  const recent = arr.filter((t) => t >= oneHourAgo);
+  ocrTimestamps.set(phone, recent);
+  return recent.length < PER_DRIVER_OCR_PER_HOUR;
+}
+
+export function recordOcrAttempt(phone: string): void {
+  const arr = ocrTimestamps.get(phone) ?? [];
+  arr.push(Date.now());
+  ocrTimestamps.set(phone, arr);
 }
 
 // Phone number candidates for matching a pending_uploads row.
@@ -244,6 +269,16 @@ export async function processMMSReply(p: {
     return handleWrongReply(p.from);
   }
 
+  // "OVERRIDE" reply path — driver acknowledging an OCR address mismatch
+  // and asking us to keep the photo anyway. The actual factoring gate
+  // still requires dispatcher approval (per Phase 1) — OVERRIDE alone
+  // does NOT auto-approve the photo, it just stops re-prompting the
+  // driver and lets dispatcher see "driver acknowledged mismatch" when
+  // reviewing. Must precede the media check (text-only reply).
+  if (/^OVERRIDE\b/.test(body)) {
+    return handleOverrideReply(p.from, p.messageSid);
+  }
+
   if (p.numMedia < 1 || !p.mediaUrl) return { handled: false };
 
   // Dedup: same MessageSid already fulfilled? Twilio retries on 5xx.
@@ -268,13 +303,18 @@ export async function processMMSReply(p: {
     };
   }
 
-  // Look up the user-facing load number for the confirmation reply. The
+  // Look up the user-facing load number AND the load's pickup/delivery
+  // addresses for the confirmation reply + the Phase 2 OCR check. The
   // driver needs to see exactly which load their photo was bound to so
   // they can flag a mistake before the BOL flows downstream into the
   // factoring submission. Cheap and worth the round-trip.
   const { loads } = await import('@shared/schema');
   const [loadRow] = await db
-    .select({ loadNumber: loads.loadNumber })
+    .select({
+      loadNumber: loads.loadNumber,
+      pickupAddress: loads.pickupAddress,
+      deliveryAddress: loads.deliveryAddress,
+    })
     .from(loads)
     .where(eq(loads.id, pending.loadId))
     .limit(1);
@@ -293,6 +333,33 @@ export async function processMMSReply(p: {
   }
   await markFulfilled(pending.id, p.messageSid);
 
+  // Phase 2: OCR address verification. Gated behind ADDRESS_VERIFY_ENABLED
+  // (default OFF) so flipping MMS_UPLOAD_ENABLED on doesn't accidentally
+  // trigger OpenAI bills. When ON, every saved BOL photo is OCR'd against
+  // the load's pickup (for pickup_bol/pickup_securement) or delivery
+  // (for delivery_pod/delivery_signed_bol) address. Three outcomes:
+  //   - matched → save with ocr_status='matched', send the normal ✅ reply
+  //   - mismatch → save with ocr_status='mismatch', send the mismatch SMS
+  //     with the OVERRIDE option
+  //   - unreadable/error/disabled → save with the corresponding ocr_status,
+  //     send the normal ✅ reply with a "dispatch will verify" note
+  // The factoring gate from Phase 1 (approvalStatus='approved') still
+  // applies — OCR match never auto-approves for factoring, dispatcher
+  // review is always required. OCR just reduces the wrong-load surface
+  // before the human ever sees the photo.
+  const ocrReply = await runOcrAddressCheckIfEnabled({
+    docId: result.docId,
+    phone: p.from,
+    stage: pending.stage,
+    fileUrl: result.url,
+    loadNumber,
+    loadPickupAddress: loadRow?.pickupAddress ?? null,
+    loadDeliveryAddress: loadRow?.deliveryAddress ?? null,
+  });
+  if (ocrReply.driverSmsOverride) {
+    return { handled: true, reply: ocrReply.driverSmsOverride };
+  }
+
   const next = nextStage(pending.stage);
   const label = STAGE_REPLY_LABEL[pending.stage];
   // Fix A (CLAUDE.md user request): echo the load number in every
@@ -300,8 +367,199 @@ export async function processMMSReply(p: {
   // immediately. The factoring/RateCon flow depends on photos being on
   // the correct load_id, and the driver is the last line of defense
   // before the BOL goes downstream.
+  const ocrSuffix = ocrReply.suffixForOkReply ?? '';
   const reply = next
-    ? `✅ ${label} saved for load ${loadNumber}. Next: reply with a photo of the ${STAGE_REPLY_LABEL[next]}. Reply WRONG if this load number is incorrect.`
-    : `✅ ${label} saved for load ${loadNumber}. All photos received. Reply WRONG if this load number is incorrect.`;
+    ? `✅ ${label} saved for load ${loadNumber}.${ocrSuffix} Next: reply with a photo of the ${STAGE_REPLY_LABEL[next]}. Reply WRONG if this load number is incorrect.`
+    : `✅ ${label} saved for load ${loadNumber}.${ocrSuffix} All photos received. Reply WRONG if this load number is incorrect.`;
   return { handled: true, reply };
+}
+
+// OCR address check + load_documents update. Returns either a full
+// driverSmsOverride (mismatch SMS — caller short-circuits and returns
+// this verbatim) or a short suffix to append to the normal ✅ reply
+// (added context like " (address verified)").
+//
+// Never throws — any OpenAI failure / timeout / cap-hit is logged and
+// returns suffix only, falling back to the existing dispatcher review
+// surface as the guardrail. This function is the load-bearing place
+// where the OCR cost gate lives — the caller does not need to know
+// about ADDRESS_VERIFY_ENABLED or the per-driver cap.
+async function runOcrAddressCheckIfEnabled(p: {
+  docId: string;
+  phone: string;
+  stage: PhotoStage;
+  fileUrl: string;
+  loadNumber: string;
+  loadPickupAddress: string | null;
+  loadDeliveryAddress: string | null;
+}): Promise<{ driverSmsOverride?: string; suffixForOkReply?: string }> {
+  const { isAddressVerifyEnabled, extractBolAddresses } = await import('./factoring-bol-address-verify');
+  if (!isAddressVerifyEnabled()) {
+    await updateOcrStatus(p.docId, { ocrStatus: 'disabled' });
+    return {};
+  }
+  if (!canRunOcrForDriver(p.phone)) {
+    console.warn(`[mms-upload] OCR per-driver hourly cap hit for ${p.phone} — skipping`);
+    await updateOcrStatus(p.docId, { ocrStatus: 'disabled' });
+    return { suffixForOkReply: '' };
+  }
+  recordOcrAttempt(p.phone);
+
+  // Pickup BOL/securement match against load.pickupAddress.
+  // Delivery POD/signed BOL match against load.deliveryAddress.
+  const isPickupStage = p.stage === 'pickup_bol' || p.stage === 'pickup_securement';
+  const expectedFreeform = isPickupStage ? p.loadPickupAddress : p.loadDeliveryAddress;
+
+  const extract = await extractBolAddresses(p.fileUrl);
+  await updateOcrStatus(p.docId, { ocrAttemptedAt: new Date() });
+  if (!extract.ok) {
+    await updateOcrStatus(p.docId, { ocrStatus: 'error' });
+    return { suffixForOkReply: '' };
+  }
+  const extractedSide = isPickupStage ? extract.shipFrom : extract.shipTo;
+  if (!extractedSide || !expectedFreeform) {
+    await updateOcrStatus(p.docId, { ocrStatus: 'unreadable' });
+    return { suffixForOkReply: ' Address auto-check incomplete — dispatch will verify.' };
+  }
+
+  const { matchAddresses, parseFreeformAddress } = await import('./address-match');
+  const expected = parseFreeformAddress(expectedFreeform);
+  const result = matchAddresses(extractedSide, expected);
+
+  // Persist the extracted labels on whichever side this stage cares
+  // about. Both columns are written (extracted side gets the label;
+  // other side stays null) so the dispatcher UI can render "OCR saw X,
+  // expected Y" at a glance.
+  const persistedExtracted = result.normalizedExtracted ?? null;
+  if (isPickupStage) {
+    await updateOcrStatus(p.docId, {
+      ocrStatus: result.outcome,
+      ocrExtractedPickup: persistedExtracted,
+    });
+  } else {
+    await updateOcrStatus(p.docId, {
+      ocrStatus: result.outcome,
+      ocrExtractedDropoff: persistedExtracted,
+    });
+  }
+
+  if (result.outcome === 'matched') {
+    return { suffixForOkReply: ` Address verified (${result.normalizedExtracted}).` };
+  }
+  if (result.outcome === 'unreadable') {
+    return { suffixForOkReply: ' Address auto-check incomplete — dispatch will verify.' };
+  }
+  // Mismatch — full driver-facing override SMS. Spell out both sides so
+  // the driver can self-correct without calling dispatch.
+  const sideLabel = isPickupStage ? 'pickup' : 'delivery';
+  return {
+    driverSmsOverride:
+      `⚠️ The BOL photo shows ${sideLabel} as ${result.normalizedExtracted}, ` +
+      `but Load #${p.loadNumber}'s ${sideLabel} is ${result.normalizedExpected}. ` +
+      `This may be the wrong BOL.\n\n` +
+      `Send a new photo, OR reply OVERRIDE to keep this one.\n\n` +
+      `⚠️ If you OVERRIDE and the BOL is wrong, factoring will reject it and payment for Load #${p.loadNumber} will be delayed.`,
+  };
+}
+
+async function updateOcrStatus(
+  docId: string,
+  patch: Partial<{
+    ocrStatus: string;
+    ocrExtractedPickup: string | null;
+    ocrExtractedDropoff: string | null;
+    ocrAttemptedAt: Date;
+  }>,
+): Promise<void> {
+  if (!docId) return;
+  try {
+    await db.update(loadDocuments).set(patch as any).where(eq(loadDocuments.id, docId));
+  } catch (err: any) {
+    console.error(`[mms-upload] OCR status update failed for ${docId}:`, err.message);
+  }
+}
+
+// "OVERRIDE" handler — driver acknowledging an OCR mismatch and asking
+// us to keep the photo on the load anyway. Finds the most recent
+// load_documents row for this phone (via the most-recent fulfilled
+// pending_uploads row) with ocr_status='mismatch' and stamps the
+// acknowledgment. Factoring still requires dispatcher approval, so
+// OVERRIDE alone never causes a wrong BOL to ship to Love's.
+export async function handleOverrideReply(
+  driverPhone: string,
+  messageSid: string,
+): Promise<{ handled: boolean; reply?: string }> {
+  if (!isMMSUploadEnabled()) return { handled: false };
+  const candidates = phoneVariants(driverPhone);
+  // Find the most-recently-fulfilled pending row for this phone.
+  const [recent] = await db
+    .select({
+      loadId: pendingUploads.loadId,
+      stage: pendingUploads.stage,
+      fulfilledMessageSid: pendingUploads.fulfilledMessageSid,
+    })
+    .from(pendingUploads)
+    .where(inArray(pendingUploads.driverPhone, candidates))
+    .orderBy(desc(pendingUploads.fulfilledAt))
+    .limit(1);
+  if (!recent || !recent.fulfilledMessageSid) {
+    return {
+      handled: true,
+      reply: 'No recent BOL upload found to override. If you meant to send a photo, please send it now.',
+    };
+  }
+  // Find the load_documents row for that load + stage in 'mismatch' state.
+  const [doc] = await db
+    .select({ id: loadDocuments.id, ocrStatus: loadDocuments.ocrStatus })
+    .from(loadDocuments)
+    .where(
+      and(
+        eq(loadDocuments.loadId, recent.loadId),
+        eq(loadDocuments.documentType, recent.stage),
+      ),
+    )
+    .orderBy(desc(loadDocuments.createdAt))
+    .limit(1);
+  if (!doc) {
+    return {
+      handled: true,
+      reply: 'No recent BOL upload found to override. Contact dispatch.',
+    };
+  }
+  if (doc.ocrStatus !== 'mismatch') {
+    return {
+      handled: true,
+      reply: 'Your most recent BOL is not flagged for mismatch. Nothing to override.',
+    };
+  }
+  // Look up the load number for the reply.
+  const { loads } = await import('@shared/schema');
+  const [loadRow] = await db
+    .select({ loadNumber: loads.loadNumber })
+    .from(loads)
+    .where(eq(loads.id, recent.loadId))
+    .limit(1);
+  const loadNumber = loadRow?.loadNumber ?? recent.loadId;
+  try {
+    await db
+      .update(loadDocuments)
+      .set({
+        ocrStatus: 'override',
+        overrideAcknowledgedAt: new Date(),
+        overrideMessageSid: messageSid,
+      } as any)
+      .where(eq(loadDocuments.id, doc.id));
+  } catch (err: any) {
+    console.error('[mms-upload] OVERRIDE persist failed:', err.message);
+    return {
+      handled: true,
+      reply: 'Could not record your override — please try again or contact dispatch.',
+    };
+  }
+  return {
+    handled: true,
+    reply:
+      `✅ Override recorded for Load #${loadNumber}. Photo will go to dispatch for final review. ` +
+      `Payment depends on dispatcher approval — if the BOL is wrong, factoring will reject it.`,
+  };
 }
