@@ -4,10 +4,12 @@
 // Records metadata in the existing load_documents table.
 
 import { v2 as cloudinary } from 'cloudinary';
+import { createHash } from 'crypto';
 import { db } from './db';
 import { loadDocuments, loads, drivers, driverLocations } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { smsLoadService } from './sms-service';
+import { UPLOAD_PAGE_CLIENT_JS } from './upload-page-client-source';
 
 export type PhotoStage =
   | 'pickup_bol'
@@ -152,6 +154,76 @@ export async function uploadLoadPhoto(
   }
 }
 
+// Sibling of uploadLoadPhoto for the direct-to-Cloudinary upload path.
+// The browser already pushed the photo to Cloudinary using a signed
+// preset from /api/loads/:id/photos/cloudinary-signature, so we just
+// need to write the load_documents row. Keeps the same return shape +
+// driver/loadId safety checks as the multipart path.
+export async function recordExternalPhotoUpload(p: {
+  loadId: string;
+  driverId?: string;
+  stage: PhotoStage;
+  cloudinaryUrl: string;
+  cloudinaryPublicId: string;
+  fileSize?: number;
+  mimeType?: string;
+  originalName?: string;
+  lat?: number;
+  lng?: number;
+  notes?: string;
+}): Promise<{ ok: true; url: string; docId: string } | { ok: false; error: string }> {
+  const load = await db.query.loads.findFirst({ where: eq(loads.id, p.loadId) });
+  if (!load) return { ok: false, error: 'Load not found' };
+
+  // Same orphan-prevention guard as uploadLoadPhoto.
+  const driverId = p.driverId || load.driverId || null;
+  if (!driverId) {
+    console.error(`[load-photos] refusing direct-upload record for load ${p.loadId} — no driver assigned`);
+    return {
+      ok: false,
+      error: 'No driver assigned to this load. Contact dispatch before uploading.',
+    };
+  }
+
+  try {
+    const [doc] = await db
+      .insert(loadDocuments)
+      .values({
+        loadId: p.loadId,
+        driverId,
+        documentType: p.stage,
+        fileName: p.originalName || `${p.stage}.jpg`,
+        fileUrl: p.cloudinaryUrl,
+        fileSize: p.fileSize || 0,
+        mimeType: p.mimeType || 'image/jpeg',
+        notes: p.notes || null,
+        approvalStatus: 'pending',
+      } as any)
+      .returning();
+
+    if (typeof p.lat === 'number' && typeof p.lng === 'number') {
+      try {
+        await db.insert(driverLocations).values({
+          driverId,
+          latitude: p.lat,
+          longitude: p.lng,
+          timestamp: new Date(),
+          loadId: p.loadId,
+          isActive: true,
+          source: 'photo-upload-direct',
+        } as any);
+      } catch (locErr: any) {
+        console.warn('[load-photos] driverLocations insert failed:', locErr?.message || locErr);
+      }
+    }
+
+    return { ok: true, url: p.cloudinaryUrl, docId: doc?.id || '' };
+  } catch (err: any) {
+    console.error('[load-photos] recordExternalPhotoUpload error:', err?.message || err);
+    return { ok: false, error: String(err?.message || err) };
+  }
+}
+
 export async function listLoadPhotos(loadId: string) {
   const docs = await db
     .select()
@@ -225,6 +297,12 @@ export async function sendUploadLink(
   return { ok: r.success, sent: r.success ? 1 : 0, error: r.error };
 }
 
+// Computed once per boot — sha256 of the inlined client JS. The
+// renderUploadPage HTML embeds this as a query string on the upload.js
+// <script> tag so every shipped fix produces a brand-new URL, defeating
+// any aggressive iOS Safari / CDN cache for the previous version.
+const UPLOAD_JS_HASH = createHash('sha256').update(UPLOAD_PAGE_CLIENT_JS).digest('hex').slice(0, 12);
+
 export function renderUploadPage(
   loadId: string,
   stages: PhotoStage[],
@@ -285,6 +363,6 @@ export function renderUploadPage(
   <footer>Photos auto-save. You can close this page when done.</footer>
 
 <script id="upload-config" type="application/json">${configJson}</script>
-<script src="/u-assets/upload.js" defer></script>
+<script src="/u-assets/upload.js?v=${UPLOAD_JS_HASH}" defer></script>
 </body></html>`;
 }

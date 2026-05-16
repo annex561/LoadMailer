@@ -998,10 +998,22 @@ export async function registerRoutes(app: Express): Promise<void> {
   // standalone .js asset files (same gotcha as the factoring signature
   // PNG that we base64-inlined in PR #68).
   const { UPLOAD_PAGE_CLIENT_JS } = await import('./upload-page-client-source');
-  app.get('/u-assets/upload.js', (_req, res) => {
+  // ETag + no-cache (must-revalidate) so the browser always sends an
+  // If-None-Match conditional GET. Cuts bytes when unchanged (304) and
+  // guarantees the driver never runs a stale client after a fix ships.
+  // The hash is computed once per process boot; same content => same
+  // ETag across replicas.
+  const { createHash } = await import('crypto');
+  const UPLOAD_JS_ETAG =
+    '"' + createHash('sha256').update(UPLOAD_PAGE_CLIENT_JS).digest('hex').slice(0, 16) + '"';
+  app.get('/u-assets/upload.js', (req, res) => {
+    if (req.headers['if-none-match'] === UPLOAD_JS_ETAG) {
+      return res.status(304).end();
+    }
     res
       .type('application/javascript')
-      .set('Cache-Control', 'public, max-age=300') // 5 min — short enough to roll out fixes fast
+      .set('Cache-Control', 'no-cache, must-revalidate')
+      .set('ETag', UPLOAD_JS_ETAG)
       .send(UPLOAD_PAGE_CLIENT_JS);
   });
 
@@ -1076,9 +1088,135 @@ export async function registerRoutes(app: Express): Promise<void> {
     limits: { fileSize: 30 * 1024 * 1024 },
   });
 
+  // Direct-to-Cloudinary signed upload params. The browser calls this
+  // endpoint, gets back a signed payload, then POSTs the photo directly to
+  // Cloudinary — no multer/buffer hop through our server. Bytes go from
+  // the phone to Cloudinary's CDN edge, which is far faster and reliable
+  // on iOS Safari + 5G E than routing through Railway's reverse proxy.
+  //
+  // Why direct: PRs #83-#96 each patched a different layer of the
+  // multer-based upload path and it still hung on rural-LTE iPhones.
+  // The architectural fix is to remove our server from the upload byte
+  // path entirely. After Cloudinary accepts the photo, the browser POSTs
+  // just the resulting secure_url back to /api/loads/:id/photos (JSON
+  // body, no multer) which writes the load_documents row tied to the
+  // specific load_id. Factoring/RateCon binding is preserved.
+  app.get('/api/loads/:id/photos/cloudinary-signature', async (req, res) => {
+    try {
+      // Same token check as the upload endpoint — driver must have a
+      // valid upload token (from the /u/<token> SMS link) to even get a
+      // signature.
+      const { verifyUploadToken, isTokenRequired } = await import('./upload-token');
+      const token = req.headers['x-upload-token'];
+      if (typeof token === 'string' && token.length > 0) {
+        const v = verifyUploadToken(token);
+        if (v.kind === 'expired') return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+        if (v.kind === 'invalid') return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+        if (v.loadId !== req.params.id) return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+      } else if (isTokenRequired()) {
+        return res.status(401).json({ ok: false, error: 'Upload token required.' });
+      }
+
+      const stage = (req.query.stage || '').toString();
+      if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+        return res.status(400).json({ ok: false, error: 'Invalid stage' });
+      }
+
+      // Load the load to derive folder/public_id (loadNumber).
+      const { db } = await import('./db');
+      const { loads } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const [load] = await db.select({ id: loads.id, loadNumber: loads.loadNumber }).from(loads).where(eq(loads.id, req.params.id)).limit(1);
+      if (!load) return res.status(404).json({ ok: false, error: 'Load not found' });
+
+      // Pull Cloudinary creds. The cloudinary SDK auto-parses CLOUDINARY_URL
+      // (format: cloudinary://KEY:SECRET@CLOUD_NAME) into config(). Read them
+      // back from the configured instance so we don't re-parse here.
+      const { v2: cld } = await import('cloudinary');
+      const cfg = cld.config();
+      const cloudName = cfg.cloud_name;
+      const apiKey = cfg.api_key;
+      const apiSecret = cfg.api_secret;
+      if (!cloudName || !apiKey || !apiSecret) {
+        return res.status(500).json({ ok: false, error: 'Cloudinary not configured on server.' });
+      }
+
+      const timestamp = Math.floor(Date.now() / 1000);
+      const folder = `traqiq/loads/${load.loadNumber}`;
+      const publicId = `${stage}_${timestamp}`;
+      const tags = ['traqiq', load.loadNumber, stage].join(',');
+      // Cloudinary's signature is HMAC-SHA1 of params (sorted, joined by
+      // & in query-string form) + api_secret. Use the SDK helper to avoid
+      // a string-formatting bug class.
+      const paramsToSign: Record<string, string | number> = {
+        folder,
+        public_id: publicId,
+        tags,
+        timestamp,
+      };
+      const signature = cld.utils.api_sign_request(paramsToSign, apiSecret);
+
+      res.json({
+        ok: true,
+        cloudName,
+        apiKey,
+        timestamp,
+        signature,
+        folder,
+        publicId,
+        tags,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // Multipart photo upload
   app.post('/api/loads/:id/photos', async (req, res) => {
     try {
+      // Direct-upload JSON path. The browser uploaded straight to
+      // Cloudinary using the signed params from
+      // /api/loads/:id/photos/cloudinary-signature; it now POSTs just the
+      // resulting secure_url here so we write the load_documents row.
+      // Detect this path by Content-Type: application/json. Falls through
+      // to multer multipart for legacy clients (driver-confirm.tsx still
+      // uses multipart and ad-hoc curl/Postman tests).
+      const ct = (req.headers['content-type'] || '').toString();
+      if (ct.includes('application/json') && req.body && req.body.cloudinaryUrl) {
+        const { verifyUploadToken, isTokenRequired } = await import('./upload-token');
+        const token = req.headers['x-upload-token'];
+        if (typeof token === 'string' && token.length > 0) {
+          const v = verifyUploadToken(token);
+          if (v.kind === 'expired') return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+          if (v.kind === 'invalid') return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+          if (v.loadId !== req.params.id) return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+        } else if (isTokenRequired()) {
+          return res.status(401).json({ ok: false, error: 'Upload token required.' });
+        }
+        const stage = (req.body.stage || '').toString();
+        if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+          return res.status(400).json({ ok: false, error: 'Invalid stage' });
+        }
+        const url: string = String(req.body.cloudinaryUrl || '');
+        if (!/^https:\/\/res\.cloudinary\.com\//.test(url)) {
+          return res.status(400).json({ ok: false, error: 'cloudinaryUrl must be a https://res.cloudinary.com URL.' });
+        }
+        const { recordExternalPhotoUpload } = await import('./load-photos-service');
+        const result = await recordExternalPhotoUpload({
+          loadId: req.params.id,
+          stage: stage as any,
+          cloudinaryUrl: url,
+          cloudinaryPublicId: String(req.body.cloudinaryPublicId || ''),
+          fileSize: req.body.fileSize ? Number(req.body.fileSize) : undefined,
+          mimeType: req.body.mimeType ? String(req.body.mimeType) : 'image/jpeg',
+          originalName: req.body.originalName ? String(req.body.originalName) : `${stage}.jpg`,
+          lat: req.body.lat ? Number(req.body.lat) : undefined,
+          lng: req.body.lng ? Number(req.body.lng) : undefined,
+        });
+        if (!result.ok) return res.status(500).json(result);
+        return res.json(result);
+      }
+
       photoMulter.single('photo')(req, res, async (err: any) => {
         if (err) {
           // Translate multer error codes into driver-friendly messages.

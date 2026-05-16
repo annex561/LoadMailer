@@ -102,7 +102,17 @@ describe("renderUploadPage — html shell", () => {
   });
 
   it("references the external script asset", () => {
-    expect(html).toContain('<script src="/u-assets/upload.js"');
+    // Path stays the same; query string is a content-hash for
+    // cache-busting (see UPLOAD_JS_HASH in load-photos-service.ts).
+    expect(html).toMatch(/<script src="\/u-assets\/upload\.js\?v=[0-9a-f]+"/);
+  });
+
+  it("script tag includes a content-hash query string for cache-busting", () => {
+    // Regression guard: if a refactor strips ?v=HASH, iOS Safari can
+    // serve a stale upload.js for up to 5 minutes after a deploy. The
+    // hash is the load-bearing piece that makes every fix immediately
+    // reach drivers' phones.
+    expect(html).toMatch(/upload\.js\?v=[0-9a-f]{6,16}"/);
   });
 
   it("does NOT contain an inline <script> block with raw JS", () => {
