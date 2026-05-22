@@ -17,14 +17,52 @@ export default function ReviewQueuePage() {
   const [drivers, setDrivers] = useState<Array<{ id: string; name: string }>>([]);
   const [search, setSearch] = useState("");
   const [focusIntakeId, setFocusIntakeId] = useState<string | null>(getIntakeIdFromUrl());
+  // Error state for the queue fetch. Renders a banner instead of letting
+  // a non-array response (e.g., 401 {"message":"Unauthorized"}) crash the
+  // whole React tree via rows.filter(...) -> TypeError -> blank black page.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = async () => {
-    const [rqRes, drvRes] = await Promise.all([
-      fetch("/api/ratecon-intake/review-queue"),
-      fetch("/api/drivers"),
-    ]);
-    setRows(await rqRes.json());
-    setDrivers(await drvRes.json());
+    try {
+      const [rqRes, drvRes] = await Promise.all([
+        fetch("/api/ratecon-intake/review-queue", { credentials: "include" }),
+        fetch("/api/drivers", { credentials: "include" }),
+      ]);
+
+      // Queue endpoint — handle auth errors and non-array bodies defensively.
+      // The previous code wrote the raw rqRes JSON straight into rows,
+      // so a 401 response with body `{"message":"Unauthorized"}` would land
+      // in `rows`, and the next `rows.filter(...)` call would TypeError and
+      // unmount the React tree, producing a blank black page.
+      if (rqRes.status === 401 || rqRes.status === 403) {
+        setRows([]);
+        setLoadError("Your session expired. Please sign in again to view the review queue.");
+      } else if (!rqRes.ok) {
+        setRows([]);
+        setLoadError(`Review queue failed to load (HTTP ${rqRes.status}). Try refreshing in a minute.`);
+      } else {
+        const rqJson = await rqRes.json();
+        if (Array.isArray(rqJson)) {
+          setRows(rqJson);
+          setLoadError(null);
+        } else {
+          setRows([]);
+          setLoadError("Review queue returned an unexpected response. Try refreshing.");
+        }
+      }
+
+      // Drivers endpoint — same defensive pattern, but missing drivers
+      // doesn't block the queue from rendering.
+      if (drvRes.ok) {
+        const drvJson = await drvRes.json();
+        setDrivers(Array.isArray(drvJson) ? drvJson : []);
+      } else {
+        setDrivers([]);
+      }
+    } catch (err: any) {
+      setRows([]);
+      setLoadError(`Could not reach the server: ${err?.message ?? String(err)}`);
+    }
   };
 
   useEffect(() => {
@@ -124,6 +162,24 @@ export default function ReviewQueuePage() {
 
   return (
     <div className="max-w-5xl mx-auto p-3 sm:p-6">
+      {loadError && (
+        <div
+          className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+          data-testid="review-queue-error-banner"
+          role="alert"
+        >
+          <strong className="font-semibold">Review queue unavailable.</strong>{" "}
+          {loadError}
+          {/^Your session expired/.test(loadError) && (
+            <>
+              {" "}
+              <a href="/login" className="underline">
+                Go to sign-in →
+              </a>
+            </>
+          )}
+        </div>
+      )}
       {focusIntakeId ? (
         // Single-intake focused view — what the SMS deep-link opens to.
         // Mobile-first: minimal chrome, clear way back to the full queue.
