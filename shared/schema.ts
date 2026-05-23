@@ -3255,3 +3255,164 @@ export type CollectionsItemWithRelations = CollectionsItem & {
   invoice: ArInvoice;
   load?: Load;
 };
+
+// ============================================================================
+// RECRUITMENT — Owner-Operator / Driver Lead Pipeline (Stage 1: manual SMS only)
+// ============================================================================
+// New customer-facing path: /owner-operators landing page → form submit creates
+// a recruitment_leads row. Admin works the lead manually from /admin/recruitment.
+// Stage 1 has ZERO automated outbound — no cron, no auto-SMS. The leads table
+// captures consent (A2P 10DLC pattern, same shape as drivers.smsConsentAt) so
+// Stage 2 can flip on automated sequencing later WITHOUT another consent pass.
+
+export const recruitmentLeadStageEnum = pgEnum("recruitment_lead_stage", [
+  "new",                  // form just submitted, no contact yet
+  "settlement_sent",      // top-OO settlement screenshot sent
+  "conversation",         // first real two-way conversation happened
+  "application_sent",     // formal app sent (Tenstreet-style)
+  "compliance_pending",   // MC / insurance / inspection / drug screen in flight
+  "lease_signed",         // signed lease packet
+  "first_load",           // first load dispatched
+  "active_30d",           // 30 days retained
+  "active_90d",           // 90 days retained
+  "lost",                 // explicitly lost (with reason)
+  "dormant",              // 60+ days no engagement, archived
+]);
+
+export const recruitmentLeadSourceEnum = pgEnum("recruitment_lead_source", [
+  "landing_page",   // /owner-operators form
+  "facebook_ad",
+  "instagram_ad",
+  "google_ad",
+  "linkedin_outbound",
+  "cold_email",
+  "truck_stop_qr",
+  "referral",
+  "industry_event",
+  "manual",         // admin entered the lead by hand
+  "other",
+]);
+
+export const recruitmentLeadKindEnum = pgEnum("recruitment_lead_kind", [
+  "owner_operator",
+  "company_driver",
+]);
+
+export const recruitmentActivityKindEnum = pgEnum("recruitment_activity_kind", [
+  "form_submit",
+  "sms_outbound",
+  "sms_inbound",
+  "email_outbound",
+  "email_inbound",
+  "call_outbound",
+  "call_inbound",
+  "voicemail",
+  "note",
+  "stage_changed",
+  "lost",
+  "system",
+]);
+
+export const recruitmentLeads = pgTable("recruitment_leads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // nullable during migration; required for new rows in code
+  kind: recruitmentLeadKindEnum("kind").notNull().default("owner_operator"),
+  stage: recruitmentLeadStageEnum("stage").notNull().default("new"),
+  source: recruitmentLeadSourceEnum("source").notNull().default("landing_page"),
+
+  // Identity
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name"),
+  phone: text("phone").notNull(),
+  email: text("email"),
+  city: text("city"),
+  state: text("state"),
+
+  // Trucking-specific
+  currentCarrier: text("current_carrier"),          // who they're leased to now
+  hasOwnAuthority: boolean("has_own_authority").default(false),
+  mcNumber: text("mc_number"),
+  usdotNumber: text("usdot_number"),
+  yearsExperience: integer("years_experience"),
+  equipmentType: text("equipment_type"),            // matches drivers.equipmentType convention
+  truckYear: integer("truck_year"),
+
+  // A2P 10DLC SMS consent — captured at form submit, same shape as drivers table
+  smsConsentAt: timestamp("sms_consent_at"),
+  smsConsentSource: text("sms_consent_source"),     // 'landing_page_form' | 'verbal_recorded' | 'manual'
+  smsConsentIp: text("sms_consent_ip"),
+  smsConsentUserAgent: text("sms_consent_user_agent"),
+  smsOptedOutAt: timestamp("sms_opted_out_at"),     // STOP keyword sets this; never re-send after
+
+  // Pipeline tracking
+  lastContactedAt: timestamp("last_contacted_at"),
+  nextActionAt: timestamp("next_action_at"),        // scheduled follow-up (manual in Stage 1)
+  ownerUserId: varchar("owner_user_id").references(() => users.id), // recruiter assigned
+
+  // Outcome tracking
+  signedDriverId: varchar("signed_driver_id").references(() => drivers.id), // FK to drivers table when converted
+  lostReason: text("lost_reason"),                  // free-text reason when stage=lost
+  notes: text("notes"),                             // freeform notes from admin
+
+  // Raw form fields for audit
+  rawFormPayload: jsonb("raw_form_payload"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_recruitment_leads_company_id").on(table.companyId),
+  index("idx_recruitment_leads_stage").on(table.stage),
+  index("idx_recruitment_leads_phone").on(table.phone),
+  index("idx_recruitment_leads_created_at").on(table.createdAt),
+  unique("recruitment_leads_phone_company_unique").on(table.phone, table.companyId),
+]);
+
+export const recruitmentLeadActivities = pgTable("recruitment_lead_activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  leadId: varchar("lead_id").references(() => recruitmentLeads.id, { onDelete: "cascade" }).notNull(),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  kind: recruitmentActivityKindEnum("kind").notNull(),
+  fromStage: recruitmentLeadStageEnum("from_stage"),
+  toStage: recruitmentLeadStageEnum("to_stage"),
+  body: text("body"),                               // SMS body, note text, call summary, etc.
+  metadata: jsonb("metadata"),                      // provider message ids, links, etc.
+  actorUserId: varchar("actor_user_id").references(() => users.id), // who did it (null = system)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_recruitment_activities_lead_id").on(table.leadId),
+  index("idx_recruitment_activities_created_at").on(table.createdAt),
+]);
+
+export const insertRecruitmentLeadSchema = createInsertSchema(recruitmentLeads).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRecruitmentLeadActivitySchema = createInsertSchema(recruitmentLeadActivities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type RecruitmentLead = typeof recruitmentLeads.$inferSelect;
+export type InsertRecruitmentLead = z.infer<typeof insertRecruitmentLeadSchema>;
+export type RecruitmentLeadActivity = typeof recruitmentLeadActivities.$inferSelect;
+export type InsertRecruitmentLeadActivity = z.infer<typeof insertRecruitmentLeadActivitySchema>;
+
+// Public landing-page form payload (validated server-side before insert)
+export const recruitmentLandingFormSchema = z.object({
+  firstName: z.string().min(1).max(80),
+  lastName: z.string().max(80).optional(),
+  phone: z.string().min(7).max(32), // normalized to E.164 server-side
+  email: z.string().email().optional().or(z.literal("")),
+  currentCarrier: z.string().max(200).optional(),
+  kind: z.enum(["owner_operator", "company_driver"]).default("owner_operator"),
+  source: z.enum([
+    "landing_page", "facebook_ad", "instagram_ad", "google_ad",
+    "linkedin_outbound", "cold_email", "truck_stop_qr", "referral",
+    "industry_event", "manual", "other",
+  ]).default("landing_page"),
+  smsConsent: z.literal(true), // required checkbox; rejects if not explicitly true
+});
+
+export type RecruitmentLandingForm = z.infer<typeof recruitmentLandingFormSchema>;
