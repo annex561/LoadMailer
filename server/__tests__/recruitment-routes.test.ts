@@ -34,7 +34,7 @@ import {
   normalizePhoneE164,
   sanitizeQualificationPatch,
 } from "../recruitment-routes";
-import { buildHotLeadEmail } from "../recruitment-notify";
+import { buildHotLeadEmail, buildHotLeadSlackPayload } from "../recruitment-notify";
 
 describe("normalizePhoneE164", () => {
   it("converts a 10-digit US number to E.164", () => {
@@ -292,6 +292,58 @@ describe("buildHotLeadEmail — owner alert email", () => {
     const { html } = buildHotLeadEmail(baseLead, "https://app.example.com/");
     expect(html).toContain('"https://app.example.com/admin/recruitment"');
     expect(html).not.toContain('"https://app.example.com//admin/recruitment"');
+  });
+});
+
+describe("buildHotLeadSlackPayload — Slack mobile push", () => {
+  const baseLead = {
+    id: "lead_abc",
+    firstName: "Tony",
+    lastName: "Hauler",
+    phone: "+14045551234",
+    email: "tony@example.com",
+    currentCarrier: "Schneider",
+    source: "landing_page",
+    createdAt: new Date("2026-05-23T15:30:00Z"),
+  };
+
+  it("includes a top-level `text` field — this drives the mobile push notification preview", () => {
+    const payload = buildHotLeadSlackPayload(baseLead, "https://app.example.com");
+    expect(payload).toHaveProperty("text");
+    expect(payload.text as string).toContain("Tony Hauler");
+    expect(payload.text as string).toContain("+14045551234");
+    expect((payload.text as string).toLowerCase()).toContain("hot lead");
+  });
+
+  it("uses Block Kit blocks with a header, fields, and action buttons", () => {
+    const payload = buildHotLeadSlackPayload(baseLead, "https://app.example.com");
+    const blocks = payload.blocks as any[];
+    expect(blocks.find((b) => b.type === "header")).toBeTruthy();
+    expect(blocks.find((b) => b.type === "section" && Array.isArray(b.fields))).toBeTruthy();
+    expect(blocks.find((b) => b.type === "actions")).toBeTruthy();
+  });
+
+  it("renders the phone as a tel: link — clickable on mobile for one-tap dial", () => {
+    const payload = buildHotLeadSlackPayload(baseLead, "https://app.example.com");
+    const json = JSON.stringify(payload);
+    expect(json).toContain("tel:+14045551234");
+  });
+
+  it("action buttons include both Call (tel:) and Open dashboard URLs", () => {
+    const payload = buildHotLeadSlackPayload(baseLead, "https://app.example.com");
+    const blocks = payload.blocks as any[];
+    const actions = blocks.find((b) => b.type === "actions");
+    const urls = (actions.elements as any[]).map((e) => e.url);
+    expect(urls).toContain("tel:+14045551234");
+    expect(urls).toContain("https://app.example.com/admin/recruitment");
+  });
+
+  it("handles missing optional fields without crashing", () => {
+    const lead = { ...baseLead, lastName: null, email: null, currentCarrier: null };
+    const payload = buildHotLeadSlackPayload(lead, "https://app.example.com");
+    expect(payload.text).toContain("Tony");
+    const json = JSON.stringify(payload);
+    expect(json).not.toContain("null");
   });
 });
 

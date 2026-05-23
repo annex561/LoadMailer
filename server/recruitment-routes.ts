@@ -25,7 +25,7 @@ import {
   type InsertRecruitmentLead,
 } from "@shared/schema";
 import { and, desc, eq } from "drizzle-orm";
-import { notifyOwnerOfHotLead } from "./recruitment-notify";
+import { notifyHotLead } from "./recruitment-notify";
 
 // Static company programs surfaced on the welcome page. Edit this list to
 // change what every new lead sees. Order matters — top items render first.
@@ -339,11 +339,17 @@ export function registerRecruitmentRoutes(app: Express) {
         });
       }
 
-      // Fire the owner notification ONCE per lead (dedup via hotLeadNotifiedAt).
-      // Email failure does NOT roll back the lead — the row is the source of truth.
+      // Fire the owner notifications ONCE per lead (dedup via hotLeadNotifiedAt).
+      // Email AND Slack fire in parallel. Either failing NEVER rolls back the
+      // lead — the row is the source of truth. If at least ONE channel
+      // succeeds, hotLeadNotifiedAt is set so duplicate submits do not re-spam.
       if (isNewLead && !leadRow.hotLeadNotifiedAt) {
-        const result = await notifyOwnerOfHotLead(leadRow, baseUrl(req));
-        if (result.ok) {
+        const results = await notifyHotLead(leadRow, baseUrl(req));
+        const sentChannels: string[] = [];
+        if (results.email.ok) sentChannels.push(`email→${results.email.sentTo.join(", ")}`);
+        if (results.slack.ok) sentChannels.push("slack");
+
+        if (sentChannels.length > 0) {
           await db
             .update(recruitmentLeads)
             .set({ hotLeadNotifiedAt: new Date(), updatedAt: new Date() })
@@ -352,16 +358,22 @@ export function registerRecruitmentRoutes(app: Express) {
             leadId,
             companyId,
             kind: "system",
-            body: `Hot-lead email sent to ${result.sentTo.join(", ")}`,
-            metadata: { messageId: result.messageId, sentTo: result.sentTo },
+            body: `Hot-lead notification sent via ${sentChannels.join(" + ")}`,
+            metadata: {
+              email: results.email.ok ? { sentTo: results.email.sentTo, messageId: results.email.messageId } : { failed: results.email.reason },
+              slack: results.slack.ok ? { sent: true } : { failed: results.slack.reason },
+            },
           });
         } else {
           await db.insert(recruitmentLeadActivities).values({
             leadId,
             companyId,
             kind: "system",
-            body: `Hot-lead email NOT sent: ${result.reason}`,
-            metadata: { reason: result.reason },
+            body: `Hot-lead notification FAILED on ALL channels`,
+            metadata: {
+              emailReason: results.email.ok ? null : results.email.reason,
+              slackReason: results.slack.ok ? null : results.slack.reason,
+            },
           });
         }
       }

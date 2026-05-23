@@ -1,24 +1,28 @@
 /**
- * Hot-lead owner notification — Stage 1.5.
+ * Hot-lead owner notification — Stage 1.5 (+ Slack add-on).
  *
- * When a new owner-operator or driver lead submits the public landing form,
- * the owner gets an immediate email saying "HOT LEAD — call now." This is the
- * ONLY automated outbound on the recruitment path. It is internal-facing
- * (admin notification, never to the lead) and uses the same nodemailer
- * transport that the factoring service already uses, so no new vendor or
- * credential is introduced.
+ * When a new lead submits the public landing form, the owner gets:
+ *   1. An email via the existing nodemailer + SMTP transport (Gmail / SES / etc.)
+ *   2. A Slack message via Incoming Webhook (mobile push notifications)
  *
- * Per the project financial-blast-radius rule, this path includes:
- *   - Default-on kill switch HOT_LEAD_EMAIL_ENABLED (set 'false' to halt)
- *   - One email per lead submission (form endpoint is naturally rate-limited)
- *   - Graceful degradation: email failure NEVER fails the lead submission;
- *     the row is saved regardless. Errors are logged + recorded as an activity.
- *   - Per-lead dedup: tracked via recruitmentLeads.hotLeadNotifiedAt so a
- *     duplicate form submit cannot trigger a second email for the same lead.
+ * Both fire in parallel. Either or both can be disabled via env without code
+ * changes. Neither blocks the lead-creation transaction — failures are logged
+ * + recorded as activity rows, never thrown.
  *
- * Recipients are pulled from env var HOT_LEAD_NOTIFY_TO (comma-separated).
- * If unset, falls back to NOTIFY_EMAIL, then OWNER_EMAIL. If none set, the
- * notifier no-ops with a logged warning — never crashes.
+ * Kill switches:
+ *   HOT_LEAD_EMAIL_ENABLED=false   → disable email
+ *   HOT_LEAD_SLACK_ENABLED=false   → disable Slack
+ *
+ * Recipients:
+ *   Email: HOT_LEAD_NOTIFY_TO (comma-separated) → NOTIFY_EMAIL → OWNER_EMAIL
+ *   Slack: SLACK_WEBHOOK_URL (single Incoming Webhook URL)
+ *
+ * If neither vendor is configured, the notifier no-ops with logged warning.
+ *
+ * Per the project financial-blast-radius rule, both paths include:
+ *   - Default-on kill switches per channel
+ *   - One notification per lead (deduped via recruitmentLeads.hotLeadNotifiedAt)
+ *   - Graceful degradation: any failure never fails the lead submission
  */
 import nodemailer from "nodemailer";
 import type { RecruitmentLead } from "@shared/schema";
@@ -126,6 +130,140 @@ export function buildHotLeadEmail(
 export type NotifyResult =
   | { ok: true; sentTo: string[]; messageId?: string }
   | { ok: false; reason: string };
+
+// =====================================================================
+// Slack
+// =====================================================================
+
+function isSlackEnabled(): boolean {
+  const flag = (process.env.HOT_LEAD_SLACK_ENABLED || "true").toLowerCase();
+  return flag !== "false" && flag !== "0" && flag !== "no";
+}
+
+function slackWebhookUrl(): string | null {
+  const url = process.env.SLACK_WEBHOOK_URL;
+  if (!url) return null;
+  // Defensive: only accept https://hooks.slack.com/* URLs so a typo doesn't
+  // POST lead PII to an arbitrary host.
+  if (!/^https:\/\/hooks\.slack\.com\//.test(url)) return null;
+  return url;
+}
+
+/**
+ * Build the Slack message payload. Pure function — exported for tests.
+ * Uses Block Kit so the message looks good in Slack desktop + mobile,
+ * with a clickable tel: link that opens the phone dialer on mobile.
+ */
+export function buildHotLeadSlackPayload(
+  lead: Pick<
+    RecruitmentLead,
+    "id" | "firstName" | "lastName" | "phone" | "email" | "currentCarrier" | "source" | "createdAt"
+  >,
+  appBaseUrl: string
+): Record<string, unknown> {
+  const fullName = `${lead.firstName}${lead.lastName ? " " + lead.lastName : ""}`;
+  const submittedAt = lead.createdAt
+    ? new Date(lead.createdAt).toLocaleString()
+    : "just now";
+  const leadUrl = `${appBaseUrl.replace(/\/+$/, "")}/admin/recruitment`;
+  const callHref = `tel:${lead.phone}`;
+  return {
+    // Fallback text — what shows up in the mobile push notification preview
+    // BEFORE the user taps in. Make it scannable.
+    text: `🚨 HOT LEAD — call ${fullName} now (${lead.phone})`,
+    blocks: [
+      {
+        type: "header",
+        text: { type: "plain_text", text: `🚨 HOT LEAD — call ${fullName} now` },
+      },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Name:*\n${fullName}` },
+          { type: "mrkdwn", text: `*Phone:*\n<${callHref}|${lead.phone}>` },
+          { type: "mrkdwn", text: `*Current carrier:*\n${lead.currentCarrier || "_not provided_"}` },
+          { type: "mrkdwn", text: `*Email:*\n${lead.email || "_not provided_"}` },
+          { type: "mrkdwn", text: `*Source:*\n${lead.source}` },
+          { type: "mrkdwn", text: `*Submitted:*\n${submittedAt}` },
+        ],
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            style: "danger",
+            text: { type: "plain_text", text: `📞 Call ${lead.phone}` },
+            url: callHref,
+          },
+          {
+            type: "button",
+            text: { type: "plain_text", text: "Open dashboard" },
+            url: leadUrl,
+          },
+        ],
+      },
+      {
+        type: "context",
+        elements: [
+          { type: "mrkdwn", text: `Lead ID: \`${lead.id}\` · Call within 15 min during business hours for best conversion.` },
+        ],
+      },
+    ],
+  };
+}
+
+/**
+ * Post the Slack message via the Incoming Webhook. NEVER throws.
+ */
+export async function notifySlackOfHotLead(
+  lead: Pick<
+    RecruitmentLead,
+    "id" | "firstName" | "lastName" | "phone" | "email" | "currentCarrier" | "source" | "createdAt"
+  >,
+  appBaseUrl: string
+): Promise<NotifyResult> {
+  if (!isSlackEnabled()) {
+    return { ok: false, reason: "kill_switch_HOT_LEAD_SLACK_ENABLED" };
+  }
+  const url = slackWebhookUrl();
+  if (!url) {
+    return { ok: false, reason: "no_slack_webhook_configured" };
+  }
+  const payload = buildHotLeadSlackPayload(lead, appBaseUrl);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { ok: false, reason: `slack_http_${res.status}: ${body.slice(0, 120)}` };
+    }
+    return { ok: true, sentTo: ["slack"] };
+  } catch (err: any) {
+    console.error("[recruitment] Slack notify failed:", err?.message || err);
+    return { ok: false, reason: `slack_error: ${err?.message || "unknown"}` };
+  }
+}
+
+/**
+ * Fan-out notification: fire email + Slack in parallel, return both results.
+ */
+export async function notifyHotLead(
+  lead: Pick<
+    RecruitmentLead,
+    "id" | "firstName" | "lastName" | "phone" | "email" | "currentCarrier" | "source" | "createdAt"
+  >,
+  appBaseUrl: string
+): Promise<{ email: NotifyResult; slack: NotifyResult }> {
+  const [email, slack] = await Promise.all([
+    notifyOwnerOfHotLead(lead, appBaseUrl),
+    notifySlackOfHotLead(lead, appBaseUrl),
+  ]);
+  return { email, slack };
+}
 
 /**
  * Send the hot-lead alert email. Returns a result object — caller decides
