@@ -7,6 +7,7 @@
  * (A2P 10DLC) and stored with timestamp + IP via the server.
  */
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,7 @@ const EMPTY: FormState = {
 };
 
 export default function OwnerOperatorsLanding() {
+  const [, setLocation] = useLocation();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +70,14 @@ export default function OwnerOperatorsLanding() {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Something went wrong. Please try again.");
+      }
+      const data = await res.json().catch(() => ({} as any));
+      // Stage 1.5: redirect to the welcome / engagement page if the server
+      // returned one. Falls back to the inline thank-you screen if not (so
+      // older deploys / failed payloads still confirm the submission).
+      if (data && typeof data.welcomeUrl === "string" && data.welcomeUrl) {
+        setLocation(data.welcomeUrl);
+        return;
       }
       setSubmitted(true);
     } catch (err: any) {

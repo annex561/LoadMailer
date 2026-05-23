@@ -66,6 +66,7 @@ const PrivacyPolicy = lazy(() => import("@/pages/privacy"));
 const TermsOfService = lazy(() => import("@/pages/terms"));
 // Recruitment Stage 1: owner-operator landing + admin pipeline (manual SMS only).
 const OwnerOperatorsLanding = lazy(() => import("@/pages/owner-operators"));
+const OwnerOperatorsWelcome = lazy(() => import("@/pages/owner-operators-welcome"));
 const RecruitmentDashboard = lazy(() => import("@/pages/recruitment"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
@@ -166,6 +167,8 @@ function App() {
               <Route path="/owner-operators" component={OwnerOperatorsLanding} />
               <Route path="/owner-operator" component={OwnerOperatorsLanding} />
               <Route path="/drive-with-us" component={OwnerOperatorsLanding} />
+              {/* Stage 1.5 — post-submit engagement page (quiz + programs + call expectation) */}
+              <Route path="/owner-operators/welcome/:leadId" component={OwnerOperatorsWelcome} />
 
               {/* Standalone driver pages without sidebar/header - for driver self-service only */}
               <Route path="/driver-onboarding" component={DriverOnboarding} />

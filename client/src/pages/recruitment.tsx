@@ -28,6 +28,9 @@ type Lead = {
   lastContactedAt: string | null;
   createdAt: string;
   notes: string | null;
+  hotLeadNotifiedAt: string | null;
+  hotLeadAcknowledgedAt: string | null;
+  qualificationCompletedAt: string | null;
 };
 
 const STAGE_LABEL: Record<string, string> = {
@@ -109,12 +112,28 @@ export default function RecruitmentDashboard() {
     }
   }
 
+  async function acknowledgeHotLead(leadId: string, phone: string) {
+    try {
+      await fetch(`/api/recruitment/leads/${leadId}/acknowledge`, { method: "POST" });
+    } catch {
+      // Soft-fail; we still open the dialer below.
+    }
+    // Open the dialer (works on mobile; on desktop, copies number)
+    window.location.href = `tel:${phone}`;
+    refresh();
+  }
+
   useEffect(() => { refresh(); }, []);
 
   const byStage = leads.reduce<Record<string, number>>((acc, l) => {
     acc[l.stage] = (acc[l.stage] || 0) + 1;
     return acc;
   }, {});
+
+  // A "hot" lead is one whose hot-lead email has been sent but not yet acknowledged
+  // by the owner. These leapfrog the rest of the list — call them NOW.
+  const hotLeads = leads.filter(l => l.hotLeadNotifiedAt && !l.hotLeadAcknowledgedAt);
+  const otherLeads = leads.filter(l => !(l.hotLeadNotifiedAt && !l.hotLeadAcknowledgedAt));
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50 p-6">
@@ -157,6 +176,47 @@ export default function RecruitmentDashboard() {
           </div>
         )}
 
+        {/* HOT — call now */}
+        {hotLeads.length > 0 && (
+          <Card className="bg-red-950/40 border-red-500/50 mb-6" data-testid="hot-leads-section">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-red-300 flex items-center gap-2">
+                <span className="animate-pulse">🚨</span> HOT — call right now ({hotLeads.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {hotLeads.map((lead) => (
+                  <div key={lead.id} data-testid={`hot-lead-${lead.id}`}
+                    className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 p-3 rounded-lg bg-red-950/30 border border-red-500/30">
+                    <div>
+                      <div className="font-bold text-lg">
+                        {lead.firstName} {lead.lastName || ""}
+                        <span className="ml-3 text-sm font-normal text-red-300">{lead.phone}</span>
+                      </div>
+                      <div className="text-sm text-zinc-300 mt-1">
+                        {lead.currentCarrier ? `Currently at ${lead.currentCarrier} · ` : ""}
+                        Submitted {fmtDate(lead.createdAt)}
+                        {lead.qualificationCompletedAt && (
+                          <span className="ml-2 text-emerald-400">✓ Quiz complete</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Button onClick={() => acknowledgeHotLead(lead.id, lead.phone)}
+                        data-testid={`call-now-${lead.id}`}
+                        className="bg-red-500 hover:bg-red-400 text-white font-bold px-6 py-6 text-base">
+                        <Phone className="h-5 w-5 mr-2" />
+                        CALL NOW
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Lead list */}
         <Card className="bg-zinc-900 border-zinc-800">
           <CardHeader>
@@ -165,13 +225,13 @@ export default function RecruitmentDashboard() {
           <CardContent>
             {loading && leads.length === 0 ? (
               <p className="text-zinc-400 text-sm">Loading…</p>
-            ) : leads.length === 0 ? (
+            ) : otherLeads.length === 0 && hotLeads.length === 0 ? (
               <p className="text-zinc-400 text-sm">
                 No leads yet. Share <code className="text-emerald-300">/owner-operators</code> in your ads and outreach.
               </p>
             ) : (
               <div className="space-y-2">
-                {leads.map((lead) => {
+                {otherLeads.map((lead) => {
                   const next = NEXT_STAGE[lead.stage];
                   return (
                     <div key={lead.id} data-testid={`lead-${lead.id}`}

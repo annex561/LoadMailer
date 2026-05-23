@@ -3354,6 +3354,31 @@ export const recruitmentLeads = pgTable("recruitment_leads", {
   lostReason: text("lost_reason"),                  // free-text reason when stage=lost
   notes: text("notes"),                             // freeform notes from admin
 
+  // ---- Stage 1.5: pre-call engagement page + hot-lead notification ----
+  // Hot-lead lifecycle: notified = owner email sent; acknowledged = owner clicked "Call Now".
+  hotLeadNotifiedAt: timestamp("hot_lead_notified_at"),
+  hotLeadAcknowledgedAt: timestamp("hot_lead_acknowledged_at"),
+  hotLeadAcknowledgedBy: varchar("hot_lead_acknowledged_by").references(() => users.id),
+
+  // Preferred call time captured on the welcome page (morning/afternoon/evening/anytime).
+  preferredCallTime: text("preferred_call_time"),
+
+  // Typed quiz answers (queryable in admin filters).
+  hasCdlA: boolean("has_cdl_a"),
+  hazmatEndorsement: boolean("hazmat_endorsement"),
+  twicCard: boolean("twic_card"),
+  ownsOrLeasesTruck: text("owns_or_leases_truck"),    // 'own' | 'lease' | 'no_truck'
+  homeBase: text("home_base"),                        // "City, ST"
+  daysOutPreference: text("days_out_preference"),     // '1_week' | '2_weeks' | '3_plus'
+  recentViolations3y: boolean("recent_violations_3y"),
+  dwiEver: boolean("dwi_ever"),
+  leaveReason: text("leave_reason"),
+  amazonRelayInterest: boolean("amazon_relay_interest"),
+
+  // Full quiz answers blob — every question with timestamp. Survives quiz changes without migration.
+  qualificationAnswers: jsonb("qualification_answers"),
+  qualificationCompletedAt: timestamp("qualification_completed_at"),
+
   // Raw form fields for audit
   rawFormPayload: jsonb("raw_form_payload"),
 
@@ -3364,6 +3389,7 @@ export const recruitmentLeads = pgTable("recruitment_leads", {
   index("idx_recruitment_leads_stage").on(table.stage),
   index("idx_recruitment_leads_phone").on(table.phone),
   index("idx_recruitment_leads_created_at").on(table.createdAt),
+  index("idx_recruitment_leads_hot_unack").on(table.hotLeadNotifiedAt, table.hotLeadAcknowledgedAt),
   unique("recruitment_leads_phone_company_unique").on(table.phone, table.companyId),
 ]);
 

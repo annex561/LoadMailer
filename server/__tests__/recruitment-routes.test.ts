@@ -32,7 +32,9 @@ import { join } from "node:path";
 import {
   buildLeadInsertFromForm,
   normalizePhoneE164,
+  sanitizeQualificationPatch,
 } from "../recruitment-routes";
+import { buildHotLeadEmail } from "../recruitment-notify";
 
 describe("normalizePhoneE164", () => {
   it("converts a 10-digit US number to E.164", () => {
@@ -144,7 +146,7 @@ describe("buildLeadInsertFromForm — consent + payload integrity", () => {
   });
 });
 
-describe("recruitment-routes module — Stage 1 ships ZERO automated outbound", () => {
+describe("recruitment-routes module — Stage 1 ships ZERO automated outbound SMS", () => {
   it("does not import Twilio or any SMS-sending service", () => {
     // Hard read of the source file. If Stage 2 wires in SMS, it MUST come via
     // a separate, approval-gated PR that adds the kill-switch / watermark /
@@ -157,6 +159,161 @@ describe("recruitment-routes module — Stage 1 ships ZERO automated outbound", 
     expect(src).not.toMatch(/from\s+["']\.\/telnyx-service["']/);
     expect(src).not.toMatch(/from\s+["']\.\/sms-service["']/);
     expect(src).not.toMatch(/twilioClient\./);
+    expect(src).not.toMatch(/\.messages\.create\(/);
+  });
+});
+
+// ============================================================================
+// STAGE 1.5 — Hot-lead notification + qualification quiz
+// ============================================================================
+
+describe("sanitizeQualificationPatch — public welcome page write-allowlist", () => {
+  it("drops fields not in the allowlist (security gate)", () => {
+    const result = sanitizeQualificationPatch({
+      // Allowed:
+      hasCdlA: true,
+      yearsExperience: 7,
+      mcNumber: "MC-123456",
+      // BLOCKED (must be dropped — security-critical):
+      stage: "lease_signed",
+      signedDriverId: "driver_abc",
+      smsConsentAt: new Date(),
+      smsOptedOutAt: new Date(),
+      ownerUserId: "user_evil",
+      lostReason: "evil-overwrite-attempt",
+      hotLeadAcknowledgedAt: new Date(),
+    });
+    expect(result.typed).toHaveProperty("hasCdlA", true);
+    expect(result.typed).toHaveProperty("yearsExperience", 7);
+    expect(result.typed).toHaveProperty("mcNumber", "MC-123456");
+    expect(result.typed).not.toHaveProperty("stage");
+    expect(result.typed).not.toHaveProperty("signedDriverId");
+    expect(result.typed).not.toHaveProperty("smsConsentAt");
+    expect(result.typed).not.toHaveProperty("smsOptedOutAt");
+    expect(result.typed).not.toHaveProperty("ownerUserId");
+    expect(result.typed).not.toHaveProperty("lostReason");
+    expect(result.typed).not.toHaveProperty("hotLeadAcknowledgedAt");
+  });
+
+  it("coerces 'yes'/'no'/'true'/'1' to booleans for bool fields", () => {
+    const result = sanitizeQualificationPatch({
+      hasCdlA: "yes",
+      hazmatEndorsement: "true",
+      twicCard: "1",
+      recentViolations3y: "no",
+      dwiEver: "false",
+      amazonRelayInterest: "0",
+    });
+    expect(result.typed.hasCdlA).toBe(true);
+    expect(result.typed.hazmatEndorsement).toBe(true);
+    expect(result.typed.twicCard).toBe(true);
+    expect(result.typed.recentViolations3y).toBe(false);
+    expect(result.typed.dwiEver).toBe(false);
+    expect(result.typed.amazonRelayInterest).toBe(false);
+  });
+
+  it("rejects invalid booleans (null, not silent-true)", () => {
+    const result = sanitizeQualificationPatch({ hasCdlA: "maybe" });
+    expect(result.typed.hasCdlA).toBeNull();
+  });
+
+  it("coerces numeric strings to integers, treats empty as null", () => {
+    expect(sanitizeQualificationPatch({ yearsExperience: "12" }).typed.yearsExperience).toBe(12);
+    expect(sanitizeQualificationPatch({ truckYear: "2019" }).typed.truckYear).toBe(2019);
+    expect(sanitizeQualificationPatch({ yearsExperience: "" }).typed.yearsExperience).toBeNull();
+    expect(sanitizeQualificationPatch({ truckYear: "abc" }).typed.truckYear).toBeNull();
+  });
+
+  it("trims strings; empty strings become null", () => {
+    expect(sanitizeQualificationPatch({ mcNumber: "  MC-123  " }).typed.mcNumber).toBe("MC-123");
+    expect(sanitizeQualificationPatch({ mcNumber: "   " }).typed.mcNumber).toBeNull();
+  });
+
+  it("`complete` flag is consumed separately, never written as a column", () => {
+    const result = sanitizeQualificationPatch({ complete: true, hasCdlA: true });
+    expect(result.typed).not.toHaveProperty("complete");
+    expect(result.blob).not.toHaveProperty("complete");
+    expect(result.typed.hasCdlA).toBe(true);
+  });
+
+  it("returns empty objects if nothing in the allowlist is present (route returns 400)", () => {
+    const result = sanitizeQualificationPatch({
+      stage: "lost",
+      signedDriverId: "x",
+      somethingWeird: "y",
+    });
+    expect(Object.keys(result.typed).length).toBe(0);
+    expect(Object.keys(result.blob).length).toBe(0);
+  });
+});
+
+describe("buildHotLeadEmail — owner alert email", () => {
+  const baseLead = {
+    id: "lead_abc",
+    firstName: "Tony",
+    lastName: "Hauler",
+    phone: "+14045551234",
+    email: "tony@example.com",
+    currentCarrier: "Schneider",
+    source: "landing_page",
+    createdAt: new Date("2026-05-23T15:30:00Z"),
+  };
+
+  it("subject line names the lead and includes the phone for at-a-glance triage", () => {
+    const { subject } = buildHotLeadEmail(baseLead, "https://app.example.com");
+    expect(subject).toContain("Tony Hauler");
+    expect(subject).toContain("+14045551234");
+    expect(subject.toLowerCase()).toContain("hot lead");
+  });
+
+  it("plain-text body includes a tel: link for one-tap dial on phone", () => {
+    const { text } = buildHotLeadEmail(baseLead, "https://app.example.com");
+    expect(text).toContain("tel:+14045551234");
+    expect(text).toContain("Tony");
+    expect(text).toContain("Schneider");
+  });
+
+  it("HTML body includes a tel: link and a dashboard link", () => {
+    const { html } = buildHotLeadEmail(baseLead, "https://app.example.com");
+    expect(html).toContain('href="tel:+14045551234"');
+    expect(html).toContain('href="https://app.example.com/admin/recruitment"');
+  });
+
+  it("handles missing optional fields without crashing", () => {
+    const lead = { ...baseLead, lastName: null, email: null, currentCarrier: null };
+    const { subject, text, html } = buildHotLeadEmail(lead, "https://app.example.com");
+    expect(subject).toContain("Tony");
+    expect(subject).not.toContain("null");
+    expect(text).toContain("not provided");
+    expect(html).toContain("not provided");
+  });
+
+  it("strips trailing slash from baseUrl when building dashboard link", () => {
+    const { html } = buildHotLeadEmail(baseLead, "https://app.example.com/");
+    expect(html).toContain('"https://app.example.com/admin/recruitment"');
+    expect(html).not.toContain('"https://app.example.com//admin/recruitment"');
+  });
+});
+
+describe("recruitment-routes module — Stage 1.5 still ships ZERO automated outbound SMS", () => {
+  it("still does not import Twilio or any SMS-sending service after adding email", () => {
+    const src = readFileSync(
+      join(__dirname, "..", "recruitment-routes.ts"),
+      "utf-8"
+    );
+    expect(src).not.toMatch(/from\s+["']twilio["']/);
+    expect(src).not.toMatch(/from\s+["']\.\/telnyx-service["']/);
+    expect(src).not.toMatch(/from\s+["']\.\/sms-service["']/);
+    expect(src).not.toMatch(/\.messages\.create\(/);
+  });
+
+  it("notify module imports nodemailer (email) but NOT Twilio (SMS)", () => {
+    const src = readFileSync(
+      join(__dirname, "..", "recruitment-notify.ts"),
+      "utf-8"
+    );
+    expect(src).toMatch(/from\s+["']nodemailer["']/);
+    expect(src).not.toMatch(/from\s+["']twilio["']/);
     expect(src).not.toMatch(/\.messages\.create\(/);
   });
 });
