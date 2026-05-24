@@ -32,6 +32,7 @@ const menuGroups: MenuGroup[] = [
     title: "Load Management",
     icon: <FileText className="w-5 h-5" />,
     items: [
+      { name: "Documents (Sign)", href: "/admin/documents" },
       { name: "RateCon Inbox", href: "/loads-inbox" },
       { name: "Upload RateCon", href: "/ratecon-upload" },
       { name: "Review Queue", href: "/review-queue" },

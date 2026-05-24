@@ -64,6 +64,8 @@ const DriverConfirmPage = lazy(() => import("@/pages/driver-confirm"));
 // Public legal pages — required for A2P 10DLC TCR campaign approval.
 const PrivacyPolicy = lazy(() => import("@/pages/privacy"));
 const TermsOfService = lazy(() => import("@/pages/terms"));
+// Documents / e-signature hub powered by DocuSeal (hosted OR self-hosted).
+const DocumentsAdmin = lazy(() => import("@/pages/documents"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -114,6 +116,9 @@ function Router() {
       <Route path="/smart-load-matching" component={SmartLoadMatching} />
       <Route path="/prediction-confidence" component={PredictionConfidence} />
       <Route path="/admin-overview" component={AdminOverview} />
+      {/* Documents / signatures — universal DocuSeal-powered envelope tracker */}
+      <Route path="/admin/documents" component={DocumentsAdmin} />
+      <Route path="/documents" component={DocumentsAdmin} />
       <Route path="/ops" component={OpsMonitor} />
       <Route path="/ops-monitor" component={OpsMonitor} />
       <Route path="/settlements" component={Settlements} />
