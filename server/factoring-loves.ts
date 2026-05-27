@@ -315,6 +315,90 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
     return { ok: false, blocked: enabled.reason };
   }
 
+  // TEST MODE — when FACTORING_TEST_TO_EMAIL is set, redirect the packet to
+  // that address instead of Love's. Lets the operator preview the exact
+  // email format (subject, body, From, PDF attachment) before going live.
+  // Skips dedup + DB writes so the same load can be re-tested repeatedly.
+  // Love's NEVER receives a test packet. Pinned by
+  // server/__tests__/factoring-test-redirect.test.ts
+  const testToEmail = process.env.FACTORING_TEST_TO_EMAIL?.trim();
+  if (testToEmail) {
+    console.log(
+      `[factoring-loves] TEST REDIRECT: loadId=${loadId} to=${testToEmail} (Love's NOT contacted)`,
+    );
+
+    const rateT = rateCheck();
+    if (!rateT.ok) {
+      console.error(`[factoring-loves] TEST RATE LIMIT: ${rateT.reason}`);
+      return { ok: false, blocked: rateT.reason };
+    }
+
+    const packetT = await buildFactoringPacket(loadId);
+    if (!packetT.ok || !packetT.pdfBytes) {
+      return { ok: false, error: packetT.error ?? "packet build failed" };
+    }
+
+    const [loadT] = await db.select().from(loads).where(eq(loads.id, loadId));
+    if (!loadT) return { ok: false, error: "Load not found" };
+
+    const fromAddrT =
+      process.env.FACTORING_FROM_EMAIL ||
+      process.env.SMTP_USER ||
+      process.env.EMAIL_USER ||
+      LAMP.email;
+
+    const subjectT = `[TEST — redirected, NOT sent to Love's] ${LAMP.clientCode} — ACH — Load #${loadT.loadNumber}`;
+
+    const bannerT =
+      `===============================================================\n` +
+      `  TEST MODE — packet REDIRECTED to ${testToEmail}\n` +
+      `  Love's Financial did NOT receive this email.\n` +
+      `  To submit for real: unset FACTORING_TEST_TO_EMAIL on Railway,\n` +
+      `  then click Submit again from /factoring.\n` +
+      `===============================================================\n\n`;
+
+    const bodyT =
+      bannerT +
+      `Hi Love's Financial team,\n\n` +
+      `Please find attached the factoring packet for ${LAMP.legalName} (${LAMP.clientCode}).\n\n` +
+      `Load #: ${loadT.loadNumber}\n` +
+      `Broker: ${loadT.brokerName ?? "see RateCon"}\n` +
+      `Pickup: ${loadT.originCity ?? ""}, ${loadT.originState ?? ""}\n` +
+      `Delivery: ${loadT.destCity ?? ""}, ${loadT.destState ?? ""}\n` +
+      `Amount: $${Number(loadT.rate ?? 0).toFixed(2)}\n\n` +
+      `Preferred payment: ACH\n\n` +
+      `Documents in attached PDF (Love's required order):\n` +
+      `  1. Bill of Sale (signed)\n` +
+      `  2. Invoice\n` +
+      `  3. Rate Confirmation\n` +
+      `  4. BOL / POD\n\n` +
+      `Thanks,\n${LAMP.dba} Dispatch\n${LAMP.phone}\n${LAMP.email}\n`;
+
+    try {
+      const infoT = await factoringMailer.sendMail({
+        from: `"${LAMP.dba} [TEST]" <${fromAddrT}>`,
+        to: testToEmail,
+        subject: subjectT,
+        text: bodyT,
+        attachments: [
+          {
+            filename: `TEST_${LAMP.clientCode}_Load_${loadT.loadNumber}_packet.pdf`,
+            content: Buffer.from(packetT.pdfBytes),
+            contentType: "application/pdf",
+          },
+        ],
+      });
+      submissionTimestamps.push(Date.now());
+      console.log(
+        `[factoring-loves] ✅ TEST sent loadId=${loadId} to=${testToEmail} msgId=${infoT.messageId}`,
+      );
+      return { ok: true, emailMessageId: infoT.messageId };
+    } catch (errT: any) {
+      console.error(`[factoring-loves] ❌ TEST send failed: ${errT.message}`);
+      return { ok: false, error: `SMTP error: ${errT.message}` };
+    }
+  }
+
   // Dedup: if a submission row already exists for this load, refuse.
   const [existing] = await db
     .select()
