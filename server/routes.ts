@@ -4679,16 +4679,38 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
       
       const document = await storage.approveDocument(documentId, approvedBy, notes);
-      
+
       if (!document) {
         return res.status(404).json({ error: 'Document not found' });
       }
-      
+
       console.log('Document approved:', { documentId, approvedBy });
-      res.json({ 
-        success: true, 
+
+      // Auto-submit to factoring when a BOL is approved, gated by env flag.
+      // Default OFF. All existing safety (LOVES_FACTORING_ENABLED required,
+      // FACTORING_DISABLED kill switch, per-load DB dedup, rate ceiling)
+      // is enforced inside submitToLoves itself.
+      // Pinned by server/__tests__/factoring-auto-submit-flag.test.ts
+      if (
+        process.env.FACTORING_AUTO_SUBMIT === 'true' &&
+        document.documentType === 'bol' &&
+        document.loadId
+      ) {
+        const loadId = document.loadId;
+        const { submitToLoves } = await import('./factoring-loves');
+        submitToLoves(loadId, approvedBy)
+          .then((result) => {
+            console.log('[factoring-auto] loadId=%s result=%o', loadId, result);
+          })
+          .catch((err) => {
+            console.error('[factoring-auto] loadId=%s error=%o', loadId, err);
+          });
+      }
+
+      res.json({
+        success: true,
         message: 'Document approved successfully',
-        document 
+        document
       });
     } catch (error) {
       console.error('Error approving document:', error);

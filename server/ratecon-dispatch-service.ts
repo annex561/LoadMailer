@@ -133,6 +133,11 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
     offeredRate: parsed.rate?.value ?? 0,
     confirmationToken,
     confirmationStatus: "pending" as const,
+    // Persist the RateCon PDF path on the load itself so downstream code
+    // (factoring packet builder, audit views) can find it without going
+    // back through rateconIntake. Pinned by
+    // server/__tests__/ratecon-dispatch-rateconPath.test.ts
+    rateconPath: intake.pdfPath ?? null,
   };
 
   const [existing] = await db
