@@ -41,6 +41,156 @@ if (process.env.CLOUDINARY_CLOUD_NAME && !process.env.CLOUDINARY_URL) {
   });
 }
 
+/**
+ * Build signed Cloudinary upload params for a direct browser-to-Cloudinary
+ * upload. Returns the data the client needs to POST the file directly to
+ * https://api.cloudinary.com/v1_1/<cloud>/image/upload.
+ *
+ * This path exists because uploading through our Express server (multer ->
+ * Cloudinary SDK) failed intermittently on iOS Safari with weak signal —
+ * the multipart body would buffer somewhere between the browser, Railway's
+ * edge, and Node, and the request would never complete. Cloudinary's
+ * upload endpoint is designed for direct browser POSTs and handles mobile
+ * networks much better.
+ *
+ * Signature spec:
+ *   sha1(<sorted-params-as-querystring> + api_secret)
+ * Params signed: timestamp, folder, public_id, source
+ * (api_key, file, and signature itself are NOT signed.)
+ */
+export interface CloudinaryDirectUploadParams {
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  folder: string;
+  publicId: string;
+  signature: string;
+}
+
+export function buildCloudinaryDirectUploadParams(
+  loadNumber: string,
+  stage: PhotoStage,
+): { ok: true; params: CloudinaryDirectUploadParams } | { ok: false; error: string } {
+  // Resolve credentials. cloudinary SDK auto-reads CLOUDINARY_URL but we
+  // need the raw values for signing here.
+  let cloudName = process.env.CLOUDINARY_CLOUD_NAME || "";
+  let apiKey = process.env.CLOUDINARY_API_KEY || "";
+  let apiSecret = process.env.CLOUDINARY_API_SECRET || "";
+
+  if ((!cloudName || !apiKey || !apiSecret) && process.env.CLOUDINARY_URL) {
+    // Parse cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+    try {
+      const u = new URL(process.env.CLOUDINARY_URL);
+      apiKey = u.username || apiKey;
+      apiSecret = u.password || apiSecret;
+      cloudName = u.hostname || cloudName;
+    } catch (_) {
+      /* fall through */
+    }
+  }
+  if (!cloudName || !apiKey || !apiSecret) {
+    return { ok: false, error: "Cloudinary not configured" };
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const folder = `traqiq/loads/${loadNumber}`;
+  const publicId = `${stage}_${Date.now()}`;
+
+  // Sorted alphabetically, joined as querystring, then concat api_secret
+  // and SHA1. Cloudinary docs: https://cloudinary.com/documentation/upload_images#generating_authentication_signatures
+  const toSign = [
+    `folder=${folder}`,
+    `public_id=${publicId}`,
+    `timestamp=${timestamp}`,
+  ].join("&");
+
+  // crypto already imported above? Use require pattern since this file is ESM.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const crypto = require("crypto");
+  const signature = crypto
+    .createHash("sha1")
+    .update(toSign + apiSecret)
+    .digest("hex");
+
+  return {
+    ok: true,
+    params: { cloudName, apiKey, timestamp, folder, publicId, signature },
+  };
+}
+
+/**
+ * Record a Cloudinary-direct-uploaded photo in load_documents. Called by
+ * the client AFTER the direct upload succeeds. Validates that the load
+ * has a driver assigned (same orphaned-photo guard as uploadLoadPhoto).
+ */
+export async function recordDirectUploadedPhoto(p: {
+  loadId: string;
+  driverId?: string;
+  stage: PhotoStage;
+  fileUrl: string;
+  fileName: string;
+  fileSize?: number;
+  mimeType?: string;
+  lat?: number;
+  lng?: number;
+  notes?: string;
+}): Promise<{ ok: true; docId: string } | { ok: false; error: string }> {
+  const load = await db.query.loads.findFirst({ where: eq(loads.id, p.loadId) });
+  if (!load) return { ok: false, error: "Load not found" };
+
+  const driverId = p.driverId || load.driverId || null;
+  if (!driverId) {
+    return {
+      ok: false,
+      error: "No driver assigned to this load. Contact dispatch before uploading.",
+    };
+  }
+
+  // Sanity-check the URL came from our Cloudinary account. Without this,
+  // a malicious client could POST any arbitrary URL and we'd record it.
+  if (!/^https:\/\/res\.cloudinary\.com\//.test(p.fileUrl)) {
+    return { ok: false, error: "Invalid file URL" };
+  }
+
+  try {
+    const [doc] = await db
+      .insert(loadDocuments)
+      .values({
+        loadId: p.loadId,
+        driverId,
+        documentType: p.stage,
+        fileName: p.fileName,
+        fileUrl: p.fileUrl,
+        fileSize: p.fileSize,
+        mimeType: p.mimeType,
+        notes: p.notes || null,
+        approvalStatus: "pending",
+      } as any)
+      .returning();
+
+    if (typeof p.lat === "number" && typeof p.lng === "number") {
+      try {
+        await db.insert(driverLocations).values({
+          driverId,
+          latitude: p.lat,
+          longitude: p.lng,
+          timestamp: new Date(),
+          loadId: p.loadId,
+          isActive: true,
+          source: "photo-upload",
+        } as any);
+      } catch (locErr: any) {
+        console.warn("[load-photos] driverLocations insert failed:", locErr?.message || locErr);
+      }
+    }
+
+    return { ok: true, docId: doc.id };
+  } catch (err: any) {
+    console.error("[load-photos] recordDirectUploadedPhoto error:", err?.message || err);
+    return { ok: false, error: String(err?.message || err) };
+  }
+}
+
 export interface UploadPhotoParams {
   loadId: string;
   driverId?: string;

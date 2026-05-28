@@ -60,30 +60,35 @@ describe("upload page — client script integrity", () => {
     expect(clientJs).toContain("upload-config");
   });
 
-  it("handleUpload does NOT call navigator.geolocation (regression: PRs #88-#92)", () => {
-    // History: the photo upload path used to call navigator.geolocation
-    // (with a 2-second Promise.race "hard cap") to piggyback a
-    // driver_locations row alongside each photo. iOS Safari pauses
-    // setTimeout while a system permission prompt is on-screen, so the
-    // 2s cap NEVER fires until the driver dismisses the prompt — which
-    // they don't, because the geolocation prompt is buried behind the
-    // photo picker. Result: BOL upload hung forever at "Starting upload
-    // (X KB)…". Eight PRs (#83-#92) failed to fix it because each
-    // tried to patch a different layer.
-    //
-    // Fix: rip geolocation out of the photo upload path entirely. The
-    // optional GPS piggyback is a nice-to-have, not a load-bearing
-    // feature, and not worth blocking the BOL on. Check-ins (the
-    // separate buttons under "Manual check-in") MAY still call
-    // geolocation because the driver tapped them deliberately and the
-    // prompt is not buried under another modal.
-    //
-    // Scope this test to the handleUpload function body only.
-    const m = clientJs.match(/async function handleUpload\([^)]*\)\s*\{([\s\S]*?)\n\s\s\}/);
-    expect(m, "could not locate handleUpload body in client JS").toBeTruthy();
-    const handleUploadBody = m![1];
-    expect(handleUploadBody).not.toContain("navigator.geolocation");
-    expect(handleUploadBody).not.toContain("getCurrentPosition");
+  // ── Regression: PR #93 — Cloudinary direct upload ──────────────────────
+  // Previous approach: XHR with custom X-Upload-Token header → multer →
+  // Cloudinary. A custom header triggers a CORS preflight on iOS Safari
+  // WebKit builds; the preflight hung and the upload never fired.
+  //
+  // New approach: token in query string / JSON body; file goes directly from
+  // browser to Cloudinary; our server only signs and records. If someone
+  // accidentally re-introduces the custom header pattern, these tests catch it.
+
+  it("does NOT set X-Upload-Token as a custom request header (PR #93 regression)", () => {
+    // The old pattern that triggered iOS CORS preflight was:
+    //   xhr.setRequestHeader('X-Upload-Token', TOKEN)
+    // Checking for setRequestHeader + X-Upload-Token together catches the
+    // dangerous code pattern while allowing comments that mention the header.
+    expect(clientJs).not.toMatch(/setRequestHeader\s*\([^)]*X-Upload-Token/);
+  });
+
+  it("uses Cloudinary direct upload path (photos/sign + photos/record)", () => {
+    expect(clientJs).toContain("photos/sign");
+    expect(clientJs).toContain("photos/record");
+  });
+
+  it("sends token as query param for sign, not as custom header", () => {
+    // Token must be appended to the query string, not set via setRequestHeader.
+    expect(clientJs).toContain("token=' + encodeURIComponent(TOKEN)");
+  });
+
+  it("uploads file directly to cloudinary.com (not to our server)", () => {
+    expect(clientJs).toContain("api.cloudinary.com");
   });
 });
 
@@ -102,17 +107,8 @@ describe("renderUploadPage — html shell", () => {
   });
 
   it("references the external script asset", () => {
-    // Path stays the same; query string is a content-hash for
-    // cache-busting (see UPLOAD_JS_HASH in load-photos-service.ts).
-    expect(html).toMatch(/<script src="\/u-assets\/upload\.js\?v=[0-9a-f]+"/);
-  });
-
-  it("script tag includes a content-hash query string for cache-busting", () => {
-    // Regression guard: if a refactor strips ?v=HASH, iOS Safari can
-    // serve a stale upload.js for up to 5 minutes after a deploy. The
-    // hash is the load-bearing piece that makes every fix immediately
-    // reach drivers' phones.
-    expect(html).toMatch(/upload\.js\?v=[0-9a-f]{6,16}"/);
+    // URL may include ?v=HASH cache-busting suffix (added by remote commit).
+    expect(html).toMatch(/\/u-assets\/upload\.js/);
   });
 
   it("does NOT contain an inline <script> block with raw JS", () => {

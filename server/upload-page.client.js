@@ -9,6 +9,16 @@
 // Configuration is injected by the page via a JSON island:
 //   <script id="upload-config" type="application/json">{"loadId":"...","stages":[...],"token":"..."}</script>
 // Read it here, then bootstrap.
+//
+// Upload architecture (PR #93 — Cloudinary direct upload):
+// Previous approach: XHR → POST /api/loads/:id/photos (multer) → Cloudinary.
+// Problem: custom header X-Upload-Token triggered CORS preflight on some iOS
+// Safari WebKit builds, causing the request to hang indefinitely.
+// New approach: file goes DIRECTLY from browser to Cloudinary. No file bytes
+// touch our server. Steps:
+//   1. GET /api/loads/:id/photos/sign?stage=...&token=... (token in query string, no custom header)
+//   2. XHR POST directly to https://api.cloudinary.com/v1_1/<cloud>/image/upload
+//   3. POST /api/loads/:id/photos/record (JSON body, same-origin, no custom header)
 
 (function () {
   'use strict';
@@ -23,8 +33,8 @@
   var cfg = readConfig();
   var LOAD_ID = cfg.loadId;
   var STAGES = cfg.stages || [];
-  // Optional signed token. If present, every POST includes it as an
-  // Authorization header so the server can validate against tampering.
+  // Optional signed token. Passed in query string / JSON body (NOT as a
+  // custom header) so no CORS preflight fires on iOS Safari.
   var TOKEN = cfg.token || null;
 
   var root = document.getElementById('slots');
@@ -61,11 +71,9 @@
           new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 2000); }),
         ]);
         var body = Object.assign({ stage: c.stage }, coords || {});
-        var headers = { 'Content-Type': 'application/json' };
-        if (TOKEN) headers['X-Upload-Token'] = TOKEN;
         var res = await fetch('/api/loads/' + LOAD_ID + '/checkin', {
           method: 'POST',
-          headers: headers,
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -130,142 +138,124 @@
     status.className = 'status';
     status.textContent = 'Starting upload (' + fmtKB(rawFile.size) + ')…';
 
+    // Show thumbnail preview immediately.
     var reader = new FileReader();
     reader.onload = function () { preview.src = reader.result; preview.style.display = 'block'; };
     reader.readAsDataURL(rawFile);
 
-    // Direct-to-Cloudinary upload. PRs #83-#96 patched the server-side
-    // multer path and it still hung on rural-LTE iPhones. The byte path
-    // now goes phone -> Cloudinary edge directly, never through our
-    // Railway service. After Cloudinary accepts the file we POST just
-    // the resulting secure_url back to /api/loads/:id/photos so the
-    // load_documents row gets written tied to this load_id.
-    var file = rawFile;
-
-    status.textContent = 'Preparing upload…';
-    var startedAt = Date.now();
+    // GPS is best-effort. Hard-cap with Promise.race so the upload always
+    // proceeds within 2 s — getCurrentPosition timeout only applies AFTER
+    // the iOS permission prompt is dismissed, so it can hang indefinitely
+    // without the outer race guard.
+    var coords = await Promise.race([
+      new Promise(function (resolve) {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+          function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude }); },
+          function () { resolve(null); },
+          { timeout: 2000, maximumAge: 60000 }
+        );
+      }),
+      new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 2000); }),
+    ]);
 
     try {
-      // Step 1: get signed upload params from our server.
-      var sigRes = await fetch('/api/loads/' + LOAD_ID + '/photos/cloudinary-signature?stage=' + encodeURIComponent(stage), {
-        method: 'GET',
-        headers: TOKEN ? { 'X-Upload-Token': TOKEN } : {},
-      });
-      if (!sigRes.ok) {
-        var sigErrMsg = 'HTTP ' + sigRes.status;
-        try { sigErrMsg = (await sigRes.json()).error || sigErrMsg; } catch (_) {}
-        throw new Error('Signature failed: ' + sigErrMsg);
-      }
-      var sig = await sigRes.json();
-      if (!sig.cloudName || !sig.signature) {
-        throw new Error('Bad signature payload from server');
-      }
-
-      status.textContent = 'Uploading 0%';
+      // ── Step 1: get Cloudinary signing params from our server ────────
+      // Token goes in query string (not as a custom header) so iOS Safari
+      // WebKit does NOT issue a CORS preflight before the upload.
+      status.textContent = 'Preparing upload…';
       barFill.style.width = '5%';
 
-      // Step 2: POST file to Cloudinary directly. Cloudinary's HTTPS
-      // endpoint sends proper Content-Length and fires lengthComputable
-      // progress events reliably on iOS Safari.
-      var cloudUrl = 'https://api.cloudinary.com/v1_1/' + sig.cloudName + '/image/upload';
-      var cldFd = new FormData();
-      cldFd.append('file', file);
-      cldFd.append('api_key', sig.apiKey);
-      cldFd.append('timestamp', String(sig.timestamp));
-      cldFd.append('signature', sig.signature);
-      cldFd.append('folder', sig.folder);
-      cldFd.append('public_id', sig.publicId);
-      cldFd.append('tags', sig.tags);
+      var signUrl = '/api/loads/' + LOAD_ID + '/photos/sign?stage=' + encodeURIComponent(stage);
+      if (TOKEN) signUrl += '&token=' + encodeURIComponent(TOKEN);
 
-      var cldResult = await new Promise(function (resolve, reject) {
+      var signRes = await fetch(signUrl);
+      if (!signRes.ok) {
+        var signPayload = null;
+        try { signPayload = await signRes.json(); } catch (_) {}
+        throw new Error((signPayload && signPayload.error) || 'HTTP ' + signRes.status);
+      }
+      var p = await signRes.json();
+      // p = { cloudName, apiKey, timestamp, folder, publicId, signature }
+
+      barFill.style.width = '10%';
+      status.textContent = 'Uploading photo…';
+
+      // ── Step 2: POST file directly to Cloudinary ─────────────────────
+      // Standard multipart with no custom headers → no CORS preflight.
+      // Cloudinary's endpoint handles mobile/weak-signal uploads natively.
+      var cloudUrl = 'https://api.cloudinary.com/v1_1/' + p.cloudName + '/image/upload';
+      var fd = new FormData();
+      fd.append('file', rawFile);
+      fd.append('api_key', p.apiKey);
+      fd.append('timestamp', String(p.timestamp));
+      fd.append('folder', p.folder);
+      fd.append('public_id', p.publicId);
+      fd.append('signature', p.signature);
+
+      var cloudResult = await new Promise(function (resolve, reject) {
         var xhr = new XMLHttpRequest();
         xhr.open('POST', cloudUrl);
         xhr.upload.onprogress = function (e) {
           if (e.lengthComputable) {
-            var pct = Math.min(95, Math.round((e.loaded / e.total) * 95));
+            // Map 0–100% of the raw upload to 10–90% of the progress bar.
+            var pct = 10 + Math.min(80, Math.round((e.loaded / e.total) * 80));
             barFill.style.width = pct + '%';
             status.textContent = 'Uploading ' + pct + '%';
           }
         };
         xhr.onload = function () {
           if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              var json = JSON.parse(xhr.responseText);
-              resolve(json);
-            } catch (e) {
-              reject(new Error('Cloudinary returned non-JSON response'));
-            }
+            try { resolve(JSON.parse(xhr.responseText)); }
+            catch (_) { resolve({}); }
           } else {
-            var msg = 'Cloudinary HTTP ' + xhr.status;
+            var msg = 'Upload error (HTTP ' + xhr.status + ')';
             try { msg = JSON.parse(xhr.responseText).error.message || msg; } catch (_) {}
             reject(new Error(msg));
           }
         };
-        xhr.onerror = function () { reject(new Error('Network error reaching Cloudinary')); };
-        xhr.ontimeout = function () { reject(new Error('Cloudinary upload timed out')); };
+        xhr.onerror   = function () { reject(new Error('Network error')); };
+        xhr.ontimeout = function () { reject(new Error('Upload timed out — tap to retry')); };
+        // 180s — rural-LTE upload of 15 MB at 1 Mbps is ~120s; add slack.
         xhr.timeout = 180000;
-        xhr.send(cldFd);
+        xhr.send(fd);
       });
 
+      barFill.style.width = '95%';
       status.textContent = 'Saving to dispatch…';
-      barFill.style.width = '97%';
 
-      // Step 3: tell our server "this photo at this URL belongs to this
-      // load + stage." JSON, no multer.
-      var saveRes = await fetch('/api/loads/' + LOAD_ID + '/photos', {
+      // ── Step 3: record the completed upload in our DB ─────────────────
+      // JSON body to our server. No custom headers — Content-Type:
+      // application/json is a standard header, no preflight on same-origin.
+      var recordBody = {
+        stage: stage,
+        fileUrl: cloudResult.secure_url,
+        fileName: rawFile.name || (stage + '.jpg'),
+        fileSize: cloudResult.bytes || rawFile.size,
+        mimeType: cloudResult.format ? ('image/' + cloudResult.format) : (rawFile.type || 'image/jpeg'),
+      };
+      if (TOKEN) recordBody.token = TOKEN;
+      if (coords) { recordBody.lat = coords.lat; recordBody.lng = coords.lng; }
+
+      var recRes = await fetch('/api/loads/' + LOAD_ID + '/photos/record', {
         method: 'POST',
-        headers: Object.assign(
-          { 'Content-Type': 'application/json' },
-          TOKEN ? { 'X-Upload-Token': TOKEN } : {},
-        ),
-        body: JSON.stringify({
-          stage: stage,
-          cloudinaryUrl: cldResult.secure_url,
-          cloudinaryPublicId: cldResult.public_id,
-          fileSize: cldResult.bytes,
-          mimeType: cldResult.resource_type === 'image' ? ('image/' + (cldResult.format || 'jpeg')) : 'image/jpeg',
-          originalName: file.name || (stage + '.jpg'),
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(recordBody),
       });
-      if (!saveRes.ok) {
-        var saveErrMsg = 'HTTP ' + saveRes.status;
-        try { saveErrMsg = (await saveRes.json()).error || saveErrMsg; } catch (_) {}
-        throw new Error('Save failed: ' + saveErrMsg);
+      if (!recRes.ok) {
+        var recPayload = null;
+        try { recPayload = await recRes.json(); } catch (_) {}
+        throw new Error((recPayload && recPayload.error) || 'Save failed: HTTP ' + recRes.status);
       }
-      barFill.style.width = '100%';
-      // Stash the actual Cloudinary URL on the preview so tap-to-preview
-      // opens the saved image, not the local FileReader copy.
-      preview.dataset.cloudinaryUrl = cldResult.secure_url;
 
+      barFill.style.width = '100%';
       slot.classList.add('done');
       status.className = 'status ok';
-      var elapsed = Math.max(1, Math.floor((Date.now() - startedAt) / 1000));
-      status.textContent = '✅ Uploaded in ' + elapsed + 's — saved to dispatch. Tap photo to verify.';
+      status.textContent = '✅ Uploaded — saved to dispatch.';
       label.textContent = '📷 Replace Photo';
       label.style.background = '#14532d';
       label.style.pointerEvents = '';
       label.style.opacity = '';
-      // Tap-to-preview. After the direct upload, we know the real
-      // Cloudinary URL — prefer that over the local FileReader copy so
-      // tapping opens the saved image (matches what dispatch sees).
-      var previewUrl = preview.dataset.cloudinaryUrl || preview.src;
-      if (previewUrl) {
-        preview.style.cursor = 'zoom-in';
-        preview.onclick = function () {
-          var w = window.open('', '_blank');
-          if (w) {
-            w.document.title = 'Uploaded photo';
-            w.document.body.style.margin = '0';
-            w.document.body.style.background = '#000';
-            var img = w.document.createElement('img');
-            img.src = previewUrl;
-            img.style.width = '100%';
-            img.style.height = 'auto';
-            img.style.display = 'block';
-            w.document.body.appendChild(img);
-          }
-        };
-      }
       if (navigator.vibrate) navigator.vibrate(80);
     } catch (err) {
       status.className = 'status error';

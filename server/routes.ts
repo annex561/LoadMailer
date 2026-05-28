@@ -1279,6 +1279,95 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // ── Cloudinary direct-upload flow ────────────────────────────────────────
+  // The XHR→multer→Cloudinary path failed on iOS Safari (request hung at
+  // "Starting upload…" with no progress event). Root cause: a multipart
+  // POST with a custom X-Upload-Token header triggers a CORS preflight in
+  // some WebKit builds, and the preflight either hangs or is rejected before
+  // the real POST ever fires.
+  //
+  // Fix: the file goes DIRECTLY from the browser to Cloudinary. Our server
+  // only signs the request (before the upload) and records the result (after).
+  // No file bytes touch our server. No custom headers on the large upload.
+
+  // GET /api/loads/:id/photos/sign?stage=...&token=...
+  // Returns Cloudinary signing params. Token is in query string (not header)
+  // so no CORS preflight is triggered.
+  app.get('/api/loads/:id/photos/sign', async (req, res) => {
+    try {
+      const { verifyUploadToken, isTokenRequired } = await import('./upload-token');
+      const { buildCloudinaryDirectUploadParams } = await import('./load-photos-service');
+
+      const token = (req.query.token || '').toString();
+      if (token.length > 0) {
+        const v = verifyUploadToken(token);
+        if (v.kind === 'expired') return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+        if (v.kind === 'invalid') return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+        if (v.loadId !== req.params.id) return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+      } else if (isTokenRequired()) {
+        return res.status(401).json({ ok: false, error: 'Upload token required.' });
+      }
+
+      const stage = (req.query.stage || '').toString();
+      if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+        return res.status(400).json({ ok: false, error: 'Invalid stage' });
+      }
+
+      const { db } = await import('./db');
+      const { loads } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const load = await db.query.loads.findFirst({ where: eq(loads.id, req.params.id) });
+      if (!load) return res.status(404).json({ ok: false, error: 'Load not found' });
+
+      const result = buildCloudinaryDirectUploadParams(load.loadNumber, stage as any);
+      if (!result.ok) return res.status(503).json({ ok: false, error: result.error });
+      res.json({ ok: true, ...result.params });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // POST /api/loads/:id/photos/record
+  // Records a completed Cloudinary direct upload in load_documents.
+  // Token in JSON body (not header) — same-origin JSON, no preflight.
+  app.post('/api/loads/:id/photos/record', async (req, res) => {
+    try {
+      const { verifyUploadToken, isTokenRequired } = await import('./upload-token');
+      const { recordDirectUploadedPhoto } = await import('./load-photos-service');
+
+      const token = (req.body.token || '').toString();
+      if (token.length > 0) {
+        const v = verifyUploadToken(token);
+        if (v.kind === 'expired') return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+        if (v.kind === 'invalid') return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+        if (v.loadId !== req.params.id) return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+      } else if (isTokenRequired()) {
+        return res.status(401).json({ ok: false, error: 'Upload token required.' });
+      }
+
+      const stage = (req.body.stage || '').toString();
+      if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+        return res.status(400).json({ ok: false, error: 'Invalid stage' });
+      }
+      if (!req.body.fileUrl) return res.status(400).json({ ok: false, error: 'fileUrl required' });
+
+      const result = await recordDirectUploadedPhoto({
+        loadId: req.params.id,
+        stage: stage as any,
+        fileUrl: req.body.fileUrl,
+        fileName: req.body.fileName || `${stage}.jpg`,
+        fileSize: req.body.fileSize ? Number(req.body.fileSize) : undefined,
+        mimeType: req.body.mimeType,
+        lat: req.body.lat != null ? Number(req.body.lat) : undefined,
+        lng: req.body.lng != null ? Number(req.body.lng) : undefined,
+      });
+      if (!result.ok) return res.status(500).json(result);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // List photos for a load
   app.get('/api/loads/:id/photos', async (req, res) => {
     try {
