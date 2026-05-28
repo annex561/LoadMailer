@@ -104,11 +104,8 @@ export function buildCloudinaryDirectUploadParams(
     `timestamp=${timestamp}`,
   ].join("&");
 
-  // crypto already imported above? Use require pattern since this file is ESM.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const crypto = require("crypto");
-  const signature = crypto
-    .createHash("sha1")
+  // createHash is already imported from 'crypto' at the top of this file.
+  const signature = createHash("sha1")
     .update(toSign + apiSecret)
     .digest("hex");
 
