@@ -242,6 +242,54 @@ export const drivers = pgTable("drivers", {
   unique("drivers_id_company_id_unique").on(table.id, table.companyId),
 ]);
 
+// Driver cash advances. Principal events (money fronted to a driver) that get
+// recouped from weekly settlements. Balance is decremented only when a paystub
+// is FINALIZED (server/paystub-service.ts), so live settlement previews never
+// double-count an unfinalized week. Math is pure + tested in
+// server/__tests__/advances-service.test.ts.
+export const driverAdvances = pgTable("driver_advances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  driverId: varchar("driver_id").notNull().references(() => drivers.id, { onDelete: "cascade" }),
+  amount: real("amount").notNull(),                  // principal fronted
+  reason: text("reason"),                            // "fuel advance", "repair", etc.
+  weeklyRepayment: real("weekly_repayment").default(0), // $/week to recoup; 0 = take full balance next settlement
+  balanceRemaining: real("balance_remaining").notNull(), // starts = amount, decremented on finalize
+  status: text("status").notNull().default("active"),    // active | paid
+  issuedAt: timestamp("issued_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_driver_advances_driver_id").on(table.driverId),
+]);
+
+// Persisted weekly paystub snapshots. Generating a stub for a (driver, week)
+// upserts this row and stores the full settlement breakdown as JSON so the PDF
+// and the driver portal show the exact numbers that were locked at finalize.
+export const paystubs = pgTable("paystubs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  driverId: varchar("driver_id").notNull().references(() => drivers.id, { onDelete: "cascade" }),
+  weekStart: text("week_start").notNull(),  // YYYY-MM-DD (Mon)
+  weekEnd: text("week_end").notNull(),      // YYYY-MM-DD (Sun)
+  loadCount: integer("load_count").notNull().default(0),
+  grossPay: real("gross_pay").notNull().default(0),
+  totalDeductions: real("total_deductions").notNull().default(0),
+  fuelCost: real("fuel_cost").notNull().default(0),
+  advanceDeduction: real("advance_deduction").notNull().default(0),
+  netPay: real("net_pay").notNull().default(0),
+  breakdown: jsonb("breakdown").notNull().default({}), // full DriverSettlement snapshot
+  pdfPath: text("pdf_path"),
+  pdfUrl: text("pdf_url"),
+  status: text("status").notNull().default("draft"), // draft | finalized | sent
+  finalizedAt: timestamp("finalized_at"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_paystubs_driver_id").on(table.driverId),
+  unique("paystubs_driver_week_unique").on(table.driverId, table.weekStart),
+]);
+
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }), // Multi-tenant: nullable during migration

@@ -843,13 +843,11 @@ export async function renderPay(token: string): Promise<string> {
     ref.setUTCDate(now.getUTCDate() - i * 7);
     const s = await computeSettlementForDriver(driver.id, fmtYMD(ref));
     const { start } = weekRange(fmtYMD(ref));
-    const fuel = +(driver.weeklyFuelCost ?? 0);
-    const ins = +(driver.weeklyInsuranceCost ?? 0);
     weekCards.push({
       label: i === 0 ? 'This week' : i === 1 ? 'Last week' : `${i} weeks ago`,
-      net: s?.netPay ?? -(fuel + ins),
+      net: s?.netPay ?? 0,
       gross: s?.grossPay ?? 0,
-      deductions: fuel + ins,
+      deductions: s?.totalDeductions ?? 0,
       loads: s?.loadCount ?? 0,
       weekStart: fmtYMD(start),
     });
@@ -875,12 +873,13 @@ export async function renderPay(token: string): Promise<string> {
       <div class="muted" style="color:#a7f3d0;margin-top:6px">${current.loads} load${current.loads === 1 ? '' : 's'} delivered · wk ${current.weekStart}</div>
     </a>
 
-    <a class="btn block" href="/statements/${token}?week=${current.weekStart}" style="margin-bottom:12px">See full breakdown →</a>
+    <a class="btn block" href="/statements/${token}?week=${current.weekStart}" style="margin-bottom:8px">See full breakdown →</a>
+    <a class="btn block" href="/my-pay/${token}/pdf?week=${current.weekStart}" target="_blank" style="margin-bottom:12px">⬇️ Download paystub PDF</a>
 
     <h2>Past weeks</h2>
     ${past || '<div class="card"><div class="muted">No prior weeks yet.</div></div>'}
 
-    <div class="muted" style="text-align:center;margin-top:18px;font-size:12px">Pay = (your % of load) − fuel − insurance</div>
+    <div class="muted" style="text-align:center;margin-top:18px;font-size:12px">Pay = (your share of each load) − fees, fuel, advances & weekly deductions</div>
   `;
   return layout({ title: 'My Pay', token, active: 'pay', body, driverId: driver.id });
 }
