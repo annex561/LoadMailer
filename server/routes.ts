@@ -950,6 +950,103 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // ── Driver advances (admin) ───────────────────────────────────────────────
+  app.get('/api/drivers/:id/advances', requireRole('admin', 'finance'), async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { driverAdvances } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const rows = await db.select().from(driverAdvances).where(eq(driverAdvances.driverId, req.params.id));
+      res.json({ ok: true, advances: rows });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  app.post('/api/drivers/:id/advances', requireRole('admin', 'finance'), async (req, res) => {
+    try {
+      const amount = Number(req.body?.amount);
+      if (!isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ ok: false, error: 'amount must be a positive number' });
+      }
+      const weeklyRepayment = Number(req.body?.weeklyRepayment ?? 0);
+      if (!isFinite(weeklyRepayment) || weeklyRepayment < 0) {
+        return res.status(400).json({ ok: false, error: 'weeklyRepayment must be a non-negative number' });
+      }
+      const { createAdvance } = await import('./advances-service');
+      const row = await createAdvance({
+        driverId: req.params.id,
+        amount,
+        weeklyRepayment,
+        reason: req.body?.reason ?? null,
+      });
+      res.json({ ok: true, advance: row });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // ── Paystubs (admin) ──────────────────────────────────────────────────────
+  // Generate/refresh a paystub snapshot. Pass { finalize: true } to lock it and
+  // recoup advances. This does NOT send anything (no outbound path).
+  app.post('/api/paystubs/:driverId/generate', requireRole('admin', 'finance'), async (req, res) => {
+    try {
+      const { generatePaystub } = await import('./paystub-service');
+      const { fmtYMD } = await import('./settlements-service');
+      const weekRef = (req.body?.weekStart as string) || (req.query.week as string) || fmtYMD(new Date());
+      const result = await generatePaystub(req.params.driverId, weekRef, { finalize: !!req.body?.finalize });
+      if (!result) return res.json({ ok: true, paystub: null, message: 'No delivered loads for this driver this week' });
+      res.json({ ok: true, paystub: { id: result.paystubId, status: result.status, pdfUrl: result.pdfUrl }, settlement: result.settlement });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  app.get('/api/paystubs/:driverId', requireRole('admin', 'finance'), async (req, res) => {
+    try {
+      const { listPaystubs } = await import('./paystub-service');
+      res.json({ ok: true, paystubs: await listPaystubs(req.params.driverId) });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // Generate + stream the PDF inline (admin convenience — view without persisting a finalize).
+  app.get('/api/paystubs/:driverId/pdf', requireRole('admin', 'finance'), async (req, res) => {
+    try {
+      const fs = await import('fs');
+      const { generatePaystub } = await import('./paystub-service');
+      const { fmtYMD } = await import('./settlements-service');
+      const weekRef = (req.query.week as string) || fmtYMD(new Date());
+      const result = await generatePaystub(req.params.driverId, weekRef, { finalize: false });
+      if (!result) return res.status(404).json({ ok: false, error: 'No delivered loads this week' });
+      const buf = fs.readFileSync(result.pdfPath);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="paystub_${weekRef}.pdf"`);
+      res.send(buf);
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // Serve a previously-generated paystub PDF from /tmp (basename only — no traversal).
+  app.get('/api/paystubs/:driverId/pdf-file/:fileName', async (req, res) => {
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      const safe = path.basename(req.params.fileName);
+      if (!safe.startsWith('paystub_') || !safe.endsWith('.pdf')) {
+        return res.status(400).json({ ok: false, error: 'bad file' });
+      }
+      const full = path.join('/tmp', safe);
+      if (!fs.existsSync(full)) return res.status(404).json({ ok: false, error: 'not found' });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.send(fs.readFileSync(full));
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // Geofence cron — manual trigger + status
   app.post('/api/geofence/tick', async (_req, res) => {
     try {
@@ -4696,6 +4793,28 @@ export async function registerRoutes(app: Express): Promise<void> {
     } catch (err: any) {
       console.error('My-pay error:', err);
       res.status(500).type('html').send('<h1>Error loading pay page</h1>');
+    }
+  });
+
+  // Driver-facing paystub PDF — authed by their own tracking token (no admin role).
+  app.get('/my-pay/:token/pdf', async (req, res) => {
+    try {
+      const fs = await import('fs');
+      const { driverFromToken } = await import('./driver-portal');
+      const { generatePaystub } = await import('./paystub-service');
+      const { fmtYMD } = await import('./settlements-service');
+      const driver = await driverFromToken(req.params.token);
+      if (!driver) return res.status(404).type('html').send('<h1>Invalid link</h1>');
+      const weekRef = (req.query.week as string) || fmtYMD(new Date());
+      const result = await generatePaystub(driver.id, weekRef, { finalize: false });
+      if (!result) return res.status(404).type('html').send('<h1>No pay for this week yet.</h1>');
+      const buf = fs.readFileSync(result.pdfPath);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="paystub_${weekRef}.pdf"`);
+      res.send(buf);
+    } catch (err: any) {
+      console.error('My-pay PDF error:', err);
+      res.status(500).type('html').send('<h1>Error generating paystub</h1>');
     }
   });
 

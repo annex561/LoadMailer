@@ -32,6 +32,11 @@ interface DriverSettlement {
   weekEnd: string;
   loadCount: number;
   totalRevenue: number;
+  grossPay: number;
+  fuelCost: number;
+  insuranceCost: number;
+  totalDeductions: number;
+  netPay: number;
   totalPay: number;
   lines: SettlementLine[];
 }
@@ -216,6 +221,16 @@ export default function Settlements() {
                           <div><div className="text-xs text-muted-foreground">− Insurance</div><div className="text-red-400">-{currency(s.insuranceCost ?? 0)}</div></div>
                           <div><div className="text-xs text-muted-foreground">Net take-home</div><div className="font-bold text-green-500">{currency(s.netPay ?? s.totalPay)}</div></div>
                         </div>
+                        <div className="mt-3 flex flex-wrap gap-2 items-center">
+                          <a
+                            href={`/api/paystubs/${s.driverId}/pdf?week=${weekRef}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <Button size="sm" variant="outline">⬇️ Download paystub PDF</Button>
+                          </a>
+                          <FinalizeButton driverId={s.driverId} weekRef={weekRef} netPay={s.totalPay} />
+                        </div>
                         <PayRuleEditor
                           driverId={s.driverId}
                           payType={s.payType}
@@ -223,6 +238,7 @@ export default function Settlements() {
                           weeklyFuelCost={(s as any).fuelCost ?? 0}
                           weeklyInsuranceCost={(s as any).insuranceCost ?? 0}
                         />
+                        <AdvanceForm driverId={s.driverId} />
                       </CardContent>
                     )}
                   </Card>
@@ -351,6 +367,109 @@ function PayRuleEditor({
           setInsurance(String(weeklyInsuranceCost));
         }}
       >
+        Cancel
+      </Button>
+    </div>
+  );
+}
+
+function FinalizeButton({
+  driverId,
+  weekRef,
+  netPay,
+}: {
+  driverId: string;
+  weekRef: string;
+  netPay: number;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/paystubs/${driverId}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weekStart: weekRef, finalize: true }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Paystub finalized", description: `Net ${currency(netPay)} locked. Advances recouped.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/settlements"] });
+    },
+    onError: (err: any) =>
+      toast({ title: "Finalize failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+  return (
+    <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+      {mutation.isPending ? "Finalizing…" : "Finalize paystub"}
+    </Button>
+  );
+}
+
+function AdvanceForm({ driverId }: { driverId: string }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [weekly, setWeekly] = useState("");
+  const [reason, setReason] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/drivers/${driverId}/advances`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: Number(amount),
+          weeklyRepayment: Number(weekly || 0),
+          reason: reason || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Advance recorded" });
+      setOpen(false);
+      setAmount("");
+      setWeekly("");
+      setReason("");
+      queryClient.invalidateQueries({ queryKey: ["/api/settlements"] });
+    },
+    onError: (err: any) =>
+      toast({ title: "Failed to record advance", description: String(err?.message || err), variant: "destructive" }),
+  });
+
+  if (!open) {
+    return (
+      <div className="mt-2">
+        <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+          + Record cash advance
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex items-end gap-2 flex-wrap p-3 border rounded bg-muted/30">
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Advance $</label>
+        <Input type="number" step="0.01" className="w-28" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      </div>
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Repay $/week (0 = all next)</label>
+        <Input type="number" step="0.01" className="w-36" value={weekly} onChange={(e) => setWeekly(e.target.value)} />
+      </div>
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Reason</label>
+        <Input className="w-40" value={reason} onChange={(e) => setReason(e.target.value)} />
+      </div>
+      <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending || !amount}>
+        {mutation.isPending ? "Saving…" : "Save advance"}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
         Cancel
       </Button>
     </div>
