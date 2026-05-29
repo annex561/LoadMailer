@@ -7,16 +7,61 @@
  * Required env vars:
  *   LOVES_FACTORING_ENABLED=true   — module-level kill switch (default off)
  *   FACTORING_DISABLED=true        — emergency halt for ALL outbound factoring email
- *   SMTP_USER / SMTP_PASS          — Gmail SMTP for outbound email (already wired)
+ *   RESEND_API_KEY                 — Resend.com API key for outbound email
+ *                                    (replaces nodemailer SMTP — Railway blocks port 587/465)
  *
  * See docs/factoring/loves-financial.md for the full spec.
  */
 
-import nodemailer from "nodemailer";
 import { db } from "./db";
 import { loads, factoringSubmissions, rateconIntake, loadDocuments } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { generateBillOfSale, generateInvoice, mergePacketPdfs, LAMP } from "./factoring-pdf-templates";
+
+/**
+ * Send an email with a PDF attachment via Resend's HTTPS API.
+ * Railway blocks outbound SMTP (ports 587 and 465 both time out), so
+ * nodemailer is replaced with a direct fetch to api.resend.com.
+ */
+async function sendViaResend(opts: {
+  from: string;
+  to: string | string[];
+  subject: string;
+  text: string;
+  attachmentName: string;
+  attachmentBase64: string;
+}): Promise<{ messageId: string }> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY not set");
+
+  const body = {
+    from: opts.from,
+    to: Array.isArray(opts.to) ? opts.to : [opts.to],
+    subject: opts.subject,
+    text: opts.text,
+    attachments: [
+      {
+        filename: opts.attachmentName,
+        content: opts.attachmentBase64,
+      },
+    ],
+  };
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const json: any = await res.json();
+  if (!res.ok) {
+    throw new Error(`Resend API error ${res.status}: ${json?.message ?? JSON.stringify(json)}`);
+  }
+  return { messageId: json.id };
+}
 
 const SCHEDULES_LS = "schedulesLS@loves.com";
 
@@ -51,19 +96,6 @@ function rateCheck(): { ok: boolean; reason?: string } {
   return { ok: true };
 }
 
-const factoringMailer = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  // Railway blocks outbound port 587. Use 465 (implicit TLS) instead.
-  // Override via SMTP_PORT env var if needed.
-  port: parseInt(process.env.SMTP_PORT || "465"),
-  secure: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) === 465 : true,
-  // Force IPv4 — Railway's network does not route IPv6 to external SMTP hosts.
-  family: 4,
-  auth: {
-    user: process.env.SMTP_USER || process.env.EMAIL_USER || "",
-    pass: process.env.SMTP_PASS || process.env.EMAIL_PASS || "",
-  },
-});
 
 interface PacketResult {
   ok: boolean;
@@ -348,8 +380,7 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
     const fromAddrT =
       process.env.FACTORING_FROM_EMAIL ||
       process.env.SMTP_USER ||
-      process.env.EMAIL_USER ||
-      LAMP.email;
+      "LAMP Logistics <onboarding@resend.dev>";
 
     const subjectT = `[TEST — redirected, NOT sent to Love's] ${LAMP.clientCode} — ACH — Load #${loadT.loadNumber}`;
 
@@ -379,18 +410,13 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
       `Thanks,\n${LAMP.dba} Dispatch\n${LAMP.phone}\n${LAMP.email}\n`;
 
     try {
-      const infoT = await factoringMailer.sendMail({
-        from: `"${LAMP.dba} [TEST]" <${fromAddrT}>`,
+      const infoT = await sendViaResend({
+        from: `${LAMP.dba} [TEST] <${fromAddrT}>`,
         to: testToEmail,
         subject: subjectT,
         text: bodyT,
-        attachments: [
-          {
-            filename: `TEST_${LAMP.clientCode}_Load_${loadT.loadNumber}_packet.pdf`,
-            content: Buffer.from(packetT.pdfBytes),
-            contentType: "application/pdf",
-          },
-        ],
+        attachmentName: `TEST_${LAMP.clientCode}_Load_${loadT.loadNumber}_packet.pdf`,
+        attachmentBase64: Buffer.from(packetT.pdfBytes).toString("base64"),
       });
       submissionTimestamps.push(Date.now());
       console.log(
@@ -399,7 +425,7 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
       return { ok: true, emailMessageId: infoT.messageId };
     } catch (errT: any) {
       console.error(`[factoring-loves] ❌ TEST send failed: ${errT.message}`);
-      return { ok: false, error: `SMTP error: ${errT.message}` };
+      return { ok: false, error: `Resend error: ${errT.message}` };
     }
   }
 
@@ -449,8 +475,7 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
   const fromAddr =
     process.env.FACTORING_FROM_EMAIL ||
     process.env.SMTP_USER ||
-    process.env.EMAIL_USER ||
-    LAMP.email;
+    "LAMP Logistics <onboarding@resend.dev>";
 
   const body =
     `Hi Love's Financial team,\n\n` +
@@ -518,18 +543,13 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
   }
 
   try {
-    const info = await factoringMailer.sendMail({
-      from: `"${LAMP.dba}" <${fromAddr}>`,
+    const info = await sendViaResend({
+      from: `${LAMP.dba} <${fromAddr}>`,
       to: SCHEDULES_LS,
       subject,
       text: body,
-      attachments: [
-        {
-          filename: `${LAMP.clientCode}_Load_${load.loadNumber}_packet.pdf`,
-          content: Buffer.from(packet.pdfBytes),
-          contentType: "application/pdf",
-        },
-      ],
+      attachmentName: `${LAMP.clientCode}_Load_${load.loadNumber}_packet.pdf`,
+      attachmentBase64: Buffer.from(packet.pdfBytes).toString("base64"),
     });
 
     submissionTimestamps.push(Date.now());
@@ -566,7 +586,7 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
       })
       .where(eq(factoringSubmissions.id, submission.id));
     console.error(`[factoring-loves] ❌ submit failed: ${err.message}`);
-    return { ok: false, error: `SMTP error: ${err.message}` };
+    return { ok: false, error: `Resend error: ${err.message}` };
   }
 }
 
