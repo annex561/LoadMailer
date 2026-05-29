@@ -9,16 +9,28 @@
  * - GET  /api/factoring/preview/:loadId — render packet PDF without sending
  */
 
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { db } from "../db";
 import { loads, factoringSubmissions, rateconIntake, loadDocuments } from "@shared/schema";
 import { and, desc, eq, isNotNull, isNull, ne, inArray } from "drizzle-orm";
 import { requireRole } from "../auth";
 import { buildFactoringPacket, submitToLoves, pastTodayCutoff } from "../factoring-loves";
 
+/**
+ * Accepts either an authenticated admin session OR the ADMIN_API_KEY header.
+ * Mirrors the requireBulkAuthorization pattern in routes.ts so factoring
+ * endpoints are callable from server-side scripts and the Railway CLI.
+ */
+function requireAdminOrApiKey(req: Request, res: Response, next: NextFunction) {
+  if ((req as any).isAuthenticated?.() && (req as any).user) return next();
+  const key = process.env.ADMIN_API_KEY;
+  if (key && req.headers["x-admin-api-key"] === key) return next();
+  res.status(401).json({ message: "Unauthorized" });
+}
+
 export function registerFactoringRoutes(app: Express) {
   // Queue: delivered loads with all required docs and no submission yet
-  app.get("/api/factoring/queue", requireRole("admin"), async (_req, res) => {
+  app.get("/api/factoring/queue", requireAdminOrApiKey, async (_req, res) => {
     try {
       const rows = await db
         .select()
@@ -147,7 +159,7 @@ export function registerFactoringRoutes(app: Express) {
   });
 
   // Submission history (sent/funded/rejected)
-  app.get("/api/factoring/submissions", requireRole("admin"), async (_req, res) => {
+  app.get("/api/factoring/submissions", requireAdminOrApiKey, async (_req, res) => {
     try {
       const rows = await db
         .select()
@@ -162,7 +174,7 @@ export function registerFactoringRoutes(app: Express) {
 
   // Manual submit — admin click. This is the ONLY path that sends a packet
   // to Love's in phase 1. No background workers, no scheduled jobs.
-  app.post("/api/factoring/submit/:loadId", requireRole("admin"), async (req, res) => {
+  app.post("/api/factoring/submit/:loadId", requireAdminOrApiKey, async (req, res) => {
     try {
       const userId = (req as any).user?.id ?? null;
       const result = await submitToLoves(req.params.loadId, userId);
@@ -182,7 +194,7 @@ export function registerFactoringRoutes(app: Express) {
 
   // Preview: render the merged packet PDF inline without sending. Lets the
   // admin eyeball the packet before clicking submit.
-  app.get("/api/factoring/preview/:loadId", requireRole("admin"), async (req, res) => {
+  app.get("/api/factoring/preview/:loadId", requireAdminOrApiKey, async (req, res) => {
     try {
       const result = await buildFactoringPacket(req.params.loadId);
       if (!result.ok || !result.pdfBytes) {
