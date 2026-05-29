@@ -144,28 +144,50 @@ export class SMSLoadService {
   private isConfigured = false;
   private isRunning = false;
   private config: SmsConfig | null = null;
+
+  // SendBlue (primary — iMessage delivery to iPhone drivers, no A2P 10DLC headache)
+  private sendblueApiKey: string = '';
+  private sendblueApiSecret: string = '';
+  private sendblueFromNumber: string = '';
+  private isSendblueConfigured = false;
+
+  // Twilio (fallback — SMS to Android / non-iMessage devices)
   private twilioClient: any = null;
   private twilioPhoneNumber: string = '';
   private twilioMessagingServiceSid: string = '';
-  
+  private isTwilioConfigured = false;
+
   constructor() {
-    // Initialize Twilio if credentials are available
+    // ── SendBlue (primary) ────────────────────────────────────────────────
+    this.sendblueApiKey    = process.env.SENDBLUE_API_KEY    || '';
+    this.sendblueApiSecret = process.env.SENDBLUE_API_SECRET || '';
+    this.sendblueFromNumber = process.env.SENDBLUE_FROM_NUMBER || '';
+
+    if (this.sendblueApiKey && this.sendblueApiSecret && this.sendblueFromNumber) {
+      this.isSendblueConfigured = true;
+      this.isConfigured = true;
+      console.log('✅ SMS service initialized with SendBlue (primary)');
+    } else {
+      console.log('⚠️ SendBlue not configured — set SENDBLUE_API_KEY, SENDBLUE_API_SECRET, SENDBLUE_FROM_NUMBER');
+    }
+
+    // ── Twilio (fallback) ─────────────────────────────────────────────────
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    this.twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER || '';
+    const authToken  = process.env.TWILIO_AUTH_TOKEN;
+    this.twilioPhoneNumber         = process.env.TWILIO_PHONE_NUMBER          || '';
     this.twilioMessagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID || '';
-    
+
     if (accountSid && authToken) {
       this.twilioClient = twilio(accountSid, authToken);
+      this.isTwilioConfigured = true;
       this.isConfigured = true;
-      console.log('✅ SMS service initialized with Twilio');
-      if (this.twilioMessagingServiceSid) {
-        console.log(`✅ Using Messaging Service SID: ${this.twilioMessagingServiceSid}`);
-      } else {
-        console.log('⚠️ No Messaging Service SID - using direct phone number (may have delivery issues)');
-      }
+      console.log('✅ Twilio configured as SMS fallback');
     } else {
-      console.log('⚠️ SMS service not configured - missing Twilio credentials');
+      console.log('⚠️ Twilio not configured — missing TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN');
+    }
+
+    if (!this.isConfigured) {
+      console.log('⚠️ SMS service not configured — no provider available');
     }
   }
 
@@ -202,7 +224,7 @@ export class SMSLoadService {
     const { isDryRunOutbound, logDryRun, dryRunFakeId } = await import('./dry-run');
     if (isDryRunOutbound()) {
       logDryRun({
-        vendor: 'twilio',
+        vendor: this.isSendblueConfigured ? 'sendblue' : 'twilio',
         action: 'sendSMS',
         payload: {
           to,
@@ -230,46 +252,70 @@ export class SMSLoadService {
       body = await appendDriverPortalFooter(to, body);
     }
 
-    if (!this.isConfigured || !this.twilioClient) {
+    if (!this.isConfigured) {
       console.log(`[SMS NOT CONFIGURED] Would send to ${to}: ${body}`);
       return { success: false, error: 'SMS service not configured' };
     }
 
-    try {
-      // Normalize phone number
-      const normalizedPhone = to.startsWith('+') ? to : `+1${to.replace(/\D/g, '')}`;
-      
-      // Build message params - use Messaging Service SID if available, otherwise use phone number
-      const messageParams: any = {
-        body: body,
-        to: normalizedPhone
-      };
+    const normalizedPhone = to.startsWith('+') ? to : `+1${to.replace(/\D/g, '')}`;
 
-      // Get the base URL for status callbacks
+    // ── Try SendBlue first (iMessage → iPhone drivers; fallback to SMS) ──
+    if (this.isSendblueConfigured) {
+      try {
+        const sbRes = await fetch('https://api.sendblue.co/api/send-message', {
+          method: 'POST',
+          headers: {
+            'sb-api-key-id':     this.sendblueApiKey,
+            'sb-api-secret-key': this.sendblueApiSecret,
+            'Content-Type':      'application/json',
+          },
+          body: JSON.stringify({
+            number:      normalizedPhone,
+            from_number: this.sendblueFromNumber,
+            content:     body,
+          }),
+        });
+        const sbJson: any = await sbRes.json();
+        if (sbRes.ok && !sbJson.error_message) {
+          console.log(`✅ SMS sent via SendBlue to ${normalizedPhone} (${sbJson.message_handle}): ${body.substring(0, 50)}...`);
+          return { success: true, messageSid: sbJson.message_handle };
+        }
+        // SendBlue returned an error — log and fall through to Twilio
+        console.warn(`⚠️ SendBlue failed for ${normalizedPhone}: ${sbJson.error_message} — trying Twilio fallback`);
+      } catch (sbErr: any) {
+        console.warn(`⚠️ SendBlue request threw: ${sbErr?.message} — trying Twilio fallback`);
+      }
+    }
+
+    // ── Twilio fallback ───────────────────────────────────────────────────
+    if (!this.isTwilioConfigured || !this.twilioClient) {
+      console.error(`❌ No SMS provider available for ${normalizedPhone}`);
+      return { success: false, error: 'No SMS provider available' };
+    }
+
+    try {
+      const messageParams: any = { body, to: normalizedPhone };
+
       const customDomain = process.env.CUSTOM_DOMAIN || 'traqiqs.io';
-      const replitDomain = process.env.REPL_SLUG 
+      const replitDomain = process.env.REPL_SLUG
         ? `${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
         : process.env.REPLIT_DEV_DOMAIN;
-      
-      const domain = replitDomain || customDomain;
+      const domain  = replitDomain || customDomain;
       const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`;
-      
-      // Prefer Messaging Service SID (required for A2P 10DLC compliance)
+
       if (this.twilioMessagingServiceSid) {
         messageParams.messagingServiceSid = this.twilioMessagingServiceSid;
         messageParams.statusCallback = `${baseUrl}/api/sms/status-callback`;
       } else {
-        // Fallback to direct phone number
         messageParams.from = this.twilioPhoneNumber;
       }
-      
+
       const message = await this.twilioClient.messages.create(messageParams);
-      
-      console.log(`✅ SMS sent to ${normalizedPhone} (SID: ${message.sid}): ${body.substring(0, 50)}...`);
+      console.log(`✅ SMS sent via Twilio (fallback) to ${normalizedPhone} (SID: ${message.sid}): ${body.substring(0, 50)}...`);
       return { success: true, messageSid: message.sid };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`❌ Failed to send SMS to ${to}:`, error);
+      console.error(`❌ Twilio fallback also failed for ${normalizedPhone}:`, error);
       return { success: false, error: errorMsg };
     }
   }
