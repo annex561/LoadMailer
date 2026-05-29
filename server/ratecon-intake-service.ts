@@ -5,6 +5,41 @@ import { eq, and, sql } from "drizzle-orm";
 import { runValidators, summarizeFailures } from "./ratecon-validators";
 import { matchDriverByName } from "./driver-name-matcher";
 import { drivers } from "@shared/schema";
+import { v2 as cloudinary } from "cloudinary";
+
+/**
+ * Upload a PDF buffer to Cloudinary as a raw resource and return the secure URL.
+ * Returns null (with a console warning) if Cloudinary is not configured or the
+ * upload fails — the intake row is still created, just without a pdfPath.
+ */
+async function uploadRateconPdf(
+  pdfBuffer: Buffer,
+  loadNumberHint: string,
+): Promise<string | null> {
+  try {
+    const url = await new Promise<string>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: "traqiq/ratecons",
+          public_id: `ratecon_${loadNumberHint.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}`,
+          resource_type: "raw",           // PDFs must use resource_type: raw
+          overwrite: false,
+          tags: ["traqiq", "ratecon"],
+        },
+        (err, result) => {
+          if (err || !result) return reject(err ?? new Error("Cloudinary upload returned no result"));
+          resolve(result.secure_url);
+        },
+      );
+      stream.end(pdfBuffer);
+    });
+    console.log(`[ratecon-intake] PDF stored to Cloudinary: ${url}`);
+    return url;
+  } catch (err: any) {
+    console.warn(`[ratecon-intake] PDF upload to Cloudinary failed (intake will have no pdfPath): ${err?.message}`);
+    return null;
+  }
+}
 
 export interface IntakeInput {
   sourceType: "email" | "upload" | "manual";
@@ -17,6 +52,16 @@ export interface IntakeInput {
 }
 
 export async function enqueueRatecon(input: IntakeInput) {
+  // Upload the PDF to Cloudinary immediately so factoring-loves.ts can
+  // retrieve it later via rateconIntake.pdfPath. Without this the PDF
+  // bytes were parsed for data and then discarded — pdfPath was always
+  // null and every factoring packet failed with "No Rate Confirmation PDF".
+  let pdfPath: string | null = null;
+  if (input.pdfBuffer && input.pdfBuffer.length > 0) {
+    const hint = input.sourceFilename?.replace(/\.pdf$/i, "") ?? "unknown";
+    pdfPath = await uploadRateconPdf(input.pdfBuffer, hint);
+  }
+
   const row: InsertRateconIntake = {
     sourceType: input.sourceType,
     companyId: input.companyId,
@@ -25,6 +70,7 @@ export async function enqueueRatecon(input: IntakeInput) {
     sourceUploadedBy: input.sourceUploadedBy,
     rawEmailText: input.rawEmailText,
     status: "pending",
+    pdfPath,
   };
   const [created] = await db.insert(rateconIntake).values(row).returning();
   return created;
