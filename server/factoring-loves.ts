@@ -55,6 +55,10 @@ const factoringMailer = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
   port: parseInt(process.env.SMTP_PORT || "587"),
   secure: false,
+  // Force IPv4 — Railway's network does not route IPv6 to external SMTP
+  // hosts (ENETUNREACH on the IPv6 address). Without this nodemailer picks
+  // whichever address DNS resolves first; on Railway that's the v6 record.
+  family: 4,
   auth: {
     user: process.env.SMTP_USER || process.env.EMAIL_USER || "",
     pass: process.env.SMTP_PASS || process.env.EMAIL_PASS || "",
