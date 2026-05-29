@@ -379,8 +379,7 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
 
     const fromAddrT =
       process.env.FACTORING_FROM_EMAIL ||
-      process.env.SMTP_USER ||
-      "LAMP Logistics <onboarding@resend.dev>";
+      "onboarding@resend.dev";
 
     const subjectT = `[TEST — redirected, NOT sent to Love's] ${LAMP.clientCode} — ACH — Load #${loadT.loadNumber}`;
 
@@ -474,8 +473,7 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
   const subject = `${LAMP.clientCode} — ACH — Load #${load.loadNumber}`;
   const fromAddr =
     process.env.FACTORING_FROM_EMAIL ||
-    process.env.SMTP_USER ||
-    "LAMP Logistics <onboarding@resend.dev>";
+    "onboarding@resend.dev";
 
   const body =
     `Hi Love's Financial team,\n\n` +
