@@ -53,11 +53,11 @@ function rateCheck(): { ok: boolean; reason?: string } {
 
 const factoringMailer = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: parseInt(process.env.SMTP_PORT || "587"),
-  secure: false,
-  // Force IPv4 — Railway's network does not route IPv6 to external SMTP
-  // hosts (ENETUNREACH on the IPv6 address). Without this nodemailer picks
-  // whichever address DNS resolves first; on Railway that's the v6 record.
+  // Railway blocks outbound port 587. Use 465 (implicit TLS) instead.
+  // Override via SMTP_PORT env var if needed.
+  port: parseInt(process.env.SMTP_PORT || "465"),
+  secure: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT) === 465 : true,
+  // Force IPv4 — Railway's network does not route IPv6 to external SMTP hosts.
   family: 4,
   auth: {
     user: process.env.SMTP_USER || process.env.EMAIL_USER || "",
