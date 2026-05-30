@@ -23,6 +23,26 @@
 (function () {
   'use strict';
 
+  // ── Debug log visible on-screen (temporary) ──────────────────────────────
+  // Shows exactly where the upload flow stops on the device.
+  // Remove once the root cause is confirmed.
+  var _dbgEl = null;
+  function dbg(msg) {
+    if (!_dbgEl) {
+      _dbgEl = document.createElement('div');
+      _dbgEl.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,.85);color:#0f0;font-size:11px;font-family:monospace;padding:6px;z-index:9999;max-height:40vh;overflow-y:auto;word-break:break-all';
+      document.body.appendChild(_dbgEl);
+    }
+    var line = document.createElement('div');
+    line.textContent = new Date().toISOString().slice(11,23) + ' ' + msg;
+    _dbgEl.appendChild(line);
+    _dbgEl.scrollTop = _dbgEl.scrollHeight;
+  }
+  window.onerror = function(m,s,l,c,e) { dbg('ERR: ' + m + ' (line ' + l + ')'); };
+  window.onunhandledrejection = function(e) { dbg('UNHANDLED: ' + (e.reason || e)); };
+  dbg('script loaded — LOAD_ID pending');
+  // ──────────────────────────────────────────────────────────────────────────
+
   function readConfig() {
     var el = document.getElementById('upload-config');
     if (!el) throw new Error('upload-config missing');
@@ -33,6 +53,7 @@
   var cfg = readConfig();
   var LOAD_ID = cfg.loadId;
   var STAGES = cfg.stages || [];
+  dbg('config OK — load=' + LOAD_ID + ' stages=' + STAGES.length);
   // Optional signed token. Passed in query string / JSON body (NOT as a
   // custom header) so no CORS preflight fires on iOS Safari.
   var TOKEN = cfg.token || null;
@@ -137,6 +158,7 @@
     barFill.style.width = '2%';
     status.className = 'status';
     status.textContent = 'Starting upload (' + fmtKB(rawFile.size) + ')…';
+    dbg('handleUpload start — stage=' + stage + ' size=' + rawFile.size + ' type=' + rawFile.type);
 
     // Show thumbnail preview immediately.
     var reader = new FileReader();
@@ -160,6 +182,7 @@
       // WebKit does NOT issue a CORS preflight before the upload.
       status.textContent = 'Preparing upload…';
       barFill.style.width = '5%';
+      dbg('fetching sign...');
 
       var signUrl = '/api/loads/' + LOAD_ID + '/photos/sign?stage=' + encodeURIComponent(stage);
       if (TOKEN) signUrl += '&token=' + encodeURIComponent(TOKEN);
@@ -172,6 +195,7 @@
       }
       var p = await signRes.json();
       // p = { cloudName, apiKey, timestamp, folder, publicId, signature }
+      dbg('sign OK — cloud=' + p.cloudName);
 
       barFill.style.width = '10%';
       status.textContent = 'Uploading photo…';
@@ -199,7 +223,9 @@
             status.textContent = 'Uploading ' + pct + '%';
           }
         };
+        dbg('xhr to cloudinary open — sending...');
         xhr.onload = function () {
+          dbg('xhr onload status=' + xhr.status);
           if (xhr.status >= 200 && xhr.status < 300) {
             try { resolve(JSON.parse(xhr.responseText)); }
             catch (_) { resolve({}); }
@@ -209,7 +235,7 @@
             reject(new Error(msg));
           }
         };
-        xhr.onerror   = function () { reject(new Error('Network error')); };
+        xhr.onerror   = function () { dbg('xhr onerror'); reject(new Error('Network error')); };
         xhr.ontimeout = function () { reject(new Error('Upload timed out — tap to retry')); };
         // 180s — rural-LTE upload of 15 MB at 1 Mbps is ~120s; add slack.
         xhr.timeout = 180000;
