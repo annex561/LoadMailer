@@ -413,13 +413,18 @@ export async function sendUploadLink(
       await createPendingUpload({ driverPhone: driver.phone, loadId, stage });
     }
     const firstLabel = STAGE_REPLY_LABEL[stages[0]];
-    // Fix B (CLAUDE.md user request): always name the load number in the
-    // prompt so the driver knows which load they're uploading to BEFORE
-    // they reply. Prevents wrong-load attachment when a driver has
-    // multiple loads in flight.
+    // Include pickup → delivery so the driver can identify the load by
+    // route, not just load number. Most drivers remember where they're
+    // going, not the load number.
+    const pickup = load.originCity && load.originState
+      ? `${load.originCity}, ${load.originState}`
+      : load.pickupAddress || 'pickup';
+    const delivery = load.destCity && load.destState
+      ? `${load.destCity}, ${load.destState}`
+      : load.deliveryAddress || 'delivery';
     const mmsMsg =
       customMessage ||
-      `📸 LAMP Load ${load.loadNumber} — reply to this text with a photo of the ${firstLabel} for load ${load.loadNumber}.`;
+      `📸 LAMP Load ${load.loadNumber} (${pickup} → ${delivery})\nPickup: ${load.pickupAddress}\nDelivery: ${load.deliveryAddress}\nReply with a photo of the ${firstLabel}.`;
     const r = await smsLoadService.sendSMS(driver.phone, mmsMsg);
     return { ok: r.success, sent: r.success ? 1 : 0, error: r.error };
   }
@@ -436,9 +441,17 @@ export async function sendUploadLink(
   const link = `${baseUrl}/u/${token}?stages=${stagesParam}`;
 
   const stageLabels = stages.map((s) => STAGE_LABELS[s]).join(' + ');
+  // Include pickup → delivery so the driver can identify the load by
+  // route. Most drivers remember where they're going, not the load number.
+  const pickup = load.originCity && load.originState
+    ? `${load.originCity}, ${load.originState}`
+    : load.pickupAddress || 'pickup';
+  const delivery = load.destCity && load.destState
+    ? `${load.destCity}, ${load.destState}`
+    : load.deliveryAddress || 'delivery';
   const msg =
     customMessage ||
-    `📸 LAMP: Load ${load.loadNumber} — please upload ${stageLabels}. Tap: ${link}`;
+    `📸 LAMP Load ${load.loadNumber} (${pickup} → ${delivery})\nPickup: ${load.pickupAddress}\nDelivery: ${load.deliveryAddress}\nPlease upload ${stageLabels}:\n${link}`;
 
   const r = await smsLoadService.sendSMS(driver.phone, msg);
   return { ok: r.success, sent: r.success ? 1 : 0, error: r.error };
