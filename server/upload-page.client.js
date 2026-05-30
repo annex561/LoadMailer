@@ -143,21 +143,16 @@
     reader.onload = function () { preview.src = reader.result; preview.style.display = 'block'; };
     reader.readAsDataURL(rawFile);
 
-    // GPS is best-effort. Hard-cap with Promise.race so the upload always
-    // proceeds within 2 s — getCurrentPosition timeout only applies AFTER
-    // the iOS permission prompt is dismissed, so it can hang indefinitely
-    // without the outer race guard.
-    var coords = await Promise.race([
-      new Promise(function (resolve) {
-        if (!navigator.geolocation) return resolve(null);
-        navigator.geolocation.getCurrentPosition(
-          function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude }); },
-          function () { resolve(null); },
-          { timeout: 2000, maximumAge: 60000 }
-        );
-      }),
-      new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 2000); }),
-    ]);
+    // GPS removed from the upload path entirely. iOS Safari freezes the
+    // entire JS event loop — including setTimeout — while a native system
+    // permission dialog is on screen. Promise.race with a 2s cap does NOT
+    // help because the timer never fires. Result: upload hangs at
+    // "Starting upload…" until the driver dismisses the dialog (which
+    // they never do because they don't know it's there). GPS is a
+    // nice-to-have for driver_locations; it is not worth blocking the BOL.
+    // Check-in buttons (which the driver taps intentionally) may still
+    // request location because the prompt is expected in that context.
+    var coords = null;
 
     try {
       // ── Step 1: get Cloudinary signing params from our server ────────
