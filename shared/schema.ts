@@ -3303,3 +3303,100 @@ export type CollectionsItemWithRelations = CollectionsItem & {
   invoice: ArInvoice;
   load?: Load;
 };
+
+// ============================================================================
+// DOCUMENTS / SIGNATURES — DocuSeal integration
+// ============================================================================
+// Universal signature envelope tracking. ANY signing flow in the platform —
+// driver onboarding, OO lease packet, NDA, fuel card agreement, etc. —
+// creates a row in signature_envelopes and tracks state through to "completed".
+//
+// DocuSeal is the signing provider. The same code works against the hosted
+// service at docuseal.co OR a self-hosted Railway instance — only the
+// DOCUSEAL_BASE_URL env var differs.
+//
+// signerKind / signerId is a polymorphic pointer to whatever entity in the
+// platform initiated the send (driver, recruitment lead, contact, or just
+// a raw phone/email). We do NOT FK-constrain it so the table works for
+// one-off sends to people who do not yet exist as drivers.
+
+export const signatureEnvelopeStatusEnum = pgEnum("signature_envelope_status", [
+  "draft",           // created locally, not yet sent to DocuSeal
+  "sent",            // sent; awaiting signature
+  "viewed",          // signer opened the link
+  "partially_signed",// 1+ but not all signers signed (multi-party)
+  "completed",       // all parties signed
+  "declined",        // signer declined
+  "expired",         // template expiration hit
+  "voided",          // admin cancelled
+  "failed",          // provider error
+]);
+
+export const signatureEnvelopeSignerKindEnum = pgEnum("signature_envelope_signer_kind", [
+  "driver",
+  "recruitment_lead",
+  "contact",
+  "user",
+  "external",       // raw email/phone, no platform entity
+]);
+
+export const signatureEnvelopes = pgTable("signature_envelopes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+
+  // Polymorphic signer pointer (NOT FK-constrained — works for external/one-off sends)
+  signerKind: signatureEnvelopeSignerKindEnum("signer_kind").notNull().default("external"),
+  signerId: varchar("signer_id"),                  // driverId / recruitmentLeadId / contactId
+
+  // Signer contact at send-time (cached so we still know who got it after deletes)
+  signerName: text("signer_name").notNull(),
+  signerEmail: text("signer_email"),
+  signerPhone: text("signer_phone"),
+
+  // What's being signed
+  documentName: text("document_name").notNull(),    // human label: "OO Lease Packet — Tony Hauler"
+  templateRef: text("template_ref"),                // DocuSeal template ID (or your own slug)
+
+  // Provider-side IDs (DocuSeal)
+  provider: text("provider").notNull().default("docuseal"),
+  providerSubmissionId: text("provider_submission_id"),
+  providerSignerUrl: text("provider_signer_url"),   // the URL the signer opens to sign
+
+  // Lifecycle
+  status: signatureEnvelopeStatusEnum("status").notNull().default("draft"),
+  sentAt: timestamp("sent_at"),
+  viewedAt: timestamp("viewed_at"),
+  completedAt: timestamp("completed_at"),
+  declinedAt: timestamp("declined_at"),
+  declinedReason: text("declined_reason"),
+
+  // Final artifact (path in object storage when complete)
+  signedPdfPath: text("signed_pdf_path"),
+
+  // Webhook + audit
+  lastWebhookAt: timestamp("last_webhook_at"),
+  lastWebhookKind: text("last_webhook_kind"),
+  rawProviderPayload: jsonb("raw_provider_payload"),
+
+  // Who initiated the send (admin user)
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  notes: text("notes"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_signature_envelopes_company_id").on(table.companyId),
+  index("idx_signature_envelopes_status").on(table.status),
+  index("idx_signature_envelopes_signer").on(table.signerKind, table.signerId),
+  index("idx_signature_envelopes_provider_id").on(table.providerSubmissionId),
+  index("idx_signature_envelopes_created_at").on(table.createdAt),
+]);
+
+export const insertSignatureEnvelopeSchema = createInsertSchema(signatureEnvelopes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SignatureEnvelope = typeof signatureEnvelopes.$inferSelect;
+export type InsertSignatureEnvelope = z.infer<typeof insertSignatureEnvelopeSchema>;

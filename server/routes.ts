@@ -51,6 +51,7 @@ import traqiqSopRoutes from "./traqiq-sop-routes";
 import driverSMSUploadRoutes from "./driver-sms-upload-routes";
 import { registerRateconIntakeRoutes } from "./ratecon-intake-routes";
 import { registerDriverConfirmationRoutes } from "./driver-confirmation-routes";
+import { registerDocumentsRoutes } from "./documents-routes";
 import twilio from "twilio";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -858,6 +859,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Ratecon intake routes (PDF upload + manual entry)
   registerRateconIntakeRoutes(app);
   registerDriverConfirmationRoutes(app);
+
+  // Universal e-signature integration via DocuSeal (hosted OR self-hosted).
+  // Powers OO lease packets, driver onboarding signatures, and any one-off doc send.
+  registerDocumentsRoutes(app);
 
   // Add authentication routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
