@@ -64,6 +64,10 @@ const DriverConfirmPage = lazy(() => import("@/pages/driver-confirm"));
 // Public legal pages — required for A2P 10DLC TCR campaign approval.
 const PrivacyPolicy = lazy(() => import("@/pages/privacy"));
 const TermsOfService = lazy(() => import("@/pages/terms"));
+// Recruitment Stage 1: owner-operator landing + admin pipeline (manual SMS only).
+const OwnerOperatorsLanding = lazy(() => import("@/pages/owner-operators"));
+const OwnerOperatorsWelcome = lazy(() => import("@/pages/owner-operators-welcome"));
+const RecruitmentDashboard = lazy(() => import("@/pages/recruitment"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -114,6 +118,9 @@ function Router() {
       <Route path="/smart-load-matching" component={SmartLoadMatching} />
       <Route path="/prediction-confidence" component={PredictionConfidence} />
       <Route path="/admin-overview" component={AdminOverview} />
+      {/* Recruitment Stage 1 — admin lead pipeline */}
+      <Route path="/admin/recruitment" component={RecruitmentDashboard} />
+      <Route path="/recruitment" component={RecruitmentDashboard} />
       <Route path="/ops" component={OpsMonitor} />
       <Route path="/ops-monitor" component={OpsMonitor} />
       <Route path="/settlements" component={Settlements} />
@@ -155,6 +162,13 @@ function App() {
               {/* Public legal pages — must be reachable without login (TCR requirement) */}
               <Route path="/privacy" component={PrivacyPolicy} />
               <Route path="/terms" component={TermsOfService} />
+
+              {/* Recruitment Stage 1 — public landing for owner-operators */}
+              <Route path="/owner-operators" component={OwnerOperatorsLanding} />
+              <Route path="/owner-operator" component={OwnerOperatorsLanding} />
+              <Route path="/drive-with-us" component={OwnerOperatorsLanding} />
+              {/* Stage 1.5 — post-submit engagement page (quiz + programs + call expectation) */}
+              <Route path="/owner-operators/welcome/:leadId" component={OwnerOperatorsWelcome} />
 
               {/* Standalone driver pages without sidebar/header - for driver self-service only */}
               <Route path="/driver-onboarding" component={DriverOnboarding} />

@@ -52,6 +52,7 @@ const menuGroups: MenuGroup[] = [
       { name: "Fleet Dashboard", href: "/fleet", adminOnly: true },
       { name: "Driver Roster", href: "/driver-management" },
       { name: "Onboarding", href: "/driver-onboarding" },
+      { name: "Recruitment", href: "/admin/recruitment", adminOnly: true },
       { name: "Trucks", href: "/fleet/trucks", adminOnly: true },
       { name: "Work Orders", href: "/fleet/work-orders", adminOnly: true },
       { name: "Inspections", href: "/fleet/inspections", adminOnly: true },
