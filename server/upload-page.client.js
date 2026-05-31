@@ -23,25 +23,28 @@
 (function () {
   'use strict';
 
-  // ── Debug log visible on-screen (temporary) ──────────────────────────────
-  // Shows exactly where the upload flow stops on the device.
-  // Remove once the root cause is confirmed.
+  // Lightweight breadcrumb logger — console only. The on-screen overlay
+  // version found the iOS-Messages FileReader crash; we keep the console
+  // breadcrumbs (cheap) so the next device-specific issue is one screen
+  // share away instead of a blind guess. Append ?debug=1 to surface them
+  // on-screen again if needed.
+  var _showDbg = /[?&]debug=1/.test(location.search);
   var _dbgEl = null;
   function dbg(msg) {
+    try { console.log('[upload] ' + msg); } catch (_) {}
+    if (!_showDbg) return;
     if (!_dbgEl) {
       _dbgEl = document.createElement('div');
       _dbgEl.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,.85);color:#0f0;font-size:11px;font-family:monospace;padding:6px;z-index:9999;max-height:40vh;overflow-y:auto;word-break:break-all';
       document.body.appendChild(_dbgEl);
     }
     var line = document.createElement('div');
-    line.textContent = new Date().toISOString().slice(11,23) + ' ' + msg;
+    line.textContent = msg;
     _dbgEl.appendChild(line);
     _dbgEl.scrollTop = _dbgEl.scrollHeight;
   }
-  window.onerror = function(m,s,l,c,e) { dbg('ERR: ' + m + ' (line ' + l + ')'); };
-  window.onunhandledrejection = function(e) { dbg('UNHANDLED: ' + (e.reason || e)); };
-  dbg('script loaded — LOAD_ID pending');
-  // ──────────────────────────────────────────────────────────────────────────
+  window.onerror = function (m, s, l) { dbg('ERR: ' + m + ' (line ' + l + ')'); };
+  window.onunhandledrejection = function (e) { dbg('UNHANDLED: ' + (e.reason || e)); };
 
   function readConfig() {
     var el = document.getElementById('upload-config');

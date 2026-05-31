@@ -90,6 +90,27 @@ describe("upload page — client script integrity", () => {
   it("uploads file directly to cloudinary.com (not to our server)", () => {
     expect(clientJs).toContain("api.cloudinary.com");
   });
+
+  // ── Regression: FileReader crash in iOS Messages in-app browser ─────────
+  // The in-app WebKit browser launched from iOS Messages does NOT expose
+  // FileReader. `new FileReader()` threw an uncaught ReferenceError that
+  // crashed handleUpload() before any upload request fired — driver was
+  // stuck at "Starting upload..." forever. FileReader is only used for the
+  // cosmetic thumbnail preview, so it MUST be feature-detected.
+  it("guards FileReader with a typeof check (iOS Messages in-app browser)", () => {
+    // If FileReader is used, it must be behind a typeof guard. We assert
+    // that any `new FileReader()` is preceded somewhere by the guard.
+    if (clientJs.includes("new FileReader()")) {
+      expect(clientJs).toMatch(/typeof\s+FileReader\s*!==\s*['"]undefined['"]/);
+    }
+  });
+
+  it("has a global error handler so device-specific crashes are visible", () => {
+    // window.onerror + onunhandledrejection are what surfaced the
+    // FileReader bug. Keep them so the next device quirk isn't a blind guess.
+    expect(clientJs).toContain("window.onerror");
+    expect(clientJs).toContain("window.onunhandledrejection");
+  });
 });
 
 describe("renderUploadPage — html shell", () => {
