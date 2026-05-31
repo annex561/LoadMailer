@@ -883,6 +883,23 @@ export class SMSCommunicationService {
         await sendReply("No active load found to mark as picked up. Are you accepting a dispatch first?");
         return true;
       }
+
+      // GATE: cannot mark PICKED UP until both pickup photos (BOL + tie-down)
+      // are uploaded. Mirrors the /checkin and /photos/confirm server gates so
+      // a load never advances with paperwork missing. Reply with the upload
+      // link so the driver fixes it in one tap.
+      {
+        const { getRequiredPhotoStatus, STAGE_LABELS } = await import("./load-photos-service");
+        const photoStatus = await getRequiredPhotoStatus(active.id, "pickup");
+        if (!photoStatus.complete) {
+          const missing = photoStatus.missing.map((s: any) => STAGE_LABELS[s]).join(" + ");
+          const base = process.env.PUBLIC_URL || process.env.APP_URL || "https://traqiq.app";
+          const link = `${base}/u/${active.id}?stages=pickup_bol,pickup_securement`;
+          await sendReply(`⚠️ Before PICKED UP, upload ${missing} for Load ${active.loadNumber}:\n${link}`);
+          return true;
+        }
+      }
+
       await db
         .update(loads)
         .set({ status: "in_transit", bookedAt: new Date(), updatedAt: new Date() })
@@ -915,6 +932,21 @@ export class SMSCommunicationService {
         await sendReply("No active load found to mark as delivered.");
         return true;
       }
+
+      // GATE: cannot mark DELIVERED until the delivery photos (POD + signed
+      // BOL) are uploaded — these are the documents factoring needs.
+      {
+        const { getRequiredPhotoStatus, STAGE_LABELS } = await import("./load-photos-service");
+        const delStatus = await getRequiredPhotoStatus(active.id, "delivery");
+        if (!delStatus.complete) {
+          const missing = delStatus.missing.map((s: any) => STAGE_LABELS[s]).join(" + ");
+          const base = process.env.PUBLIC_URL || process.env.APP_URL || "https://traqiq.app";
+          const link = `${base}/u/${active.id}?stages=delivery_pod,delivery_signed_bol`;
+          await sendReply(`⚠️ Before DELIVERED, upload ${missing} for Load ${active.loadNumber}:\n${link}`);
+          return true;
+        }
+      }
+
       await db
         .update(loads)
         .set({ status: "delivered", deliveredAt: new Date(), updatedAt: new Date() })
