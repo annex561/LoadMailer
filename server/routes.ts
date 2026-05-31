@@ -1175,7 +1175,13 @@ export async function registerRoutes(app: Express): Promise<void> {
           ['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(s),
         );
       if (stages.length === 0) {
-        stages = [...PICKUP_STAGES, ...DELIVERY_STAGES];
+        // No explicit phase in the link → derive from where the load actually
+        // is. Pre-delivery shows ONLY the pickup slots (BOL + tie-down);
+        // delivery slots never appear until the load reaches the delivery
+        // phase. Prevents the "all 4 slots showing at pickup" confusion that
+        // led to driver error. (Was: always showed all 4.)
+        const { stagesForLoadStatus } = await import('./load-photos-service');
+        stages = stagesForLoadStatus(load.status as string | null);
       }
       res.type('html').send(renderUploadPage(load.id, stages as any, load.loadNumber, tokenForClient));
     } catch (err: any) {

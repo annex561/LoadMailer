@@ -96,7 +96,9 @@ class GeofenceCron {
 
         const baseUrl =
           process.env.PUBLIC_URL || process.env.APP_URL || 'https://traqiq.app';
-        const uploadLink = `${baseUrl}/u/${load.id}`;
+        // Phase-scoped links — driver sees only the slots for where they are.
+        const pickupUploadLink = `${baseUrl}/u/${load.id}?stages=pickup_bol,pickup_securement`;
+        const deliveryUploadLink = `${baseUrl}/u/${load.id}?stages=delivery_pod,delivery_signed_bol`;
 
         // MMS-reply mode swaps the link-bearing custom message for `undefined`
         // so sendUploadLink builds its default "reply with photo of load #X"
@@ -112,7 +114,7 @@ class GeofenceCron {
             const pickupMsg = mmsMode
               ? undefined
               : `You're near the shipper for Load #${load.loadNumber}.\n` +
-                `Upload the signed BOL when loaded:\n${uploadLink}\n\n` +
+                `Upload the BOL + tie-down (both required):\n${pickupUploadLink}\n\n` +
                 `Or reply PICKED UP when loaded.`;
             const r = await sendUploadLink(load.id, PICKUP_STAGES, pickupMsg);
             if (r.ok) {
@@ -133,7 +135,7 @@ class GeofenceCron {
             const deliveryMsg = mmsMode
               ? undefined
               : `You're near the receiver for Load #${load.loadNumber}.\n` +
-                `Upload the signed BOL when offloaded:\n${uploadLink}\n\n` +
+                `Upload the signed BOL + POD:\n${deliveryUploadLink}\n\n` +
                 `Or reply DELIVERED when offloaded.`;
             const r = await sendUploadLink(load.id, DELIVERY_STAGES, deliveryMsg);
             if (r.ok) {

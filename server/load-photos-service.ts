@@ -27,6 +27,39 @@ export const STAGE_LABELS: Record<PhotoStage, string> = {
 export const PICKUP_STAGES: PhotoStage[] = ['pickup_bol', 'pickup_securement'];
 export const DELIVERY_STAGES: PhotoStage[] = ['delivery_pod', 'delivery_signed_bol'];
 
+// All four stages are required documents, but the driver should only ever see
+// the slots for the phase the load is currently in — pickup slots before
+// delivery, delivery slots once at/after delivery. Keeping the off-phase slots
+// hidden prevents drivers uploading the wrong doc to the wrong slot.
+export const REQUIRED_STAGES: PhotoStage[] = [
+  'pickup_bol',
+  'pickup_securement',
+  'delivery_pod',
+  'delivery_signed_bol',
+];
+
+// Load statuses that mean the truck is at / past the delivery dock. Anything
+// else is treated as the pickup phase.
+const DELIVERY_PHASE_STATUSES = new Set([
+  'at_delivery',
+  'unloaded',
+  'delivered',
+  'completed',
+  'pod_received',
+]);
+
+/**
+ * Which photo slots to show for a load given its current status. Pre-delivery
+ * → pickup BOL + tie-down only. At/after delivery → POD + signed BOL only.
+ * This is the single source of truth used by the /u/<token> page when the
+ * link doesn't pin an explicit phase.
+ */
+export function stagesForLoadStatus(status: string | null | undefined): PhotoStage[] {
+  return status && DELIVERY_PHASE_STATUSES.has(status)
+    ? [...DELIVERY_STAGES]
+    : [...PICKUP_STAGES];
+}
+
 function isConfigured(): boolean {
   return !!process.env.CLOUDINARY_URL || !!process.env.CLOUDINARY_CLOUD_NAME;
 }
@@ -497,6 +530,8 @@ export function renderUploadPage(
   .slot h2{font-size:15px;margin:0 0 10px;color:#e2e8f0}
   .slot.done{border-color:#22c55e;background:#14532d33}
   .slot.done h2::before{content:"✅ ";color:#22c55e}
+  .req-badge{display:inline-block;background:#7c2d12;color:#fed7aa;border:1px solid #ea580c;font-size:10px;font-weight:700;letter-spacing:.5px;padding:1px 6px;border-radius:4px;vertical-align:middle;margin-left:6px}
+  .slot.done .req-badge{background:#14532d;border-color:#22c55e;color:#bbf7d0}
   input[type=file]{display:none}
   label.btn{display:block;background:#0ea5e9;color:white;padding:14px;border-radius:8px;text-align:center;font-weight:600;cursor:pointer;font-size:15px}
   label.btn:active{background:#0369a1}

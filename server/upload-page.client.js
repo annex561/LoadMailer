@@ -115,13 +115,37 @@
     ciRoot.appendChild(b);
   });
 
+  // ---------- Required banner ----------
+  // Every shown slot is a required document for this phase. Make that
+  // unmissable so a driver doesn't leave the dock with a photo missing.
+  if (STAGES.length) {
+    var banner = document.createElement('div');
+    banner.id = 'required-banner';
+    banner.style.cssText = 'background:#7c2d12;color:#fed7aa;border:1px solid #ea580c;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;font-weight:600';
+    banner.innerHTML = '⚠️ Both photos below are <b>required</b> before you leave. <span id="req-count"></span>';
+    root.parentNode.insertBefore(banner, root);
+  }
+
+  function updateReqCount() {
+    var done = document.querySelectorAll('.slot.done').length;
+    var el = document.getElementById('req-count');
+    if (!el) return;
+    if (done >= STAGES.length) {
+      el.textContent = '✅ All ' + STAGES.length + ' uploaded — you’re done.';
+      var b = document.getElementById('required-banner');
+      if (b) { b.style.background = '#14532d'; b.style.borderColor = '#22c55e'; b.style.color = '#bbf7d0'; b.innerHTML = '✅ All required photos uploaded. You can close this page.'; }
+    } else {
+      el.textContent = '(' + done + ' of ' + STAGES.length + ' done)';
+    }
+  }
+
   // ---------- Photo slots ----------
   STAGES.forEach(function (s) {
     var el = document.createElement('div');
     el.className = 'slot';
     el.id = 'slot-' + s.stage;
     el.innerHTML =
-      '<h2>' + s.label + '</h2>' +
+      '<h2>' + s.label + ' <span class="req-badge">REQUIRED</span></h2>' +
       '<label class="btn" for="file-' + s.stage + '">📷 Take / Choose Photo</label>' +
       '<input type="file" id="file-' + s.stage + '" accept="image/*">' +
       '<div class="progress" style="display:none"><div style="width:0%"></div></div>' +
@@ -131,6 +155,7 @@
     var input = el.querySelector('input');
     input.addEventListener('change', function () { handleUpload(s.stage, input.files[0]); });
   });
+  updateReqCount();
 
   function fmtKB(n) {
     return n < 1024 * 1024
@@ -284,6 +309,7 @@
       label.style.pointerEvents = '';
       label.style.opacity = '';
       if (navigator.vibrate) navigator.vibrate(80);
+      updateReqCount();
     } catch (err) {
       status.className = 'status error';
       status.textContent = '❌ Upload failed: ' + err.message + ' — tap the button to retry';

@@ -14,7 +14,7 @@ import { db } from './db';
 import { drivers, loads, loadDocuments } from '@shared/schema';
 import { eq, and, desc, or, isNull } from 'drizzle-orm';
 import { weekRange, fmtYMD, computeSettlementForDriver } from './settlements-service';
-import { STAGE_LABELS } from './load-photos-service';
+import { STAGE_LABELS, stagesForLoadStatus } from './load-photos-service';
 
 // ---------------------------------------------------------------------------
 // Canonical vehicle / trailer type list.
@@ -570,7 +570,7 @@ export async function renderLoadDetail(token: string, loadId: string): Promise<s
     <h2>Photos</h2>
     <div class="card">${stageSummary}</div>
 
-    <a class="btn block" href="/u/${load.id}?stages=pickup_bol,pickup_securement,delivery_pod,delivery_signed_bol">
+    <a class="btn block" href="/u/${load.id}?stages=${stagesForLoadStatus(load.status as any).join(',')}">
       📷 Upload Photos / Check In
     </a>
   `;

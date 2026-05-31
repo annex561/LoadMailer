@@ -309,7 +309,12 @@ export function buildDriverStageMessages(
     "https://traqiq.app";
   // Prefer the signed token if the caller minted one. Falls back to the
   // bare loadId so existing test fixtures and ad-hoc calls keep working.
-  const uploadUrl = `${base}/u/${inputs.uploadToken || inputs.loadId}`;
+  const uploadBase = `${base}/u/${inputs.uploadToken || inputs.loadId}`;
+  // Phase-scoped links so the driver only ever sees the slots that apply right
+  // now: pickup BOL + tie-down at pickup, POD + signed BOL at delivery. Without
+  // the ?stages pin the page would fall back to all four and confuse the driver.
+  const pickupUploadUrl = `${uploadBase}?stages=pickup_bol,pickup_securement`;
+  const deliveryUploadUrl = `${uploadBase}?stages=delivery_pod,delivery_signed_bol`;
   // Anchor to #tracking so the page scrolls to the toggle widget — driver
   // can tap "Turn ON" with no scrolling needed.
   const trackerLink = inputs.trackingToken
@@ -327,8 +332,8 @@ export function buildDriverStageMessages(
           `We'll text you when you arrive at the pickup so you can send the signed BOL.`,
         ]
       : [
-          `Upload a clear photo of the signed BOL:`,
-          uploadUrl,
+          `Upload the BOL + tie-down photos (both required):`,
+          pickupUploadUrl,
         ];
     return [
       [
@@ -379,8 +384,8 @@ export function buildDriverStageMessages(
               `We'll text you when you arrive at the delivery so you can send the signed BOL.`,
             ]
           : [
-              `Upload the signed BOL:`,
-              uploadUrl,
+              `Upload the signed BOL + POD:`,
+              deliveryUploadUrl,
               ``,
               `Or text the BOL photo to this number.`,
             ]),
