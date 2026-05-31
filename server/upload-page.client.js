@@ -160,10 +160,13 @@
     status.textContent = 'Starting upload (' + fmtKB(rawFile.size) + ')…';
     dbg('handleUpload start — stage=' + stage + ' size=' + rawFile.size + ' type=' + rawFile.type);
 
-    // Show thumbnail preview immediately.
-    var reader = new FileReader();
-    reader.onload = function () { preview.src = reader.result; preview.style.display = 'block'; };
-    reader.readAsDataURL(rawFile);
+    // Show thumbnail preview — skip if FileReader is unavailable (iOS
+    // in-app browser opened from Messages does not expose it).
+    if (typeof FileReader !== 'undefined') {
+      var reader = new FileReader();
+      reader.onload = function () { preview.src = reader.result; preview.style.display = 'block'; };
+      reader.readAsDataURL(rawFile);
+    }
 
     // GPS removed from the upload path entirely. iOS Safari freezes the
     // entire JS event loop — including setTimeout — while a native system
