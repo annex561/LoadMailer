@@ -825,11 +825,21 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Dispatcher-or-admin operational surface (ratecon intake, review queue,
   // dispatch approvals, HOS check, geofence). Drivers use SMS-only + tokenized
   // /api/confirm/:token endpoints which stay unauthenticated by design.
+  //
+  // Also accepts the ADMIN_API_KEY header (x-admin-api-key) as an alternative
+  // to a logged-in session, so these endpoints are scriptable for automated
+  // testing and back-office jobs — same pattern as the factoring routes and
+  // requireBulkAuthorization. The key is a trusted server-side admin secret.
+  const adminOrDispatcherOrApiKey = (req: any, res: any, next: any) => {
+    const key = process.env.ADMIN_API_KEY;
+    if (key && req.headers['x-admin-api-key'] === key) return next();
+    return requireRole('admin', 'dispatcher')(req, res, next);
+  };
   app.use([
     '/api/ratecon-intake',
     '/api/hos-check',
     '/api/geofence',
-  ], requireRole('admin', 'dispatcher'));
+  ], adminOrDispatcherOrApiKey);
   // /api/dispatch-criteria: GET allowed for dispatchers, mutations admin-only.
   app.use('/api/dispatch-criteria', (req, res, next) => {
     if (req.method === 'GET') return isAuthenticated(req, res, next);
