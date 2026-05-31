@@ -18,6 +18,7 @@
 import { describe, it, expect } from "vitest";
 import {
   stagesForLoadStatus,
+  stagesForPhase,
   PICKUP_STAGES,
   DELIVERY_STAGES,
 } from "../load-photos-service";
@@ -62,5 +63,10 @@ describe("stagesForLoadStatus — phase-correct upload slots", () => {
       "pickup_bol",
       "pickup_securement",
     ]);
+  });
+
+  it("stagesForPhase maps phase → the two required docs for that phase", () => {
+    expect(stagesForPhase("pickup")).toEqual(PICKUP_STAGES);
+    expect(stagesForPhase("delivery")).toEqual(DELIVERY_STAGES);
   });
 });

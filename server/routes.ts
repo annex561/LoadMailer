@@ -1481,6 +1481,58 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // Driver "Done — Submit to Dispatch" button. Confirms a phase's required
+  // photos are all in, stamps a confirmation milestone, and returns a clear
+  // success the page turns into a full-screen "all saved" confirmation. This
+  // is what gives the driver certainty their photos reached the system.
+  app.post('/api/loads/:id/photos/confirm', async (req, res) => {
+    try {
+      const { verifyUploadToken, isTokenRequired } = await import('./upload-token');
+      const token = (req.body.token || '').toString();
+      if (token.length > 0) {
+        const v = verifyUploadToken(token);
+        if (v.kind === 'expired') return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+        if (v.kind === 'invalid') return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+        if (v.loadId !== req.params.id) return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+      } else if (isTokenRequired()) {
+        return res.status(401).json({ ok: false, error: 'Upload token required.' });
+      }
+
+      const phase = (req.body.phase || '').toString();
+      if (phase !== 'pickup' && phase !== 'delivery') {
+        return res.status(400).json({ ok: false, error: 'phase must be pickup or delivery' });
+      }
+
+      const { db } = await import('./db');
+      const { loads } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const { getRequiredPhotoStatus, STAGE_LABELS } = await import('./load-photos-service');
+
+      const status = await getRequiredPhotoStatus(req.params.id, phase as any);
+      if (!status.complete) {
+        const missingLabels = status.missing.map((s: any) => STAGE_LABELS[s]).join(' + ');
+        return res.status(409).json({
+          ok: false,
+          code: 'PHOTOS_REQUIRED',
+          error: `Still need: ${missingLabels}.`,
+          missing: status.missing,
+        });
+      }
+
+      // Stamp the confirmation milestone so dispatch can see the driver
+      // explicitly confirmed the set (distinct from individual photo rows).
+      const [l] = await db.select({ id: loads.id, sopProgress: loads.sopProgress }).from(loads).where(eq(loads.id, req.params.id));
+      if (!l) return res.status(404).json({ ok: false, error: 'Load not found' });
+      const sop: any = (l.sopProgress as any) || {};
+      sop[phase === 'pickup' ? 'pickupPhotosConfirmedAt' : 'deliveryPhotosConfirmedAt'] = new Date().toISOString();
+      await db.update(loads).set({ sopProgress: sop } as any).where(eq(loads.id, req.params.id));
+
+      res.json({ ok: true, phase, confirmed: status.present });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // List photos for a load
   app.get('/api/loads/:id/photos', async (req, res) => {
     try {
@@ -1527,6 +1579,25 @@ export async function registerRoutes(app: Express): Promise<void> {
       };
       const field = fieldMap[stage];
       if (!field) return res.status(400).json({ ok: false, error: 'Invalid stage' });
+
+      // Lifecycle gate: the driver cannot mark the load LOADED (picked up)
+      // until both pickup photos are in, nor UNLOADED (delivered) until both
+      // delivery photos are in. This is the server-side enforcement behind the
+      // "required" UI — a driver can't advance the load with paperwork missing.
+      const gatePhase = stage === 'loaded' ? 'pickup' : stage === 'unloaded' ? 'delivery' : null;
+      if (gatePhase) {
+        const { getRequiredPhotoStatus, STAGE_LABELS } = await import('./load-photos-service');
+        const status = await getRequiredPhotoStatus(req.params.id, gatePhase as any);
+        if (!status.complete) {
+          const missingLabels = status.missing.map((s: any) => STAGE_LABELS[s]).join(' + ');
+          return res.status(409).json({
+            ok: false,
+            code: 'PHOTOS_REQUIRED',
+            error: `Upload ${missingLabels} before marking ${stage === 'loaded' ? 'picked up' : 'delivered'}.`,
+            missing: status.missing,
+          });
+        }
+      }
 
       const [l] = await db.select({ id: loads.id, sopProgress: loads.sopProgress, driverId: loads.driverId }).from(loads).where(eq(loads.id, req.params.id));
       if (!l) return res.status(404).json({ ok: false, error: 'Load not found' });

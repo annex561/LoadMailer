@@ -404,6 +404,34 @@ export async function recordExternalPhotoUpload(p: {
   }
 }
 
+export type UploadPhase = 'pickup' | 'delivery';
+
+export function stagesForPhase(phase: UploadPhase): PhotoStage[] {
+  return phase === 'delivery' ? [...DELIVERY_STAGES] : [...PICKUP_STAGES];
+}
+
+/**
+ * Which required photos for a phase are present vs missing on a load.
+ * A stage counts as present if ANY load_documents row exists for it (pending
+ * or approved — the driver has done their part; dispatcher approval is a
+ * separate downstream gate). This powers both the driver's "Done" button and
+ * the server-side advancement gate.
+ */
+export async function getRequiredPhotoStatus(
+  loadId: string,
+  phase: UploadPhase,
+): Promise<{ complete: boolean; present: PhotoStage[]; missing: PhotoStage[] }> {
+  const required = stagesForPhase(phase);
+  const docs = await db
+    .select({ documentType: loadDocuments.documentType })
+    .from(loadDocuments)
+    .where(eq(loadDocuments.loadId, loadId));
+  const have = new Set(docs.map((d) => d.documentType));
+  const present = required.filter((s) => have.has(s));
+  const missing = required.filter((s) => !have.has(s));
+  return { complete: missing.length === 0, present, missing };
+}
+
 export async function listLoadPhotos(loadId: string) {
   const docs = await db
     .select()

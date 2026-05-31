@@ -126,16 +126,40 @@
     root.parentNode.insertBefore(banner, root);
   }
 
+  // Phase this page is for — drives the Done/confirm call.
+  var PHASE = (STAGES[0] && STAGES[0].stage && STAGES[0].stage.indexOf('delivery') === 0)
+    ? 'delivery' : 'pickup';
+
+  function allDone() {
+    return document.querySelectorAll('.slot.done').length >= STAGES.length && STAGES.length > 0;
+  }
+
   function updateReqCount() {
     var done = document.querySelectorAll('.slot.done').length;
     var el = document.getElementById('req-count');
-    if (!el) return;
-    if (done >= STAGES.length) {
-      el.textContent = '✅ All ' + STAGES.length + ' uploaded — you’re done.';
-      var b = document.getElementById('required-banner');
-      if (b) { b.style.background = '#14532d'; b.style.borderColor = '#22c55e'; b.style.color = '#bbf7d0'; b.innerHTML = '✅ All required photos uploaded. You can close this page.'; }
-    } else {
-      el.textContent = '(' + done + ' of ' + STAGES.length + ' done)';
+    if (el) {
+      if (done >= STAGES.length) {
+        el.textContent = '✅ All ' + STAGES.length + ' photos uploaded.';
+        var b = document.getElementById('required-banner');
+        if (b) { b.style.background = '#14532d'; b.style.borderColor = '#22c55e'; b.style.color = '#bbf7d0'; b.innerHTML = '✅ All required photos uploaded — tap <b>Done</b> below to submit.'; }
+      } else {
+        el.textContent = '(' + done + ' of ' + STAGES.length + ' done)';
+      }
+    }
+    // Enable/disable the Done button.
+    var btn = document.getElementById('done-btn');
+    if (btn) {
+      if (allDone()) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = '';
+        btn.textContent = '✅ Done — Submit to Dispatch';
+      } else {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.pointerEvents = 'none';
+        btn.textContent = 'Upload all photos to submit';
+      }
     }
   }
 
@@ -155,6 +179,57 @@
     var input = el.querySelector('input');
     input.addEventListener('change', function () { handleUpload(s.stage, input.files[0]); });
   });
+
+  // ---------- Done / Submit button ----------
+  // Gives the driver one clear action + confirmation that everything reached
+  // the system. Disabled until every required photo is uploaded.
+  var doneBtn = document.createElement('button');
+  doneBtn.id = 'done-btn';
+  doneBtn.type = 'button';
+  doneBtn.style.cssText = 'display:block;width:100%;background:#16a34a;color:#fff;border:none;padding:16px;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px';
+  doneBtn.onclick = submitConfirm;
+  root.parentNode.insertBefore(doneBtn, root.nextSibling);
+
+  function submitConfirm() {
+    if (!allDone()) return;
+    doneBtn.disabled = true;
+    doneBtn.style.pointerEvents = 'none';
+    doneBtn.textContent = 'Submitting…';
+    var body = { phase: PHASE };
+    if (TOKEN) body.token = TOKEN;
+    fetch('/api/loads/' + LOAD_ID + '/photos/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+    }).then(function (res) {
+      if (!res.ok || !res.j.ok) {
+        throw new Error((res.j && res.j.error) || 'Submit failed');
+      }
+      showDoneOverlay();
+      if (navigator.vibrate) navigator.vibrate([60, 40, 120]);
+    }).catch(function (err) {
+      doneBtn.disabled = false;
+      doneBtn.style.pointerEvents = '';
+      doneBtn.textContent = '✅ Done — Submit to Dispatch';
+      alert('Could not submit: ' + err.message);
+    });
+  }
+
+  function showDoneOverlay() {
+    var ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;z-index:10000';
+    ov.innerHTML =
+      '<div style="font-size:64px;line-height:1">✅</div>' +
+      '<h1 style="color:#4ade80;font-size:24px;margin:16px 0 8px">All saved!</h1>' +
+      '<p style="color:#e2e8f0;font-size:16px;max-width:320px;margin:0 0 4px">Your ' +
+      (PHASE === 'delivery' ? 'delivery' : 'pickup') +
+      ' photos were sent to dispatch and recorded on this load.</p>' +
+      '<p style="color:#94a3b8;font-size:14px;margin-top:16px">You can close this page now.</p>';
+    document.body.appendChild(ov);
+  }
+
   updateReqCount();
 
   function fmtKB(n) {

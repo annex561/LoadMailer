@@ -111,6 +111,24 @@ describe("upload page — client script integrity", () => {
     expect(clientJs).toContain("window.onerror");
     expect(clientJs).toContain("window.onunhandledrejection");
   });
+
+  // ── Done / Submit confirmation (driver needs to know it saved) ──────────
+  it("has a Done/Submit button that confirms to /photos/confirm", () => {
+    expect(clientJs).toContain("done-btn");
+    expect(clientJs).toContain("photos/confirm");
+  });
+
+  it("shows a full-screen success confirmation after submit", () => {
+    // The driver must get unmistakable feedback the photos reached the system.
+    expect(clientJs).toContain("showDoneOverlay");
+    expect(clientJs).toMatch(/All saved/i);
+  });
+
+  it("derives the confirm phase from the visible stages", () => {
+    // pickup page → phase 'pickup', delivery page → phase 'delivery'.
+    expect(clientJs).toContain("PHASE");
+    expect(clientJs).toContain("'delivery'");
+  });
 });
 
 describe("renderUploadPage — html shell", () => {
