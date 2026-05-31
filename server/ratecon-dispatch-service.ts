@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { rateconIntake, loads, drivers, customers } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import nodemailer from "nodemailer";
 import type { PayDriverInput, PayLoadInput } from "./pay-calculator";
@@ -52,13 +52,32 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
   const parsed = intake.parsedJson as any;
   const confirmationToken = nanoid(24);
 
-  // Resolve or auto-create customer from broker name (loads.customerId is required)
+  // Resolve or auto-create customer from broker name (loads.customerId is required).
+  //
+  // CRITICAL: loads has a composite FK loads_customer_company_fk → customers
+  // (id, company_id). The customer we pick MUST belong to the SAME company the
+  // load will be created under (canonicalCompanyId), or the insert fails with a
+  // foreign-key violation. Two bugs were here before:
+  //   1. Lookup was by name ONLY, so it would match a same-named customer from
+  //      a DIFFERENT company (e.g. a "TQL" row created under company X) and then
+  //      the load (company Y) → (customerX, companyY) pair violated the FK.
+  //   2. Auto-create used intake.companyId instead of canonicalCompanyId, so a
+  //      freshly-created customer could still mismatch the load's company.
+  // Both are fixed by scoping lookup AND creation to the load's company.
+  const loadCompanyId = canonicalCompanyId ?? intake.companyId;
   const brokerName = parsed.broker?.value ?? "Unknown Broker";
   let customerId: string;
   const [existingCustomer] = await db
     .select()
     .from(customers)
-    .where(eq(customers.name, brokerName))
+    .where(
+      and(
+        eq(customers.name, brokerName),
+        // IS NOT DISTINCT FROM so a null company matches null (and the
+        // composite FK with MATCH SIMPLE is satisfied either way).
+        sql`${customers.companyId} IS NOT DISTINCT FROM ${loadCompanyId}`,
+      ),
+    )
     .limit(1);
   if (existingCustomer) {
     customerId = existingCustomer.id;
@@ -66,7 +85,7 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
     const [newCustomer] = await db
       .insert(customers)
       .values({
-        companyId: intake.companyId,
+        companyId: loadCompanyId,
         name: brokerName,
         contactPerson: "",
         email: "",
@@ -104,9 +123,9 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
   };
 
   const loadValues = {
-    // Use the canonical companyId (driver's, possibly back-filled) so the
-    // loads → drivers FK is satisfied. Fall back to intake's companyId.
-    companyId: canonicalCompanyId ?? intake.companyId,
+    // Same company the customer was resolved/created under — guarantees both
+    // the loads→drivers and loads→customers composite FKs are satisfied.
+    companyId: loadCompanyId,
     loadNumber,
     customerId,
     driverId: driver.id,
