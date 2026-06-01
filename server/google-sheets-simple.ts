@@ -19,7 +19,11 @@ interface GoogleSheetsLoad {
 }
 
 class GoogleSheetsSimple {
-  private spreadsheetId = '1AQ-vAhewUVmE-86Z3D_M3KYJg3lzvK5Q-w1horGrgI4';
+  // Disabled by default. Override with GOOGLE_SHEETS_SPREADSHEET_ID env var
+  // pointing to a real, actively-managed sheet. The old hardcoded ID was a
+  // loadboard-scrape demo sheet that generated $0-rate GQ-UUID ghost loads
+  // every 3 minutes. Real loads come in through Gmail ratecon intake.
+  private spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID || '';
   private importInterval: NodeJS.Timeout | null = null;
   private isRunning = false;
 
@@ -135,6 +139,10 @@ class GoogleSheetsSimple {
   }
 
   async start() {
+    if (!this.spreadsheetId) {
+      console.log('ℹ️  Google Sheets import disabled — set GOOGLE_SHEETS_SPREADSHEET_ID to enable.');
+      return;
+    }
     if (this.isRunning) return;
     this.isRunning = true;
 
