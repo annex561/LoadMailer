@@ -1850,7 +1850,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Send test SMS to specific driver
-  app.post('/api/sms/test/:driverId', async (req, res) => {
+  // SECURITY: requires an authenticated session (used by the admin
+  // sms-dispatching page). Closes anonymous Twilio-cost abuse.
+  // Regression-guarded in server/__tests__/test-endpoints-auth.test.ts.
+  app.post('/api/sms/test/:driverId', isAuthenticated, async (req, res) => {
     try {
       const { driverId } = req.params;
       
@@ -2329,7 +2332,9 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // TEST: Pull last RateCon and send dispatch SMS to driver as a dry-run
-  app.post('/api/test/ratecon-pipeline', async (req, res) => {
+  // SECURITY: admin-gated. Triggers the ratecon pipeline + outbound SMS.
+  // Regression-guarded in server/__tests__/test-endpoints-auth.test.ts.
+  app.post('/api/test/ratecon-pipeline', requireRole('admin'), async (req, res) => {
     try {
       const { gmailIngest } = await import('./services/gmail');
       const { smsLoadService } = await import('./sms-service');
@@ -7347,7 +7352,10 @@ TRAQ IQ Dispatch Team
   });
   
   // Test SMS endpoint to send messages
-  app.post('/api/test-sms', async (req, res) => {
+  // SECURITY: admin-gated. Sends arbitrary Twilio SMS — an unauthenticated
+  // version of this endpoint is an open Twilio-cost / spoofing vector.
+  // Regression-guarded in server/__tests__/test-endpoints-auth.test.ts.
+  app.post('/api/test-sms', requireRole('admin'), async (req, res) => {
     try {
       const { to, message } = req.body;
       
