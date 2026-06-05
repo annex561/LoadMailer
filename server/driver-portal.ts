@@ -15,6 +15,7 @@ import { drivers, loads, loadDocuments } from '@shared/schema';
 import { eq, and, desc, or, isNull } from 'drizzle-orm';
 import { weekRange, fmtYMD, computeSettlementForDriver } from './settlements-service';
 import { STAGE_LABELS, stagesForLoadStatus } from './load-photos-service';
+import { EXAMPLE_LOAD, shouldShowExampleLoad } from './driver-portal-example';
 
 // ---------------------------------------------------------------------------
 // Canonical vehicle / trailer type list.
@@ -275,6 +276,74 @@ function loadStatusBadge(load: any): string {
 }
 
 // ---------------------------------------------------------------------------
+// Example load — shown to brand-new drivers who have zero active loads so they
+// can see what a real dispatch looks like and tap into the detail view. It
+// disappears automatically the moment they have a real active load.
+// EXAMPLE_LOAD + shouldShowExampleLoad live in ./driver-portal-example (db-free
+// so they're unit-testable). Regression-tested in
+// server/__tests__/driver-portal-example-load.test.ts — do NOT remove
+// shouldShowExampleLoad / the loadId==='example' short-circuit without updating
+// that test.
+// ---------------------------------------------------------------------------
+
+/** Compact example-load card for the Home / Loads empty state. */
+export function renderExampleLoadCard(token: string): string {
+  const l = EXAMPLE_LOAD;
+  return `
+    <a class="card" href="/driver/${token}/loads/example" style="border:1px dashed #38bdf8">
+      <div class="row">
+        <div>
+          <div class="muted">Load ${escapeHtml(l.loadNumber)}</div>
+          <div style="font-weight:600;margin-top:2px">${escapeHtml(l.originCity)}, ${escapeHtml(l.originState)} → ${escapeHtml(l.destCity)}, ${escapeHtml(l.destState)}</div>
+          <div class="muted" style="margin-top:4px">${l.miles} mi · ${fmtMoney(l.rate)}</div>
+        </div>
+        <span class="badge" style="background:#0ea5e9;color:#fff">EXAMPLE</span>
+      </div>
+    </a>
+    <div class="muted" style="margin:6px 2px 0;font-size:13px">👆 A sample so you can see what a load looks like. Your real loads show up here once dispatch assigns one — and you'll get a text.</div>
+  `;
+}
+
+/** Static example-load detail page (no DB lookup). */
+export function renderExampleLoadDetail(token: string): string {
+  const l = EXAMPLE_LOAD;
+  const body = `
+    <div class="card emph" style="border:1px dashed #38bdf8">
+      <div class="row">
+        <div>
+          <div class="muted" style="color:#bae6fd">Example Load</div>
+          <div style="font-weight:700;font-size:18px">${escapeHtml(l.loadNumber)}</div>
+        </div>
+        <span class="badge" style="background:#0ea5e9;color:#fff">EXAMPLE</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="muted">This is a sample load so you can see the layout. Your real loads will look exactly like this — with a Pickup, Delivery, Rate, photo upload, and check-in buttons.</div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">📍 Pickup</h2>
+      <div>${escapeHtml(l.pickupAddress)}</div>
+      <div class="muted" style="margin-top:4px">Pickup time shows here</div>
+      <h2>📍 Delivery</h2>
+      <div>${escapeHtml(l.deliveryAddress)}</div>
+      <div class="muted" style="margin-top:4px">Delivery time shows here</div>
+    </div>
+
+    <div class="card">
+      <div class="row"><span class="muted">Rate</span><span><b>${fmtMoney(l.rate)}</b></span></div>
+      <div class="row"><span class="muted">Miles</span><span>${l.miles}</span></div>
+    </div>
+
+    <div class="card">
+      <div class="muted">On a real load you'd upload your BOL/POD photos and tap check-in buttons (At Pickup → Loaded → At Delivery → Unloaded) right here.</div>
+    </div>
+  `;
+  return layout({ title: 'Example Load', token, active: 'loads', showBack: true, backHref: `/driver/${token}`, body });
+}
+
+// ---------------------------------------------------------------------------
 // Page: Home
 // ---------------------------------------------------------------------------
 export async function renderHome(token: string): Promise<string> {
@@ -303,7 +372,7 @@ export async function renderHome(token: string): Promise<string> {
     ? `<div class="pay-breakdown">${fmtMoney(gross)} earned − ${fmtMoney(deductions)} deductions</div>`
     : `<div class="pay-breakdown">${fmtMoney(gross)} earned − ${fmtMoney(deductions)} deductions = take-home</div>`;
 
-  const activeCards = active.length ? active.map((l: any) => `
+  const activeCards = shouldShowExampleLoad(active.length) ? renderExampleLoadCard(token) : active.map((l: any) => `
     <a class="card" href="/driver/${token}/loads/${l.id}">
       <div class="row">
         <div>
@@ -314,7 +383,7 @@ export async function renderHome(token: string): Promise<string> {
         ${loadStatusBadge(l)}
       </div>
     </a>
-  `).join('') : `<div class="card"><div class="muted">No active load. You'll see it here when dispatched.</div></div>`;
+  `).join('');
 
   const body = `
     <div class="muted" style="margin-bottom:16px">Hey ${escapeHtml(driver.name)} 👋</div>
@@ -485,7 +554,7 @@ export async function renderLoadsList(token: string): Promise<string> {
   const body = `
     ${active.length ? `<h2>Active (${active.length})</h2>${active.map(renderItem).join('')}` : ''}
     ${past.length ? `<h2>Past (${past.length})</h2>${past.map(renderItem).join('')}` : ''}
-    ${rows.length === 0 ? '<div class="card"><div class="muted">No loads yet.</div></div>' : ''}
+    ${rows.length === 0 ? renderExampleLoadCard(token) : ''}
   `;
   return layout({ title: 'My Loads', token, active: 'loads', body, driverId: driver.id });
 }
@@ -496,6 +565,10 @@ export async function renderLoadsList(token: string): Promise<string> {
 export async function renderLoadDetail(token: string, loadId: string): Promise<string> {
   const driver = await driverFromToken(token);
   if (!driver) return layout({ title: 'Not Found', token, active: 'loads', body: '<p>Invalid link.</p>' });
+
+  // Example load — static demo page, no DB lookup. Real load ids never equal
+  // 'example', so there is no collision with a real load.
+  if (loadId === 'example') return renderExampleLoadDetail(token);
 
   const [load] = await db
     .select()
