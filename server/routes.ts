@@ -51,6 +51,7 @@ import traqiqSopRoutes from "./traqiq-sop-routes";
 import driverSMSUploadRoutes from "./driver-sms-upload-routes";
 import { registerRateconIntakeRoutes } from "./ratecon-intake-routes";
 import { registerDriverConfirmationRoutes } from "./driver-confirmation-routes";
+import { registerRecruitingRoutes } from "./recruiting/routes";
 import twilio from "twilio";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -868,6 +869,9 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Ratecon intake routes (PDF upload + manual entry)
   registerRateconIntakeRoutes(app);
   registerDriverConfirmationRoutes(app);
+
+  // Driver recruiting funnel — public lead capture + DOT application + status
+  registerRecruitingRoutes(app);
 
   // Add authentication routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {

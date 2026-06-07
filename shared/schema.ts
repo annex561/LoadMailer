@@ -3303,3 +3303,209 @@ export type CollectionsItemWithRelations = CollectionsItem & {
   invoice: ArInvoice;
   load?: Load;
 };
+
+// ============================================================================
+// RECRUITING FUNNEL — Driver hiring pipeline (LEAD → ACTIVE)
+// 49 CFR § 391.21 DOT-compliant. Separate from `drivers` until activation.
+// ============================================================================
+
+export const recruitingStageEnum = pgEnum("recruiting_stage", [
+  "LEAD",
+  "APPLIED",
+  "PRESCREENED_PASS",
+  "PRESCREENED_FAIL",
+  "DOCS_REQUESTED",
+  "DOCS_RECEIVED",
+  "BACKGROUND_RUNNING",
+  "BACKGROUND_PASS",
+  "BACKGROUND_FAIL",
+  "MEDICAL_REQUESTED",
+  "MEDICAL_PASS",
+  "MEDICAL_FAIL",
+  "AGREEMENT_SIGNED",
+  "ORIENTATION",
+  "ORIENTATION_DONE",
+  "TRUCK_ASSIGNED",
+  "ACTIVE",
+  "TERMINATED",
+  "DISQUALIFIED",
+]);
+
+export const recruitingApplications = pgTable("recruiting_applications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "cascade" }),
+  driverId: varchar("driver_id").references(() => drivers.id, { onDelete: "set null" }),
+
+  // Stage 1 — Lead capture
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  phone: text("phone").notNull(),
+  email: text("email").notNull(),
+  hasCdl: boolean("has_cdl"),
+  yearsExperience: integer("years_experience"),
+  leadSource: text("lead_source"),
+  consentSmsAt: timestamp("consent_sms_at"),
+
+  // Stage 2 — DOT application (49 CFR 391.21)
+  dob: timestamp("dob"),
+  ssn: text("ssn"), // encrypt at rest in production
+  currentAddress: text("current_address"),
+  currentCity: text("current_city"),
+  currentState: text("current_state"),
+  currentZip: text("current_zip"),
+  addressHistory: jsonb("address_history"),
+  driverLicenseNumber: text("driver_license_number"),
+  driverLicenseState: text("driver_license_state"),
+  driverLicenseClass: text("driver_license_class"),
+  driverLicenseExpiration: timestamp("driver_license_expiration"),
+  employmentHistory: jsonb("employment_history"),
+  accidents3yr: jsonb("accidents_3yr"),
+  violations3yr: jsonb("violations_3yr"),
+  licenseSuspensionRevocation: boolean("license_suspension_revocation"),
+  licenseDenialEver: boolean("license_denial_ever"),
+  felonyConviction: boolean("felony_conviction"),
+  felonyExplanation: text("felony_explanation"),
+  failedDotDrugTestEver: boolean("failed_dot_drug_test_ever"),
+  failedDotAlcoholTestEver: boolean("failed_dot_alcohol_test_ever"),
+  authorizedToWorkInUs: boolean("authorized_to_work_in_us"),
+  isOwnerOperator: boolean("is_owner_operator"),
+  consentMvr: boolean("consent_mvr"),
+  consentDrugTest: boolean("consent_drug_test"),
+  consentBackground: boolean("consent_background"),
+  consentClearinghouse: boolean("consent_clearinghouse"),
+  consentPriorEmployerContact: boolean("consent_prior_employer_contact"),
+  applicantSignature: text("applicant_signature"),
+  applicationSignedAt: timestamp("application_signed_at"),
+
+  // Stage 3 — Pre-screen result
+  prescreenStatus: text("prescreen_status"), // PASS | FAIL | MANUAL_REVIEW
+  prescreenReasons: jsonb("prescreen_reasons"),
+  prescreenCompletedAt: timestamp("prescreen_completed_at"),
+
+  // Funnel state
+  currentStage: recruitingStageEnum("current_stage").notNull().default("LEAD"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  emailIdx: index("recruiting_applications_email_idx").on(t.email),
+  stageIdx: index("recruiting_applications_stage_idx").on(t.currentStage),
+  companyIdx: index("recruiting_applications_company_idx").on(t.companyId),
+  uniqueEmailPerCompany: unique("recruiting_applications_email_company_unique").on(t.email, t.companyId),
+}));
+
+export const recruitingStatusEvents = pgTable("recruiting_status_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  applicationId: varchar("application_id").references(() => recruitingApplications.id, { onDelete: "cascade" }).notNull(),
+  fromStage: recruitingStageEnum("from_stage"),
+  toStage: recruitingStageEnum("to_stage").notNull(),
+  reason: text("reason"),
+  triggeredBy: text("triggered_by"), // SYSTEM | recruiter user id
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  applicationIdx: index("recruiting_status_events_app_idx").on(t.applicationId),
+  createdIdx: index("recruiting_status_events_created_idx").on(t.createdAt),
+}));
+
+export const recruitingDocuments = pgTable("recruiting_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  applicationId: varchar("application_id").references(() => recruitingApplications.id, { onDelete: "cascade" }).notNull(),
+  type: text("type").notNull(), // DRIVER_LICENSE_FRONT, SSN_CARD, etc.
+  filename: text("filename").notNull(),
+  storagePath: text("storage_path").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  verified: boolean("verified").notNull().default(false),
+  verifiedAt: timestamp("verified_at"),
+  verifiedBy: text("verified_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  applicationIdx: index("recruiting_documents_app_idx").on(t.applicationId),
+}));
+
+export const recruitingScreenings = pgTable("recruiting_screenings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  applicationId: varchar("application_id").references(() => recruitingApplications.id, { onDelete: "cascade" }).notNull(),
+  vendor: text("vendor").notNull(), // SAMBASAFETY | FMCSA_PSP | FMCSA_CLEARINGHOUSE | CHECKR
+  kind: text("kind").notNull(), // MVR | PSP | CLEARINGHOUSE | CRIMINAL
+  status: text("status").notNull(), // PENDING | PASS | FAIL | ERROR
+  rawResult: jsonb("raw_result"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  applicationIdx: index("recruiting_screenings_app_idx").on(t.applicationId),
+}));
+
+export const recruitingMedical = pgTable("recruiting_medical", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  applicationId: varchar("application_id").references(() => recruitingApplications.id, { onDelete: "cascade" }).notNull(),
+  kind: text("kind").notNull(), // DRUG_TEST | DOT_PHYSICAL
+  vendor: text("vendor"),
+  status: text("status").notNull(), // SCHEDULED | PASSED | FAILED | REFUSED
+  scheduledFor: timestamp("scheduled_for"),
+  completedAt: timestamp("completed_at"),
+  medicalCardNumber: text("medical_card_number"),
+  medicalCardExpiration: timestamp("medical_card_expiration"),
+  rawResult: jsonb("raw_result"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  applicationIdx: index("recruiting_medical_app_idx").on(t.applicationId),
+}));
+
+export type RecruitingApplication = typeof recruitingApplications.$inferSelect;
+export type InsertRecruitingApplication = typeof recruitingApplications.$inferInsert;
+export type RecruitingStatusEvent = typeof recruitingStatusEvents.$inferSelect;
+export type RecruitingDocument = typeof recruitingDocuments.$inferSelect;
+
+export const insertRecruitingLeadSchema = z.object({
+  firstName: z.string().min(1).max(50),
+  lastName: z.string().min(1).max(50),
+  phone: z.string().min(10),
+  email: z.string().email(),
+  hasCdl: z.boolean().optional().nullable(),
+  yearsExperience: z.number().int().min(0).max(60).optional().nullable(),
+  consentSms: z.literal(true),
+  leadSource: z.string().optional().nullable(),
+  companyId: z.string().optional().nullable(),
+});
+export type InsertRecruitingLead = z.infer<typeof insertRecruitingLeadSchema>;
+
+export const insertRecruitingApplicationSchema = z.object({
+  dob: z.string().min(8),
+  ssn: z.string().regex(/^\d{3}-?\d{2}-?\d{4}$/),
+  currentAddress: z.string().min(1),
+  currentCity: z.string().min(1),
+  currentState: z.string().length(2),
+  currentZip: z.string().min(5),
+  driverLicenseNumber: z.string().min(1),
+  driverLicenseState: z.string().length(2),
+  driverLicenseClass: z.string().min(1),
+  driverLicenseExpiration: z.string().min(8),
+  employmentHistory: z.array(z.object({
+    employer: z.string().min(1),
+    position: z.string().min(1),
+    fromDate: z.string(),
+    toDate: z.string(),
+    reasonForLeaving: z.string().min(1),
+    wasDOT: z.boolean(),
+    supervisor: z.string().optional(),
+    supervisorPhone: z.string().optional(),
+  })).min(1),
+  accidents3yr: z.array(z.any()).default([]),
+  violations3yr: z.array(z.any()).default([]),
+  licenseSuspensionRevocation: z.boolean(),
+  licenseDenialEver: z.boolean(),
+  felonyConviction: z.boolean(),
+  felonyExplanation: z.string().optional(),
+  failedDotDrugTestEver: z.boolean(),
+  failedDotAlcoholTestEver: z.boolean(),
+  authorizedToWorkInUs: z.boolean(),
+  isOwnerOperator: z.boolean(),
+  consentMvr: z.literal(true),
+  consentDrugTest: z.literal(true),
+  consentBackground: z.literal(true),
+  consentClearinghouse: z.literal(true),
+  consentPriorEmployerContact: z.literal(true),
+  applicantSignature: z.string().min(1),
+});
+export type InsertRecruitingApplicationPayload = z.infer<typeof insertRecruitingApplicationSchema>;

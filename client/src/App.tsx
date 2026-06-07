@@ -64,6 +64,10 @@ const DriverConfirmPage = lazy(() => import("@/pages/driver-confirm"));
 // Public legal pages — required for A2P 10DLC TCR campaign approval.
 const PrivacyPolicy = lazy(() => import("@/pages/privacy"));
 const TermsOfService = lazy(() => import("@/pages/terms"));
+// Driver Recruiting Funnel — public pages, no auth required
+const RecruitingLanding = lazy(() => import("@/pages/recruiting/landing"));
+const RecruitingApplication = lazy(() => import("@/pages/recruiting/application"));
+const RecruitingStatus = lazy(() => import("@/pages/recruiting/status"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -155,6 +159,11 @@ function App() {
               {/* Public legal pages — must be reachable without login (TCR requirement) */}
               <Route path="/privacy" component={PrivacyPolicy} />
               <Route path="/terms" component={TermsOfService} />
+
+              {/* Driver Recruiting Funnel — public pages, no auth, no sidebar */}
+              <Route path="/drive-with-lamp" component={RecruitingLanding} />
+              <Route path="/apply/:id" component={RecruitingApplication} />
+              <Route path="/apply/:id/status" component={RecruitingStatus} />
 
               {/* Standalone driver pages without sidebar/header - for driver self-service only */}
               <Route path="/driver-onboarding" component={DriverOnboarding} />
