@@ -369,7 +369,150 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ pending_uploads table: ${e.message}`);
     }
 
-    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log + pending_uploads created)`);
+    // Driver Recruiting Funnel — PR #113 (LEAD → ACTIVE pipeline, DOT 49 CFR 391.21).
+    // We CREATE TABLE IF NOT EXISTS so a stock `npm run dev` after pull just works
+    // without requiring the operator to run `npm run db:push`. Schema-level changes
+    // are still tracked in shared/schema.ts for type safety.
+    try {
+      // Enum first (CREATE TYPE ... IF NOT EXISTS isn't supported pre-PG 16, so we DO/EXCEPTION it)
+      await pool.query(`
+        DO $$ BEGIN
+          CREATE TYPE recruiting_stage AS ENUM (
+            'LEAD','APPLIED','PRESCREENED_PASS','PRESCREENED_FAIL',
+            'DOCS_REQUESTED','DOCS_RECEIVED',
+            'BACKGROUND_RUNNING','BACKGROUND_PASS','BACKGROUND_FAIL',
+            'MEDICAL_REQUESTED','MEDICAL_PASS','MEDICAL_FAIL',
+            'AGREEMENT_SIGNED','ORIENTATION','ORIENTATION_DONE',
+            'TRUCK_ASSIGNED','ACTIVE','TERMINATED','DISQUALIFIED'
+          );
+        EXCEPTION WHEN duplicate_object THEN null; END $$;
+      `);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS recruiting_applications (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          company_id VARCHAR REFERENCES companies(id) ON DELETE CASCADE,
+          driver_id VARCHAR REFERENCES drivers(id) ON DELETE SET NULL,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          email TEXT NOT NULL,
+          has_cdl BOOLEAN,
+          years_experience INTEGER,
+          lead_source TEXT,
+          consent_sms_at TIMESTAMP,
+          dob TIMESTAMP,
+          ssn TEXT,
+          current_address TEXT,
+          current_city TEXT,
+          current_state TEXT,
+          current_zip TEXT,
+          address_history JSONB,
+          driver_license_number TEXT,
+          driver_license_state TEXT,
+          driver_license_class TEXT,
+          driver_license_expiration TIMESTAMP,
+          employment_history JSONB,
+          accidents_3yr JSONB,
+          violations_3yr JSONB,
+          license_suspension_revocation BOOLEAN,
+          license_denial_ever BOOLEAN,
+          felony_conviction BOOLEAN,
+          felony_explanation TEXT,
+          failed_dot_drug_test_ever BOOLEAN,
+          failed_dot_alcohol_test_ever BOOLEAN,
+          authorized_to_work_in_us BOOLEAN,
+          is_owner_operator BOOLEAN,
+          consent_mvr BOOLEAN,
+          consent_drug_test BOOLEAN,
+          consent_background BOOLEAN,
+          consent_clearinghouse BOOLEAN,
+          consent_prior_employer_contact BOOLEAN,
+          applicant_signature TEXT,
+          application_signed_at TIMESTAMP,
+          prescreen_status TEXT,
+          prescreen_reasons JSONB,
+          prescreen_completed_at TIMESTAMP,
+          current_stage recruiting_stage NOT NULL DEFAULT 'LEAD',
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_applications_email_idx ON recruiting_applications(email)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_applications_stage_idx ON recruiting_applications(current_stage)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_applications_company_idx ON recruiting_applications(company_id)`);
+      try {
+        await pool.query(`ALTER TABLE recruiting_applications ADD CONSTRAINT recruiting_applications_email_company_unique UNIQUE (email, company_id)`);
+      } catch (_) {}
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS recruiting_status_events (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          application_id VARCHAR NOT NULL REFERENCES recruiting_applications(id) ON DELETE CASCADE,
+          from_stage recruiting_stage,
+          to_stage recruiting_stage NOT NULL,
+          reason TEXT,
+          triggered_by TEXT,
+          metadata JSONB,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_status_events_app_idx ON recruiting_status_events(application_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_status_events_created_idx ON recruiting_status_events(created_at)`);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS recruiting_documents (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          application_id VARCHAR NOT NULL REFERENCES recruiting_applications(id) ON DELETE CASCADE,
+          type TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          storage_path TEXT NOT NULL,
+          mime_type TEXT NOT NULL,
+          size_bytes INTEGER NOT NULL,
+          verified BOOLEAN NOT NULL DEFAULT false,
+          verified_at TIMESTAMP,
+          verified_by TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_documents_app_idx ON recruiting_documents(application_id)`);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS recruiting_screenings (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          application_id VARCHAR NOT NULL REFERENCES recruiting_applications(id) ON DELETE CASCADE,
+          vendor TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          status TEXT NOT NULL,
+          raw_result JSONB,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_screenings_app_idx ON recruiting_screenings(application_id)`);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS recruiting_medical (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          application_id VARCHAR NOT NULL REFERENCES recruiting_applications(id) ON DELETE CASCADE,
+          kind TEXT NOT NULL,
+          vendor TEXT,
+          status TEXT NOT NULL,
+          scheduled_for TIMESTAMP,
+          completed_at TIMESTAMP,
+          medical_card_number TEXT,
+          medical_card_expiration TIMESTAMP,
+          raw_result JSONB,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_medical_app_idx ON recruiting_medical(application_id)`);
+
+      log(`✅ Recruiting funnel tables ready (recruiting_applications + 4 child tables)`);
+    } catch (e: any) {
+      log(`⚠️ recruiting funnel tables: ${e.message}`);
+    }
+
+    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log + pending_uploads + recruiting_* created)`);
   } catch (err: any) {
     log(`⚠️ ensureSchema error: ${err.message}`);
   }
