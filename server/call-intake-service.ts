@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { callRecord, rateconIntake } from "@shared/schema";
-import type { InsertRateconIntake } from "@shared/schema";
-import { and, eq, gt } from "drizzle-orm";
+import type { InsertRateconIntake, CallRecord } from "@shared/schema";
+import { and, eq, gt, lt } from "drizzle-orm";
 import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "not-configured" });
@@ -153,6 +153,53 @@ async function resolveCallParties(callSid: string): Promise<{ from: string | nul
   } catch { return { from: null, to: null }; }
 }
 
+// Transcribe + classify + (conditionally) auto-surface an ALREADY-INSERTED call
+// record. Shared by processRecording (new recordings) and recoverStuckTranscriptions
+// (rows stranded in 'transcribing' by a mid-flight crash/deploy — I-3). Idempotent
+// on the auto-surface: only creates an intake if the row isn't already linked.
+async function runTranscriptionPipeline(row: CallRecord): Promise<void> {
+  const decision = shouldTranscribe(row.durationSec, isCallIntakeEnabled());
+  if (!decision.transcribe) {
+    console.log(`[call-intake] skip-transcribe ${row.recordingSid} reason=${decision.reason}`);
+    await db.update(callRecord).set({ transcriptStatus: "skipped", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
+    return;
+  }
+  if (!row.recordingUrl) {
+    console.error(`[call-intake] no recordingUrl for ${row.recordingSid} — marking failed`);
+    await db.update(callRecord).set({ transcriptStatus: "failed", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
+    return;
+  }
+
+  // Rate ceiling: count rows transcribed in the last hour
+  const since = new Date(Date.now() - 3_600_000);
+  const recent = await db.select({ id: callRecord.id }).from(callRecord)
+    .where(and(eq(callRecord.transcriptStatus, "done"), gt(callRecord.updatedAt, since)));
+  if (!withinRateCeiling(recent.length)) {
+    console.log(`[call-intake] rate-limited ${row.recordingSid} (${recent.length}/${CALL_TRANSCRIBE_MAX_PER_HOUR} last hr)`);
+    await db.update(callRecord).set({ transcriptStatus: "failed", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
+    return;
+  }
+
+  try {
+    const transcript = await transcribeRecordingAudio(row.recordingUrl);
+    const classification = await classifyTranscript(transcript);
+    await db.update(callRecord).set({
+      transcript, aiClassification: classification as any, transcriptStatus: "done", updatedAt: new Date(),
+    }).where(eq(callRecord.id, row.id));
+    console.log(`[call-intake] classified ${row.recordingSid} category=${classification.category} conf=${classification.confidence}`);
+
+    if (!row.linkedIntakeId && shouldAutoSurfaceLoadOffer(classification)) {
+      const intakeRow = buildCallIntakeRow({ companyId: row.companyId, callRecordId: row.id, classification });
+      const [intake] = await db.insert(rateconIntake).values(intakeRow).returning();
+      await db.update(callRecord).set({ linkedIntakeId: intake.id, updatedAt: new Date() }).where(eq(callRecord.id, row.id));
+      console.log(`[call-intake] intake-created ${intake.id} from ${row.recordingSid}`);
+    }
+  } catch (e: any) {
+    console.error(`[call-intake] processing failed ${row.recordingSid}: ${e.message}`);
+    await db.update(callRecord).set({ transcriptStatus: "failed", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
+  }
+}
+
 export async function processRecording(job: RecordingJob): Promise<void> {
   const enabled = isCallIntakeEnabled();
 
@@ -189,40 +236,27 @@ export async function processRecording(job: RecordingJob): Promise<void> {
   }
   console.log(`[call-intake] ingested rec=${job.recordingSid} call=${job.callSid} enabled=${enabled}`);
 
-  const decision = shouldTranscribe(job.durationSec, enabled);
-  if (!decision.transcribe) {
-    console.log(`[call-intake] skip-transcribe ${job.recordingSid} reason=${decision.reason}`);
-    await db.update(callRecord).set({ transcriptStatus: "skipped", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
-    return;
-  }
+  await runTranscriptionPipeline(row);
+}
 
-  // Rate ceiling: count rows transcribed in the last hour
-  const since = new Date(Date.now() - 3_600_000);
-  const recent = await db.select({ id: callRecord.id }).from(callRecord)
-    .where(and(eq(callRecord.transcriptStatus, "done"), gt(callRecord.updatedAt, since)));
-  if (!withinRateCeiling(recent.length)) {
-    console.log(`[call-intake] rate-limited ${job.recordingSid} (${recent.length}/${CALL_TRANSCRIBE_MAX_PER_HOUR} last hr)`);
-    await db.update(callRecord).set({ transcriptStatus: "failed", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
-    return;
-  }
-
-  try {
-    const transcript = await transcribeRecordingAudio(job.recordingUrl);
-    const classification = await classifyTranscript(transcript);
-    await db.update(callRecord).set({
-      transcript, aiClassification: classification as any, transcriptStatus: "done", updatedAt: new Date(),
-    }).where(eq(callRecord.id, row.id));
-    console.log(`[call-intake] classified ${job.recordingSid} category=${classification.category} conf=${classification.confidence}`);
-
-    if (shouldAutoSurfaceLoadOffer(classification)) {
-      const intakeRow = buildCallIntakeRow({ companyId: row.companyId, callRecordId: row.id, classification });
-      const [intake] = await db.insert(rateconIntake).values(intakeRow).returning();
-      await db.update(callRecord).set({ linkedIntakeId: intake.id, updatedAt: new Date() }).where(eq(callRecord.id, row.id));
-      console.log(`[call-intake] intake-created ${intake.id} from ${job.recordingSid}`);
+// I-3 recovery: a row stranded in 'transcribing' (process died mid-transcription
+// during a deploy/crash) is otherwise never retried — the dedup check skips it
+// because the row already exists. This sweep re-runs the pipeline on rows stuck
+// in 'transcribing' for >10 min. Bounded (limit 5) and behind the same rate
+// ceiling and enable flag.
+export async function recoverStuckTranscriptions(): Promise<void> {
+  if (!isCallIntakeEnabled()) return;
+  const cutoff = new Date(Date.now() - 10 * 60_000);
+  const stuck = await db.select().from(callRecord)
+    .where(and(eq(callRecord.transcriptStatus, "transcribing"), lt(callRecord.updatedAt, cutoff)))
+    .limit(5);
+  for (const row of stuck) {
+    try {
+      console.log(`[call-intake] recovering stuck transcription ${row.recordingSid}`);
+      await runTranscriptionPipeline(row);
+    } catch (e: any) {
+      console.error(`[call-intake] recovery failed ${row.recordingSid}: ${e.message}`);
     }
-  } catch (e: any) {
-    console.error(`[call-intake] processing failed ${job.recordingSid}: ${e.message}`);
-    await db.update(callRecord).set({ transcriptStatus: "failed", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
   }
 }
 
@@ -268,6 +302,11 @@ let _pollTimer: NodeJS.Timeout | null = null;
 export function startCallIntakePoller(): void {
   if (_pollTimer) return;
   if (!isCallIntakeEnabled()) { console.log("[call-intake] poller not started — CALL_INTAKE_ENABLED is off"); return; }
-  console.log("[call-intake] poller started (every 120s)");
-  _pollTimer = setInterval(() => { pollNewRecordings().catch(() => {}); }, 120_000);
+  console.log("[call-intake] poller started (immediate + every 120s, with stuck-transcription recovery)");
+  const tick = () => {
+    pollNewRecordings().catch(() => {});
+    recoverStuckTranscriptions().catch(() => {});
+  };
+  tick(); // fire immediately on boot instead of waiting a full interval
+  _pollTimer = setInterval(tick, 120_000);
 }
