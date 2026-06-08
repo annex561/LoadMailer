@@ -59,3 +59,85 @@ export function resolveCallSource(
   }
   return { source: job.source ?? "twilio_main", driverId: job.driverId ?? null, companyId: job.companyId ?? null };
 }
+
+import { db } from "./db";
+import { drivers } from "@shared/schema";
+import { eq } from "drizzle-orm";
+
+const VOICE_WEBHOOK_BASE = process.env.VOICE_WEBHOOK_BASE || "https://traqiq.app";
+const OUR_VOICE_URL = `${VOICE_WEBHOOK_BASE}${DRIVER_INBOUND_PATH}`;
+
+function tw(): { sid: string; auth: string } {
+  const sid = process.env.TWILIO_ACCOUNT_SID || "";
+  const auth = Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64");
+  return { sid, auth };
+}
+
+async function listOwnedNumbers(): Promise<Array<{ phoneNumber: string; smsUrl: string; voiceUrl: string; sid: string }>> {
+  const { sid, auth } = tw();
+  const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers.json?PageSize=100`, { headers: { Authorization: `Basic ${auth}` } });
+  if (!r.ok) throw new Error(`list numbers failed: ${r.status}`);
+  const j: any = await r.json();
+  return (j.incoming_phone_numbers ?? []).map((n: any) => ({ phoneNumber: n.phone_number, smsUrl: n.sms_url ?? "", voiceUrl: n.voice_url ?? "", sid: n.sid }));
+}
+
+export async function findSpareNumber(): Promise<{ phoneNumber: string; sid: string } | null> {
+  const owned = await listOwnedNumbers();
+  const assignedRows = await db.select({ v: drivers.voiceNumber }).from(drivers);
+  const assigned = new Set(assignedRows.map((r: { v: string | null }) => r.v).filter(Boolean) as string[]);
+  const ctx = { mainNumber: process.env.TWILIO_PHONE_NUMBER || "", assignedVoiceNumbers: assigned, ourWebhookUrl: OUR_VOICE_URL };
+  const spare = owned.find((n) => isSpareNumber(n, ctx));
+  return spare ? { phoneNumber: spare.phoneNumber, sid: spare.sid } : null;
+}
+
+async function wireVoiceWebhook(numberSid: string): Promise<void> {
+  const { sid, auth } = tw();
+  const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers/${numberSid}.json`, {
+    method: "POST",
+    headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ VoiceUrl: OUR_VOICE_URL, VoiceMethod: "POST" }),
+  });
+  if (!r.ok) throw new Error(`wire webhook failed: ${r.status}`);
+}
+
+async function buyNumber(areaCode: string): Promise<{ phoneNumber: string; sid: string }> {
+  const { sid, auth } = tw();
+  const avail = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/AvailablePhoneNumbers/US/Local.json?AreaCode=${encodeURIComponent(areaCode)}&VoiceEnabled=true&PageSize=1`, { headers: { Authorization: `Basic ${auth}` } });
+  if (!avail.ok) throw new Error(`available-numbers lookup failed: ${avail.status}`);
+  const aj: any = await avail.json();
+  const candidate = aj.available_phone_numbers?.[0]?.phone_number;
+  if (!candidate) throw new Error(`no available number in area code ${areaCode}`);
+  const buy = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers.json`, {
+    method: "POST",
+    headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ PhoneNumber: candidate, VoiceUrl: OUR_VOICE_URL, VoiceMethod: "POST" }),
+  });
+  if (!buy.ok) throw new Error(`buy number failed: ${buy.status}`);
+  const bj: any = await buy.json();
+  return { phoneNumber: bj.phone_number, sid: bj.sid };
+}
+
+export interface ProvisionResult { ok: boolean; phoneNumber?: string; mode?: "reuse" | "buy"; error?: string; }
+
+export async function assignLineToDriver(driverId: string, requestedAreaCode?: string): Promise<ProvisionResult> {
+  const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1);
+  if (!driver) return { ok: false, error: "driver not found" };
+  if (driver.voiceNumber) return { ok: true, phoneNumber: driver.voiceNumber, mode: "reuse" }; // idempotent
+
+  const spare = await findSpareNumber();
+  const decision = provisionDecision({ hasSpare: !!spare, provisionEnabled: process.env.DRIVER_LINE_PROVISION_ENABLED === "true" });
+
+  let number: { phoneNumber: string; sid: string };
+  let mode: "reuse" | "buy";
+  if (decision === "reuse" && spare) { number = spare; mode = "reuse"; await wireVoiceWebhook(number.sid); }
+  else if (decision === "buy") {
+    const areaCode = requestedAreaCode || areaCodeOf(driver.phone) || "205";
+    number = await buyNumber(areaCode); mode = "buy"; // webhook wired at buy time
+  } else {
+    return { ok: false, error: "no spare number available and buying is disabled (set DRIVER_LINE_PROVISION_ENABLED=true to buy)" };
+  }
+
+  await db.update(drivers).set({ voiceNumber: number.phoneNumber, voiceNumberSid: number.sid }).where(eq(drivers.id, driverId));
+  console.log(`[driver-lines] assigned ${number.phoneNumber} to driver ${driverId} (${mode})`);
+  return { ok: true, phoneNumber: number.phoneNumber, mode };
+}
