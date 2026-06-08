@@ -129,16 +129,34 @@ export default function RecruitingDashboard() {
             All applicants from public landing page to active driver. Powered by TraqIQ.
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-sm">
-            <span className="text-slate-600">Public link:</span>
-            <code className="text-xs bg-white px-2 py-1 rounded border">{publicUrl}</code>
-            <Button size="sm" variant="ghost" onClick={copyUrl} className="h-7 w-7 p-0">
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-            <a href={publicUrl} target="_blank" rel="noreferrer" className="text-emerald-600 hover:text-emerald-700">
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+        <div className="flex flex-col sm:flex-row gap-2 items-end">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Public Application Link — Share With Drivers
+            </span>
+            <div className="flex items-center gap-2 rounded-lg border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm">
+              <code className="text-sm font-mono font-semibold text-emerald-900 dark:text-emerald-100 bg-white dark:bg-slate-900 px-3 py-1.5 rounded border border-emerald-200 dark:border-emerald-800 select-all">
+                {publicUrl}
+              </code>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={copyUrl}
+                className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy
+              </Button>
+              <a
+                href={publicUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-emerald-300 dark:border-emerald-700 px-3 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-sm font-medium"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Open
+              </a>
+            </div>
           </div>
         </div>
       </div>
