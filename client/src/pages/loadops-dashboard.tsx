@@ -54,6 +54,7 @@ const ManualDispatch = lazy(() => import('./manual-dispatch'));
 const GoogleSheetsImport = lazy(() => import('./google-sheets-import'));
 const DriverManagement = lazy(() => import('./driver-management'));
 const DriverOnboarding = lazy(() => import('./driver-onboarding'));
+const RecruitingDashboard = lazy(() => import('./recruiting/dashboard'));
 const SimpleDriverRegistration = lazy(() => import('./simple-driver-registration'));
 const Contacts = lazy(() => import('./contacts'));
 const SmsDispatching = lazy(() => import('./sms-dispatching'));
@@ -571,6 +572,8 @@ export default function LoadOpsDashboard() {
         return <RequireRole roles={["admin"]}><GoogleSheetsImport /></RequireRole>;
       case '/driver-management':
         return <DriverManagement />;
+      case '/recruiting':
+        return <RecruitingDashboard />;
       case '/contacts':
         return <Contacts />;
       case '/sms-dispatching':
