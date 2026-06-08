@@ -1,8 +1,9 @@
 import { db } from "./db";
-import { callRecord, rateconIntake } from "@shared/schema";
+import { callRecord, rateconIntake, drivers } from "@shared/schema";
 import type { InsertRateconIntake, CallRecord } from "@shared/schema";
 import { and, eq, gt, lt } from "drizzle-orm";
 import OpenAI from "openai";
+import { resolveCallSource } from "./driver-line-service";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "not-configured" });
 
@@ -213,11 +214,16 @@ export async function processRecording(job: RecordingJob): Promise<void> {
 
   const { from, to } = await resolveCallParties(job.callSid);
 
+  const driver = to
+    ? (await db.select({ id: drivers.id, companyId: drivers.companyId }).from(drivers).where(eq(drivers.voiceNumber, to)).limit(1))[0]
+    : undefined;
+  const tag = resolveCallSource(driver, job);
+
   const [row] = await db.insert(callRecord).values({
-    companyId: job.companyId ?? null,
-    source: job.source ?? "twilio_main",
+    companyId: tag.companyId,
+    source: tag.source,
     direction: job.direction ?? "inbound",
-    driverId: job.driverId ?? null,
+    driverId: tag.driverId,
     callSid: job.callSid,
     recordingSid: job.recordingSid,
     fromNumber: from,
