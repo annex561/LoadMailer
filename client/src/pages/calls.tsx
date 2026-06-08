@@ -7,6 +7,7 @@ type CallRow = {
   recordingSid: string; transcript: string | null; transcriptStatus: string;
   aiClassification: { category?: string; isLoadOffer?: boolean; confidence?: number; summary?: string } | null;
   linkedIntakeId: string | null;
+  driverId: string | null;
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -20,6 +21,8 @@ export default function CallsPage() {
     queryKey: ["/api/voice/calls"], refetchInterval: 30_000,
   });
   const [openId, setOpenId] = useState<string | null>(null);
+  const driverFilter = new URLSearchParams(window.location.search).get("driver");
+  const shown = (calls ?? []).filter((c) => !driverFilter || c.driverId === driverFilter);
 
   async function convert(id: string) {
     const r = await fetch(`/api/voice/calls/${id}/convert`, { method: "POST", credentials: "include" });
@@ -31,7 +34,7 @@ export default function CallsPage() {
       <h1 className="text-2xl font-semibold mb-4">Inbound Calls</h1>
       {isLoading && <p>Loading…</p>}
       <div className="space-y-2">
-        {(calls ?? []).map((c) => {
+        {shown.map((c) => {
           const cat = c.aiClassification?.category ?? "—";
           const isOpen = openId === c.id;
           return (

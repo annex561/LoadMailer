@@ -15,6 +15,7 @@ import { EQUIPMENT_TYPES } from '@shared/equipment-types';
 import { User, MessageCircle, Truck, Phone, Mail, MapPin, Save, CheckCircle } from 'lucide-react';
 import type { Driver } from '@shared/schema';
 import { DriverPayRulesForm, DriverPayRules } from "@/components/driver-pay-rules-form";
+import DriverPhoneLine from "@/components/DriverPhoneLine";
 
 const driverProfileSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -38,7 +39,7 @@ export default function DriverProfile() {
   const queryClient = useQueryClient();
 
   // Fetch driver profile
-  const { data: driver, isLoading } = useQuery({
+  const { data: driver, isLoading, refetch } = useQuery({
     queryKey: ['/api/drivers', driverId],
     queryFn: async (): Promise<Driver> => {
       const response = await fetch(`/api/drivers/${driverId}`);
@@ -261,6 +262,14 @@ export default function DriverProfile() {
                     </FormItem>
                   )}
                 />
+
+                {driver && (
+                  <DriverPhoneLine
+                    driverId={driver.id}
+                    voiceNumber={(driver as any).voiceNumber ?? null}
+                    onChanged={() => refetch?.()}
+                  />
+                )}
               </CardContent>
             </Card>
 
