@@ -70,14 +70,14 @@ export default function RecruitingStatus() {
 
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center text-slate-500">
+      <main className="force-light-theme min-h-screen flex items-center justify-center text-slate-500 bg-white" style={{ colorScheme: "light" }}>
         Loading…
       </main>
     );
   }
   if (error || !data?.application) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
+      <main className="force-light-theme min-h-screen flex items-center justify-center bg-white text-slate-900" style={{ colorScheme: "light" }}>
         <p className="text-red-600">{error || "Application not found"}</p>
       </main>
     );
@@ -88,14 +88,19 @@ export default function RecruitingStatus() {
   const reasons: string[] = app.prescreenReasons || [];
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <nav className="border-b bg-white">
-        <div className="mx-auto max-w-3xl px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-sm">L</div>
-            <div className="font-bold">LAMP Driver Portal</div>
-          </div>
-          <Badge variant={isDead ? "destructive" : "default"}>
+    <main className="force-light-theme min-h-screen bg-slate-50 text-slate-900" style={{ colorScheme: "light" }}>
+      <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-sm shadow-sm">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+          <a href="/drive-with-lamp" className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white font-bold text-lg shadow-sm">
+              L
+            </div>
+            <div>
+              <div className="font-bold text-lg leading-tight text-slate-900">LAMP Logistics</div>
+              <div className="text-xs text-slate-500 leading-tight">Driver Portal</div>
+            </div>
+          </a>
+          <Badge variant={isDead ? "destructive" : "default"} className="text-xs">
             {STAGE_LABEL[app.currentStage] || app.currentStage}
           </Badge>
         </div>

@@ -151,7 +151,7 @@ export default function RecruitingApplication() {
 
   if (!id) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
+      <main className="force-light-theme min-h-screen flex items-center justify-center bg-white text-slate-900" style={{ colorScheme: "light" }}>
         <p className="text-slate-600">Invalid application link.</p>
       </main>
     );
@@ -164,11 +164,21 @@ export default function RecruitingApplication() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <nav className="border-b bg-white">
-        <div className="mx-auto max-w-3xl px-6 py-4 flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white font-bold text-sm">L</div>
-          <div className="font-bold">LAMP Driver Application</div>
+    <main className="force-light-theme min-h-screen bg-slate-50 text-slate-900" style={{ colorScheme: "light" }}>
+      <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-sm shadow-sm">
+        <div className="mx-auto max-w-3xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+          <a href="/drive-with-lamp" className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white font-bold text-lg shadow-sm">
+              L
+            </div>
+            <div>
+              <div className="font-bold text-lg leading-tight text-slate-900">LAMP Logistics</div>
+              <div className="text-xs text-slate-500 leading-tight">Driver Application · MC-1725755</div>
+            </div>
+          </a>
+          <a href="tel:+14234214111" className="hidden sm:inline-flex text-sm text-slate-700 hover:text-emerald-700 font-medium">
+            📞 (423) 421-4111
+          </a>
         </div>
       </nav>
 

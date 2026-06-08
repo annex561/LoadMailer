@@ -422,3 +422,37 @@ button {
 .glass {
   @apply bg-card/80 backdrop-blur-sm border border-border/30;
 }
+
+/* ============================================================== */
+/* Force LIGHT theme for public recruiting pages.                  */
+/* TraqIQ defaults to dark mode via :root, but the public driver   */
+/* landing/application/status pages need to be light for clarity   */
+/* and professional appearance to job applicants.                  */
+/* ============================================================== */
+.force-light-theme,
+.force-light-theme * {
+  color-scheme: light;
+}
+.force-light-theme {
+  --background: 0 0% 100%;
+  --foreground: 220 20% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 20% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 20% 12%;
+  --primary: 142 71% 38%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 220 20% 12%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 8% 46%;
+  --accent: 142 71% 95%;
+  --accent-foreground: 142 71% 25%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 13% 91%;
+  --input: 220 13% 91%;
+  --ring: 142 71% 45%;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}

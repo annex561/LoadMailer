@@ -63,24 +63,45 @@ export default function RecruitingLanding() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      {/* NAV */}
-      <nav className="border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white font-bold">
+    <main className="force-light-theme min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900" style={{ colorScheme: "light" }}>
+      {/* STICKY HEADER */}
+      <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-sm shadow-sm">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-3">
+          <a href="#top" className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white font-bold text-lg shadow-sm">
               L
             </div>
             <div>
-              <div className="font-bold text-lg leading-tight">LAMP Logistics</div>
-              <div className="text-xs text-slate-500">MC-1725755 · DOT 4397421</div>
+              <div className="font-bold text-lg leading-tight text-slate-900">LAMP Logistics</div>
+              <div className="text-xs text-slate-500 leading-tight">MC-1725755 · DOT 4397421</div>
             </div>
+          </a>
+          <div className="hidden md:flex items-center gap-7 text-sm font-medium">
+            <a href="#how" className="text-slate-700 hover:text-emerald-700 transition-colors">How It Works</a>
+            <a href="#pay" className="text-slate-700 hover:text-emerald-700 transition-colors">Pay</a>
+            <a href="#why" className="text-slate-700 hover:text-emerald-700 transition-colors">Why LAMP</a>
+            <a href="tel:+14234214111" className="text-slate-700 hover:text-emerald-700 transition-colors">
+              📞 (423) 421-4111
+            </a>
+            <a
+              href="#apply"
+              className="inline-flex rounded-lg bg-emerald-600 hover:bg-emerald-700 px-5 py-2.5 text-white text-sm font-semibold shadow-sm transition-colors"
+            >
+              Apply Now →
+            </a>
           </div>
-          <a href="#apply" className="hidden sm:inline-flex rounded-lg bg-slate-900 px-4 py-2 text-white text-sm font-semibold hover:bg-slate-800">
-            Apply Now
+          <a
+            href="#apply"
+            className="md:hidden inline-flex rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-white text-sm font-semibold"
+          >
+            Apply →
           </a>
         </div>
       </nav>
+      <div id="top" />
+      {/* Section anchor: Why LAMP fallback to How (no separate section yet) */}
+      <a id="why" />
+      {/* Apply form anchor sits inside the hero below */}
 
       {/* HERO */}
       <section className="px-6 pt-16 pb-12 sm:pt-24">
