@@ -107,3 +107,91 @@ export async function classifyTranscript(transcript: string): Promise<CallClassi
   if (!content) throw new Error("classifier returned empty response");
   return JSON.parse(content) as CallClassification;
 }
+
+export interface RecordingJob {
+  recordingSid: string;
+  recordingUrl: string;   // Twilio media base URL (no extension)
+  callSid: string;
+  durationSec: number;
+  legType: "call" | "voicemail";
+  source?: string;        // default 'twilio_main'
+  direction?: "inbound" | "outbound";
+  companyId?: string | null;
+  driverId?: string | null;
+}
+
+async function resolveCallParties(callSid: string): Promise<{ from: string | null; to: string | null }> {
+  try {
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Calls/${callSid}.json`;
+    const r = await fetch(url, { headers: { Authorization: twilioBasicAuthHeader() } });
+    if (!r.ok) return { from: null, to: null };
+    const j: any = await r.json();
+    return { from: j.from ?? null, to: j.to ?? null };
+  } catch { return { from: null, to: null }; }
+}
+
+export async function processRecording(job: RecordingJob): Promise<void> {
+  const enabled = isCallIntakeEnabled();
+
+  // Dedup on recordingSid (idempotent against re-poll / retries)
+  const existingRows = await db.select({ id: callRecord.id }).from(callRecord)
+    .where(eq(callRecord.recordingSid, job.recordingSid)).limit(1);
+  if (!shouldIngestRecording(existingRows[0])) {
+    console.log(`[call-intake] dedup-hit ${job.recordingSid}`);
+    return;
+  }
+
+  const { from, to } = await resolveCallParties(job.callSid);
+
+  const [row] = await db.insert(callRecord).values({
+    companyId: job.companyId ?? null,
+    source: job.source ?? "twilio_main",
+    direction: job.direction ?? "inbound",
+    driverId: job.driverId ?? null,
+    callSid: job.callSid,
+    recordingSid: job.recordingSid,
+    fromNumber: from,
+    toNumber: to,
+    durationSec: job.durationSec,
+    recordingUrl: job.recordingUrl,
+    legType: job.legType,
+    transcriptStatus: enabled ? "transcribing" : "skipped",
+  }).returning();
+  console.log(`[call-intake] ingested rec=${job.recordingSid} call=${job.callSid} enabled=${enabled}`);
+
+  const decision = shouldTranscribe(job.durationSec, enabled);
+  if (!decision.transcribe) {
+    console.log(`[call-intake] skip-transcribe ${job.recordingSid} reason=${decision.reason}`);
+    await db.update(callRecord).set({ transcriptStatus: "skipped", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
+    return;
+  }
+
+  // Rate ceiling: count rows transcribed in the last hour
+  const since = new Date(Date.now() - 3_600_000);
+  const recent = await db.select({ id: callRecord.id }).from(callRecord)
+    .where(and(eq(callRecord.transcriptStatus, "done"), gt(callRecord.updatedAt, since)));
+  if (!withinRateCeiling(recent.length)) {
+    console.log(`[call-intake] rate-limited ${job.recordingSid} (${recent.length}/${CALL_TRANSCRIBE_MAX_PER_HOUR} last hr)`);
+    await db.update(callRecord).set({ transcriptStatus: "failed", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
+    return;
+  }
+
+  try {
+    const transcript = await transcribeRecordingAudio(job.recordingUrl);
+    const classification = await classifyTranscript(transcript);
+    await db.update(callRecord).set({
+      transcript, aiClassification: classification as any, transcriptStatus: "done", updatedAt: new Date(),
+    }).where(eq(callRecord.id, row.id));
+    console.log(`[call-intake] classified ${job.recordingSid} category=${classification.category} conf=${classification.confidence}`);
+
+    if (shouldAutoSurfaceLoadOffer(classification)) {
+      const intakeRow = buildCallIntakeRow({ companyId: row.companyId, callRecordId: row.id, classification });
+      const [intake] = await db.insert(rateconIntake).values(intakeRow).returning();
+      await db.update(callRecord).set({ linkedIntakeId: intake.id, updatedAt: new Date() }).where(eq(callRecord.id, row.id));
+      console.log(`[call-intake] intake-created ${intake.id} from ${job.recordingSid}`);
+    }
+  } catch (e: any) {
+    console.error(`[call-intake] processing failed ${job.recordingSid}: ${e.message}`);
+    await db.update(callRecord).set({ transcriptStatus: "failed", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
+  }
+}
