@@ -195,3 +195,42 @@ export async function processRecording(job: RecordingJob): Promise<void> {
     await db.update(callRecord).set({ transcriptStatus: "failed", updatedAt: new Date() }).where(eq(callRecord.id, row.id));
   }
 }
+
+// Poll Twilio for new recordings created at/after CALL_INTAKE_START_AT. Watermark + dedup prevent backlog blast.
+export async function pollNewRecordings(): Promise<void> {
+  if (!isCallIntakeEnabled()) return;
+  const startAt = process.env.CALL_INTAKE_START_AT; // ISO8601; recordings before this are ignored
+  if (!startAt) { console.log("[call-intake] poll skipped — CALL_INTAKE_START_AT unset"); return; }
+  const startMs = Date.parse(startAt);
+  if (Number.isNaN(startMs)) { console.log("[call-intake] poll skipped — CALL_INTAKE_START_AT not a valid date"); return; }
+
+  try {
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Recordings.json?PageSize=20`;
+    const r = await fetch(url, { headers: { Authorization: twilioBasicAuthHeader() } });
+    if (!r.ok) { console.error(`[call-intake] poll list failed: ${r.status}`); return; }
+    const j: any = await r.json();
+    const recs: any[] = j.recordings ?? [];
+    for (const rec of recs) {
+      const created = Date.parse(rec.date_created);
+      if (Number.isNaN(created) || created < startMs) continue;       // before watermark → ignore
+      const base = `https://api.twilio.com${rec.uri.replace(/\.json$/, "")}`; // media base (no extension)
+      await processRecording({
+        recordingSid: rec.sid,
+        recordingUrl: base,
+        callSid: rec.call_sid,
+        durationSec: Number(rec.duration) || 0,
+        legType: rec.source === "RecordVerb" ? "voicemail" : "call",
+      });
+    }
+  } catch (e: any) {
+    console.error(`[call-intake] poll error: ${e.message}`);
+  }
+}
+
+let _pollTimer: NodeJS.Timeout | null = null;
+export function startCallIntakePoller(): void {
+  if (_pollTimer) return;
+  if (!isCallIntakeEnabled()) { console.log("[call-intake] poller not started — CALL_INTAKE_ENABLED is off"); return; }
+  console.log("[call-intake] poller started (every 120s)");
+  _pollTimer = setInterval(() => { pollNewRecordings().catch(() => {}); }, 120_000);
+}

@@ -223,6 +223,15 @@ app.use((req, res, next) => {
     await Promise.race([routeRegistrationPromise, timeoutPromise]);
     log('✅ Routes registered successfully');
 
+    // Unified Call-Data Layer (SP1): start the watermarked Twilio recordings poller.
+    // No-op unless CALL_INTAKE_ENABLED=true (logs "poller not started"). Default OFF — zero OpenAI spend.
+    try {
+      const { startCallIntakePoller } = await import("./call-intake-service");
+      startCallIntakePoller();
+    } catch (e: any) {
+      log(`⚠️ call-intake poller start failed: ${e.message}`);
+    }
+
     // Create HTTP server after route registration
     const server = createHTTPServer(app);
     log('✅ HTTP server created');
