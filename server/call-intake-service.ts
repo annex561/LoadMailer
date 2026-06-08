@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { callRecord, rateconIntake } from "@shared/schema";
 import type { InsertRateconIntake } from "@shared/schema";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import OpenAI from "openai";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "not-configured" });
@@ -46,16 +46,39 @@ export function withinRateCeiling(countLastHour: number, max = CALL_TRANSCRIBE_M
 
 // Build a ratecon_intake row from a call. status is HARD-CODED 'in_review' — a call can NEVER auto-dispatch.
 // (regression: call-intake-never-auto-dispatch.test.ts — do not change without updating that test)
+//
+// parsedJson is written in the SAME ParsedRateconV2 wrapper shape the rest of
+// the intake pipeline expects (dispatchFromIntake, the /review-queue UI), so a
+// dispatcher can review/edit a call-sourced intake with the exact same fields
+// as an email/upload one. Scalars become { value, confidence }; pickup/drop
+// become { city, state, address?, date, time, confidence }. The classification
+// confidence is reused for each field (a phone transcript has one overall
+// confidence, not per-field). Values are null when the classification field is
+// null. See server/ratecon-confidence-parser.ts for the interface.
 export function buildCallIntakeRow(args: { companyId: string | null; callRecordId: string; classification: CallClassification }): InsertRateconIntake {
   const c = args.classification;
+  const conf = typeof c.confidence === "number" ? c.confidence : 0;
+  const loc = (l: any) => ({
+    city: l?.city ?? null,
+    state: l?.state ?? null,
+    address: l?.address ?? null,
+    date: l?.date ?? null,
+    time: l?.time ?? null,
+    confidence: conf,
+  });
   return {
     companyId: args.companyId,
     sourceType: "call",
     sourceCallId: args.callRecordId,
     parsedJson: {
-      broker: c.broker ?? null, mc: c.mc ?? null, rate: c.rate ?? null,
-      lane: c.lane ?? null, commodity: c.commodity ?? null,
-      pickup: c.pickup ?? null, drop: c.drop ?? null, summary: c.summary ?? null,
+      broker: { value: c.broker ?? null, confidence: conf },
+      mc: { value: c.mc ?? null, confidence: conf },
+      rate: { value: c.rate ?? null, confidence: conf },
+      lane: { value: c.lane ?? null, confidence: conf },
+      commodity: { value: c.commodity ?? null, confidence: conf },
+      summary: { value: c.summary ?? null, confidence: conf },
+      pickup: loc(c.pickup),
+      drop: loc(c.drop),
       _source: "inbound_call",
     },
     parserModel: "gpt-4o",
@@ -156,7 +179,14 @@ export async function processRecording(job: RecordingJob): Promise<void> {
     recordingUrl: job.recordingUrl,
     legType: job.legType,
     transcriptStatus: enabled ? "transcribing" : "skipped",
-  }).returning();
+  }).onConflictDoNothing().returning();
+  // A concurrent worker won the unique-recordingSid race between our dedup
+  // check above and this insert — onConflictDoNothing returns no row. Bail
+  // so we never double-process (double-transcribe / double-intake) the call.
+  if (!row) {
+    console.log(`[call-intake] insert-conflict (already ingested) ${job.recordingSid}`);
+    return;
+  }
   console.log(`[call-intake] ingested rec=${job.recordingSid} call=${job.callSid} enabled=${enabled}`);
 
   const decision = shouldTranscribe(job.durationSec, enabled);
@@ -211,16 +241,23 @@ export async function pollNewRecordings(): Promise<void> {
     const j: any = await r.json();
     const recs: any[] = j.recordings ?? [];
     for (const rec of recs) {
-      const created = Date.parse(rec.date_created);
-      if (Number.isNaN(created) || created < startMs) continue;       // before watermark → ignore
-      const base = `https://api.twilio.com${rec.uri.replace(/\.json$/, "")}`; // media base (no extension)
-      await processRecording({
-        recordingSid: rec.sid,
-        recordingUrl: base,
-        callSid: rec.call_sid,
-        durationSec: Number(rec.duration) || 0,
-        legType: rec.source === "RecordVerb" ? "voicemail" : "call",
-      });
+      // Per-recording try/catch so one bad recording (transcription error,
+      // malformed Twilio row, transient DB hiccup) can't abort the whole batch
+      // and strand every newer recording behind it.
+      try {
+        const created = Date.parse(rec.date_created);
+        if (Number.isNaN(created) || created < startMs) continue;       // before watermark → ignore
+        const base = `https://api.twilio.com${rec.uri.replace(/\.json$/, "")}`; // media base (no extension)
+        await processRecording({
+          recordingSid: rec.sid,
+          recordingUrl: base,
+          callSid: rec.call_sid,
+          durationSec: Number(rec.duration) || 0,
+          legType: rec.source === "RecordVerb" ? "voicemail" : "call",
+        });
+      } catch (e: any) {
+        console.error(`[call-intake] recording failed ${rec.sid}: ${e.message}`);
+      }
     }
   } catch (e: any) {
     console.error(`[call-intake] poll error: ${e.message}`);

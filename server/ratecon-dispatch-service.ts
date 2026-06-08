@@ -29,6 +29,11 @@ export interface DispatchOutcome {
 export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutcome> {
   const [intake] = await db.select().from(rateconIntake).where(eq(rateconIntake.id, intakeId));
   if (!intake) return { ok: false, error: "Intake not found" };
+  // Defense in depth (I-1): a call-sourced intake came from a phone transcript,
+  // not a validated RateCon — it must NEVER auto-dispatch real Twilio SMS, even
+  // if some future caller reaches this function without the route-level guard
+  // (isAutoDispatchEligible in ratecon-intake-routes.ts).
+  if (intake.sourceType === "call") return { ok: false, error: "call-sourced intake cannot auto-dispatch" };
   if (!intake.matchedDriverId) return { ok: false, error: "No driver assigned" };
   if (!intake.parsedJson) return { ok: false, error: "No parsed data" };
 

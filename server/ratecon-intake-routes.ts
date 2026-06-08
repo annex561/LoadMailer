@@ -23,6 +23,16 @@ export function shouldPersistDriverIdFromBody(body: unknown): boolean {
   return typeof body === "string" && (body as string).length > 0;
 }
 
+// A call-sourced intake must NEVER auto-dispatch (data came from a phone transcript, not a validated RateCon).
+// Regression: call-intake-no-autodispatch.test.ts
+export function isAutoDispatchEligible(intake: { sourceType?: string | null; status?: string | null; validatorFailures?: Array<{ severity?: string }> | null }): boolean {
+  if (intake?.sourceType === "call") return false;
+  if (intake?.status === "auto_dispatched" || intake?.status === "dispatched") return false;
+  const failures = (intake?.validatorFailures ?? []) as Array<{ severity?: string }>;
+  if (failures.some((f) => f?.severity === "error")) return false;
+  return true;
+}
+
 // Walks two parsed-RateCon JSON blobs and returns the dot-paths that differ.
 // Used to record exactly which fields the dispatcher had to fix so the parser
 // can learn from the diff.
@@ -210,34 +220,34 @@ export function registerRateconIntakeRoutes(app: Express) {
       let autoDispatch: { triggered: boolean; ok?: boolean; loadId?: string; error?: string; sms?: any } = {
         triggered: false,
       };
-      if (driverWasAssigned && updated && updated.status !== "auto_dispatched" && updated.status !== "dispatched") {
-        const failures = (updated.validatorFailures ?? []) as Array<{ severity?: string }>;
-        const hasErrors = failures.some((f) => f?.severity === "error");
-        if (!hasErrors) {
-          try {
-            const { dispatchFromIntake, sendDispatchSms } = await import("./ratecon-dispatch-service");
-            const outcome = await dispatchFromIntake(id);
-            if (outcome.ok && outcome.loadId) {
-              const smsResult = await sendDispatchSms(outcome.loadId);
-              await db
-                .update(rateconIntake)
-                .set({ status: "auto_dispatched", updatedAt: new Date() })
-                .where(eq(rateconIntake.id, id));
-              autoDispatch = {
-                triggered: true,
-                ok: true,
-                loadId: outcome.loadId,
-                sms: smsResult,
-              };
-              console.log(`[ratecon-intake:patch] auto-dispatched ${id} → load ${outcome.loadNumber} (sms ok=${smsResult.ok})`);
-            } else {
-              autoDispatch = { triggered: true, ok: false, error: outcome.error };
-              console.warn(`[ratecon-intake:patch] auto-dispatch failed for ${id}: ${outcome.error}`);
-            }
-          } catch (dispatchErr: any) {
-            autoDispatch = { triggered: true, ok: false, error: dispatchErr?.message ?? String(dispatchErr) };
-            console.error(`[ratecon-intake:patch] auto-dispatch threw for ${id}:`, dispatchErr);
+      // isAutoDispatchEligible() folds in the prior inline checks (not already
+      // dispatched, no error-severity validator failures) AND adds the call-source
+      // guard: a call-sourced intake (validatorFailures: null) must never slip
+      // through to auto-dispatch. driverWasAssigned is unchanged. (I-1)
+      if (driverWasAssigned && updated && isAutoDispatchEligible(updated)) {
+        try {
+          const { dispatchFromIntake, sendDispatchSms } = await import("./ratecon-dispatch-service");
+          const outcome = await dispatchFromIntake(id);
+          if (outcome.ok && outcome.loadId) {
+            const smsResult = await sendDispatchSms(outcome.loadId);
+            await db
+              .update(rateconIntake)
+              .set({ status: "auto_dispatched", updatedAt: new Date() })
+              .where(eq(rateconIntake.id, id));
+            autoDispatch = {
+              triggered: true,
+              ok: true,
+              loadId: outcome.loadId,
+              sms: smsResult,
+            };
+            console.log(`[ratecon-intake:patch] auto-dispatched ${id} → load ${outcome.loadNumber} (sms ok=${smsResult.ok})`);
+          } else {
+            autoDispatch = { triggered: true, ok: false, error: outcome.error };
+            console.warn(`[ratecon-intake:patch] auto-dispatch failed for ${id}: ${outcome.error}`);
           }
+        } catch (dispatchErr: any) {
+          autoDispatch = { triggered: true, ok: false, error: dispatchErr?.message ?? String(dispatchErr) };
+          console.error(`[ratecon-intake:patch] auto-dispatch threw for ${id}:`, dispatchErr);
         }
       }
 
