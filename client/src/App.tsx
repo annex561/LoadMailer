@@ -64,10 +64,12 @@ const DriverConfirmPage = lazy(() => import("@/pages/driver-confirm"));
 // Public legal pages — required for A2P 10DLC TCR campaign approval.
 const PrivacyPolicy = lazy(() => import("@/pages/privacy"));
 const TermsOfService = lazy(() => import("@/pages/terms"));
-// Driver Recruiting Funnel — public pages, no auth required
+// Driver Recruiting Funnel — public pages (landing/apply/status) + internal /recruiting dashboard.
+// Each lazy import is its own const declaration so Vite tree-shaking keeps the binding intact.
 const RecruitingLanding = lazy(() => import("@/pages/recruiting/landing"));
 const RecruitingApplication = lazy(() => import("@/pages/recruiting/application"));
 const RecruitingStatus = lazy(() => import("@/pages/recruiting/status"));
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const RecruitingDashboard = lazy(() => import("@/pages/recruiting/dashboard"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
