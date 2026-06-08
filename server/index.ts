@@ -280,20 +280,54 @@ app.use((req, res, next) => {
       log(`⚠️ Typing indicator service failed to initialize: ${error.message}`);
     }
     
-    // Start listening on the port - this must complete quickly for deployment
-    server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
-      log(`🎉 Server is now serving on port ${port}`);
-      
-      // Schedule background services to start AFTER server is fully responsive
-      // Use a delay to ensure the server is completely ready before starting background tasks
-      setTimeout(() => {
-        initializeBackgroundServicesAsync();
-      }, 2000); // 2 second delay to ensure deployment completes first
-    });
+    // Start listening on the port - this must complete quickly for deployment.
+    //
+    // macOS note: ControlCenter / AirPlay Receiver holds port 5000 by default on
+    // Sonoma+. With `reusePort: true`, Express *can* still bind but the kernel
+    // load-balances incoming connections between AirPlay and us — so some hits
+    // return AirPlay's "Access to localhost was denied" 403. To avoid that, we
+    // try the requested port first; if anything goes wrong (EADDRINUSE or noisy
+    // co-occupancy on macOS), we fall back to the next ports up and log loudly.
+    let actualPort = port;
+    const tryListen = (p: number, attemptsLeft: number) => {
+      // Disable reusePort so co-occupancy by AirPlay produces a clean EADDRINUSE
+      // rather than silent traffic splitting.
+      const isPort5000OnDarwin = process.platform === "darwin" && p === 5000;
+      const onError = (err: any) => {
+        if (err?.code === "EADDRINUSE" && attemptsLeft > 0) {
+          log(`⚠️ Port ${p} in use (likely macOS AirPlay Receiver on Sonoma+). Trying port ${p + 1}…`);
+          server.removeListener("error", onError);
+          tryListen(p + 1, attemptsLeft - 1);
+          return;
+        }
+        log(`❌ Failed to bind to port ${p}: ${err?.message ?? err}`);
+        throw err;
+      };
+      server.once("error", onError);
+      server.listen(
+        {
+          port: p,
+          host: "0.0.0.0",
+          // On macOS with AirPlay on 5000, reusePort silently splits traffic.
+          // Force exclusive bind so we get EADDRINUSE and can hop to 5001.
+          ...(isPort5000OnDarwin ? {} : { reusePort: true }),
+        },
+        () => {
+          actualPort = p;
+          server.removeListener("error", onError);
+          if (p !== port) {
+            log(`🎉 Server is now serving on port ${p} (originally requested ${port})`);
+            log(`   👉 Open http://localhost:${p}/ in your browser`);
+          } else {
+            log(`🎉 Server is now serving on port ${p}`);
+          }
+          setTimeout(() => {
+            initializeBackgroundServicesAsync();
+          }, 2000);
+        }
+      );
+    };
+    tryListen(port, 10);
     
     // Initialize background services completely separate from server startup
     function initializeBackgroundServicesAsync() {
