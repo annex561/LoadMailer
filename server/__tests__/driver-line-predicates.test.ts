@@ -29,6 +29,7 @@ describe("isSpareNumber (never grab an SMS/main/assigned number)", () => {
     mainNumber: "+16605572729",
     assignedVoiceNumbers: new Set(["+12055550142"]),
     ourWebhookUrl: "https://traqiq.app/api/twilio/voice/driver-inbound",
+    messagingPoolNumbers: new Set<string>(),
   };
   it("rejects the main SMS number", () => {
     expect(isSpareNumber({ phoneNumber: "+16605572729", smsUrl: "", voiceUrl: "" }, ctx)).toBe(false);
@@ -44,5 +45,17 @@ describe("isSpareNumber (never grab an SMS/main/assigned number)", () => {
   });
   it("accepts a genuinely idle number (no sms, demo/empty voice)", () => {
     expect(isSpareNumber({ phoneNumber: "+19045550001", smsUrl: "https://demo.twilio.com/welcome/sms/reply/", voiceUrl: "https://demo.twilio.com/welcome/voice/" }, ctx)).toBe(true);
+  });
+  it("C1: rejects a Messaging Service pool number even with empty smsUrl", () => {
+    expect(isSpareNumber(
+      { phoneNumber: "+15155550001", smsUrl: "", voiceUrl: "" },
+      { mainNumber: "+16605572729", assignedVoiceNumbers: new Set<string>(), ourWebhookUrl: "https://traqiq.app/api/twilio/voice/driver-inbound", messagingPoolNumbers: new Set(["+15155550001"]) },
+    )).toBe(false);
+  });
+  it("M3: treats our webhook with a trailing slash as ours (still spare)", () => {
+    expect(isSpareNumber(
+      { phoneNumber: "+19045550002", smsUrl: "", voiceUrl: "https://traqiq.app/api/twilio/voice/driver-inbound/" },
+      ctx,
+    )).toBe(true);
   });
 });

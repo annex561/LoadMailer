@@ -15,6 +15,18 @@ describe("buildInboundTwiml — no arbitrary dial (regression)", () => {
     expect(x).toContain("record-from-answer");
     expect(x).toContain("/api/twilio/voice/driver-inbound/after");
   });
+  it("I1: escapes/omits a malformed From so it can't break the TwiML", () => {
+    const x = buildInboundTwiml({ phone: "+12058614115" }, '+1"evil');
+    // Not E.164 → callerId attribute omitted entirely.
+    expect(x).not.toContain("callerId=");
+    // No unescaped double-quote injected into the attribute list.
+    expect(x).not.toContain('+1"evil');
+    // Still exactly one well-formed Response wrapper.
+    expect((x.match(/<Response>/g) || []).length).toBe(1);
+    expect((x.match(/<\/Response>/g) || []).length).toBe(1);
+    expect(x).toContain("<Dial");
+    expect(x).toContain("+12058614115");
+  });
 });
 
 describe("buildAfterTwiml — voicemail only on a missed call", () => {
