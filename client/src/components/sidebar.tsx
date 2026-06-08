@@ -36,6 +36,7 @@ const menuGroups: MenuGroup[] = [
       { name: "RateCon Inbox", href: "/loads-inbox" },
       { name: "Upload RateCon", href: "/ratecon-upload" },
       { name: "Review Queue", href: "/review-queue" },
+      { name: "Calls", href: "/calls" },
       { name: "Active Loads", href: "/active-loads" },
       { name: "Load History", href: "/loads" },
       { name: "Driver Messages", href: "/communication-dashboard" },
