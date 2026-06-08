@@ -68,6 +68,7 @@ const TermsOfService = lazy(() => import("@/pages/terms"));
 const RecruitingLanding = lazy(() => import("@/pages/recruiting/landing"));
 const RecruitingApplication = lazy(() => import("@/pages/recruiting/application"));
 const RecruitingStatus = lazy(() => import("@/pages/recruiting/status"));
+const RecruitingDashboard = lazy(() => import("@/pages/recruiting/dashboard"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -104,6 +105,7 @@ function Router() {
       <Route path="/contacts" component={Contacts} />
       <Route path="/templates" component={Templates} />
       <Route path="/driver-management" component={DriverManagement} />
+      <Route path="/recruiting" component={RecruitingDashboard} />
       <Route path="/scrapers" component={ScraperManagement} />
       <Route path="/dispatcher" component={DispatcherDashboard} />
       <Route path="/dispatcher-dashboard" component={DispatcherDashboard} />

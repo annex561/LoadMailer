@@ -124,6 +124,65 @@ export function registerRecruitingRoutes(app: Express) {
   });
 
   // -----------------------------------------------------------------------
+  // GET /api/recruiting/applications — recruiter dashboard list (auth required)
+  // -----------------------------------------------------------------------
+  app.get("/api/recruiting/applications", async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const rows = await db
+        .select({
+          id: recruitingApplications.id,
+          firstName: recruitingApplications.firstName,
+          lastName: recruitingApplications.lastName,
+          phone: recruitingApplications.phone,
+          email: recruitingApplications.email,
+          isOwnerOperator: recruitingApplications.isOwnerOperator,
+          yearsExperience: recruitingApplications.yearsExperience,
+          currentStage: recruitingApplications.currentStage,
+          prescreenStatus: recruitingApplications.prescreenStatus,
+          createdAt: recruitingApplications.createdAt,
+          updatedAt: recruitingApplications.updatedAt,
+        })
+        .from(recruitingApplications)
+        .orderBy(recruitingApplications.updatedAt);
+
+      res.json({ applications: rows.reverse() });
+    } catch (err) {
+      console.error("[recruiting/applications GET list] error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // PATCH /api/recruiting/applications/:id/stage — recruiter advances stage
+  // -----------------------------------------------------------------------
+  app.patch("/api/recruiting/applications/:id/stage", async (req: any, res) => {
+    try {
+      if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const { id } = req.params;
+      const { toStage, reason } = req.body;
+      if (!toStage) return res.status(400).json({ error: "toStage required" });
+
+      const [existing] = await db
+        .select({ id: recruitingApplications.id })
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!existing) return res.status(404).json({ error: "Application not found" });
+
+      await transitionStage(id, toStage, reason || "Recruiter stage transition", req.user?.id || "RECRUITER");
+      res.json({ success: true });
+    } catch (err) {
+      console.error("[recruiting/applications/:id/stage PATCH] error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
   // GET /api/recruiting/applications/:id — fetch driver-facing status
   // -----------------------------------------------------------------------
   app.get("/api/recruiting/applications/:id", async (req, res) => {
