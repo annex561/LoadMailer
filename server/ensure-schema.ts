@@ -225,6 +225,39 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ ratecon_intake table: ${e.message}`);
     }
 
+    // call_record table (Unified Call-Data Layer SP1)
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS call_record (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+          company_id VARCHAR,
+          source TEXT NOT NULL,
+          direction TEXT NOT NULL,
+          driver_id VARCHAR,
+          call_sid TEXT,
+          recording_sid TEXT NOT NULL,
+          from_number TEXT,
+          to_number TEXT,
+          duration_sec INTEGER,
+          recording_url TEXT,
+          leg_type TEXT,
+          transcript TEXT,
+          transcript_status TEXT NOT NULL DEFAULT 'pending',
+          ai_classification JSONB,
+          linked_intake_id VARCHAR,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS call_record_recording_sid_unique ON call_record(recording_sid)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_call_record_company ON call_record(company_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_call_record_created ON call_record(created_at)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_call_record_driver ON call_record(driver_id)`);
+      await pool.query(`ALTER TABLE ratecon_intake ADD COLUMN IF NOT EXISTS source_call_id VARCHAR`);
+    } catch (e: any) {
+      log(`⚠️ call_record table: ${e.message}`);
+    }
+
     // factoring_submissions — one row per packet sent to a factor (currently
     // only Love's Financial). Unique on load_id so the same load can never
     // be double-submitted. See docs/factoring/loves-financial.md.

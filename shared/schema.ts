@@ -417,6 +417,7 @@ export const rateconIntake = pgTable("ratecon_intake", {
   sourceEmailMessageId: text("source_email_message_id"), // Gmail message id if email
   sourceFilename: text("source_filename"),
   sourceUploadedBy: varchar("source_uploaded_by"), // user id if upload/manual
+  sourceCallId: varchar("source_call_id"), // FK-ish link to call_record.id when sourceType === 'call'
 
   // Raw artifact storage
   pdfPath: text("pdf_path"),             // where the original PDF is stored
@@ -455,6 +456,36 @@ export const rateconIntake = pgTable("ratecon_intake", {
 
 export type RateconIntake = typeof rateconIntake.$inferSelect;
 export type InsertRateconIntake = typeof rateconIntake.$inferInsert;
+
+// ---- Unified call-data layer (SP1) ----
+// Holds every recorded call (any source/direction). Driver calls (SP2/SP3) set companyId + driverId.
+export const callRecord = pgTable("call_record", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").references(() => companies.id, { onDelete: "restrict" }),
+  source: text("source").notNull(),        // 'twilio_main' | 'twilio_driver' | 'twilio_portal'
+  direction: text("direction").notNull(),  // 'inbound' | 'outbound'
+  driverId: varchar("driver_id"),          // nullable; set by SP2/SP3
+  callSid: text("call_sid"),
+  recordingSid: text("recording_sid").notNull(),
+  fromNumber: text("from_number"),
+  toNumber: text("to_number"),
+  durationSec: integer("duration_sec"),
+  recordingUrl: text("recording_url"),
+  legType: text("leg_type"),               // 'call' | 'voicemail'
+  transcript: text("transcript"),
+  transcriptStatus: text("transcript_status").notNull().default("pending"), // pending|transcribing|done|failed|skipped
+  aiClassification: jsonb("ai_classification"),
+  linkedIntakeId: varchar("linked_intake_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_call_record_company").on(table.companyId),
+  index("idx_call_record_created").on(table.createdAt),
+  index("idx_call_record_driver").on(table.driverId),
+  unique("call_record_recording_sid_unique").on(table.recordingSid),
+]);
+export type CallRecord = typeof callRecord.$inferSelect;
+export type InsertCallRecord = typeof callRecord.$inferInsert;
 
 // Stores every dispatcher correction made to a parsed RateCon. The parser
 // pulls the most recent N rows from this table and includes them as
