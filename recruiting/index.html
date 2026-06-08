@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Own Your Truck in 3 Years | LAMP Logistics Driver Program</title>
+<meta name="description" content="Lease-to-own a box truck. $5,000 down, no credit check. Run on our established authority and start earning week one. Own your truck in 3 years." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0e1116; --bg2:#151a22; --card:#1b222c; --line:#2a333f;
+    --ink:#f3f6fa; --muted:#a9b4c2; --accent:#ff7a18; --accent2:#ffb347;
+    --good:#37c871;
+    --maxw:1080px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.display{font-family:'Oswald',Impact,sans-serif;letter-spacing:.5px;line-height:1.05;text-transform:uppercase}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 20px}
+  a{color:inherit}
+  .accent{color:var(--accent)}
+
+  /* NAV */
+  header.nav{position:sticky;top:0;z-index:50;background:rgba(14,17,22,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .nav .wrap{display:flex;align-items:center;justify-content:space-between;height:64px}
+  .logo{font-family:'Oswald';font-size:22px;font-weight:700;letter-spacing:1px}
+  .logo span{color:var(--accent)}
+  .nav .cta{background:var(--accent);color:#1a1006;font-weight:700;padding:10px 18px;border-radius:8px;text-decoration:none;font-size:14px}
+
+  /* HERO */
+  .hero{position:relative;padding:74px 0 64px;background:
+     radial-gradient(1200px 500px at 70% -10%, rgba(255,122,24,.18), transparent 60%),
+     linear-gradient(180deg,var(--bg),var(--bg2))}
+  .hero h1{font-size:clamp(38px,7vw,72px)}
+  .hero .sub{font-size:clamp(17px,2.4vw,22px);color:var(--muted);margin:20px 0 28px;max-width:640px}
+  .stats{display:flex;flex-wrap:wrap;gap:12px;margin:28px 0 34px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px;min-width:150px}
+  .stat b{font-family:'Oswald';font-size:26px;color:var(--accent2);display:block}
+  .stat span{font-size:13px;color:var(--muted)}
+  .btn{display:inline-block;background:var(--accent);color:#1a1006;font-weight:700;font-size:17px;padding:16px 30px;border-radius:10px;text-decoration:none;box-shadow:0 8px 30px rgba(255,122,24,.25);transition:transform .12s}
+  .btn:hover{transform:translateY(-2px)}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);box-shadow:none;margin-left:10px}
+
+  section{padding:62px 0}
+  .eyebrow{font-family:'Oswald';color:var(--accent);font-size:14px;letter-spacing:2px;margin-bottom:10px}
+  .h2{font-size:clamp(28px,4.5vw,44px);margin-bottom:14px}
+  .lead{color:var(--muted);font-size:18px;max-width:680px}
+
+  /* PROBLEM */
+  .problem{background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .problem .lead{font-size:19px;max-width:760px}
+  .problem strong{color:var(--ink)}
+
+  /* GRID */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:34px}
+  .feat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px}
+  .feat .ic{width:44px;height:44px;border-radius:10px;background:rgba(255,122,24,.14);display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px}
+  .feat h3{font-size:19px;margin-bottom:8px}
+  .feat p{color:var(--muted);font-size:15px}
+
+  /* NUMBERS strip */
+  .numbers{background:linear-gradient(180deg,var(--bg),#10151c)}
+  .numrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:30px}
+  .num{text-align:center;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px 16px}
+  .num b{font-family:'Oswald';font-size:40px;color:var(--accent2);display:block;line-height:1}
+  .num span{color:var(--muted);font-size:14px;margin-top:8px;display:block}
+
+  /* STEPS */
+  .steps{counter-reset:s;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;margin-top:34px}
+  .step{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px;position:relative}
+  .step::before{counter-increment:s;content:counter(s);font-family:'Oswald';font-size:30px;color:var(--accent);display:block;margin-bottom:8px}
+  .step h3{font-size:18px;margin-bottom:6px}
+  .step p{color:var(--muted);font-size:15px}
+
+  /* QUALIFY */
+  .qual ul{list-style:none;margin-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+  .qual li{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;font-size:16px;display:flex;gap:10px;align-items:center}
+  .qual li::before{content:"\2713";color:var(--good);font-weight:700}
+
+  /* FORM */
+  .apply{background:var(--bg2);border-top:1px solid var(--line)}
+  form{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:30px;margin-top:30px;max-width:620px}
+  .field{margin-bottom:16px}
+  label{display:block;font-size:14px;color:var(--muted);margin-bottom:6px}
+  input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:13px 14px;color:var(--ink);font-size:16px;font-family:inherit}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .submit{width:100%;background:var(--accent);color:#1a1006;font-weight:700;font-size:18px;padding:16px;border:none;border-radius:10px;cursor:pointer;margin-top:6px}
+  .formnote{font-size:13px;color:var(--muted);margin-top:12px;text-align:center}
+
+  footer{padding:40px 0;border-top:1px solid var(--line);color:var(--muted);font-size:14px;text-align:center}
+
+  @media(max-width:560px){.row{grid-template-columns:1fr}.btn.ghost{margin-left:0;margin-top:10px;display:block;text-align:center}}
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <div class="logo">LAMP <span>Logistics</span></div>
+    <a class="cta" href="#apply">Apply Now</a>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <h1>Own Your Truck<br><span class="accent">In 3 Years.</span></h1>
+    <p class="sub">Lease-to-own a box truck and run on our established authority. Real freight and a real paycheck your first week. No CDL required.</p>
+    <div class="stats">
+      <div class="stat"><b>$5,000</b><span>down to start</span></div>
+      <div class="stat"><b>No</b><span>credit check, ever</span></div>
+      <div class="stat"><b>Week 1</b><span>you start earning</span></div>
+      <div class="stat"><b>Non-CDL</b><span>welcome</span></div>
+    </div>
+    <a class="btn" href="#apply">Get Seated &rarr;</a>
+    <a class="btn ghost" href="#how">See How It Works</a>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="problem">
+  <div class="wrap">
+    <div class="eyebrow">The trap nobody warns you about</div>
+    <h2 class="h2">Going it alone is how good drivers go broke.</h2>
+    <p class="lead">You set up your own authority and then you sit. Brokers won't load a brand-new carrier for six months to a year. The good freight goes to companies with history. You're stuck with scraps, hunting a dispatcher in a market full of scammers, fighting for factoring, watching the truck payment come due while you barely make a dime. <strong>The truck payment doesn't sink most new drivers. The empty months do.</strong></p>
+  </div>
+</section>
+
+<!-- SOLUTION -->
+<section id="how">
+  <div class="wrap">
+    <div class="eyebrow">We took the empty months out</div>
+    <h2 class="h2">A running business, day one.</h2>
+    <p class="lead">You run under our established authority. We already have the freight, the relationships, the insurance, and the factoring. You skip the wait and start earning immediately.</p>
+    <div class="grid">
+      <div class="feat"><div class="ic">&#128739;</div><h3>Our Authority</h3><p>Run on our seasoned MC from day one. Real freight, no six-month freeze.</p></div>
+      <div class="feat"><div class="ic">&#128666;</div><h3>Steady Loads</h3><p>Dedicated routes and final-mile freight dispatched to you. No load-hunting, no scammers.</p></div>
+      <div class="feat"><div class="ic">&#128176;</div><h3>Paid Weekly</h3><p>We factor your loads. You get paid every week with a clear, itemized statement.</p></div>
+      <div class="feat"><div class="ic">&#128737;</div><h3>Insurance Handled</h3><p>Covered on our policy. No fighting for your own commercial coverage.</p></div>
+      <div class="feat"><div class="ic">&#128295;</div><h3>Dispatch Handled</h3><p>No deposits, no ghosting. Our team keeps your truck loaded.</p></div>
+      <div class="feat"><div class="ic">&#127942;</div><h3>The Truck Is Yours</h3><p>Every payment builds real equity toward a truck you keep, free and clear.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- NUMBERS -->
+<section class="numbers">
+  <div class="wrap">
+    <div class="eyebrow">Straight numbers, no fine print</div>
+    <h2 class="h2">Here's the deal.</h2>
+    <div class="numrow">
+      <div class="num"><b>$5,000</b><span>Truck down payment</span></div>
+      <div class="num"><b>$1,500</b><span>First month insurance</span></div>
+      <div class="num"><b>36 mo</b><span>To full ownership</span></div>
+      <div class="num"><b>$0</b><span>Credit check required</span></div>
+    </div>
+    <p class="lead" style="margin-top:26px">Pay it off early anytime. The day it's paid, the title is yours. Take it anywhere, run it however you want. Your truck, your business, your rules.</p>
+  </div>
+</section>
+
+<!-- STEPS -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2 class="h2">Four steps to your own truck.</h2>
+    <div class="steps">
+      <div class="step"><h3>Apply &amp; Qualify</h3><p>Valid license, clean record, and ready to work. We verify and get you approved fast.</p></div>
+      <div class="step"><h3>Put Down $6,500</h3><p>$5,000 on the truck, $1,500 first month insurance. No credit pull.</p></div>
+      <div class="step"><h3>Get Seated &amp; Roll</h3><p>You're on our authority, on a route, earning your first week. No death-valley wait.</p></div>
+      <div class="step"><h3>Own It in 3 Years</h3><p>Run, build equity, and the title transfers to you. Free and clear.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- QUALIFY -->
+<section class="qual" style="background:var(--bg2);border-top:1px solid var(--line)">
+  <div class="wrap">
+    <div class="eyebrow">Who qualifies</div>
+    <h2 class="h2">If this is you, apply.</h2>
+    <ul>
+      <li>Valid driver's license (CDL not required)</li>
+      <li>2+ years driving experience</li>
+      <li>Clean driving record</li>
+      <li>Able to pass a DOT drug test</li>
+      <li>$6,500 ready to start</li>
+      <li>Ready to work and own your future</li>
+    </ul>
+  </div>
+</section>
+
+<!-- APPLY -->
+<section class="apply" id="apply">
+  <div class="wrap">
+    <div class="eyebrow">Seats are limited</div>
+    <h2 class="h2">Stop building someone else's dream. Build yours.</h2>
+    <p class="lead">Fill this out and our team will reach out to get you seated. We onboard drivers as trucks and freight come available, so apply now to hold your spot.</p>
+
+    <!-- Netlify Forms: auto-captured on deploy. In Netlify: Forms -> Form notifications -> add email to dispatch@lampslogistics.com -->
+    <form name="driver-application" method="POST" data-netlify="true" netlify-honeypot="bot-field">
+      <input type="hidden" name="form-name" value="driver-application" />
+      <p hidden><label>Skip this field: <input name="bot-field" /></label></p>
+      <div class="row">
+        <div class="field"><label>Full name</label><input name="name" required placeholder="John Smith" /></div>
+        <div class="field"><label>Phone</label><input name="phone" type="tel" required placeholder="(901) 555-0123" /></div>
+      </div>
+      <div class="field"><label>Email</label><input name="email" type="email" required placeholder="you@email.com" /></div>
+      <div class="row">
+        <div class="field"><label>City &amp; State</label><input name="location" required placeholder="Memphis, TN" /></div>
+        <div class="field"><label>Years driving experience</label>
+          <select name="experience" required>
+            <option value="">Select...</option>
+            <option>Less than 1 year</option>
+            <option>1-2 years</option>
+            <option>2-5 years</option>
+            <option>5+ years</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Do you have ~$6,500 ready to start?</label>
+        <select name="funds_ready" required>
+          <option value="">Select...</option>
+          <option>Yes, ready now</option>
+          <option>Within 30 days</option>
+          <option>Not yet</option>
+        </select>
+      </div>
+      <div class="field"><label>Anything else? (optional)</label><textarea name="message" rows="3" placeholder="Tell us about your driving background"></textarea></div>
+      <button class="submit" type="submit">Apply to Get Seated</button>
+      <p class="formnote">By submitting you agree to be contacted about the driver program. We never run a credit check.</p>
+    </form>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>LAMP Logistics &middot; <a href="mailto:dispatch@lampslogistics.com" style="color:var(--accent2)">dispatch@lampslogistics.com</a></p>
+    <p style="margin-top:8px;opacity:.7">Lease-to-own owner-operator program. Equal opportunity. This is not a guarantee of earnings; income depends on the loads you run.</p>
+  </div>
+</footer>
+
+</body>
+</html>
