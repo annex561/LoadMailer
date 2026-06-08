@@ -161,6 +161,8 @@ export const drivers = pgTable("drivers", {
 
   // SMS integration
   phoneNumber: text("phone_number").unique(),
+  voiceNumber: text("voice_number").unique(),     // SP2: driver's assigned recorded company line (E.164)
+  voiceNumberSid: text("voice_number_sid"),        // Twilio IncomingPhoneNumber SID, for rewire/release
   city: text("city"),
   enableSmsNotifications: boolean("enable_sms_notifications").notNull().default(false),
   // A2P 10DLC compliance: timestamped consent + opt-out audit trail required by TCR.

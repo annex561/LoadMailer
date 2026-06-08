@@ -17,6 +17,11 @@ export async function ensureSchema(): Promise<void> {
     ['max_length', 'INTEGER DEFAULT 53'],
     ['max_weight', 'INTEGER DEFAULT 26000'],
     ['phone_number', 'TEXT'],
+    // SP2: per-driver recorded voice line. Registered here (not just in the
+    // try-block below) so server/__tests__/schema-completeness.test.ts passes —
+    // every drivers column in schema.ts must appear in this array or prod INSERTs fail.
+    ['voice_number', 'TEXT'],
+    ['voice_number_sid', 'TEXT'],
     ['city', 'TEXT'],
     ['enable_sms_notifications', 'BOOLEAN NOT NULL DEFAULT false'],
     // A2P 10DLC compliance — consent + opt-out audit trail (PR #39).
@@ -169,6 +174,15 @@ export async function ensureSchema(): Promise<void> {
 
     try { await pool.query(`ALTER TABLE drivers ADD CONSTRAINT drivers_phone_number_unique UNIQUE (phone_number)`); } catch (_) {}
     try { await pool.query(`ALTER TABLE drivers ADD CONSTRAINT drivers_tracking_token_unique UNIQUE (tracking_token)`); } catch (_) {}
+
+    // SP2: per-driver recorded voice line
+    try {
+      await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS voice_number TEXT`);
+      await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS voice_number_sid TEXT`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS drivers_voice_number_unique ON drivers(voice_number) WHERE voice_number IS NOT NULL`);
+    } catch (e: any) {
+      log(`⚠️ drivers voice_number columns: ${e.message}`);
+    }
 
     // Loads confirmation columns
     let loadsOk = 0;
