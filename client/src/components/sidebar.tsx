@@ -1,13 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { 
-  LayoutDashboard, 
-  Truck, 
-  FileText, 
-  DollarSign, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Truck,
+  FileText,
+  DollarSign,
+  Settings,
   ChevronDown,
   MessageSquare,
   LogOut,
+  UserPlus,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -46,13 +47,20 @@ const menuGroups: MenuGroup[] = [
     ]
   },
   {
+    title: "Recruiting",
+    icon: <UserPlus className="w-5 h-5" />,
+    items: [
+      { name: "Funnel Dashboard", href: "/recruiting" },
+      { name: "Public Application Link", href: "/drive-with-lamp" },
+    ]
+  },
+  {
     title: "Fleet & Drivers",
     icon: <Truck className="w-5 h-5" />,
     items: [
       { name: "Fleet Dashboard", href: "/fleet", adminOnly: true },
       { name: "Driver Roster", href: "/driver-management" },
       { name: "Onboarding", href: "/driver-onboarding" },
-      { name: "Recruiting Funnel", href: "/recruiting" },
       { name: "Trucks", href: "/fleet/trucks", adminOnly: true },
       { name: "Work Orders", href: "/fleet/work-orders", adminOnly: true },
       { name: "Inspections", href: "/fleet/inspections", adminOnly: true },
