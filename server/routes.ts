@@ -839,6 +839,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   };
   app.use([
     '/api/ratecon-intake',
+    '/api/voice',
     '/api/hos-check',
     '/api/geofence',
   ], adminOrDispatcherOrApiKey);
