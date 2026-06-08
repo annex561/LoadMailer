@@ -64,3 +64,46 @@ export function buildCallIntakeRow(args: { companyId: string | null; callRecordI
     reviewReason: "inbound call — AI-detected load offer",
   };
 }
+
+function twilioBasicAuthHeader(): string {
+  const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64");
+  return `Basic ${auth}`;
+}
+
+// recordingUrl is the Twilio media base URL (no extension). Fetch the mp3 with Basic auth and send to Whisper.
+export async function transcribeRecordingAudio(recordingUrl: string): Promise<string> {
+  const resp = await fetch(`${recordingUrl}.mp3`, { headers: { Authorization: twilioBasicAuthHeader() } });
+  if (!resp.ok) throw new Error(`fetch recording failed: ${resp.status}`);
+  const buf = Buffer.from(await resp.arrayBuffer());
+  const file = new File([buf], "recording.mp3", { type: "audio/mpeg" });
+  const tr = await openai.audio.transcriptions.create({ model: "whisper-1", file });
+  return tr.text;
+}
+
+const CALL_CLASSIFY_SYSTEM = `You are an assistant for a trucking carrier (LAMP Logistics). You receive a transcript of a phone call to the company line. Classify the call and, if a freight broker or shipper is offering a specific load to haul, extract the load details. Respond as STRICT JSON with these keys:
+category: one of "load_offer","driver","shipper","spam","other"
+isLoadOffer: boolean (true ONLY if someone is offering a specific load to haul)
+confidence: number 0..1 (your confidence in isLoadOffer)
+broker: string or null
+mc: string or null (MC/DOT number if stated)
+rate: number (USD) or null
+lane: string like "Atlanta, GA -> Dallas, TX" or null
+commodity: string or null
+pickup: {city,state,date,time} or null
+drop: {city,state,date,time} or null
+summary: one sentence
+Use null for anything not clearly stated. Do not invent values.`;
+
+export async function classifyTranscript(transcript: string): Promise<CallClassification> {
+  const resp = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: CALL_CLASSIFY_SYSTEM },
+      { role: "user", content: `--- CALL TRANSCRIPT ---\n${transcript}\n--- END TRANSCRIPT ---` },
+    ],
+    response_format: { type: "json_object" },
+  });
+  const content = resp.choices[0]?.message?.content;
+  if (!content) throw new Error("classifier returned empty response");
+  return JSON.parse(content) as CallClassification;
+}
