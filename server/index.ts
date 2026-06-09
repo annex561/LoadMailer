@@ -356,6 +356,19 @@ app.use((req, res, next) => {
           }
         })();
       }, 500);
+
+      // 0.1 Recruiting Notification Processor — fires queued SMS/email for driver recruiting funnel.
+      // Gated by RECRUITING_NOTIFICATIONS_LIVE env var (default off, no traffic if unset).
+      setTimeout(() => {
+        (async () => {
+          try {
+            const { startRecruitingNotificationProcessor } = await import('./recruiting/notifications');
+            startRecruitingNotificationProcessor();
+          } catch (error: any) {
+            log(`⚠️ Recruiting Notification Processor failed to initialize: ${error?.message || error}`);
+          }
+        })();
+      }, 600);
       
       // 0.5 GPS Health Monitor Service (monitors active drivers for stale GPS tracking)
       setTimeout(() => {

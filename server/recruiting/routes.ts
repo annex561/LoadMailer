@@ -11,6 +11,7 @@ import {
   insertRecruitingApplicationSchema,
 } from "@shared/schema";
 import { screenApplication } from "./screening";
+import { queueRecruitingNotification } from "./notifications";
 
 const LAMP_COMPANY_ID_ENV = process.env.LAMP_DEFAULT_COMPANY_ID; // optional override
 
@@ -113,8 +114,25 @@ export function registerRecruitingRoutes(app: Express) {
         reason: "Lead captured from landing page",
       });
 
-      // TODO (next-session): queue welcome SMS via existing smsCommunicationService + welcome email via SendGrid
-      // (Both require explicit live-vendor approval per financial-impact policy.)
+      // Queue welcome SMS + welcome email (gated by RECRUITING_NOTIFICATIONS_LIVE env var).
+      // If kill switch is off, these queue but never send — safe by default.
+      try {
+        const baseUrl = process.env.PUBLIC_APP_URL || "https://traqiq.app";
+        await queueRecruitingNotification({
+          applicationId: created.id,
+          channel: "SMS",
+          templateKey: "LEAD_CAPTURE_SMS",
+          payload: { first_name: firstName, app_url: `${baseUrl}/apply/${created.id}` },
+        });
+        await queueRecruitingNotification({
+          applicationId: created.id,
+          channel: "EMAIL",
+          templateKey: "LEAD_CAPTURE_EMAIL",
+          payload: { first_name: firstName, app_url: `${baseUrl}/apply/${created.id}` },
+        });
+      } catch (notifyErr) {
+        console.error("[recruiting/leads] notification queue err:", notifyErr);
+      }
 
       res.json({ id: created.id, status: "LEAD_CREATED" });
     } catch (err) {
@@ -279,6 +297,23 @@ export function registerRecruitingRoutes(app: Express) {
 
       await transitionStage(id, "APPLIED", "Application submitted");
 
+      // Queue acknowledgement notifications (gated by env)
+      try {
+        const baseUrl = process.env.PUBLIC_APP_URL || "https://traqiq.app";
+        await queueRecruitingNotification({
+          applicationId: id,
+          channel: "SMS",
+          templateKey: "APP_RECEIVED_SMS",
+          payload: { first_name: existing.firstName },
+        });
+        await queueRecruitingNotification({
+          applicationId: id,
+          channel: "EMAIL",
+          templateKey: "APPLICATION_RECEIVED_EMAIL",
+          payload: { first_name: existing.firstName, status_url: `${baseUrl}/apply/${id}/status` },
+        });
+      } catch (e) { console.error("[recruiting] APPLIED notif err:", e); }
+
       // Stage 3 — Pre-screening
       const screen = screenApplication({
         yearsExperience: existing.yearsExperience ?? 0,
@@ -305,12 +340,43 @@ export function registerRecruitingRoutes(app: Express) {
       if (screen.status === "PASS") {
         await transitionStage(id, "PRESCREENED_PASS", "Pre-screening passed");
         await transitionStage(id, "DOCS_REQUESTED", "Documents requested");
+
+        try {
+          const baseUrl = process.env.PUBLIC_APP_URL || "https://traqiq.app";
+          await queueRecruitingNotification({
+            applicationId: id,
+            channel: "SMS",
+            templateKey: "DOCS_REQUEST_SMS",
+            payload: { first_name: existing.firstName, docs_url: `${baseUrl}/apply/${id}/documents` },
+          });
+          await queueRecruitingNotification({
+            applicationId: id,
+            channel: "EMAIL",
+            templateKey: "DOCS_REQUESTED_EMAIL",
+            payload: { first_name: existing.firstName, docs_url: `${baseUrl}/apply/${id}/documents` },
+          });
+        } catch (e) { console.error("[recruiting] PASS notif err:", e); }
       } else if (screen.status === "FAIL") {
         await transitionStage(
           id,
           "PRESCREENED_FAIL",
           `Pre-screening failed: ${screen.reasons.join("; ")}`
         );
+
+        try {
+          await queueRecruitingNotification({
+            applicationId: id,
+            channel: "SMS",
+            templateKey: "DISQUALIFICATION_SMS",
+            payload: { first_name: existing.firstName },
+          });
+          await queueRecruitingNotification({
+            applicationId: id,
+            channel: "EMAIL",
+            templateKey: "DISQUALIFICATION_EMAIL",
+            payload: { first_name: existing.firstName },
+          });
+        } catch (e) { console.error("[recruiting] FAIL notif err:", e); }
       } else {
         await logStage({
           applicationId: id,
