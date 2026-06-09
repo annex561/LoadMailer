@@ -110,10 +110,12 @@ const EMAIL_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender
 let _transporter: nodemailer.Transporter | null = null;
 function emailTransporter(): nodemailer.Transporter {
   if (_transporter) return _transporter;
+  const smtpPort = parseInt(process.env.SMTP_PORT || "587");
   _transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: parseInt(process.env.SMTP_PORT || "587"),
-    secure: false,
+    port: smtpPort,
+    // Port 465 uses SMTPS (implicit SSL); 587 uses STARTTLS. Auto-detect so config matches transport.
+    secure: smtpPort === 465,
     auth: {
       user: process.env.SMTP_USER || process.env.EMAIL_USER,
       pass: process.env.SMTP_PASS || process.env.EMAIL_PASS,
