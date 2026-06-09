@@ -3543,3 +3543,16 @@ export const insertRecruitingApplicationSchema = z.object({
   applicantSignature: z.string().min(1),
 });
 export type InsertRecruitingApplicationPayload = z.infer<typeof insertRecruitingApplicationSchema>;
+
+// Recruiter notes on an application — append-only audit-of-thought log.
+export const recruitingNotes = pgTable("recruiting_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  applicationId: varchar("application_id").references(() => recruitingApplications.id, { onDelete: "cascade" }).notNull(),
+  authorId: varchar("author_id"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  appIdx: index("recruiting_notes_app_idx").on(t.applicationId),
+}));
+
+export type RecruitingNote = typeof recruitingNotes.$inferSelect;

@@ -557,7 +557,18 @@ export async function ensureSchema(): Promise<void> {
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_medical_app_idx ON recruiting_medical(application_id)`);
 
-      log(`✅ Recruiting funnel tables ready (recruiting_applications + 4 child tables)`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS recruiting_notes (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          application_id VARCHAR NOT NULL REFERENCES recruiting_applications(id) ON DELETE CASCADE,
+          author_id VARCHAR,
+          body TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS recruiting_notes_app_idx ON recruiting_notes(application_id)`);
+
+      log(`✅ Recruiting funnel tables ready (recruiting_applications + 5 child tables)`);
     } catch (e: any) {
       log(`⚠️ recruiting funnel tables: ${e.message}`);
     }

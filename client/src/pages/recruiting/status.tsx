@@ -160,6 +160,12 @@ export default function RecruitingStatus() {
                     Driver license, SSN card, voided check, and any current DOT medical card. Use
                     your phone&apos;s camera.
                   </p>
+                  <a
+                    href={`/apply/${id}/documents`}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-white text-sm font-semibold hover:bg-emerald-700"
+                  >
+                    Upload Documents →
+                  </a>
                 </>
               )}
               {app.currentStage === "BACKGROUND_RUNNING" && (

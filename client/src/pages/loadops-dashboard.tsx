@@ -55,6 +55,7 @@ const GoogleSheetsImport = lazy(() => import('./google-sheets-import'));
 const DriverManagement = lazy(() => import('./driver-management'));
 const DriverOnboarding = lazy(() => import('./driver-onboarding'));
 const RecruitingDashboard = lazy(() => import('./recruiting/dashboard'));
+const RecruiterApplicant = lazy(() => import('./recruiting/applicant'));
 const SimpleDriverRegistration = lazy(() => import('./simple-driver-registration'));
 const Contacts = lazy(() => import('./contacts'));
 const SmsDispatching = lazy(() => import('./sms-dispatching'));
@@ -693,6 +694,11 @@ export default function LoadOpsDashboard() {
         const loadDetailMatch = location.match(/^\/loads\/([^/]+)$/);
         if (loadDetailMatch) {
           return <LoadDetailsPage id={loadDetailMatch[1]} />;
+        }
+        // /recruiting/<id> — recruiter applicant detail with stage controls
+        const recruitMatch = location.match(/^\/recruiting\/([^/]+)$/);
+        if (recruitMatch) {
+          return <RecruiterApplicant />;
         }
         return <NotFound />;
     }

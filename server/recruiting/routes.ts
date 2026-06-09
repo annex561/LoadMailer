@@ -12,6 +12,49 @@ import {
 } from "@shared/schema";
 import { screenApplication } from "./screening";
 import { queueRecruitingNotification } from "./notifications";
+import { pullMvr, queryClearinghouse, pullCriminal, scheduleDrugTest, scheduleDotPhysical, createSignatureRequest } from "./vendors";
+import {
+  recruitingDocuments,
+  recruitingScreenings,
+  recruitingMedical,
+  drivers,
+} from "@shared/schema";
+import multer from "multer";
+import { v2 as cloudinary } from "cloudinary";
+import { sql } from "drizzle-orm";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+});
+
+// Configure cloudinary once if CLOUDINARY_URL is set
+if (process.env.CLOUDINARY_URL && !cloudinary.config().cloud_name) {
+  cloudinary.config({ secure: true });
+}
+
+const REQUIRED_DOCS_OWNER_OP = [
+  "DRIVER_LICENSE_FRONT",
+  "DRIVER_LICENSE_BACK",
+  "SSN_CARD",
+  "VOIDED_CHECK",
+  "INSURANCE_CARD",
+  "TRUCK_REGISTRATION",
+];
+const REQUIRED_DOCS_COMPANY = [
+  "DRIVER_LICENSE_FRONT",
+  "DRIVER_LICENSE_BACK",
+  "SSN_CARD",
+  "VOIDED_CHECK",
+];
+
+function requireAuth(req: any, res: any): boolean {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    res.status(401).json({ error: "Unauthorized" });
+    return false;
+  }
+  return true;
+}
 
 const LAMP_COMPANY_ID_ENV = process.env.LAMP_DEFAULT_COMPANY_ID; // optional override
 
@@ -389,6 +432,594 @@ export function registerRecruitingRoutes(app: Express) {
       res.json({ success: true, prescreen: screen });
     } catch (err) {
       console.error("[recruiting/applications/:id POST] error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // STAGE 4 — Document upload (PUBLIC — driver-facing)
+  // -----------------------------------------------------------------------
+  app.post(
+    "/api/recruiting/applications/:id/documents",
+    upload.single("file"),
+    async (req: any, res) => {
+      try {
+        const { id } = req.params;
+        const docType = String(req.body?.type || "").trim();
+        if (!docType) return res.status(400).json({ error: "type required" });
+        if (!req.file) return res.status(400).json({ error: "file required" });
+
+        const [appRow] = await db
+          .select()
+          .from(recruitingApplications)
+          .where(eq(recruitingApplications.id, id))
+          .limit(1);
+        if (!appRow) return res.status(404).json({ error: "Application not found" });
+
+        // Upload to Cloudinary
+        const folder = `traqiq/recruiting/${id}`;
+        const publicId = `${docType}_${Date.now()}`;
+        const isPdf = req.file.mimetype === "application/pdf";
+
+        const uploadResult = await new Promise<any>((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              folder,
+              public_id: publicId,
+              resource_type: isPdf ? "raw" : "image",
+              overwrite: false,
+              tags: ["recruiting", id, docType],
+              transformation: isPdf
+                ? undefined
+                : [{ width: 2400, height: 2400, crop: "limit" }, { quality: "auto:good" }],
+            },
+            (err, result) => (err ? reject(err) : resolve(result))
+          );
+          stream.end(req.file.buffer);
+        });
+
+        // Replace any existing doc of same type
+        await db
+          .delete(recruitingDocuments)
+          .where(
+            and(
+              eq(recruitingDocuments.applicationId, id),
+              eq(recruitingDocuments.type, docType)
+            )
+          );
+
+        await db.insert(recruitingDocuments).values({
+          applicationId: id,
+          type: docType,
+          filename: req.file.originalname,
+          storagePath: uploadResult.secure_url,
+          mimeType: req.file.mimetype,
+          sizeBytes: req.file.size,
+          verified: false,
+        });
+
+        // Check if all required docs are uploaded → transition to DOCS_RECEIVED
+        const uploaded = await db
+          .select({ type: recruitingDocuments.type })
+          .from(recruitingDocuments)
+          .where(eq(recruitingDocuments.applicationId, id));
+        const haveTypes = new Set(uploaded.map((d) => d.type));
+        const required = appRow.isOwnerOperator
+          ? REQUIRED_DOCS_OWNER_OP
+          : REQUIRED_DOCS_COMPANY;
+        const allReceived = required.every((t) => haveTypes.has(t));
+
+        if (allReceived && appRow.currentStage === "DOCS_REQUESTED") {
+          await transitionStage(id, "DOCS_RECEIVED", "All required documents received");
+          try {
+            await queueRecruitingNotification({
+              applicationId: id,
+              channel: "SMS",
+              templateKey: "DOCS_RECEIVED_SMS",
+              payload: { first_name: appRow.firstName },
+            });
+          } catch (e) {
+            console.error("[recruiting] DOCS_RECEIVED notif err:", e);
+          }
+        }
+
+        res.json({
+          success: true,
+          documentUrl: uploadResult.secure_url,
+          allReceived,
+        });
+      } catch (err) {
+        console.error("[recruiting/documents POST] error:", err);
+        res.status(500).json({ error: err instanceof Error ? err.message : "Upload failed" });
+      }
+    }
+  );
+
+  // List documents for an application (PUBLIC — driver checks own progress; recruiter via dashboard)
+  app.get("/api/recruiting/applications/:id/documents", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const docs = await db
+        .select({
+          id: recruitingDocuments.id,
+          type: recruitingDocuments.type,
+          filename: recruitingDocuments.filename,
+          mimeType: recruitingDocuments.mimeType,
+          sizeBytes: recruitingDocuments.sizeBytes,
+          verified: recruitingDocuments.verified,
+          createdAt: recruitingDocuments.createdAt,
+          // intentionally NOT exposing storagePath to public — only authenticated recruiter sees URLs
+        })
+        .from(recruitingDocuments)
+        .where(eq(recruitingDocuments.applicationId, id));
+
+      const [appRow] = await db
+        .select({ isOwnerOperator: recruitingApplications.isOwnerOperator })
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+
+      const required = appRow?.isOwnerOperator
+        ? REQUIRED_DOCS_OWNER_OP
+        : REQUIRED_DOCS_COMPANY;
+
+      res.json({ documents: docs, required });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // RECRUITER: full applicant record (auth required)
+  // -----------------------------------------------------------------------
+  app.get("/api/recruiting/applications/:id/full", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      const [appRow] = await db
+        .select()
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!appRow) return res.status(404).json({ error: "Application not found" });
+
+      const [events, documents, screenings, medical] = await Promise.all([
+        db
+          .select()
+          .from(recruitingStatusEvents)
+          .where(eq(recruitingStatusEvents.applicationId, id))
+          .orderBy(recruitingStatusEvents.createdAt),
+        db
+          .select()
+          .from(recruitingDocuments)
+          .where(eq(recruitingDocuments.applicationId, id)),
+        db
+          .select()
+          .from(recruitingScreenings)
+          .where(eq(recruitingScreenings.applicationId, id)),
+        db
+          .select()
+          .from(recruitingMedical)
+          .where(eq(recruitingMedical.applicationId, id)),
+      ]);
+
+      // Mask SSN to last-4 for recruiter view
+      const safeApp = { ...appRow, ssn: appRow.ssn ? `***-**-${appRow.ssn.slice(-4)}` : null };
+
+      res.json({
+        application: safeApp,
+        events,
+        documents,
+        screenings,
+        medical,
+      });
+    } catch (err) {
+      console.error("[recruiting/applications/:id/full] error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // RECRUITER notes
+  // -----------------------------------------------------------------------
+  app.get("/api/recruiting/applications/:id/notes", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      const rows = await db.execute(
+        sql`SELECT id, author_id as "authorId", body, created_at as "createdAt"
+            FROM recruiting_notes
+            WHERE application_id = ${id}
+            ORDER BY created_at DESC`
+      );
+      res.json({ notes: (rows as any).rows || rows });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
+    }
+  });
+
+  app.post("/api/recruiting/applications/:id/notes", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      const body = String(req.body?.body || "").trim();
+      if (!body) return res.status(400).json({ error: "body required" });
+      const authorId = req.user?.id || null;
+      await db.execute(
+        sql`INSERT INTO recruiting_notes (application_id, author_id, body)
+            VALUES (${id}, ${authorId}, ${body})`
+      );
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // STAGE 5 — Background / MVR / Clearinghouse (recruiter-triggered)
+  // -----------------------------------------------------------------------
+  app.post("/api/recruiting/applications/:id/screenings/run", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      const [appRow] = await db
+        .select()
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!appRow) return res.status(404).json({ error: "Application not found" });
+
+      await transitionStage(id, "BACKGROUND_RUNNING", "Background screenings initiated", req.user?.id);
+
+      const triggeredBy = req.user?.id || "RECRUITER";
+
+      // Fire all three mock vendors in parallel
+      const [mvr, clear, crim] = await Promise.all([
+        pullMvr({
+          licenseNumber: appRow.driverLicenseNumber || "",
+          licenseState: appRow.driverLicenseState || "",
+        }),
+        queryClearinghouse({
+          licenseNumber: appRow.driverLicenseNumber || "",
+          licenseState: appRow.driverLicenseState || "",
+          ssn: appRow.ssn || "",
+          dob: appRow.dob?.toISOString?.() || "",
+        }),
+        pullCriminal({
+          firstName: appRow.firstName,
+          lastName: appRow.lastName,
+          ssn: appRow.ssn || "",
+          dob: appRow.dob?.toISOString?.() || "",
+        }),
+      ]);
+
+      // Persist results
+      await db.insert(recruitingScreenings).values([
+        { applicationId: id, vendor: mvr.vendor, kind: "MVR", status: mvr.status, rawResult: mvr as any },
+        { applicationId: id, vendor: clear.vendor, kind: "CLEARINGHOUSE", status: clear.status, rawResult: clear as any },
+        { applicationId: id, vendor: crim.vendor, kind: "CRIMINAL", status: crim.status, rawResult: crim as any },
+      ]);
+
+      // Update applicant summary fields
+      await db
+        .update(recruitingApplications)
+        .set({
+          mvrPullStatus: mvr.status,
+          mvrPullDate: new Date(),
+          mvrPullVendor: mvr.vendor,
+          clearinghouseStatus: clear.status,
+          clearinghouseDate: new Date(),
+          criminalBackgroundStatus: crim.status,
+          criminalBackgroundDate: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(recruitingApplications.id, id));
+
+      const allPass =
+        mvr.status === "CLEAN" &&
+        clear.status === "NOT_PROHIBITED" &&
+        crim.status === "CLEAR";
+
+      if (allPass) {
+        await transitionStage(id, "BACKGROUND_PASS", "All background checks passed", triggeredBy);
+        try {
+          await queueRecruitingNotification({
+            applicationId: id,
+            channel: "SMS",
+            templateKey: "BACKGROUND_PASS_SMS",
+            payload: { first_name: appRow.firstName },
+          });
+        } catch (e) {
+          console.error("[recruiting] BACKGROUND_PASS notif err:", e);
+        }
+      } else {
+        const reasons: string[] = [];
+        if (mvr.status !== "CLEAN") reasons.push("MVR violations");
+        if (clear.status !== "NOT_PROHIBITED") reasons.push("Clearinghouse prohibited");
+        if (crim.status !== "CLEAR") reasons.push("Criminal record");
+        await transitionStage(
+          id,
+          "BACKGROUND_FAIL",
+          `Background failed: ${reasons.join("; ")}`,
+          triggeredBy
+        );
+      }
+
+      res.json({ success: true, mvr, clearinghouse: clear, criminal: crim, passed: allPass });
+    } catch (err) {
+      console.error("[recruiting/screenings/run] error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // STAGE 6 — Schedule drug test + DOT physical
+  // -----------------------------------------------------------------------
+  app.post("/api/recruiting/applications/:id/medical/schedule", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      const [appRow] = await db
+        .select()
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!appRow) return res.status(404).json({ error: "Application not found" });
+
+      const [drugTest, physical] = await Promise.all([
+        scheduleDrugTest({
+          applicationId: id,
+          firstName: appRow.firstName,
+          lastName: appRow.lastName,
+        }),
+        scheduleDotPhysical({
+          applicationId: id,
+          firstName: appRow.firstName,
+          lastName: appRow.lastName,
+        }),
+      ]);
+
+      await db.insert(recruitingMedical).values([
+        {
+          applicationId: id,
+          kind: "DRUG_TEST",
+          vendor: drugTest.vendor,
+          status: "SCHEDULED",
+          scheduledFor: new Date(drugTest.scheduledFor),
+          rawResult: drugTest as any,
+        },
+        {
+          applicationId: id,
+          kind: "DOT_PHYSICAL",
+          vendor: physical.vendor,
+          status: "SCHEDULED",
+          scheduledFor: new Date(physical.scheduledFor),
+          rawResult: physical as any,
+        },
+      ]);
+
+      await transitionStage(id, "MEDICAL_REQUESTED", "Drug test + DOT physical scheduled", req.user?.id);
+
+      res.json({ success: true, drugTest, physical });
+    } catch (err) {
+      console.error("[recruiting/medical/schedule] error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // STAGE 6.5 — Mark medical complete (mock: auto-pass; live: webhook from Concentra)
+  // -----------------------------------------------------------------------
+  app.post("/api/recruiting/applications/:id/medical/complete", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      const passed = req.body?.passed !== false;
+      const [appRow] = await db
+        .select()
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!appRow) return res.status(404).json({ error: "Application not found" });
+
+      await db
+        .update(recruitingApplications)
+        .set({
+          drugTestStatus: passed ? "NEGATIVE" : "POSITIVE",
+          drugTestDate: new Date(),
+          dotPhysicalStatus: passed ? "PASSED" : "FAILED",
+          dotPhysicalDate: new Date(),
+          medicalCardNumber: passed ? `MC-${id.slice(0, 8).toUpperCase()}` : null,
+          medicalCardExpiration: passed ? new Date(Date.now() + 24 * 30 * 24 * 60 * 60 * 1000) : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(recruitingApplications.id, id));
+
+      if (passed) {
+        await transitionStage(id, "MEDICAL_PASS", "Drug test + DOT physical passed", req.user?.id);
+        try {
+          await queueRecruitingNotification({
+            applicationId: id,
+            channel: "SMS",
+            templateKey: "MEDICAL_PASS_SMS",
+            payload: { first_name: appRow.firstName },
+          });
+        } catch (e) {
+          console.error("[recruiting] MEDICAL_PASS notif err:", e);
+        }
+      } else {
+        await transitionStage(id, "MEDICAL_FAIL", "Medical screening failed", req.user?.id);
+      }
+
+      res.json({ success: true, passed });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // STAGE 7 — Send lease/W-2 for e-signature
+  // -----------------------------------------------------------------------
+  app.post("/api/recruiting/applications/:id/sign-request", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      const [appRow] = await db
+        .select()
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!appRow) return res.status(404).json({ error: "Application not found" });
+
+      const documentKey = appRow.isOwnerOperator
+        ? "OWNER_OPERATOR_LEASE"
+        : "COMPANY_DRIVER_W2";
+
+      const sigReq = await createSignatureRequest({
+        applicationId: id,
+        documentKey,
+        signerName: `${appRow.firstName} ${appRow.lastName}`,
+        signerEmail: appRow.email,
+      });
+
+      await db
+        .update(recruitingApplications)
+        .set({
+          agreementType: documentKey,
+          agreementDocumentUrl: sigReq.signingUrl,
+          updatedAt: new Date(),
+        })
+        .where(eq(recruitingApplications.id, id));
+
+      // For mock mode, auto-complete the signature for testing convenience
+      // In live mode this comes from DocuSign webhook
+      const autoComplete = process.env.RECRUITING_LIVE_VENDORS !== "true";
+      if (autoComplete) {
+        await db
+          .update(recruitingApplications)
+          .set({
+            agreementSignedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(recruitingApplications.id, id));
+        await transitionStage(id, "AGREEMENT_SIGNED", "Agreement signed (mock auto-complete)", req.user?.id);
+      }
+
+      res.json({ success: true, signingUrl: sigReq.signingUrl, autoCompleted: autoComplete });
+    } catch (err) {
+      console.error("[recruiting/sign-request] error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // STAGE 8 — Mark orientation complete
+  // -----------------------------------------------------------------------
+  app.post("/api/recruiting/applications/:id/orientation/complete", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      await db
+        .update(recruitingApplications)
+        .set({ orientationCompletedAt: new Date(), updatedAt: new Date() })
+        .where(eq(recruitingApplications.id, id));
+      await transitionStage(id, "ORIENTATION_DONE", "Orientation completed", req.user?.id);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // STAGE 9 — Assign truck
+  // -----------------------------------------------------------------------
+  app.post("/api/recruiting/applications/:id/truck/assign", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      const truckUnit = String(req.body?.truckUnit || "").trim() || `T-${Date.now()}`;
+      await db
+        .update(recruitingApplications)
+        .set({
+          assignedTruckUnit: truckUnit,
+          truckAssignmentDate: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(recruitingApplications.id, id));
+      await transitionStage(id, "TRUCK_ASSIGNED", `Truck ${truckUnit} assigned`, req.user?.id);
+      res.json({ success: true, truckUnit });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // STAGE 10 — Promote to active driver. Creates row in existing drivers table.
+  // -----------------------------------------------------------------------
+  app.post("/api/recruiting/applications/:id/activate", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { id } = req.params;
+      const [appRow] = await db
+        .select()
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!appRow) return res.status(404).json({ error: "Application not found" });
+
+      if (appRow.driverId) {
+        return res.json({ success: true, driverId: appRow.driverId, alreadyActive: true });
+      }
+
+      // Normalize phone to +1XXXXXXXXXX
+      const digits = (appRow.phone || "").replace(/\D/g, "");
+      const e164Phone = digits.length === 10 ? `+1${digits}` : digits.length === 11 ? `+${digits}` : appRow.phone;
+
+      const [created] = await db
+        .insert(drivers)
+        .values({
+          companyId: appRow.companyId || null,
+          name: `${appRow.firstName} ${appRow.lastName}`,
+          email: appRow.email,
+          phone: appRow.phone,
+          phoneNumber: e164Phone,
+          status: "available",
+          licenseNumber: appRow.driverLicenseNumber || null,
+          equipmentType: "straight_box_truck",
+          isOnboarded: true,
+          enableSmsNotifications: true,
+          smsConsentAt: appRow.applicationSignedAt || appRow.consentSmsAt || new Date(),
+          smsConsentSource: "recruiting_funnel",
+          currentMood: "🙂",
+        } as any)
+        .returning({ id: drivers.id });
+
+      // Backlink application → driver, mark ACTIVE
+      await db
+        .update(recruitingApplications)
+        .set({
+          driverId: created.id,
+          activeFromDate: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(recruitingApplications.id, id));
+
+      await transitionStage(id, "ACTIVE", `Activated as driver ${created.id}`, req.user?.id);
+
+      try {
+        await queueRecruitingNotification({
+          applicationId: id,
+          channel: "SMS",
+          templateKey: "ACTIVE_SMS",
+          payload: { first_name: appRow.firstName },
+        });
+      } catch (e) {
+        console.error("[recruiting] ACTIVE notif err:", e);
+      }
+
+      res.json({ success: true, driverId: created.id });
+    } catch (err) {
+      console.error("[recruiting/activate] error:", err);
       res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
     }
   });

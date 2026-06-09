@@ -250,9 +250,9 @@ export default function RecruitingDashboard() {
                       </td>
                       <td className="px-4 text-slate-500 text-xs">{relativeTime(a.updatedAt)}</td>
                       <td className="px-4">
-                        <Link href={`/apply/${a.id}/status`}>
+                        <Link href={`/recruiting/${a.id}`}>
                           <span className="text-emerald-600 hover:text-emerald-700 hover:underline text-xs font-semibold cursor-pointer">
-                            View →
+                            Open →
                           </span>
                         </Link>
                       </td>
