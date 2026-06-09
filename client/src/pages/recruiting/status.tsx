@@ -184,6 +184,36 @@ export default function RecruitingStatus() {
                   </p>
                 </>
               )}
+              {(app.currentStage === "AGREEMENT_SIGNED" || app.currentStage === "ORIENTATION") && (
+                <>
+                  <h3 className="font-bold text-emerald-700">Time for orientation</h3>
+                  <p className="mt-1 text-sm text-slate-700">
+                    8 quick modules. Read each, check the box, get cleared for truck assignment.
+                  </p>
+                  <a
+                    href={`/apply/${id}/orientation`}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-white text-sm font-semibold hover:bg-emerald-700"
+                  >
+                    Start Orientation →
+                  </a>
+                </>
+              )}
+              {app.currentStage === "ORIENTATION_DONE" && (
+                <>
+                  <h3 className="font-bold">Orientation complete — truck coming</h3>
+                  <p className="mt-1 text-sm text-slate-700">
+                    Your dispatcher is assigning a truck. You&apos;ll be notified shortly.
+                  </p>
+                </>
+              )}
+              {app.currentStage === "TRUCK_ASSIGNED" && (
+                <>
+                  <h3 className="font-bold text-emerald-700">Truck assigned</h3>
+                  <p className="mt-1 text-sm text-slate-700">
+                    Your truck is ready. First load coming through TraqIQ shortly.
+                  </p>
+                </>
+              )}
               {app.currentStage === "ACTIVE" && (
                 <>
                   <h3 className="font-bold text-emerald-700">Active driver — welcome</h3>

@@ -391,6 +391,29 @@ export default function RecruiterApplicant() {
                             View
                           </a>
                         )}
+                        <Button
+                          size="sm"
+                          variant={d.verified ? "outline" : "default"}
+                          className={`h-7 px-2 text-xs ${d.verified ? "" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
+                          disabled={busy === "Verify"}
+                          onClick={async () => {
+                            setBusy("Verify");
+                            try {
+                              await fetch(`/api/recruiting/documents/${d.id}/verify`, {
+                                method: "PATCH",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ verified: !d.verified }),
+                              });
+                              await refresh();
+                              toast({ title: d.verified ? "Marked unverified" : "Verified" });
+                            } finally {
+                              setBusy(null);
+                            }
+                          }}
+                        >
+                          {d.verified ? "Unverify" : "Verify"}
+                        </Button>
                       </div>
                     </div>
                   ))}

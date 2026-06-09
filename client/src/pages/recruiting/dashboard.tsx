@@ -75,6 +75,7 @@ export default function RecruitingDashboard() {
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [analytics, setAnalytics] = useState<any>(null);
 
   useEffect(() => {
     fetch("/api/recruiting/applications", { credentials: "include" })
@@ -84,6 +85,10 @@ export default function RecruitingDashboard() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+    fetch("/api/recruiting/analytics", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => setAnalytics(d))
+      .catch(() => {});
   }, []);
 
   const filtered =
@@ -169,18 +174,59 @@ export default function RecruitingDashboard() {
         <StatTile icon={<XCircle className="h-5 w-5" />} label="Dead End" value={counts.dead} color="text-slate-600" />
       </div>
 
-      {/* Funnel breakdown */}
+      {/* Funnel breakdown + 90-day conversion analytics */}
       <Card>
         <CardContent className="p-6">
-          <h2 className="text-lg font-bold mb-4">Funnel Breakdown</h2>
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-5 lg:grid-cols-10">
-            {FUNNEL_GROUPS.map((g) => (
-              <div key={g.key} className="rounded-lg border p-3">
-                <div className="text-xs text-slate-500">{g.label}</div>
-                <div className="text-2xl font-bold mt-1">{stageCounts[g.key]}</div>
+          <div className="flex items-baseline justify-between mb-4">
+            <h2 className="text-lg font-bold">Funnel Breakdown</h2>
+            {analytics?.totalApplications > 0 && (
+              <div className="text-xs text-slate-500">
+                Last 90 days: {analytics.totalApplications} applicants
               </div>
-            ))}
+            )}
           </div>
+          <div className="grid gap-2 grid-cols-2 sm:grid-cols-5 lg:grid-cols-10">
+            {FUNNEL_GROUPS.map((g) => {
+              const pct = analytics?.stageStats?.find(
+                (s: any) => s.stage === g.matches[0] || s.stage === g.matches[g.matches.length - 1]
+              )?.pctOfLeads;
+              return (
+                <div key={g.key} className="rounded-lg border p-3">
+                  <div className="text-xs text-slate-500">{g.label}</div>
+                  <div className="text-2xl font-bold mt-1">{stageCounts[g.key]}</div>
+                  {typeof pct === "number" && (
+                    <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
+                      {pct}% of leads
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Time-in-stage averages */}
+          {analytics?.avgTimeInStage?.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-slate-200">
+              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                Average time between stages (last 90 days)
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {analytics.avgTimeInStage.slice(0, 6).map((t: any) => (
+                  <div key={t.transition} className="rounded-md bg-slate-50 px-3 py-2 text-xs">
+                    <div className="text-slate-600">{t.transition.replace(/_/g, " ")}</div>
+                    <div className="font-semibold text-slate-900 mt-0.5">
+                      {t.avgHours < 1
+                        ? `${Math.round(t.avgHours * 60)} min`
+                        : t.avgHours < 24
+                          ? `${t.avgHours.toFixed(1)} hrs`
+                          : `${(t.avgHours / 24).toFixed(1)} days`}{" "}
+                      <span className="font-normal text-slate-500">avg ({t.samples})</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

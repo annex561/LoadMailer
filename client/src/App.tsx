@@ -71,6 +71,7 @@ const RecruitingLanding = lazy(() => import("@/pages/recruiting/landing"));
 const RecruitingApplication = lazy(() => import("@/pages/recruiting/application"));
 const RecruitingStatus = lazy(() => import("@/pages/recruiting/status"));
 const RecruitingDocuments = lazy(() => import("@/pages/recruiting/documents"));
+const RecruitingOrientation = lazy(() => import("@/pages/recruiting/orientation"));
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const RecruitingDashboard = lazy(() => import("@/pages/recruiting/dashboard"));
 
@@ -172,6 +173,7 @@ function App() {
               <Route path="/apply/:id" component={RecruitingApplication} />
               <Route path="/apply/:id/status" component={RecruitingStatus} />
               <Route path="/apply/:id/documents" component={RecruitingDocuments} />
+              <Route path="/apply/:id/orientation" component={RecruitingOrientation} />
 
               {/* Standalone driver pages without sidebar/header - for driver self-service only */}
               <Route path="/driver-onboarding" component={DriverOnboarding} />

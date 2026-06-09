@@ -3,7 +3,7 @@
 
 import { type Express } from "express";
 import { db } from "../db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import {
   recruitingApplications,
   recruitingStatusEvents,
@@ -1022,5 +1022,133 @@ export function registerRecruitingRoutes(app: Express) {
       console.error("[recruiting/activate] error:", err);
       res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
     }
+  });
+
+  // -----------------------------------------------------------------------
+  // Document verification (recruiter — toggle verified flag)
+  // -----------------------------------------------------------------------
+  app.patch("/api/recruiting/documents/:docId/verify", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      const { docId } = req.params;
+      const verified = req.body?.verified !== false;
+      await db
+        .update(recruitingDocuments)
+        .set({
+          verified,
+          verifiedAt: verified ? new Date() : null,
+          verifiedBy: verified ? req.user?.id || "RECRUITER" : null,
+        })
+        .where(eq(recruitingDocuments.id, docId));
+      res.json({ success: true, verified });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // FUNNEL ANALYTICS — conversion rates + time-in-stage
+  // -----------------------------------------------------------------------
+  app.get("/api/recruiting/analytics", async (req: any, res) => {
+    if (!requireAuth(req, res)) return;
+    try {
+      // Pull all status events for the trailing 90 days so we can compute conversions
+      const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      const events = await db
+        .select()
+        .from(recruitingStatusEvents)
+        .where(gte(recruitingStatusEvents.createdAt, cutoff))
+        .orderBy(recruitingStatusEvents.createdAt);
+
+      // Count distinct applications that have EVER reached each stage
+      const reachedByApp: Record<string, Set<string>> = {};
+      const firstReachAt: Record<string, Record<string, Date>> = {};
+      for (const e of events) {
+        const aid = e.applicationId;
+        const stage = e.toStage;
+        if (!reachedByApp[aid]) reachedByApp[aid] = new Set();
+        if (!firstReachAt[aid]) firstReachAt[aid] = {};
+        if (!reachedByApp[aid].has(stage)) {
+          reachedByApp[aid].add(stage);
+          firstReachAt[aid][stage] = e.createdAt as any as Date;
+        }
+      }
+
+      const totalApps = Object.keys(reachedByApp).length;
+      const FUNNEL_ORDER = [
+        "LEAD",
+        "APPLIED",
+        "PRESCREENED_PASS",
+        "DOCS_RECEIVED",
+        "BACKGROUND_PASS",
+        "MEDICAL_PASS",
+        "AGREEMENT_SIGNED",
+        "ORIENTATION_DONE",
+        "TRUCK_ASSIGNED",
+        "ACTIVE",
+      ];
+
+      const stageStats = FUNNEL_ORDER.map((stage) => {
+        let reached = 0;
+        for (const aid in reachedByApp) {
+          if (reachedByApp[aid].has(stage)) reached++;
+        }
+        return { stage, reached, pctOfLeads: totalApps > 0 ? Math.round((reached / totalApps) * 100) : 0 };
+      });
+
+      // Time-in-stage averages (between consecutive funnel stages)
+      const transitions: Record<string, { totalMs: number; count: number }> = {};
+      for (const aid in firstReachAt) {
+        for (let i = 0; i < FUNNEL_ORDER.length - 1; i++) {
+          const fromS = FUNNEL_ORDER[i];
+          const toS = FUNNEL_ORDER[i + 1];
+          const fromT = firstReachAt[aid][fromS];
+          const toT = firstReachAt[aid][toS];
+          if (fromT && toT) {
+            const key = `${fromS}→${toS}`;
+            if (!transitions[key]) transitions[key] = { totalMs: 0, count: 0 };
+            transitions[key].totalMs += new Date(toT).getTime() - new Date(fromT).getTime();
+            transitions[key].count += 1;
+          }
+        }
+      }
+      const avgTimeInStage = Object.entries(transitions).map(([key, v]) => {
+        const avgHrs = v.count > 0 ? v.totalMs / v.count / (60 * 60 * 1000) : 0;
+        return { transition: key, avgHours: Math.round(avgHrs * 10) / 10, samples: v.count };
+      });
+
+      res.json({
+        windowDays: 90,
+        totalApplications: totalApps,
+        stageStats,
+        avgTimeInStage,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // Mock signature completion page — for testing the lease/W-2 flow without
+  // actually wiring DocuSign. Renders a simple e-sign UI; clicking "Sign"
+  // transitions stage to AGREEMENT_SIGNED.
+  // -----------------------------------------------------------------------
+  app.get("/api/recruiting/applications/:id/mock-sign", async (req, res) => {
+    const { id } = req.params;
+    const doc = String(req.query?.doc || "AGREEMENT");
+    const [appRow] = await db
+      .select({ firstName: recruitingApplications.firstName, lastName: recruitingApplications.lastName })
+      .from(recruitingApplications)
+      .where(eq(recruitingApplications.id, id))
+      .limit(1);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Mock Sign — LAMP Logistics</title>
+<style>body{font-family:-apple-system,Segoe UI,sans-serif;background:#f1f5f9;margin:0;padding:40px}main{max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08)}h1{margin:0 0 8px;font-size:22px}.muted{color:#64748b;font-size:13px}.sig{margin:24px 0;border:2px dashed #cbd5e1;border-radius:10px;padding:32px;text-align:center;color:#94a3b8}.sig.signed{border-color:#059669;background:#ecfdf5;color:#065f46}.btn{display:inline-block;background:#059669;color:#fff;padding:14px 28px;border-radius:10px;font-weight:700;text-decoration:none;border:0;cursor:pointer;font-size:15px}.note{background:#fef3c7;border-radius:8px;padding:12px;font-size:12px;color:#78350f;margin-top:24px}</style></head>
+<body><main><h1>Sign your ${doc.includes("LEASE") ? "Owner-Operator Lease" : "W-2 Employment Agreement"}</h1>
+<div class="muted">Signer: ${appRow?.firstName || "Driver"} ${appRow?.lastName || ""} · MC-1725755</div>
+<div class="sig" id="sigBox">Click to sign</div>
+<button class="btn" onclick="document.getElementById('sigBox').textContent='✓ Signed';document.getElementById('sigBox').className='sig signed';this.disabled=true;this.textContent='Signed';setTimeout(()=>location.href='/apply/${id}/status',1000)">Sign Now</button>
+<div class="note"><strong>Demo mode.</strong> When you wire real DocuSign, the live envelope replaces this page and the signature webhook fires.</div>
+</main></body></html>`);
   });
 }

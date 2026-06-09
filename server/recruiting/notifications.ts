@@ -83,26 +83,96 @@ const SMS_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender> 
   }),
 };
 
+// Branded HTML email frame — single source of truth for the LAMP look.
+function brandedEmail(opts: {
+  preview: string;
+  heading: string;
+  bodyHtml: string;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  footer?: string;
+}): string {
+  const cta = opts.ctaLabel && opts.ctaUrl
+    ? `<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0"><tr><td>
+        <a href="${opts.ctaUrl}" style="background:#059669;color:#ffffff;display:inline-block;font-weight:700;font-size:16px;text-decoration:none;padding:14px 28px;border-radius:10px">${opts.ctaLabel}</a>
+       </td></tr></table>`
+    : "";
+
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LAMP Logistics</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a">
+<span style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden">${opts.preview}</span>
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f1f5f9;padding:24px 16px">
+  <tr><td align="center">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="560" style="max-width:560px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.06)">
+      <tr><td style="padding:24px 32px 16px 32px;border-bottom:1px solid #e2e8f0">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>
+          <td style="width:48px;padding-right:14px"><div style="width:44px;height:44px;background:linear-gradient(135deg,#059669,#047857);border-radius:11px;color:#ffffff;font-weight:700;font-size:22px;line-height:44px;text-align:center">L</div></td>
+          <td><div style="font-weight:700;font-size:18px;color:#0f172a">LAMP Logistics</div><div style="font-size:11px;color:#64748b;letter-spacing:0.5px">MC-1725755 · DOT 4397421</div></td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:32px">
+        <h1 style="margin:0 0 16px 0;font-size:24px;color:#0f172a;font-weight:700;line-height:1.3">${opts.heading}</h1>
+        <div style="font-size:15px;line-height:1.6;color:#334155">${opts.bodyHtml}</div>
+        ${cta}
+        ${opts.footer ? `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b">${opts.footer}</div>` : ""}
+      </td></tr>
+      <tr><td style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b">
+        Questions? <a href="tel:+18333629813" style="color:#059669;text-decoration:none">📞 (833) 362-9813</a> · <a href="mailto:recruit@lamplogistics.com" style="color:#059669;text-decoration:none">recruit@lamplogistics.com</a><br>
+        © ${new Date().getFullYear()} LAMP Logistics LLC · MC-1725755 · DOT 4397421
+      </td></tr>
+    </table>
+  </td></tr>
+</table></body></html>`;
+}
+
 const EMAIL_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender> = {
-  LEAD_CAPTURE_EMAIL: (p) => ({
-    subject: "Welcome to LAMP Logistics — finish your application",
-    text: `Hi ${p.first_name || "there"},\n\nThanks for your interest in driving with LAMP Logistics. Continue your application here:\n${p.app_url}\n\nQuestions: recruit@lamplogistics.com or (833) 362-9813.\n\nLAMP Logistics LLC · MC-1725755`,
-    html: `<p>Hi ${p.first_name || "there"},</p><p>Thanks for your interest in driving with LAMP Logistics. <a href="${p.app_url}">Continue your application</a>.</p><p>Questions: recruit@lamplogistics.com or (833) 362-9813.</p><p style="color:#888;font-size:12px">LAMP Logistics LLC · MC-1725755 · DOT 4397421</p>`,
-  }),
+  LEAD_CAPTURE_EMAIL: (p) => {
+    const heading = `${p.first_name ? p.first_name + ", w" : "W"}elcome to LAMP Logistics`;
+    return {
+      subject: "Welcome to LAMP Logistics — finish your application",
+      text: `Hi ${p.first_name || "there"},\n\nThanks for your interest in driving with LAMP. Continue your application:\n${p.app_url}\n\nQuestions: (833) 362-9813.\n\nLAMP Logistics LLC · MC-1725755`,
+      html: brandedEmail({
+        preview: "Finish your LAMP application in under 10 minutes",
+        heading,
+        bodyHtml: `<p>Thanks for your interest in driving with LAMP. We're a box-truck carrier built by drivers, for drivers — weekly pay, real authority, exclusive dispatcher.</p><p><strong>Your application is started.</strong> Finish the DOT-required portion now and we'll text you the result within 24 hours.</p>`,
+        ctaLabel: "Continue Application →",
+        ctaUrl: p.app_url,
+        footer: `Most drivers finish in 10–15 minutes. Progress is saved as you go.`,
+      }),
+    };
+  },
   APPLICATION_RECEIVED_EMAIL: (p) => ({
     subject: "We received your LAMP application",
-    text: `Hi ${p.first_name || "there"},\n\nYour DOT-compliant application is in our system. We're running pre-screening now. We'll text + email you the result within 24 hours.\n\nQuestions: (833) 362-9813.`,
-    html: `<p>Hi ${p.first_name || "there"},</p><p>Your DOT-compliant application is in our system. Pre-screening result within 24 hours.</p><p>Questions: (833) 362-9813.</p>`,
+    text: `Hi ${p.first_name || "there"},\n\nWe have your DOT application. Pre-screening result within 24 hours.\n\nQuestions: (833) 362-9813.`,
+    html: brandedEmail({
+      preview: "Pre-screening result coming within 24 hours",
+      heading: `${p.first_name || "Driver"}, we got your application`,
+      bodyHtml: `<p>Your DOT-compliant driver application is in our system. We're running pre-screening now — most applicants hear back within 24 hours.</p><p>If you pass, you'll get a text with a link to upload your driver's license, SSN card, and voided check.</p>`,
+      ctaLabel: "Check Status →",
+      ctaUrl: p.status_url,
+    }),
   }),
   DOCS_REQUESTED_EMAIL: (p) => ({
-    subject: "Next step: upload your documents",
-    text: `Hi ${p.first_name || "there"},\n\nYou passed pre-screening. Please upload your driver's license, SSN card, and voided check here:\n${p.docs_url}\n\nQuestions: (833) 362-9813.`,
-    html: `<p>Hi ${p.first_name || "there"},</p><p>You passed pre-screening. <a href="${p.docs_url}">Upload your documents</a>.</p><p>Questions: (833) 362-9813.</p>`,
+    subject: "You passed pre-screening — upload your documents",
+    text: `Hi ${p.first_name || "there"},\n\nYou passed pre-screening. Upload your documents:\n${p.docs_url}\n\nQuestions: (833) 362-9813.`,
+    html: brandedEmail({
+      preview: "Snap photos of 4-6 documents to keep your application moving",
+      heading: `${p.first_name || "Driver"}, you passed pre-screening 🎉`,
+      bodyHtml: `<p>Great news — you cleared our initial review. The fastest way to start driving is to upload your documents now.</p><p>You'll need: driver's license (front + back), SSN card or W-2, and a voided check. Owner-operators also upload truck insurance + registration.</p><p>Phone camera works fine.</p>`,
+      ctaLabel: "Upload Documents →",
+      ctaUrl: p.docs_url,
+      footer: `Most drivers finish uploading in under 5 minutes.`,
+    }),
   }),
   DISQUALIFICATION_EMAIL: (p) => ({
     subject: "Your LAMP Logistics application",
-    text: `Hi ${p.first_name || "there"},\n\nWe regret to inform you that based on the information you provided, we are unable to move forward with your application at this time. You may re-apply in 12 months.\n\nQuestions: recruit@lamplogistics.com.`,
-    html: `<p>Hi ${p.first_name || "there"},</p><p>We regret to inform you that based on the information you provided, we are unable to move forward with your application at this time. You may re-apply in 12 months.</p><p>Questions: recruit@lamplogistics.com.</p>`,
+    text: `Hi ${p.first_name || "there"},\n\nWe're unable to move forward with your application at this time. You may re-apply in 12 months.\n\nQuestions: recruit@lamplogistics.com.`,
+    html: brandedEmail({
+      preview: "Application not approved at this time",
+      heading: `${p.first_name || "Driver"}, your application`,
+      bodyHtml: `<p>Thank you for applying with LAMP Logistics. Based on the information you provided, we're unable to move forward with your application at this time.</p><p>You may re-apply in 12 months. If your situation changes before then, please reach out directly.</p>`,
+      footer: `LAMP Logistics is an equal opportunity employer.`,
+    }),
   }),
 };
 
