@@ -1,6 +1,7 @@
 // Pure, unit-tested predicates for SP2 driver lines. Twilio API calls are added in Task 3.
 
 export const DRIVER_INBOUND_PATH = "/api/twilio/voice/driver-inbound";
+export const WHISPER_PATH = "/api/twilio/voice/whisper";
 
 export function areaCodeOf(phone: string | null | undefined): string | null {
   if (!phone) return null;
@@ -49,7 +50,15 @@ function esc(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
-export function buildInboundTwiml(driver: { phone: string } | null | undefined, fromNumber: string): string {
+// Line-whisper: TwiML played to the ANSWERING party (before the caller is
+// bridged) so the owner knows which inbound line is ringing. Pointed at by the
+// <Number url="…"> below. The caller never hears this. Single <Response>.
+// Regression: server/__tests__/line-whisper.test.ts
+export function buildWhisperTwiml(label: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Joanna">${esc(label)}</Say></Response>`;
+}
+
+export function buildInboundTwiml(driver: { phone: string } | null | undefined, fromNumber: string, whisperLabel?: string | null): string {
   if (!driver || !driver.phone) {
     return `<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Joanna">Sorry, this number is not in service.</Say><Hangup/></Response>`;
   }
@@ -57,10 +66,16 @@ export function buildInboundTwiml(driver: { phone: string } | null | undefined, 
   // attribute entirely so a malformed/spoofed From can never break the TwiML.
   const valid = /^\+[1-9]\d{6,14}$/.test(fromNumber || "");
   const callerId = valid ? ` callerId="${esc(fromNumber)}"` : "";
+  // Line-whisper: when a non-empty label is supplied, point the <Number> at the
+  // whisper endpoint so the answering party hears it before bridging. Absent/empty
+  // → no url= (SP2 behavior unchanged). The query is built then xml-escaped so the
+  // attribute is always well-formed. Regression: server/__tests__/line-whisper.test.ts
+  const label = (whisperLabel ?? "").trim();
+  const numberUrl = label ? ` url="${esc(`${WHISPER_PATH}?label=${encodeURIComponent(label)}`)}"` : "";
   return `<?xml version="1.0" encoding="UTF-8"?><Response>` +
     `<Say voice="Polly.Joanna">Thank you for calling. This call may be recorded for quality and training purposes.</Say>` +
     `<Dial record="record-from-answer"${callerId} timeout="25" answerOnBridge="true" action="${DRIVER_INBOUND_PATH}/after" method="POST">` +
-    `<Number>${esc(driver.phone)}</Number></Dial></Response>`;
+    `<Number${numberUrl}>${esc(driver.phone)}</Number></Dial></Response>`;
 }
 
 export function buildAfterTwiml(dialCallStatus: string): string {

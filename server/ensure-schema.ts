@@ -22,6 +22,8 @@ export async function ensureSchema(): Promise<void> {
     // every drivers column in schema.ts must appear in this array or prod INSERTs fail.
     ['voice_number', 'TEXT'],
     ['voice_number_sid', 'TEXT'],
+    // line-whisper: per-line whisper word played to the answering party on inbound forward.
+    ['whisper_label', 'TEXT'],
     ['city', 'TEXT'],
     ['enable_sms_notifications', 'BOOLEAN NOT NULL DEFAULT false'],
     // A2P 10DLC compliance — consent + opt-out audit trail (PR #39).
@@ -179,6 +181,7 @@ export async function ensureSchema(): Promise<void> {
     try {
       await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS voice_number TEXT`);
       await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS voice_number_sid TEXT`);
+      await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS whisper_label TEXT`);
       await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS drivers_voice_number_unique ON drivers(voice_number) WHERE voice_number IS NOT NULL`);
     } catch (e: any) {
       log(`⚠️ drivers voice_number columns: ${e.message}`);
