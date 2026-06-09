@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeNanp, isDialableDestination, buildPortalOutboundTwiml, buildCalleeNoticeTwiml, rateCheck, isPollerOutboundSkip } from "../portal-dialer-service";
+import { normalizeNanp, isDialableDestination, buildPortalOutboundTwiml, buildCalleeNoticeTwiml, rateCheck, isPollerOutboundSkip, mintVoiceToken } from "../portal-dialer-service";
 
 describe("normalizeNanp / isDialableDestination", () => {
   it("normalizes 10-digit, 11-digit, and +1 forms", () => {
@@ -32,6 +32,11 @@ describe("buildPortalOutboundTwiml", () => {
     const x = buildPortalOutboundTwiml({ to: "+12055550148", callerId: "+18333629813", recordingCallbackUrl: "https://x/cb" });
     expect(x).not.toContain("url=");
   });
+  it("XML-escapes a raw & in the recording callback URL (avoids Twilio error 12300)", () => {
+    const x = buildPortalOutboundTwiml({ to: "+12055550148", callerId: "+18333629813", recordingCallbackUrl: "https://x/cb?a=1&b=2" });
+    expect(x).toContain("a=1&amp;b=2");
+    expect(x).not.toContain("?a=1&b=2");
+  });
 });
 
 describe("buildCalleeNoticeTwiml", () => {
@@ -60,5 +65,36 @@ describe("isPollerOutboundSkip", () => {
     expect(isPollerOutboundSkip(undefined, "outbound-dial")).toBe(true);
     expect(isPollerOutboundSkip(undefined, "inbound")).toBe(false);
     expect(isPollerOutboundSkip("outbound", "outbound-api")).toBe(false); // callback path proceeds
+  });
+  it("also skips when the poller value is null (null-safe sentinel)", () => {
+    expect(isPollerOutboundSkip(null, "outbound-api")).toBe(true);
+    expect(isPollerOutboundSkip(null, "inbound")).toBe(false);
+  });
+});
+
+describe("mintVoiceToken", () => {
+  it("mints a token with a server-set driver-<id> identity", () => {
+    const prev = {
+      sid: process.env.TWILIO_ACCOUNT_SID,
+      key: process.env.TWILIO_API_KEY,
+      secret: process.env.TWILIO_API_SECRET,
+      app: process.env.TWILIO_TWIML_APP_SID,
+    };
+    process.env.TWILIO_ACCOUNT_SID = "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    process.env.TWILIO_API_KEY = "SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    process.env.TWILIO_API_SECRET = "dummysecret";
+    process.env.TWILIO_TWIML_APP_SID = "APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+    try {
+      const r = mintVoiceToken({ id: "abc123" });
+      expect(r.identity).toBe("driver-abc123");
+      expect(typeof r.token).toBe("string");
+      expect(r.token.length).toBeGreaterThan(0);
+    } finally {
+      // Restore env so file isolation is tidy regardless of vitest per-file isolation.
+      prev.sid === undefined ? delete process.env.TWILIO_ACCOUNT_SID : (process.env.TWILIO_ACCOUNT_SID = prev.sid);
+      prev.key === undefined ? delete process.env.TWILIO_API_KEY : (process.env.TWILIO_API_KEY = prev.key);
+      prev.secret === undefined ? delete process.env.TWILIO_API_SECRET : (process.env.TWILIO_API_SECRET = prev.secret);
+      prev.app === undefined ? delete process.env.TWILIO_TWIML_APP_SID : (process.env.TWILIO_TWIML_APP_SID = prev.app);
+    }
   });
 });
