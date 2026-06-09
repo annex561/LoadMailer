@@ -49,3 +49,22 @@ export function withinDriverCallCeiling(driverId: string, max = Number(process.e
 export function isPollerOutboundSkip(jobDirection: string | undefined, callDirection: string | null | undefined): boolean {
   return jobDirection === undefined && !!callDirection && callDirection.startsWith("outbound");
 }
+
+import twilio from "twilio";
+
+// Mints a short-TTL Twilio Voice access token scoped to a driver. The identity
+// is server-set (driver-<id>), never client-supplied. outgoingApplicationSid
+// points the SDK at our portal-outbound TwiML handler.
+export function mintVoiceToken(driver: { id: string }): { token: string; identity: string } {
+  const AccessToken = (twilio as any).jwt.AccessToken;
+  const VoiceGrant = AccessToken.VoiceGrant;
+  const identity = `driver-${driver.id}`;
+  const at = new AccessToken(
+    process.env.TWILIO_ACCOUNT_SID as string,
+    process.env.TWILIO_API_KEY as string,
+    process.env.TWILIO_API_SECRET as string,
+    { identity, ttl: 3600 },
+  );
+  at.addGrant(new VoiceGrant({ outgoingApplicationSid: process.env.TWILIO_TWIML_APP_SID, incomingAllow: false }));
+  return { token: at.toJwt(), identity };
+}
