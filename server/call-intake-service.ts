@@ -4,6 +4,7 @@ import type { InsertRateconIntake, CallRecord } from "@shared/schema";
 import { and, eq, gt, lt } from "drizzle-orm";
 import OpenAI from "openai";
 import { resolveCallSource } from "./driver-line-service";
+import { isPollerOutboundSkip } from "./portal-dialer-service";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "not-configured" });
 
@@ -144,14 +145,14 @@ export interface RecordingJob {
   driverId?: string | null;
 }
 
-async function resolveCallParties(callSid: string): Promise<{ from: string | null; to: string | null }> {
+async function resolveCallParties(callSid: string): Promise<{ from: string | null; to: string | null; direction: string | null }> {
   try {
     const url = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Calls/${callSid}.json`;
     const r = await fetch(url, { headers: { Authorization: twilioBasicAuthHeader() } });
-    if (!r.ok) return { from: null, to: null };
+    if (!r.ok) return { from: null, to: null, direction: null };
     const j: any = await r.json();
-    return { from: j.from ?? null, to: j.to ?? null };
-  } catch { return { from: null, to: null }; }
+    return { from: j.from ?? null, to: j.to ?? null, direction: j.direction ?? null };
+  } catch { return { from: null, to: null, direction: null }; }
 }
 
 // Transcribe + classify + (conditionally) auto-surface an ALREADY-INSERTED call
@@ -212,7 +213,15 @@ export async function processRecording(job: RecordingJob): Promise<void> {
     return;
   }
 
-  const { from, to } = await resolveCallParties(job.callSid);
+  const { from, to, direction: callDir } = await resolveCallParties(job.callSid);
+
+  // Outbound portal calls are owned by the recordingStatusCallback (it passes
+  // job.direction explicitly). When the poller (job.direction undefined) hits an
+  // outbound call, skip — the callback handles attribution. (test: isPollerOutboundSkip)
+  if (isPollerOutboundSkip(job.direction, callDir)) {
+    console.log(`[call-intake] skip-outbound (poller) ${job.recordingSid}`);
+    return;
+  }
 
   const driver = to
     ? (await db.select({ id: drivers.id, companyId: drivers.companyId }).from(drivers).where(eq(drivers.voiceNumber, to)).limit(1))[0]
