@@ -176,8 +176,8 @@ export default function RecruitingApplication() {
               <div className="text-xs text-slate-500 leading-tight">Driver Application · MC-1725755</div>
             </div>
           </a>
-          <a href="tel:+14234214111" className="hidden sm:inline-flex text-sm text-slate-700 hover:text-emerald-700 font-medium">
-            📞 (423) 421-4111
+          <a href="tel:+18333629813" className="hidden sm:inline-flex text-sm text-slate-700 hover:text-emerald-700 font-medium">
+            📞 (833) 362-9813
           </a>
         </div>
       </nav>

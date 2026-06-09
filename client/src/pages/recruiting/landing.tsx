@@ -80,8 +80,8 @@ export default function RecruitingLanding() {
             <a href="#how" className="text-slate-700 hover:text-emerald-700 transition-colors">How It Works</a>
             <a href="#pay" className="text-slate-700 hover:text-emerald-700 transition-colors">Pay</a>
             <a href="#why" className="text-slate-700 hover:text-emerald-700 transition-colors">Why LAMP</a>
-            <a href="tel:+14234214111" className="text-slate-700 hover:text-emerald-700 transition-colors">
-              📞 (423) 421-4111
+            <a href="tel:+18333629813" className="text-slate-700 hover:text-emerald-700 transition-colors">
+              📞 (833) 362-9813
             </a>
             <a
               href="#apply"
@@ -414,11 +414,11 @@ export default function RecruitingLanding() {
               Start My Application →
             </a>
             <a
-              href="tel:+14234214111"
+              href="tel:+18333629813"
               className="inline-flex justify-center items-center rounded-lg border-2 px-8 py-4 font-bold text-base"
               style={{ borderColor: "#ffffff", color: "#ffffff" }}
             >
-              📞 Call Us: (423) 421-4111
+              📞 Call Us: (833) 362-9813
             </a>
           </div>
           <p className="mt-6 text-sm" style={{ color: "#a7f3d0" }}>
@@ -448,7 +448,7 @@ export default function RecruitingLanding() {
                 <li><a href="#apply" className="hover:text-emerald-700">Apply Now</a></li>
                 <li><a href="#pay" className="hover:text-emerald-700">Pay Details</a></li>
                 <li><a href="#how" className="hover:text-emerald-700">How It Works</a></li>
-                <li><a href="tel:+14234214111" className="hover:text-emerald-700">📞 (423) 421-4111</a></li>
+                <li><a href="tel:+18333629813" className="hover:text-emerald-700">📞 (833) 362-9813</a></li>
               </ul>
             </div>
             <div>
