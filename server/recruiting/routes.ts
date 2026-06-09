@@ -975,6 +975,16 @@ export function registerRecruitingRoutes(app: Express) {
       const digits = (appRow.phone || "").replace(/\D/g, "");
       const e164Phone = digits.length === 10 ? `+1${digits}` : digits.length === 11 ? `+${digits}` : appRow.phone;
 
+      // Mint a tracking_token — this is the driver's credential for /driver/:token portal.
+      // Matches the pattern in server/driver-onboard.ts (32 hex chars, 128-bit). Without
+      // this, the driver row can be created but the driver has no way to log in to the portal.
+      const tokenBytes = new Uint8Array(16);
+      (globalThis.crypto as any)?.getRandomValues?.(tokenBytes);
+      if (tokenBytes.every((b) => b === 0)) {
+        for (let i = 0; i < tokenBytes.length; i++) tokenBytes[i] = Math.floor(Math.random() * 256);
+      }
+      const trackingToken = Array.from(tokenBytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+
       const [created] = await db
         .insert(drivers)
         .values({
@@ -986,6 +996,7 @@ export function registerRecruitingRoutes(app: Express) {
           status: "available",
           licenseNumber: appRow.driverLicenseNumber || null,
           equipmentType: "straight_box_truck",
+          trackingToken,
           isOnboarded: true,
           enableSmsNotifications: true,
           smsConsentAt: appRow.applicationSignedAt || appRow.consentSmsAt || new Date(),
@@ -1007,17 +1018,30 @@ export function registerRecruitingRoutes(app: Express) {
       await transitionStage(id, "ACTIVE", `Activated as driver ${created.id}`, req.user?.id);
 
       try {
+        const baseUrl = process.env.PUBLIC_APP_URL || "https://traqiq.app";
         await queueRecruitingNotification({
           applicationId: id,
           channel: "SMS",
           templateKey: "ACTIVE_SMS",
-          payload: { first_name: appRow.firstName },
+          payload: {
+            first_name: appRow.firstName,
+            portal_url: `${baseUrl}/driver/${trackingToken}`,
+          },
+        });
+        await queueRecruitingNotification({
+          applicationId: id,
+          channel: "EMAIL",
+          templateKey: "ACTIVE_EMAIL",
+          payload: {
+            first_name: appRow.firstName,
+            portal_url: `${baseUrl}/driver/${trackingToken}`,
+          },
         });
       } catch (e) {
         console.error("[recruiting] ACTIVE notif err:", e);
       }
 
-      res.json({ success: true, driverId: created.id });
+      res.json({ success: true, driverId: created.id, trackingToken });
     } catch (err) {
       console.error("[recruiting/activate] error:", err);
       res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
@@ -1143,12 +1167,78 @@ export function registerRecruitingRoutes(app: Express) {
       .limit(1);
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Mock Sign — LAMP Logistics</title>
-<style>body{font-family:-apple-system,Segoe UI,sans-serif;background:#f1f5f9;margin:0;padding:40px}main{max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08)}h1{margin:0 0 8px;font-size:22px}.muted{color:#64748b;font-size:13px}.sig{margin:24px 0;border:2px dashed #cbd5e1;border-radius:10px;padding:32px;text-align:center;color:#94a3b8}.sig.signed{border-color:#059669;background:#ecfdf5;color:#065f46}.btn{display:inline-block;background:#059669;color:#fff;padding:14px 28px;border-radius:10px;font-weight:700;text-decoration:none;border:0;cursor:pointer;font-size:15px}.note{background:#fef3c7;border-radius:8px;padding:12px;font-size:12px;color:#78350f;margin-top:24px}</style></head>
+<style>body{font-family:-apple-system,Segoe UI,sans-serif;background:#f1f5f9;margin:0;padding:40px}main{max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08)}h1{margin:0 0 8px;font-size:22px}.muted{color:#64748b;font-size:13px}.sig{margin:24px 0;border:2px dashed #cbd5e1;border-radius:10px;padding:32px;text-align:center;color:#94a3b8}.sig.signed{border-color:#059669;background:#ecfdf5;color:#065f46}.btn{display:inline-block;background:#059669;color:#fff;padding:14px 28px;border-radius:10px;font-weight:700;text-decoration:none;border:0;cursor:pointer;font-size:15px}.btn:disabled{background:#94a3b8;cursor:not-allowed}.note{background:#fef3c7;border-radius:8px;padding:12px;font-size:12px;color:#78350f;margin-top:24px}</style></head>
 <body><main><h1>Sign your ${doc.includes("LEASE") ? "Owner-Operator Lease" : "W-2 Employment Agreement"}</h1>
 <div class="muted">Signer: ${appRow?.firstName || "Driver"} ${appRow?.lastName || ""} · MC-1725755</div>
 <div class="sig" id="sigBox">Click to sign</div>
-<button class="btn" onclick="document.getElementById('sigBox').textContent='✓ Signed';document.getElementById('sigBox').className='sig signed';this.disabled=true;this.textContent='Signed';setTimeout(()=>location.href='/apply/${id}/status',1000)">Sign Now</button>
+<button id="signBtn" class="btn">Sign Now</button>
 <div class="note"><strong>Demo mode.</strong> When you wire real DocuSign, the live envelope replaces this page and the signature webhook fires.</div>
+<script>
+document.getElementById('signBtn').addEventListener('click', async function() {
+  this.disabled = true;
+  this.textContent = 'Signing…';
+  try {
+    const res = await fetch('/api/recruiting/applications/${id}/mock-sign/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ doc: '${doc}' })
+    });
+    if (!res.ok) throw new Error('Signing failed');
+    document.getElementById('sigBox').textContent = '✓ Signed';
+    document.getElementById('sigBox').className = 'sig signed';
+    this.textContent = 'Signed ✓';
+    setTimeout(() => location.href = '/apply/${id}/status', 1200);
+  } catch (err) {
+    this.disabled = false;
+    this.textContent = 'Sign Now';
+    alert('Could not record signature. Try again.');
+  }
+});
+</script>
 </main></body></html>`);
+  });
+
+  // Mock signature completion — actually transitions stage to AGREEMENT_SIGNED.
+  // No auth (mock-sign page is accessed by the applicant via a tokenized URL in a real DocuSign flow).
+  app.post("/api/recruiting/applications/:id/mock-sign/complete", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const doc = String(req.body?.doc || "AGREEMENT");
+      const [appRow] = await db
+        .select({ currentStage: recruitingApplications.currentStage, firstName: recruitingApplications.firstName })
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!appRow) return res.status(404).json({ error: "Application not found" });
+      if (appRow.currentStage === "AGREEMENT_SIGNED" || appRow.currentStage === "ORIENTATION" || appRow.currentStage === "ACTIVE") {
+        return res.json({ success: true, alreadySigned: true });
+      }
+      await db
+        .update(recruitingApplications)
+        .set({
+          agreementType: doc.includes("LEASE") ? "OWNER_OPERATOR_LEASE" : "COMPANY_DRIVER_W2",
+          agreementSignedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(recruitingApplications.id, id));
+      await transitionStage(id, "AGREEMENT_SIGNED", "Mock signature completed by applicant", "APPLICANT");
+
+      try {
+        await queueRecruitingNotification({
+          applicationId: id,
+          channel: "SMS",
+          templateKey: "AGREEMENT_SIGNED_SMS",
+          payload: {
+            first_name: appRow.firstName,
+            orientation_url: `${process.env.PUBLIC_APP_URL || "https://traqiq.app"}/apply/${id}/orientation`,
+          },
+        });
+      } catch (_) {}
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error("[recruiting/mock-sign/complete] error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
   });
 }

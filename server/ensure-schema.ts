@@ -495,6 +495,73 @@ export async function ensureSchema(): Promise<void> {
         await pool.query(`ALTER TABLE recruiting_applications ADD CONSTRAINT recruiting_applications_email_company_unique UNIQUE (email, company_id)`);
       } catch (_) {}
 
+      // Stages 5-10 columns — added incrementally. CREATE TABLE IF NOT EXISTS above
+      // skips creation if the table already exists, so we ALTER ADD COLUMN IF NOT EXISTS
+      // for each Stage 5-10 field so older deploys catch up without losing data.
+      const stageColumns: [string, string][] = [
+        ["mvr_pull_status", "TEXT"],
+        ["mvr_pull_date", "TIMESTAMP"],
+        ["mvr_pull_vendor", "TEXT"],
+        ["psp_status", "TEXT"],
+        ["clearinghouse_status", "TEXT"],
+        ["clearinghouse_date", "TIMESTAMP"],
+        ["criminal_background_status", "TEXT"],
+        ["criminal_background_date", "TIMESTAMP"],
+        ["prior_employer_verified", "BOOLEAN"],
+        ["drug_test_status", "TEXT"],
+        ["drug_test_date", "TIMESTAMP"],
+        ["drug_test_vendor", "TEXT"],
+        ["dot_physical_status", "TEXT"],
+        ["dot_physical_date", "TIMESTAMP"],
+        ["medical_card_number", "TEXT"],
+        ["medical_card_expiration", "TIMESTAMP"],
+        ["agreement_type", "TEXT"],
+        ["agreement_signed_at", "TIMESTAMP"],
+        ["agreement_document_url", "TEXT"],
+        ["w9_or_w4_submitted", "BOOLEAN"],
+        ["i9_verified", "BOOLEAN"],
+        ["direct_deposit_submitted", "BOOLEAN"],
+        ["orientation_started_at", "TIMESTAMP"],
+        ["orientation_completed_at", "TIMESTAMP"],
+        ["orientation_progress", "JSONB"],
+        ["assigned_truck_unit", "TEXT"],
+        ["truck_assignment_date", "TIMESTAMP"],
+        ["truck_insurance_verified", "BOOLEAN"],
+        ["eld_provisioned", "BOOLEAN"],
+        ["active_from_date", "TIMESTAMP"],
+        ["terminated_at", "TIMESTAMP"],
+        ["termination_reason", "TEXT"],
+      ];
+      for (const [col, def] of stageColumns) {
+        try {
+          await pool.query(`ALTER TABLE recruiting_applications ADD COLUMN IF NOT EXISTS ${col} ${def}`);
+        } catch (e: any) {
+          if (!e.message?.includes("already exists")) {
+            log(`⚠️ recruiting_applications.${col}: ${e.message}`);
+          }
+        }
+      }
+
+      // notification_queue — recruiting funnel uses this for SMS/email dispatch.
+      // Without it, queueRecruitingNotification() silently no-ops and applicants never
+      // get welcome/docs-request/active SMS or email.
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS notification_queue (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          created_at TIMESTAMP DEFAULT NOW(),
+          driver_id VARCHAR NOT NULL,
+          channel TEXT NOT NULL,
+          template_key TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'PENDING',
+          sent_at TIMESTAMP,
+          error_msg TEXT
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS notification_queue_status_idx ON notification_queue(status)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS notification_queue_driver_idx ON notification_queue(driver_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS notification_queue_created_idx ON notification_queue(created_at)`);
+
       await pool.query(`
         CREATE TABLE IF NOT EXISTS recruiting_status_events (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),

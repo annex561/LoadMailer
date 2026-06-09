@@ -3556,3 +3556,26 @@ export const recruitingNotes = pgTable("recruiting_notes", {
 }));
 
 export type RecruitingNote = typeof recruitingNotes.$inferSelect;
+
+// notification_queue — recruiting funnel SMS/email dispatch queue.
+// Used by server/recruiting/notifications.ts: queueRecruitingNotification()
+// inserts a row, and the processor pulls PENDING rows, sends, marks SENT/FAILED.
+// Without this table the queue function silently no-ops and applicants never
+// get welcome/docs-request/active SMS or email.
+export const notificationQueue = pgTable("notification_queue", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  createdAt: timestamp("created_at").defaultNow(),
+  driverId: varchar("driver_id").notNull(),
+  channel: text("channel").notNull(),
+  templateKey: text("template_key").notNull(),
+  payload: text("payload").notNull(),
+  status: text("status").notNull().default("PENDING"),
+  sentAt: timestamp("sent_at"),
+  errorMsg: text("error_msg"),
+}, (t) => ({
+  statusIdx: index("notification_queue_status_idx").on(t.status),
+  driverIdx: index("notification_queue_driver_idx").on(t.driverId),
+  createdIdx: index("notification_queue_created_idx").on(t.createdAt),
+}));
+
+export type NotificationQueueItem = typeof notificationQueue.$inferSelect;

@@ -76,7 +76,7 @@ const SMS_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender> 
     text: `${p.first_name || "Driver"}, your truck is ready. First load coming through TraqIQ shortly.`,
   }),
   ACTIVE_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, you're ACTIVE. Welcome to LAMP. First settlement Friday.`,
+    text: `${p.first_name || "Driver"}, you're ACTIVE at LAMP. Open your driver portal: ${p.portal_url || "https://traqiq.app"}. First settlement Friday.`,
   }),
   DISQUALIFICATION_SMS: (p) => ({
     text: `${p.first_name || "Driver"}, your LAMP application was not approved at this time. See your portal for details.`,
@@ -162,6 +162,18 @@ const EMAIL_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender
       ctaLabel: "Upload Documents →",
       ctaUrl: p.docs_url,
       footer: `Most drivers finish uploading in under 5 minutes.`,
+    }),
+  }),
+  ACTIVE_EMAIL: (p) => ({
+    subject: "You're ACTIVE at LAMP — your driver portal is ready",
+    text: `${p.first_name || "Driver"}, congratulations — you're ACTIVE at LAMP Logistics.\n\nYour driver portal is here:\n${p.portal_url}\n\nBookmark this URL. First settlement Friday.\n\nQuestions: (833) 362-9813.`,
+    html: brandedEmail({
+      preview: "Your driver portal is live — bookmark the URL",
+      heading: `${p.first_name || "Driver"}, you're ACTIVE 🎉`,
+      bodyHtml: `<p>Welcome to LAMP Logistics. You're officially an active driver in our system.</p><p><strong>Your driver portal is ready.</strong> Bookmark this URL — it's how you'll see your loads, settlements, and messages from dispatch.</p><p>First settlement hits your account Friday.</p>`,
+      ctaLabel: "Open Driver Portal →",
+      ctaUrl: p.portal_url,
+      footer: `Don't share this link — it's your personal credential. If you lose it, call (833) 362-9813.`,
     }),
   }),
   DISQUALIFICATION_EMAIL: (p) => ({
