@@ -264,6 +264,80 @@ function fmtMoney(n: number) { return `$${(n || 0).toFixed(2)}`; }
 function escapeHtml(s: any): string {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 }
+
+// SP3 in-portal outbound recorded dialer. Server-rendered string blob (the
+// portal is not React): Twilio Voice SDK from CDN + a floating dialpad + an
+// in-call overlay. Exposes window.lampCall(number, label). The token endpoint
+// (/driver/:token/voice-token) returns 403 when PORTAL_DIALER_ENABLED is off, so
+// the SDK never initializes and no call is possible. Injected near the end of
+// the home + load-detail render bodies.
+export function dialerWidget(token: string): string {
+  return `
+<link rel="stylesheet" href="data:text/css,">
+<style>
+  #lampDial{position:fixed;right:16px;bottom:16px;z-index:9000}
+  #lampFab{width:56px;height:56px;border-radius:50%;background:#2563eb;color:#fff;border:none;font-size:24px;box-shadow:0 6px 16px rgba(37,99,235,.5)}
+  #lampPad,#lampCallUI{position:fixed;inset:0;background:#0b1220;color:#e2e8f0;z-index:9001;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;font-family:-apple-system,system-ui,sans-serif}
+  #lampPadNum{font-size:30px;font-weight:700;min-height:40px;margin:10px}
+  .lampKeys{display:grid;grid-template-columns:repeat(3,72px);gap:14px}
+  .lampKey{height:62px;border-radius:50%;background:#111a2e;border:1px solid #1e2c47;color:#e2e8f0;font-size:22px}
+  .lampGreen{width:64px;height:64px;border-radius:50%;background:#16a34a;border:none;color:#fff;font-size:26px;margin-top:16px}
+  .lampRed{width:64px;height:64px;border-radius:50%;background:#dc2626;border:none;color:#fff;font-size:26px}
+  #lampClose{position:absolute;top:18px;right:20px;background:none;border:none;color:#94a3b8;font-size:26px}
+  .lampRec{background:#7f1d1d;color:#fecaca;font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px}
+  .lampCallee{font-size:23px;font-weight:800;margin:18px 0 4px}
+  .lampVia{font-size:12px;color:#7c8aa5}
+  .lampTimer{font-size:16px;margin:14px 0 26px;font-variant-numeric:tabular-nums}
+</style>
+<div id="lampDial"><button id="lampFab" onclick="lampOpenPad()">⌨</button></div>
+<div id="lampPad">
+  <button id="lampClose" onclick="lampHide()">×</button>
+  <div id="lampPadNum"></div>
+  <div class="lampKeys">
+    ${"123456789*0#".split("").map((k)=>`<button class="lampKey" onclick="lampPadPress('${k}')">${k}</button>`).join("")}
+  </div>
+  <button class="lampGreen" onclick="lampDialPad()">📞</button>
+</div>
+<div id="lampCallUI">
+  <span class="lampRec">● REC</span>
+  <div class="lampCallee" id="lampCallee">—</div>
+  <div class="lampVia">via your company line · 833-362-9813</div>
+  <div class="lampTimer" id="lampTimer">00:00</div>
+  <button class="lampRed" onclick="lampHangup()">📞</button>
+</div>
+<script src="https://sdk.twilio.com/js/voice/releases/2.12.3/twilio.min.js"></script>
+<script>
+(function(){
+  var device=null, conn=null, t0=0, tick=null, padNum="";
+  var TOKEN_URL="/driver/${token}/voice-token", DRIVER_ID="";
+  async function ensureDevice(){
+    if(device) return device;
+    var r=await fetch(TOKEN_URL); if(!r.ok){ alert("Calling is not enabled."); throw new Error("disabled"); }
+    var j=await r.json(); DRIVER_ID=(j.identity||"").replace("driver-","");
+    device=new Twilio.Device(j.token,{codecPreferences:["opus","pcmu"]});
+    return device;
+  }
+  function show(id){ document.getElementById(id).style.display="flex"; }
+  function hideAll(){ ["lampPad","lampCallUI"].forEach(function(i){document.getElementById(i).style.display="none";}); }
+  window.lampHide=hideAll;
+  window.lampOpenPad=function(){ padNum=""; document.getElementById("lampPadNum").textContent=""; show("lampPad"); };
+  window.lampPadPress=function(k){ padNum+=k; document.getElementById("lampPadNum").textContent=padNum; };
+  window.lampDialPad=function(){ if(padNum) window.lampCall(padNum, padNum); };
+  function fmt(s){ var m=Math.floor(s/60),x=s%60; return (m<10?"0":"")+m+":"+(x<10?"0":"")+x; }
+  window.lampCall=async function(number,label){
+    try{
+      var d=await ensureDevice();
+      conn=await d.connect({ params:{ To:number, driverId:DRIVER_ID } });
+      document.getElementById("lampCallee").textContent=label||number;
+      document.getElementById("lampTimer").textContent="00:00"; hideAll(); show("lampCallUI");
+      t0=Date.now(); tick=setInterval(function(){ document.getElementById("lampTimer").textContent=fmt(Math.floor((Date.now()-t0)/1000)); },1000);
+      conn.on("disconnect",function(){ clearInterval(tick); hideAll(); });
+    }catch(e){ console.error(e); }
+  };
+  window.lampHangup=function(){ if(conn) conn.disconnect(); clearInterval(tick); hideAll(); };
+})();
+</script>`;
+}
 function loadStatusBadge(load: any): string {
   const sop: any = load.sopProgress || {};
   if (load.deliveredAt) return '<span class="badge green">Delivered</span>';
@@ -521,6 +595,7 @@ export async function renderHome(token: string): Promise<string> {
       setInterval(paint, 5000);
     })();
     </script>
+    ${dialerWidget(token)}
   `;
   return layout({ title: 'My Dashboard', token, active: 'home', body, driverId: driver.id });
 }
@@ -633,7 +708,7 @@ export async function renderLoadDetail(token: string, loadId: string): Promise<s
       <div class="row"><span class="muted">Rate</span><span><b>${load.rate ? fmtMoney(load.rate) : 'TBD'}</b></span></div>
       <div class="row"><span class="muted">Miles</span><span>${load.miles || '—'}</span></div>
       <div class="row"><span class="muted">Broker</span><span>${escapeHtml(load.brokerName || '—')}</span></div>
-      ${load.brokerPhone ? `<div class="row"><span class="muted">Broker phone</span><a href="tel:${escapeHtml(load.brokerPhone)}">${escapeHtml(load.brokerPhone)}</a></div>` : ''}
+      ${load.brokerPhone ? `<div class="row"><span class="muted">Broker</span><button onclick="lampCall('${escapeHtml(load.brokerPhone)}','${escapeHtml(load.brokerName||"Broker")}')" style="background:#16a34a;color:#fff;border:none;border-radius:999px;padding:6px 13px;font-weight:700">📞 Call</button></div>` : ''}
       ${load.specialInstructions ? `<div style="margin-top:8px;color:#fde68a"><b>Notes:</b> ${escapeHtml(load.specialInstructions)}</div>` : ''}
     </div>
 
@@ -646,6 +721,7 @@ export async function renderLoadDetail(token: string, loadId: string): Promise<s
     <a class="btn block" href="/u/${load.id}?stages=${stagesForLoadStatus(load.status as any).join(',')}">
       📷 Upload Photos / Check In
     </a>
+    ${dialerWidget(token)}
   `;
   return layout({ title: `Load ${load.loadNumber}`, token, active: 'loads', showBack: true, backHref: `/driver/${token}/loads`, body, driverId: driver.id });
 }
