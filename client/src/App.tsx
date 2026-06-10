@@ -74,6 +74,7 @@ const RecruitingDocuments = lazy(() => import("@/pages/recruiting/documents"));
 const RecruitingOrientation = lazy(() => import("@/pages/recruiting/orientation"));
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const RecruitingDashboard = lazy(() => import("@/pages/recruiting/dashboard"));
+const RecruitingApplicant = lazy(() => import("@/pages/recruiting/applicant"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -111,6 +112,7 @@ function Router() {
       <Route path="/templates" component={Templates} />
       <Route path="/driver-management" component={DriverManagement} />
       <Route path="/recruiting" component={RecruitingDashboard} />
+      <Route path="/recruiting/:id" component={RecruitingApplicant} />
       <Route path="/scrapers" component={ScraperManagement} />
       <Route path="/dispatcher" component={DispatcherDashboard} />
       <Route path="/dispatcher-dashboard" component={DispatcherDashboard} />
