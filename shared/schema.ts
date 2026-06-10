@@ -3416,6 +3416,60 @@ export const recruitingApplications = pgTable("recruiting_applications", {
   prescreenReasons: jsonb("prescreen_reasons"),
   prescreenCompletedAt: timestamp("prescreen_completed_at"),
 
+  // Application sections beyond basic info
+  addressHistory: jsonb("address_history"),
+  employmentHistory: jsonb("employment_history"),
+  accidents3yr: jsonb("accidents_3yr"),
+  violations3yr: jsonb("violations_3yr"),
+
+  // Stage 5 — Background results
+  mvrPullVendor: text("mvr_pull_vendor"),
+  mvrPullStatus: text("mvr_pull_status"),
+  mvrPullDate: timestamp("mvr_pull_date"),
+  clearinghouseStatus: text("clearinghouse_status"),
+  clearinghouseDate: timestamp("clearinghouse_date"),
+  criminalBackgroundStatus: text("criminal_background_status"),
+  criminalBackgroundDate: timestamp("criminal_background_date"),
+  pspStatus: text("psp_status"),
+  priorEmployerVerified: boolean("prior_employer_verified"),
+
+  // Stage 6 — Medical / drug
+  drugTestVendor: text("drug_test_vendor"),
+  drugTestStatus: text("drug_test_status"),
+  drugTestDate: timestamp("drug_test_date"),
+  dotPhysicalStatus: text("dot_physical_status"),
+  dotPhysicalDate: timestamp("dot_physical_date"),
+  medicalCardNumber: text("medical_card_number"),
+  medicalCardExpiration: timestamp("medical_card_expiration"),
+
+  // Stage 7 — Agreement (DocuSeal-backed)
+  agreementType: text("agreement_type"),
+  agreementDocumentUrl: text("agreement_document_url"),
+  agreementSignedAt: timestamp("agreement_signed_at"),
+
+  // Stage 8 — Orientation
+  orientationStartedAt: timestamp("orientation_started_at"),
+  orientationCompletedAt: timestamp("orientation_completed_at"),
+  orientationProgress: jsonb("orientation_progress"),
+
+  // Stage 9 — Truck assignment
+  assignedTruckUnit: text("assigned_truck_unit"),
+  truckAssignmentDate: timestamp("truck_assignment_date"),
+  truckInsuranceVerified: boolean("truck_insurance_verified"),
+  eldProvisioned: boolean("eld_provisioned"),
+
+  // Stage 10 — ACTIVE
+  driverId: text("driver_id"),
+  activeFromDate: timestamp("active_from_date"),
+  i9Verified: boolean("i9_verified"),
+  w9OrW4Submitted: boolean("w9_or_w4_submitted"),
+  directDepositSubmitted: boolean("direct_deposit_submitted"),
+  trackingToken: text("tracking_token"),
+
+  // Termination
+  terminatedAt: timestamp("terminated_at"),
+  terminationReason: text("termination_reason"),
+
   // Funnel state
   currentStage: recruitingStageEnum("current_stage").notNull().default("LEAD"),
 
