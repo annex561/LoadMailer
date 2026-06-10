@@ -1153,9 +1153,103 @@ export function registerRecruitingRoutes(app: Express) {
   });
 
   // -----------------------------------------------------------------------
+  // DocuSeal webhook receiver — fires when a submitter completes a form.
+  // Configure in DocuSeal admin → Webhooks: POST to /api/recruiting/docuseal/webhook
+  // with header X-DocuSeal-Secret = DOCUSEAL_WEBHOOK_SECRET.
+  // -----------------------------------------------------------------------
+  app.post("/api/recruiting/docuseal/webhook", async (req, res) => {
+    try {
+      const secret = process.env.DOCUSEAL_WEBHOOK_SECRET || "";
+      if (secret) {
+        const provided =
+          (req.headers["x-docuseal-secret"] as string) ||
+          (req.headers["x-webhook-secret"] as string) ||
+          "";
+        if (provided !== secret) {
+          return res.status(401).json({ error: "Invalid webhook secret" });
+        }
+      }
+      const event = (req.body?.event_type || req.body?.event || "").toString();
+      const data = req.body?.data || req.body || {};
+      // Only act on completion events.
+      if (
+        event !== "form.completed" &&
+        event !== "submission.completed" &&
+        event !== "submitter.completed"
+      ) {
+        return res.json({ ok: true, ignored: event });
+      }
+      const applicationId =
+        data?.external_id ||
+        data?.submitter?.external_id ||
+        data?.metadata?.application_id ||
+        data?.submitter?.metadata?.application_id;
+      const documentKey =
+        data?.metadata?.document_key ||
+        data?.submitter?.metadata?.document_key ||
+        "OWNER_OPERATOR_LEASE";
+      if (!applicationId) {
+        console.warn("[recruiting/docuseal/webhook] no application id on event:", event);
+        return res.json({ ok: true, ignored: "no_application_id" });
+      }
+      const [appRow] = await db
+        .select({
+          currentStage: recruitingApplications.currentStage,
+          firstName: recruitingApplications.firstName,
+        })
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, String(applicationId)))
+        .limit(1);
+      if (!appRow) {
+        return res.status(404).json({ error: "Application not found" });
+      }
+      if (
+        appRow.currentStage === "AGREEMENT_SIGNED" ||
+        appRow.currentStage === "ORIENTATION" ||
+        appRow.currentStage === "ACTIVE"
+      ) {
+        return res.json({ ok: true, alreadySigned: true });
+      }
+      await db
+        .update(recruitingApplications)
+        .set({
+          agreementType: String(documentKey).includes("LEASE")
+            ? "OWNER_OPERATOR_LEASE"
+            : "COMPANY_DRIVER_W2",
+          agreementSignedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(recruitingApplications.id, String(applicationId)));
+      await transitionStage(
+        String(applicationId),
+        "AGREEMENT_SIGNED",
+        "DocuSeal completion webhook received",
+        "VENDOR"
+      );
+      try {
+        await queueRecruitingNotification({
+          applicationId: String(applicationId),
+          channel: "SMS",
+          templateKey: "AGREEMENT_SIGNED_SMS",
+          payload: {
+            first_name: appRow.firstName,
+            orientation_url: `${process.env.PUBLIC_APP_URL || "https://traqiq.app"}/apply/${applicationId}/orientation`,
+          },
+        });
+      } catch (_) {}
+      res.json({ ok: true, advanced: "AGREEMENT_SIGNED" });
+    } catch (err) {
+      console.error("[recruiting/docuseal/webhook] error:", err);
+      res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    }
+  });
+
+  // -----------------------------------------------------------------------
   // Mock signature completion page — for testing the lease/W-2 flow without
-  // actually wiring DocuSign. Renders a simple e-sign UI; clicking "Sign"
+  // actually wiring DocuSeal. Renders a simple e-sign UI; clicking "Sign"
   // transitions stage to AGREEMENT_SIGNED.
+  // Only active when DOCUSEAL_API_KEY is unset (createSignatureRequest falls
+  // back to this URL in mock mode).
   // -----------------------------------------------------------------------
   app.get("/api/recruiting/applications/:id/mock-sign", async (req, res) => {
     const { id } = req.params;

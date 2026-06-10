@@ -161,11 +161,68 @@ export async function createSignatureRequest(opts: {
   signerName: string;
   signerEmail: string;
 }): Promise<SignatureRequestResult> {
-  guardLive("DocuSign");
+  // Live DocuSeal integration — requires DOCUSEAL_URL + DOCUSEAL_API_KEY + template ID for the doc.
+  const docusealUrl = (process.env.DOCUSEAL_URL || "").replace(/\/+$/, "");
+  const apiKey = process.env.DOCUSEAL_API_KEY || "";
+  const templateId =
+    opts.documentKey === "OWNER_OPERATOR_LEASE"
+      ? process.env.DOCUSEAL_OWNER_OP_TEMPLATE_ID
+      : process.env.DOCUSEAL_W2_TEMPLATE_ID;
+
+  if (docusealUrl && apiKey && templateId) {
+    try {
+      const resp = await fetch(`${docusealUrl}/api/submissions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Auth-Token": apiKey,
+        },
+        body: JSON.stringify({
+          template_id: Number(templateId),
+          send_email: false,
+          send_sms: false,
+          submitters: [
+            {
+              role: "Driver",
+              name: opts.signerName,
+              email: opts.signerEmail,
+              external_id: opts.applicationId,
+              metadata: { application_id: opts.applicationId, document_key: opts.documentKey },
+            },
+          ],
+        }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`DocuSeal create submission failed: ${resp.status} ${txt}`);
+      }
+      const submitters = (await resp.json()) as Array<{
+        id: number;
+        submission_id: number;
+        slug: string;
+        embed_src?: string;
+      }>;
+      const submitter = submitters?.[0];
+      if (!submitter?.slug) {
+        throw new Error("DocuSeal returned submission without signing slug");
+      }
+      return {
+        vendor: "DOCUSEAL",
+        envelopeId: String(submitter.submission_id),
+        signingUrl: submitter.embed_src || `${docusealUrl}/s/${submitter.slug}`,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      };
+    } catch (err) {
+      console.error("[vendors/createSignatureRequest] DocuSeal failed, falling back:", err);
+      // Fall through to mock so dev/test environments without DocuSeal still work.
+    }
+  }
+
+  guardLive("DocuSeal");
   await sleep(500);
   const envelopeId = `mock-env-${opts.applicationId.slice(0, 8)}`;
   return {
-    vendor: "MOCK_DOCUSIGN",
+    vendor: "MOCK_DOCUSEAL",
     envelopeId,
     signingUrl: `https://traqiq.app/api/recruiting/applications/${opts.applicationId}/mock-sign?envelope=${envelopeId}&doc=${opts.documentKey}`,
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
