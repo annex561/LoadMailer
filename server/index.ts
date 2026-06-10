@@ -3,6 +3,8 @@ import { createServer } from "http";
 import compression from "compression";
 import { registerRoutes, createHTTPServer } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { registerSeoPrerender } from "./seo-prerender";
+import path from "path";
 import { startRateconEscalationCron } from "./ratecon-escalation-cron";
 
 const app = express();
@@ -268,6 +270,15 @@ app.use((req, res, next) => {
       await setupVite(app, server);
       log('✅ Vite setup completed');
     } else {
+      // SEO pre-render for public landing pages (must run BEFORE serveStatic
+      // so the SEO-enriched HTML wins over the raw index.html).
+      try {
+        const distPath = path.resolve(import.meta.dirname, "public");
+        registerSeoPrerender(app, distPath);
+        log('✅ SEO pre-render registered');
+      } catch (e: any) {
+        log(`⚠️ SEO pre-render skipped: ${e?.message || e}`);
+      }
       serveStatic(app);
       log('✅ Static files setup completed');
     }
