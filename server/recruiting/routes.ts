@@ -858,7 +858,7 @@ export function registerRecruitingRoutes(app: Express) {
   });
 
   // -----------------------------------------------------------------------
-  // STAGE 7 — Send lease/W-2 for e-signature
+  // STAGE 7 — Send lease/contractor agreement for e-signature (DocuSeal)
   // -----------------------------------------------------------------------
   app.post("/api/recruiting/applications/:id/sign-request", async (req: any, res) => {
     if (!requireAuth(req, res)) return;
@@ -873,7 +873,7 @@ export function registerRecruitingRoutes(app: Express) {
 
       const documentKey = appRow.isOwnerOperator
         ? "OWNER_OPERATOR_LEASE"
-        : "COMPANY_DRIVER_W2";
+        : "COMPANY_DRIVER_1099";
 
       const sigReq = await createSignatureRequest({
         applicationId: id,
@@ -1215,7 +1215,7 @@ export function registerRecruitingRoutes(app: Express) {
         .set({
           agreementType: String(documentKey).includes("LEASE")
             ? "OWNER_OPERATOR_LEASE"
-            : "COMPANY_DRIVER_W2",
+            : "COMPANY_DRIVER_1099",
           agreementSignedAt: new Date(),
           updatedAt: new Date(),
         })
@@ -1245,9 +1245,8 @@ export function registerRecruitingRoutes(app: Express) {
   });
 
   // -----------------------------------------------------------------------
-  // Mock signature completion page — for testing the lease/W-2 flow without
-  // actually wiring DocuSeal. Renders a simple e-sign UI; clicking "Sign"
-  // transitions stage to AGREEMENT_SIGNED.
+  // Mock signature completion page — fallback for when DocuSeal is not configured.
+  // Renders a simple e-sign UI; clicking "Sign" transitions stage to AGREEMENT_SIGNED.
   // Only active when DOCUSEAL_API_KEY is unset (createSignatureRequest falls
   // back to this URL in mock mode).
   // -----------------------------------------------------------------------
@@ -1262,7 +1261,7 @@ export function registerRecruitingRoutes(app: Express) {
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Mock Sign — LAMP Logistics</title>
 <style>body{font-family:-apple-system,Segoe UI,sans-serif;background:#f1f5f9;margin:0;padding:40px}main{max-width:560px;margin:0 auto;background:#fff;border-radius:14px;padding:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08)}h1{margin:0 0 8px;font-size:22px}.muted{color:#64748b;font-size:13px}.sig{margin:24px 0;border:2px dashed #cbd5e1;border-radius:10px;padding:32px;text-align:center;color:#94a3b8}.sig.signed{border-color:#059669;background:#ecfdf5;color:#065f46}.btn{display:inline-block;background:#059669;color:#fff;padding:14px 28px;border-radius:10px;font-weight:700;text-decoration:none;border:0;cursor:pointer;font-size:15px}.btn:disabled{background:#94a3b8;cursor:not-allowed}.note{background:#fef3c7;border-radius:8px;padding:12px;font-size:12px;color:#78350f;margin-top:24px}</style></head>
-<body><main><h1>Sign your ${doc.includes("LEASE") ? "Owner-Operator Lease" : "W-2 Employment Agreement"}</h1>
+<body><main><h1>Sign your ${doc.includes("LEASE") ? "Owner-Operator Lease" : "Independent Contractor Agreement"}</h1>
 <div class="muted">Signer: ${appRow?.firstName || "Driver"} ${appRow?.lastName || ""} · MC-1725755</div>
 <div class="sig" id="sigBox">Click to sign</div>
 <button id="signBtn" class="btn">Sign Now</button>
@@ -1310,7 +1309,7 @@ document.getElementById('signBtn').addEventListener('click', async function() {
       await db
         .update(recruitingApplications)
         .set({
-          agreementType: doc.includes("LEASE") ? "OWNER_OPERATOR_LEASE" : "COMPANY_DRIVER_W2",
+          agreementType: doc.includes("LEASE") ? "OWNER_OPERATOR_LEASE" : "COMPANY_DRIVER_1099",
           agreementSignedAt: new Date(),
           updatedAt: new Date(),
         })

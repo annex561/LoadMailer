@@ -157,7 +157,7 @@ export type SignatureRequestResult = {
 
 export async function createSignatureRequest(opts: {
   applicationId: string;
-  documentKey: "OWNER_OPERATOR_LEASE" | "COMPANY_DRIVER_W2";
+  documentKey: "OWNER_OPERATOR_LEASE" | "COMPANY_DRIVER_1099";
   signerName: string;
   signerEmail: string;
 }): Promise<SignatureRequestResult> {
@@ -167,7 +167,7 @@ export async function createSignatureRequest(opts: {
   const templateId =
     opts.documentKey === "OWNER_OPERATOR_LEASE"
       ? process.env.DOCUSEAL_OWNER_OP_TEMPLATE_ID
-      : process.env.DOCUSEAL_W2_TEMPLATE_ID;
+      : process.env.DOCUSEAL_COMPANY_DRIVER_TEMPLATE_ID;
 
   if (docusealUrl && apiKey && templateId) {
     try {

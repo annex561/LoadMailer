@@ -122,7 +122,7 @@ export default function RecruitingLanding() {
             </p>
             <div className="mt-8 flex flex-wrap gap-2">
               <Badge>80/20 split for owner-operators</Badge>
-              <Badge>$1,200/wk W-2 base for company drivers</Badge>
+              <Badge>$1,200/wk minimum for company drivers</Badge>
               <Badge>Weekly pay every Friday</Badge>
               <Badge>Dedicated dispatcher</Badge>
             </div>
@@ -278,7 +278,7 @@ export default function RecruitingLanding() {
               </ul>
             </div>
             <div className="rounded-2xl p-6 border" style={{ backgroundColor: "#1e293b", borderColor: "#334155" }}>
-              <div className="text-sm font-bold tracking-wide" style={{ color: "#34d399" }}>COMPANY DRIVER (W-2)</div>
+              <div className="text-sm font-bold tracking-wide" style={{ color: "#34d399" }}>COMPANY DRIVER (LEASE-ON)</div>
               <div className="mt-2 text-4xl font-bold" style={{ color: "#ffffff" }}>$1,200/wk base</div>
               <ul className="mt-5 space-y-2.5 text-sm" style={{ color: "#cbd5e1" }}>
                 <li>✓ Mileage bonus over base loads</li>
@@ -386,7 +386,7 @@ export default function RecruitingLanding() {
           <div className="mt-12 space-y-3">
             <Faq q="Do I need a CDL to drive for LAMP?" a="For most LAMP loads, no. Our box trucks are under 26,001 GVWR which doesn't require a CDL — just a regular driver's license. You still need a current DOT physical and a clean driving record." />
             <Faq q="How fast can I start driving?" a="Most drivers go from application to first load in 10–21 days. The timeline depends on how fast your background check, MVR, drug test, and DOT physical come back." />
-            <Faq q="Do I have to own my own truck?" a="No. We offer both options. Owner-operators get an 80/20 split (you keep 80% of gross). Company drivers get $1,200/week W-2 base plus mileage bonuses — no truck payment, no fuel out of pocket." />
+            <Faq q="Do I have to own my own truck?" a="No. We offer both options. Owner-operators get an 80/20 split (you keep 80% of gross). Company drivers lease one of our trucks and run as an Independent Contractor — guaranteed $1,200/week minimum plus mileage bonuses, no truck payment, no fuel out of pocket." />
             <Faq q="When and how do I get paid?" a="Every Friday. Settlements process Tuesday for the prior week, deposit hits your account Friday. You see a full settlement statement in TraqIQ — no guessing, no missing line items." />
             <Faq q="What disqualifies me from driving with LAMP?" a="Recent license suspension/revocation, DUI in the last 5 years, failed DOT drug or alcohol test, more than 2 moving violations in the past 3 years. Felony convictions are reviewed case-by-case." />
             <Faq q="What lanes do you run?" a="Regional and OTR mix — primarily Southeast (TN, GA, AL, FL, NC, SC, KY) with some Midwest runs. Home time depends on your lane preference. Tell your dispatcher what works." />

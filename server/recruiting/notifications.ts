@@ -67,7 +67,7 @@ const SMS_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender> 
     text: `${p.first_name || "Driver"}, background check cleared. Drug test + DOT physical next. Check your email for the appointment.`,
   }),
   MEDICAL_PASS_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, medical cleared. Your lease/W-2 paperwork is on the way for e-signature.`,
+    text: `${p.first_name || "Driver"}, medical cleared. Your contractor agreement is on the way for e-signature.`,
   }),
   AGREEMENT_SIGNED_SMS: (p) => ({
     text: `${p.first_name || "Driver"}, agreement signed. Orientation course unlocked: ${p.orientation_url || "https://traqiq.app"}.`,
@@ -158,7 +158,7 @@ const EMAIL_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender
     html: brandedEmail({
       preview: "Snap photos of 4-6 documents to keep your application moving",
       heading: `${p.first_name || "Driver"}, you passed pre-screening 🎉`,
-      bodyHtml: `<p>Great news — you cleared our initial review. The fastest way to start driving is to upload your documents now.</p><p>You'll need: driver's license (front + back), SSN card or W-2, and a voided check. Owner-operators also upload truck insurance + registration.</p><p>Phone camera works fine.</p>`,
+      bodyHtml: `<p>Great news — you cleared our initial review. The fastest way to start driving is to upload your documents now.</p><p>You'll need: driver's license (front + back), Social Security card, and a voided check (for direct deposit). Owner-operators also upload truck insurance + registration.</p><p>Phone camera works fine.</p>`,
       ctaLabel: "Upload Documents →",
       ctaUrl: p.docs_url,
       footer: `Most drivers finish uploading in under 5 minutes.`,

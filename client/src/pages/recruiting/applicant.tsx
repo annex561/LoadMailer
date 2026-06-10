@@ -188,7 +188,7 @@ export default function RecruiterApplicant() {
         };
       case "MEDICAL_PASS":
         return {
-          label: "Send Lease/W-2 for Signature",
+          label: "Send Agreement for Signature",
           icon: <FileText className="h-4 w-4" />,
           run: () => callAction("Send for Signature", `/api/recruiting/applications/${id}/sign-request`),
         };

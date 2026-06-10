@@ -40,7 +40,7 @@ const FUNNEL_GROUPS = [
   { key: "documents", label: "4. Documents", matches: ["DOCS_REQUESTED", "DOCS_RECEIVED"] },
   { key: "background", label: "5. Background", matches: ["BACKGROUND_RUNNING", "BACKGROUND_PASS"] },
   { key: "medical", label: "6. Drug/Physical", matches: ["MEDICAL_REQUESTED", "MEDICAL_PASS"] },
-  { key: "agreement", label: "7. Lease/W-2", matches: ["AGREEMENT_SIGNED"] },
+  { key: "agreement", label: "7. Sign Agreement", matches: ["AGREEMENT_SIGNED"] },
   { key: "orientation", label: "8. Orientation", matches: ["ORIENTATION", "ORIENTATION_DONE"] },
   { key: "truck", label: "9. Truck Assigned", matches: ["TRUCK_ASSIGNED"] },
   { key: "active", label: "10. Active", matches: ["ACTIVE"] },

@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 const DOC_LABELS: Record<string, string> = {
   DRIVER_LICENSE_FRONT: "Driver's License — Front",
   DRIVER_LICENSE_BACK: "Driver's License — Back",
-  SSN_CARD: "Social Security Card (or W-2)",
+  SSN_CARD: "Social Security Card",
   VOIDED_CHECK: "Voided Check (for direct deposit)",
   INSURANCE_CARD: "Truck Insurance Card",
   TRUCK_REGISTRATION: "Truck Registration",
