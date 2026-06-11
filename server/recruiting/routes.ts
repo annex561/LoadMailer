@@ -919,6 +919,20 @@ export function registerRecruitingRoutes(app: Express) {
     if (!requireAuth(req, res)) return;
     try {
       const { id } = req.params;
+      const [appRow] = await db
+        .select({
+          agreementSignedAt: recruitingApplications.agreementSignedAt,
+          agreementType: recruitingApplications.agreementType,
+        })
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!appRow) return res.status(404).json({ error: "Application not found" });
+      if (appRow.agreementSignedAt == null || appRow.agreementType == null) {
+        return res.status(409).json({
+          error: "Driver must sign the contractor agreement before completing orientation.",
+        });
+      }
       await db
         .update(recruitingApplications)
         .set({ orientationCompletedAt: new Date(), updatedAt: new Date() })
@@ -938,6 +952,20 @@ export function registerRecruitingRoutes(app: Express) {
     try {
       const { id } = req.params;
       const truckUnit = String(req.body?.truckUnit || "").trim() || `T-${Date.now()}`;
+      const [appRow] = await db
+        .select({
+          agreementSignedAt: recruitingApplications.agreementSignedAt,
+          agreementType: recruitingApplications.agreementType,
+        })
+        .from(recruitingApplications)
+        .where(eq(recruitingApplications.id, id))
+        .limit(1);
+      if (!appRow) return res.status(404).json({ error: "Application not found" });
+      if (appRow.agreementSignedAt == null || appRow.agreementType == null) {
+        return res.status(409).json({
+          error: "Driver must sign the contractor agreement before a truck can be assigned.",
+        });
+      }
       await db
         .update(recruitingApplications)
         .set({
@@ -969,6 +997,24 @@ export function registerRecruitingRoutes(app: Express) {
 
       if (appRow.driverId) {
         return res.json({ success: true, driverId: appRow.driverId, alreadyActive: true });
+      }
+
+      // Hard gate — refuse to activate a driver who has not signed the
+      // contractor agreement. Legacy applicants activated before agreement
+      // tracking existed have agreementType == null AND agreementSignedAt == null
+      // AND already have a driverId (caught above), so this gate ONLY blocks
+      // new applicants who skipped signing.
+      const hasSignedAgreement =
+        appRow.agreementSignedAt != null && appRow.agreementType != null;
+      if (!hasSignedAgreement) {
+        return res.status(409).json({
+          error:
+            "Agreement not signed — driver must complete the DocuSeal contractor agreement before activation. Stage 7 (Send Agreement for Signature) must be completed first.",
+          missing: {
+            agreement_type: appRow.agreementType,
+            agreement_signed_at: appRow.agreementSignedAt,
+          },
+        });
       }
 
       // Normalize phone to +1XXXXXXXXXX
