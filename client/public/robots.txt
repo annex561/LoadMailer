@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+
+# Public pages
+Allow: /drive-with-lamp
+Allow: /apply
+
+# Block API + admin
+Disallow: /api/
+Disallow: /admin/
+Disallow: /recruiting/
+Disallow: /dispatcher
+Disallow: /dispatcher-dashboard
+Disallow: /loadops-dashboard
+Disallow: /driver-management
+Disallow: /contacts
+Disallow: /templates
+Disallow: /scrapers
+Disallow: /admin
+
+Sitemap: https://traqiq.app/sitemap.xml
