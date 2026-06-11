@@ -9,8 +9,97 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, Truck, DollarSign, Calendar, Shield, MessageSquare } from "lucide-react";
 
+// Variants for SEO-targeted landing pages. Each variant changes the hero
+// copy and badges to match a specific keyword cluster. Same form below,
+// same brand frame, same conversion flow — only the above-the-fold pitch
+// changes, plus the leadSource tag so we can measure which page converts.
+type LandingVariant = {
+  badge: string;
+  h1Line1: string;
+  h1Line2: string;
+  subhead: string;
+  badges: string[];
+  leadSource: string;
+};
+
+const VARIANTS: Record<string, LandingVariant> = {
+  "/drive-with-lamp": {
+    badge: "Now hiring · Box truck drivers",
+    h1Line1: "Earn $4,000–$6,000 a week.",
+    h1Line2: "Paid every Friday.",
+    subhead:
+      "LAMP gives box truck drivers steady freight, weekly settlements, an exclusive dispatcher, and zero runaround. Most loads do not require a CDL.",
+    badges: [
+      "80/20 split for owner-operators",
+      "$1,200/wk minimum for company drivers",
+      "Weekly pay every Friday",
+      "Dedicated dispatcher",
+    ],
+    leadSource: "landing-page",
+  },
+  "/non-cdl-truck-driver-jobs": {
+    badge: "Now hiring · No CDL required",
+    h1Line1: "Drive a box truck.",
+    h1Line2: "No CDL required.",
+    subhead:
+      "Our box trucks are under 26,001 GVWR — so a regular driver's license is enough. Earn $4,000–$6,000/week without spending months in CDL school. Paid every Friday.",
+    badges: [
+      "No CDL required",
+      "Just a clean driver's license",
+      "$4,000–$6,000/wk",
+      "Start in 10–21 days",
+    ],
+    leadSource: "non-cdl-landing",
+  },
+  "/owner-operator-jobs": {
+    badge: "Now hiring · Owner-operators",
+    h1Line1: "80/20 split. Your truck, your rules.",
+    h1Line2: "Settlements every Friday.",
+    subhead:
+      "Owner-operators at LAMP keep 80% of gross. We bring the freight and the dispatcher — you bring the truck. Zero forced dispatch, transparent settlements, every load itemized in TraqIQ.",
+    badges: [
+      "Keep 80% of gross",
+      "No forced dispatch",
+      "Itemized settlements",
+      "Weekly pay Friday",
+    ],
+    leadSource: "owner-operator-landing",
+  },
+  "/box-truck-careers-tennessee": {
+    badge: "Now hiring · Chattanooga + Tennessee",
+    h1Line1: "Box truck careers based in Tennessee.",
+    h1Line2: "Home weekly. Paid weekly.",
+    subhead:
+      "LAMP Logistics is Chattanooga-based and dispatches throughout Tennessee, the Southeast, and OTR for drivers who want longer hauls. Most local-regional loads get you home weekly. Most loads do not require a CDL.",
+    badges: [
+      "Chattanooga HQ",
+      "TN, GA, AL, MS lanes",
+      "Home weekly available",
+      "$4,000–$6,000/wk",
+    ],
+    leadSource: "tennessee-landing",
+  },
+  "/lease-on-trucking-jobs": {
+    badge: "Now hiring · Lease-on company drivers",
+    h1Line1: "Lease one of our trucks.",
+    h1Line2: "$1,200/wk minimum guaranteed.",
+    subhead:
+      "Drive a LAMP-owned box truck on a lease-on Independent Contractor model. $1,200/week minimum, mileage bonuses on top. No truck payment out of pocket, no fuel out of pocket, no upfront capital.",
+    badges: [
+      "$1,200/wk minimum",
+      "Mileage bonuses on top",
+      "Truck + fuel covered",
+      "No upfront capital",
+    ],
+    leadSource: "lease-on-landing",
+  },
+};
+
+const DEFAULT_VARIANT = VARIANTS["/drive-with-lamp"];
+
 export default function RecruitingLanding() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const variant = VARIANTS[location] || DEFAULT_VARIANT;
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
@@ -46,7 +135,7 @@ export default function RecruitingLanding() {
           hasCdl: form.hasCdl === "yes",
           yearsExperience: form.yearsExperience,
           consentSms: true,
-          leadSource: "landing-page",
+          leadSource: variant.leadSource,
         }),
       });
       const data = await res.json();
@@ -109,22 +198,20 @@ export default function RecruitingLanding() {
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Now hiring · Box truck drivers
+              {variant.badge}
             </div>
             <h1 className="mt-5 text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-slate-900">
-              Earn $4,000–$6,000 a week.
+              {variant.h1Line1}
               <br />
-              <span className="text-emerald-600">Paid every Friday.</span>
+              <span className="text-emerald-600">{variant.h1Line2}</span>
             </h1>
             <p className="mt-6 text-lg text-slate-700 max-w-xl">
-              LAMP gives box truck drivers steady freight, weekly settlements, an exclusive
-              dispatcher, and zero runaround. Most loads do not require a CDL.
+              {variant.subhead}
             </p>
             <div className="mt-8 flex flex-wrap gap-2">
-              <Badge>80/20 split for owner-operators</Badge>
-              <Badge>$1,200/wk minimum for company drivers</Badge>
-              <Badge>Weekly pay every Friday</Badge>
-              <Badge>Dedicated dispatcher</Badge>
+              {variant.badges.map((b) => (
+                <Badge key={b}>{b}</Badge>
+              ))}
             </div>
           </div>
 

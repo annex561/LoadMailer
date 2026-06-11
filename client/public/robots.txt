@@ -3,6 +3,10 @@ Allow: /
 
 # Public pages
 Allow: /drive-with-lamp
+Allow: /non-cdl-truck-driver-jobs
+Allow: /owner-operator-jobs
+Allow: /box-truck-careers-tennessee
+Allow: /lease-on-trucking-jobs
 Allow: /apply
 
 # Block API + admin

@@ -172,6 +172,10 @@ function App() {
 
               {/* Driver Recruiting Funnel — public pages, no auth, no sidebar */}
               <Route path="/drive-with-lamp" component={RecruitingLanding} />
+              <Route path="/non-cdl-truck-driver-jobs" component={RecruitingLanding} />
+              <Route path="/owner-operator-jobs" component={RecruitingLanding} />
+              <Route path="/box-truck-careers-tennessee" component={RecruitingLanding} />
+              <Route path="/lease-on-trucking-jobs" component={RecruitingLanding} />
               <Route path="/apply/:id" component={RecruitingApplication} />
               <Route path="/apply/:id/status" component={RecruitingStatus} />
               <Route path="/apply/:id/documents" component={RecruitingDocuments} />
