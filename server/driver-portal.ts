@@ -271,32 +271,57 @@ function escapeHtml(s: any): string {
 // (/driver/:token/voice-token) returns 403 when PORTAL_DIALER_ENABLED is off, so
 // the SDK never initializes and no call is possible. Injected near the end of
 // the home + load-detail render bodies.
-export function dialerWidget(token: string): string {
+export function dialerWidget(token: string, contacts: Array<{ name: string; phone: string }> = []): string {
+  const keys = ["1","2","3","4","5","6","7","8","9","*","0","#"];
+  const contactRows = contacts.length
+    ? contacts.map((c) => `<button class="lampContact" data-num="${escapeHtml(c.phone)}" data-label="${escapeHtml(c.name)}"><span class="lampContactName">${escapeHtml(c.name)}<span class="lampContactNum">${escapeHtml(c.phone)}</span></span><span class="lampGo">Call ▸</span></button>`).join("")
+    : `<div class="lampNoContacts">No load contacts with a phone number yet.</div>`;
   return `
-<link rel="stylesheet" href="data:text/css,">
 <style>
-  #lampDial{position:fixed;right:16px;bottom:16px;z-index:9000}
-  #lampFab{width:56px;height:56px;border-radius:50%;background:#2563eb;color:#fff;border:none;font-size:24px;box-shadow:0 6px 16px rgba(37,99,235,.5)}
-  #lampPad,#lampCallUI{position:fixed;inset:0;background:#0b1220;color:#e2e8f0;z-index:9001;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px;font-family:-apple-system,system-ui,sans-serif}
-  #lampPadNum{font-size:30px;font-weight:700;min-height:40px;margin:10px}
-  .lampKeys{display:grid;grid-template-columns:repeat(3,72px);gap:14px}
-  .lampKey{height:62px;border-radius:50%;background:#111a2e;border:1px solid #1e2c47;color:#e2e8f0;font-size:22px}
-  .lampGreen{width:64px;height:64px;border-radius:50%;background:#16a34a;border:none;color:#fff;font-size:26px;margin-top:16px}
-  .lampRed{width:64px;height:64px;border-radius:50%;background:#dc2626;border:none;color:#fff;font-size:26px}
-  #lampClose{position:absolute;top:18px;right:20px;background:none;border:none;color:#94a3b8;font-size:26px}
-  .lampRec{background:#7f1d1d;color:#fecaca;font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px}
+  #lampDial{position:fixed;right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:9000}
+  #lampFab{width:58px;height:58px;border-radius:50%;background:#2563eb;color:#fff;border:none;font-size:24px;box-shadow:0 8px 20px rgba(37,99,235,.55)}
+  #lampPad,#lampCallUI{position:fixed;inset:0;background:#0b1220;color:#e2e8f0;z-index:9001;display:none;flex-direction:column;align-items:center;padding:18px 18px calc(28px + env(safe-area-inset-bottom,0px));font-family:-apple-system,system-ui,sans-serif;overflow-y:auto}
+  #lampClose{position:absolute;top:12px;right:16px;background:none;border:none;color:#94a3b8;font-size:32px;line-height:1;z-index:2}
+  .lampTitle{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#64748b;font-weight:700;margin:34px 0 8px;align-self:center}
+  #lampPadNum{width:100%;max-width:300px;text-align:center;font-size:30px;font-weight:700;letter-spacing:1px;background:transparent;border:none;border-bottom:2px solid #1e2c47;color:#fff;padding:8px 0;outline:none}
+  #lampPadNum::placeholder{color:#3b4a63;font-size:16px;font-weight:500;letter-spacing:normal}
+  .lampKeys{display:grid;grid-template-columns:repeat(3,70px);gap:12px;margin:18px 0 4px}
+  .lampKey{height:60px;border-radius:50%;background:#111a2e;border:1px solid #1e2c47;color:#e2e8f0;font-size:22px}
+  .lampKey:active{background:#1e2c47}
+  .lampRow{display:flex;align-items:center;justify-content:center;gap:26px;margin-top:10px}
+  .lampGreen{width:62px;height:62px;border-radius:50%;background:#16a34a;border:none;color:#fff;font-size:26px}
+  .lampBack{width:50px;height:50px;border-radius:50%;background:#1e293b;border:none;color:#cbd5e1;font-size:22px}
+  .lampSpacer{width:50px}
+  .lampContacts{width:100%;max-width:320px;margin-top:18px}
+  .lampContact{display:flex;justify-content:space-between;align-items:center;width:100%;background:#111a2e;border:1px solid #1e2c47;border-radius:12px;padding:12px 14px;margin-bottom:8px;color:#e2e8f0;text-align:left}
+  .lampContact:active{background:#1e2c47}
+  .lampContactName{font-size:14px;font-weight:600;display:flex;flex-direction:column}
+  .lampContactNum{color:#7c8aa5;font-size:12px;font-weight:400;margin-top:2px}
+  .lampGo{color:#22c55e;font-weight:700;font-size:13px;white-space:nowrap}
+  .lampNoContacts{color:#64748b;font-size:13px;text-align:center}
+  .lampRec{background:#7f1d1d;color:#fecaca;font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px;margin-top:36px}
   .lampCallee{font-size:23px;font-weight:800;margin:18px 0 4px}
   .lampVia{font-size:12px;color:#7c8aa5}
   .lampTimer{font-size:16px;margin:14px 0 26px;font-variant-numeric:tabular-nums}
+  .lampRed{width:64px;height:64px;border-radius:50%;background:#dc2626;border:none;color:#fff;font-size:26px}
 </style>
 <div id="lampDial"><button id="lampFab" onclick="lampOpenPad()">⌨</button></div>
 <div id="lampPad">
   <button id="lampClose" onclick="lampHide()">×</button>
-  <div id="lampPadNum"></div>
+  <div class="lampTitle">Dial a number</div>
+  <input id="lampPadNum" type="tel" inputmode="tel" autocomplete="off" placeholder="Type or paste a number" />
   <div class="lampKeys">
-    ${"123456789*0#".split("").map((k)=>`<button class="lampKey" onclick="lampPadPress('${k}')">${k}</button>`).join("")}
+    ${keys.map((k) => `<button class="lampKey" data-k="${k}">${k}</button>`).join("")}
   </div>
-  <button class="lampGreen" onclick="lampDialPad()">📞</button>
+  <div class="lampRow">
+    <span class="lampSpacer"></span>
+    <button class="lampGreen" onclick="lampDialPad()" aria-label="call">📞</button>
+    <button class="lampBack" onclick="lampBack()" aria-label="backspace">⌫</button>
+  </div>
+  <div class="lampContacts">
+    <div class="lampTitle" style="margin-top:8px">Call a load contact</div>
+    ${contactRows}
+  </div>
 </div>
 <div id="lampCallUI">
   <span class="lampRec">● REC</span>
@@ -308,10 +333,12 @@ export function dialerWidget(token: string): string {
 <script src="https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.12.3/dist/twilio.min.js"></script>
 <script>
 (function(){
-  var device=null, conn=null, t0=0, tick=null, padNum="";
+  var device=null, conn=null, t0=0, tick=null;
   var TOKEN_URL="/driver/${token}/voice-token", DRIVER_ID="";
+  var pad=document.getElementById("lampPadNum");
   async function ensureDevice(){
     if(device) return device;
+    if(typeof Twilio==="undefined" || !Twilio.Device){ alert("Dialer failed to load. Refresh the page and try again."); throw new Error("sdk-missing"); }
     var r=await fetch(TOKEN_URL); if(!r.ok){ alert("Calling is not enabled."); throw new Error("disabled"); }
     var j=await r.json(); DRIVER_ID=(j.identity||"").replace("driver-","");
     device=new Twilio.Device(j.token,{codecPreferences:["opus","pcmu"]});
@@ -320,9 +347,11 @@ export function dialerWidget(token: string): string {
   function show(id){ document.getElementById(id).style.display="flex"; }
   function hideAll(){ ["lampPad","lampCallUI"].forEach(function(i){document.getElementById(i).style.display="none";}); }
   window.lampHide=hideAll;
-  window.lampOpenPad=function(){ padNum=""; document.getElementById("lampPadNum").textContent=""; show("lampPad"); };
-  window.lampPadPress=function(k){ padNum+=k; document.getElementById("lampPadNum").textContent=padNum; };
-  window.lampDialPad=function(){ if(padNum) window.lampCall(padNum, padNum); };
+  window.lampOpenPad=function(){ show("lampPad"); };
+  window.lampBack=function(){ pad.value=pad.value.slice(0,-1); };
+  window.lampDialPad=function(){ var n=(pad.value||"").trim(); if(n){ window.lampCall(n,n); } else { alert("Enter a number first."); } };
+  Array.prototype.forEach.call(document.querySelectorAll(".lampKey"), function(b){ b.addEventListener("click", function(){ pad.value += b.getAttribute("data-k"); }); });
+  Array.prototype.forEach.call(document.querySelectorAll(".lampContact"), function(b){ b.addEventListener("click", function(){ window.lampCall(b.getAttribute("data-num"), b.getAttribute("data-label")); }); });
   function fmt(s){ var m=Math.floor(s/60),x=s%60; return (m<10?"0":"")+m+":"+(x<10?"0":"")+x; }
   window.lampCall=async function(number,label){
     try{
@@ -332,6 +361,7 @@ export function dialerWidget(token: string): string {
       document.getElementById("lampTimer").textContent="00:00"; hideAll(); show("lampCallUI");
       t0=Date.now(); tick=setInterval(function(){ document.getElementById("lampTimer").textContent=fmt(Math.floor((Date.now()-t0)/1000)); },1000);
       conn.on("disconnect",function(){ clearInterval(tick); hideAll(); });
+      conn.on("error",function(e){ clearInterval(tick); hideAll(); alert("Call failed: "+(e&&e.message?e.message:"unknown")); });
     }catch(e){ console.error(e); }
   };
   window.lampHangup=function(){ if(conn) conn.disconnect(); clearInterval(tick); hideAll(); };
@@ -431,6 +461,13 @@ export async function renderHome(token: string): Promise<string> {
     .where(and(eq(loads.driverId, driver.id), isNull(loads.deliveredAt)))
     .orderBy(desc(loads.createdAt))
     .limit(3);
+
+  // Dialer contacts: broker/contact phones from the driver's active loads (deduped by number).
+  const dialerContacts = Array.from(new Map(
+    active
+      .filter((l: any) => l.brokerPhone || l.contactPhone)
+      .map((l: any) => [String(l.brokerPhone || l.contactPhone), { name: String(l.brokerName || 'Broker'), phone: String(l.brokerPhone || l.contactPhone) }])
+  ).values());
 
   // This week pay
   const settlement = await computeSettlementForDriver(driver.id, fmtYMD(new Date()));
@@ -595,7 +632,7 @@ export async function renderHome(token: string): Promise<string> {
       setInterval(paint, 5000);
     })();
     </script>
-    ${dialerWidget(token)}
+    ${dialerWidget(token, dialerContacts)}
   `;
   return layout({ title: 'My Dashboard', token, active: 'home', body, driverId: driver.id });
 }
@@ -654,6 +691,10 @@ export async function renderLoadDetail(token: string, loadId: string): Promise<s
     return layout({ title: 'Not Found', token, active: 'loads', showBack: true, backHref: `/driver/${token}/loads`,
       body: '<div class="card">Load not found or not assigned to you.</div>' });
   }
+
+  // Dialer contact: this load's broker (or contact) phone.
+  const detailPhone = (load as any).brokerPhone || (load as any).contactPhone;
+  const detailContacts = detailPhone ? [{ name: String((load as any).brokerName || 'Broker'), phone: String(detailPhone) }] : [];
 
   const docs = await db
     .select()
@@ -721,7 +762,7 @@ export async function renderLoadDetail(token: string, loadId: string): Promise<s
     <a class="btn block" href="/u/${load.id}?stages=${stagesForLoadStatus(load.status as any).join(',')}">
       📷 Upload Photos / Check In
     </a>
-    ${dialerWidget(token)}
+    ${dialerWidget(token, detailContacts)}
   `;
   return layout({ title: `Load ${load.loadNumber}`, token, active: 'loads', showBack: true, backHref: `/driver/${token}/loads`, body, driverId: driver.id });
 }
