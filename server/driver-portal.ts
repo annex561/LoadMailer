@@ -305,7 +305,7 @@ export function dialerWidget(token: string): string {
   <div class="lampTimer" id="lampTimer">00:00</div>
   <button class="lampRed" onclick="lampHangup()">📞</button>
 </div>
-<script src="https://sdk.twilio.com/js/voice/releases/2.12.3/twilio.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.12.3/dist/twilio.min.js"></script>
 <script>
 (function(){
   var device=null, conn=null, t0=0, tick=null, padNum="";
