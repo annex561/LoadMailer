@@ -3,7 +3,7 @@
 
 import { type Express } from "express";
 import { db } from "../db";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, inArray } from "drizzle-orm";
 import {
   recruitingApplications,
   recruitingStatusEvents,
@@ -954,6 +954,7 @@ export function registerRecruitingRoutes(app: Express) {
       const truckUnit = String(req.body?.truckUnit || "").trim() || `T-${Date.now()}`;
       const [appRow] = await db
         .select({
+          isOwnerOperator: recruitingApplications.isOwnerOperator,
           agreementSignedAt: recruitingApplications.agreementSignedAt,
           agreementType: recruitingApplications.agreementType,
         })
@@ -966,11 +967,45 @@ export function registerRecruitingRoutes(app: Express) {
           error: "Driver must sign the contractor agreement before a truck can be assigned.",
         });
       }
+
+      // Owner-operators: their truck, their insurance. Refuse truck assignment
+      // (which here means linking THEIR truck to operate under LAMP's authority)
+      // until COI + registration are uploaded AND verified by an admin. Company
+      // drivers (lease-on) use a LAMP-owned truck + LAMP-paid insurance, so no
+      // COI gate applies to them.
+      if (appRow.isOwnerOperator === true) {
+        const insuranceDocs = await db
+          .select({ type: recruitingDocuments.type, verified: recruitingDocuments.verified })
+          .from(recruitingDocuments)
+          .where(
+            and(
+              eq(recruitingDocuments.applicationId, id),
+              inArray(recruitingDocuments.type, ["INSURANCE_CARD", "TRUCK_REGISTRATION"])
+            )
+          );
+        const insurance = insuranceDocs.find((d) => d.type === "INSURANCE_CARD");
+        const registration = insuranceDocs.find((d) => d.type === "TRUCK_REGISTRATION");
+        const missing: string[] = [];
+        if (!insurance) missing.push("INSURANCE_CARD upload");
+        else if (!insurance.verified) missing.push("INSURANCE_CARD verification");
+        if (!registration) missing.push("TRUCK_REGISTRATION upload");
+        else if (!registration.verified) missing.push("TRUCK_REGISTRATION verification");
+        if (missing.length > 0) {
+          return res.status(409).json({
+            error:
+              "Owner-operator's truck cannot be added to LAMP's authority without verified insurance + registration: " +
+              missing.join(", "),
+            missing,
+          });
+        }
+      }
+
       await db
         .update(recruitingApplications)
         .set({
           assignedTruckUnit: truckUnit,
           truckAssignmentDate: new Date(),
+          ...(appRow.isOwnerOperator === true ? { truckInsuranceVerified: true } : {}),
           updatedAt: new Date(),
         })
         .where(eq(recruitingApplications.id, id));
