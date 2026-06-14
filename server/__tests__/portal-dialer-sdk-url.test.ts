@@ -27,4 +27,10 @@ describe("portal dialer uses the dial-out bridge (no WebRTC)", () => {
   it("places calls via the server-side bridge endpoint", () => {
     expect(src).toMatch(/\/bridge-call/);
   });
+  // iOS Safari double-tapped the dialer keys fast and zoomed the page. Fixed with
+  // touch-action:manipulation on the controls (not a viewport change). Tripwire so
+  // the rule isn't dropped in a future refactor.
+  it("disables iOS double-tap-to-zoom on the dialer controls", () => {
+    expect(src).toMatch(/touch-action:\s*manipulation/);
+  });
 });

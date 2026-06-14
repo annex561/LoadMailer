@@ -278,6 +278,10 @@ export function dialerWidget(token: string, contacts: Array<{ name: string; phon
     : `<div class="lampNoContacts">No load contacts with a phone number yet.</div>`;
   return `
 <style>
+  /* iOS Safari: kill double-tap-to-zoom on the dialer controls/overlays only —
+     no viewport meta change, so pinch-zoom on the rest of the page still works. */
+  #lampDial,#lampPad,#lampCallUI,#lampFab,#lampPadNum,.lampKey,.lampGreen,.lampBack,.lampContact,.lampDoneBtn,#lampClose,#lampCloseRing{touch-action:manipulation}
+  #lampFab,.lampKey,.lampGreen,.lampBack,.lampContact,.lampDoneBtn,#lampClose,#lampCloseRing{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
   #lampDial{position:fixed;right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:9000}
   #lampFab{width:58px;height:58px;border-radius:50%;background:#2563eb;color:#fff;border:none;font-size:24px;box-shadow:0 8px 20px rgba(37,99,235,.55)}
   #lampPad,#lampCallUI{position:fixed;inset:0;background:#0b1220;color:#e2e8f0;z-index:9001;display:none;flex-direction:column;align-items:center;padding:18px 18px calc(28px + env(safe-area-inset-bottom,0px));font-family:-apple-system,system-ui,sans-serif;overflow-y:auto}
