@@ -347,7 +347,7 @@ export function dialerWidget(token: string, contacts: Array<{ name: string; phon
   function show(id){ document.getElementById(id).style.display="flex"; }
   function hideAll(){ ["lampPad","lampCallUI"].forEach(function(i){document.getElementById(i).style.display="none";}); }
   window.lampHide=hideAll;
-  window.lampOpenPad=function(){ show("lampPad"); };
+  window.lampOpenPad=function(){ show("lampPad"); ensureDevice().catch(function(){}); };
   window.lampBack=function(){ pad.value=pad.value.slice(0,-1); };
   window.lampDialPad=function(){ var n=(pad.value||"").trim(); if(n){ window.lampCall(n,n); } else { alert("Enter a number first."); } };
   Array.prototype.forEach.call(document.querySelectorAll(".lampKey"), function(b){ b.addEventListener("click", function(){ pad.value += b.getAttribute("data-k"); }); });
@@ -355,6 +355,13 @@ export function dialerWidget(token: string, contacts: Array<{ name: string; phon
   function fmt(s){ var m=Math.floor(s/60),x=s%60; return (m<10?"0":"")+m+":"+(x<10?"0":"")+x; }
   window.lampCall=async function(number,label){
     try{
+      // iOS Safari: the mic must be acquired INSIDE the tap gesture or the SDK's
+      // own getUserMedia fails with AcquisitionFailedError (31402). Grab it here
+      // (prompts/warms the mic in-gesture), release it, then let the SDK acquire.
+      if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+        try{ var s=await navigator.mediaDevices.getUserMedia({audio:true}); s.getTracks().forEach(function(t){t.stop();}); }
+        catch(me){ alert("Microphone not available: "+(me&&me.message?me.message:me)+"\\n\\nClose any other app using the mic, then try again."); return; }
+      }
       var d=await ensureDevice();
       conn=await d.connect({ params:{ To:number, driverId:DRIVER_ID } });
       document.getElementById("lampCallee").textContent=label||number;
@@ -362,7 +369,7 @@ export function dialerWidget(token: string, contacts: Array<{ name: string; phon
       t0=Date.now(); tick=setInterval(function(){ document.getElementById("lampTimer").textContent=fmt(Math.floor((Date.now()-t0)/1000)); },1000);
       conn.on("disconnect",function(){ clearInterval(tick); hideAll(); });
       conn.on("error",function(e){ clearInterval(tick); hideAll(); alert("Call failed: "+(e&&e.message?e.message:"unknown")); });
-    }catch(e){ console.error(e); }
+    }catch(e){ console.error(e); alert("Call failed: "+(e&&e.message?e.message:e)); }
   };
   window.lampHangup=function(){ if(conn) conn.disconnect(); clearInterval(tick); hideAll(); };
 })();
