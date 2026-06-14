@@ -1,0 +1,19 @@
+# Netlify config — deploys ONLY the static driver-recruiting landing page.
+# Publish dir is `recruiting/`, so Netlify will NOT try to build the main TRAQ-IQ app.
+# The no-op build command stops Netlify auto-detecting package.json and running npm build.
+
+[build]
+  publish = "recruiting"
+  command = "echo 'Static landing page — no build step needed'"
+
+# Netlify Forms: the form in recruiting/index.html (data-netlify="true" + hidden
+# form-name input) is auto-detected on deploy. After the first deploy, set the
+# notification email in Netlify: Forms -> Form notifications -> dispatch@lampslogistics.com
+
+# Light security headers for a public marketing page.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
