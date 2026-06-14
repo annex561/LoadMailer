@@ -31,6 +31,39 @@ export function registerPortalDialerRoutes(app: Express) {
     res.json(mintVoiceToken({ id: driver.id }));
   });
 
+  // Dial-out bridge (reliable, no WebRTC): rings the driver's OWN cell from the
+  // company line, and when they answer, bridges them to the destination — recorded,
+  // company caller ID — via the same buildPortalOutboundTwiml + recording callback.
+  // Token-gated; no browser mic needed, so it works on every phone.
+  app.post("/driver/:token/bridge-call", async (req, res) => {
+    if (!dialerEnabled()) return res.status(403).json({ error: "dialer disabled" });
+    const driver = await driverFromToken(req.params.token);
+    if (!driver) return res.status(404).json({ error: "invalid token" });
+    if (!driver.phone) return res.status(400).json({ error: "no driver phone on file" });
+    const to = normalizeNanp(req.body?.to);
+    if (!to) return res.status(400).json({ error: "that number can not be dialed" });
+    if (!withinDriverCallCeiling(driver.id)) return res.status(429).json({ error: "call limit reached, try again later" });
+    try {
+      const base = `${req.protocol}://${req.get("host")}`;
+      const recCb = `${base}/api/twilio/voice/portal-recording?driverId=${encodeURIComponent(driver.id)}`;
+      const noticeUrl = process.env.PORTAL_DIALER_RECORDING_NOTICE === "false" ? undefined : `${base}/api/twilio/voice/portal-callee-notice`;
+      const twiml = buildPortalOutboundTwiml({ to, callerId: CALLER_ID, recordingCallbackUrl: recCb, noticeUrl });
+      const sid = process.env.TWILIO_ACCOUNT_SID as string;
+      const auth = Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString("base64");
+      const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Calls.json`, {
+        method: "POST",
+        headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ To: driver.phone, From: CALLER_ID, Twiml: twiml }),
+      });
+      if (!r.ok) { console.error("[portal-bridge] create failed", r.status, await r.text()); return res.status(502).json({ error: "could not place the call" }); }
+      const j: any = await r.json();
+      res.json({ ok: true, callSid: j.sid, ringingLast4: (driver.phone || "").slice(-4) });
+    } catch (e: any) {
+      console.error("[portal-bridge]", e.message);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // TwiML App Voice URL — places the outbound leg.
   app.post("/api/twilio/voice/portal-outbound", async (req, res) => {
     if (!validTwilioSig(req)) return res.status(403).send("Forbidden");

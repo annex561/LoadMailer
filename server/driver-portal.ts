@@ -299,11 +299,13 @@ export function dialerWidget(token: string, contacts: Array<{ name: string; phon
   .lampContactNum{color:#7c8aa5;font-size:12px;font-weight:400;margin-top:2px}
   .lampGo{color:#22c55e;font-weight:700;font-size:13px;white-space:nowrap}
   .lampNoContacts{color:#64748b;font-size:13px;text-align:center}
-  .lampRec{background:#7f1d1d;color:#fecaca;font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px;margin-top:36px}
-  .lampCallee{font-size:23px;font-weight:800;margin:18px 0 4px}
-  .lampVia{font-size:12px;color:#7c8aa5}
-  .lampTimer{font-size:16px;margin:14px 0 26px;font-variant-numeric:tabular-nums}
-  .lampRed{width:64px;height:64px;border-radius:50%;background:#dc2626;border:none;color:#fff;font-size:26px}
+  #lampCloseRing{position:absolute;top:12px;right:16px;background:none;border:none;color:#94a3b8;font-size:32px;line-height:1}
+  .lampRingIcon{font-size:54px;margin-top:60px;animation:lampPulse 1.1s ease-in-out infinite}
+  @keyframes lampPulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.12);opacity:1}}
+  .lampCallee{font-size:24px;font-weight:800;margin:20px 0 4px;text-align:center}
+  .lampVia{font-size:12px;color:#7c8aa5;text-align:center}
+  .lampRingMsg{font-size:15px;line-height:1.5;color:#cbd5e1;text-align:center;margin:26px 22px 30px;max-width:300px}
+  .lampDoneBtn{background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:999px;padding:12px 28px;font-size:15px;font-weight:600}
 </style>
 <div id="lampDial"><button id="lampFab" onclick="lampOpenPad()">⌨</button></div>
 <div id="lampPad">
@@ -324,54 +326,41 @@ export function dialerWidget(token: string, contacts: Array<{ name: string; phon
   </div>
 </div>
 <div id="lampCallUI">
-  <span class="lampRec">● REC</span>
-  <div class="lampCallee" id="lampCallee">—</div>
-  <div class="lampVia">via your company line · 833-362-9813</div>
-  <div class="lampTimer" id="lampTimer">00:00</div>
-  <button class="lampRed" onclick="lampHangup()">📞</button>
+  <button id="lampCloseRing" onclick="lampHide()">×</button>
+  <div class="lampRingIcon">📞</div>
+  <div class="lampCallee" id="lampCallee">Calling…</div>
+  <div class="lampVia">via your company line · 833-362-9813 · recorded</div>
+  <div class="lampRingMsg">Your phone (•••<span id="lampLast4">----</span>) is ringing now.<br/>Answer it and you'll be connected to the call.</div>
+  <button class="lampDoneBtn" onclick="lampHide()">Done</button>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@twilio/voice-sdk@2.12.3/dist/twilio.min.js"></script>
 <script>
 (function(){
-  var device=null, conn=null, t0=0, tick=null;
-  var TOKEN_URL="/driver/${token}/voice-token", DRIVER_ID="";
+  // Dial-out bridge: tapping Call rings the driver's OWN cell from the 833 line,
+  // and Twilio bridges them to the destination on answer (recorded). No WebRTC,
+  // no mic, no SDK — works on every phone, including iOS Safari.
+  var TOKEN="${token}";
   var pad=document.getElementById("lampPadNum");
-  async function ensureDevice(){
-    if(device) return device;
-    if(typeof Twilio==="undefined" || !Twilio.Device){ alert("Dialer failed to load. Refresh the page and try again."); throw new Error("sdk-missing"); }
-    var r=await fetch(TOKEN_URL); if(!r.ok){ alert("Calling is not enabled."); throw new Error("disabled"); }
-    var j=await r.json(); DRIVER_ID=(j.identity||"").replace("driver-","");
-    device=new Twilio.Device(j.token,{codecPreferences:["opus","pcmu"]});
-    return device;
-  }
   function show(id){ document.getElementById(id).style.display="flex"; }
   function hideAll(){ ["lampPad","lampCallUI"].forEach(function(i){document.getElementById(i).style.display="none";}); }
   window.lampHide=hideAll;
-  window.lampOpenPad=function(){ show("lampPad"); ensureDevice().catch(function(){}); };
+  window.lampOpenPad=function(){ show("lampPad"); };
   window.lampBack=function(){ pad.value=pad.value.slice(0,-1); };
   window.lampDialPad=function(){ var n=(pad.value||"").trim(); if(n){ window.lampCall(n,n); } else { alert("Enter a number first."); } };
   Array.prototype.forEach.call(document.querySelectorAll(".lampKey"), function(b){ b.addEventListener("click", function(){ pad.value += b.getAttribute("data-k"); }); });
   Array.prototype.forEach.call(document.querySelectorAll(".lampContact"), function(b){ b.addEventListener("click", function(){ window.lampCall(b.getAttribute("data-num"), b.getAttribute("data-label")); }); });
-  function fmt(s){ var m=Math.floor(s/60),x=s%60; return (m<10?"0":"")+m+":"+(x<10?"0":"")+x; }
   window.lampCall=async function(number,label){
+    var btns=document.querySelectorAll(".lampGreen,.lampContact");
+    Array.prototype.forEach.call(btns,function(b){b.disabled=true;});
     try{
-      // iOS Safari: the mic must be acquired INSIDE the tap gesture or the SDK's
-      // own getUserMedia fails with AcquisitionFailedError (31402). Grab it here
-      // (prompts/warms the mic in-gesture), release it, then let the SDK acquire.
-      if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
-        try{ var s=await navigator.mediaDevices.getUserMedia({audio:true}); s.getTracks().forEach(function(t){t.stop();}); }
-        catch(me){ alert("Microphone not available: "+(me&&me.message?me.message:me)+"\\n\\nClose any other app using the mic, then try again."); return; }
-      }
-      var d=await ensureDevice();
-      conn=await d.connect({ params:{ To:number, driverId:DRIVER_ID } });
+      var r=await fetch("/driver/"+TOKEN+"/bridge-call",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({to:number}) });
+      var j=await r.json();
+      if(!r.ok||!j.ok){ alert("Could not place the call: "+((j&&j.error)||("error "+r.status))); return; }
       document.getElementById("lampCallee").textContent=label||number;
-      document.getElementById("lampTimer").textContent="00:00"; hideAll(); show("lampCallUI");
-      t0=Date.now(); tick=setInterval(function(){ document.getElementById("lampTimer").textContent=fmt(Math.floor((Date.now()-t0)/1000)); },1000);
-      conn.on("disconnect",function(){ clearInterval(tick); hideAll(); });
-      conn.on("error",function(e){ clearInterval(tick); hideAll(); alert("Call failed: "+(e&&e.message?e.message:"unknown")); });
-    }catch(e){ console.error(e); alert("Call failed: "+(e&&e.message?e.message:e)); }
+      document.getElementById("lampLast4").textContent=j.ringingLast4||"----";
+      hideAll(); show("lampCallUI");
+    }catch(e){ alert("Could not place the call: "+(e&&e.message?e.message:e)); }
+    finally{ Array.prototype.forEach.call(btns,function(b){b.disabled=false;}); }
   };
-  window.lampHangup=function(){ if(conn) conn.disconnect(); clearInterval(tick); hideAll(); };
 })();
 </script>`;
 }

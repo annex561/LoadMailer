@@ -1,13 +1,16 @@
 /**
- * Regression guard: the in-portal dialer's Twilio Voice SDK <script> must load
- * from a reachable CDN. It originally pointed at
- * `https://sdk.twilio.com/js/voice/releases/<v>/twilio.min.js`, which returns
- * 403 AccessDenied (that bucket doesn't serve the Voice SDK) — so `Twilio.Device`
- * never loaded and the dialer couldn't place a call. Fixed to jsDelivr's
- * `@twilio/voice-sdk` build.
+ * Regression guard: the in-portal dialer uses the dial-out BRIDGE, not WebRTC.
  *
- * Source-level tripwire: asserts the dialer markup does NOT reference the broken
- * sdk.twilio.com voice path and DOES load @twilio/voice-sdk from a CDN.
+ * History: the dialer first shipped on the Twilio Voice JS SDK (WebRTC softphone).
+ * Two CDN/iOS bugs followed — the SDK <script> 403'd from sdk.twilio.com, and once
+ * that was fixed, iOS Safari rejected the SDK's mic acquisition with
+ * AcquisitionFailedError (31402). We abandoned WebRTC for a server-originated
+ * dial-out bridge: tapping Call POSTs `/driver/:token/bridge-call`, the server rings
+ * the driver's own cell from the 833 line and Twilio bridges to the destination
+ * (recorded). No browser mic, no SDK — works on every phone.
+ *
+ * Source-level tripwire: the dialer markup must NOT reload any Twilio Voice WebRTC
+ * SDK (which is what broke iOS), and MUST call the bridge endpoint.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -15,11 +18,13 @@ import { resolve } from "node:path";
 
 const src = readFileSync(resolve(__dirname, "../driver-portal.ts"), "utf8");
 
-describe("portal dialer Voice SDK CDN", () => {
-  it("does not use the broken sdk.twilio.com voice path", () => {
+describe("portal dialer uses the dial-out bridge (no WebRTC)", () => {
+  it("does not load any Twilio Voice WebRTC SDK", () => {
     expect(src).not.toMatch(/sdk\.twilio\.com\/js\/voice/);
+    expect(src).not.toMatch(/@twilio\/voice-sdk/);
+    expect(src).not.toMatch(/new Twilio\.Device/);
   });
-  it("loads @twilio/voice-sdk from a reachable CDN", () => {
-    expect(/@twilio\/voice-sdk@[\d.]+\/dist\/twilio(\.min)?\.js/.test(src)).toBe(true);
+  it("places calls via the server-side bridge endpoint", () => {
+    expect(src).toMatch(/\/bridge-call/);
   });
 });
