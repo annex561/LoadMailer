@@ -785,6 +785,17 @@ async function initializeAllServices() {
       }
     });
 
+    // FMCSA monitor cron — daily SAFER check, SMS the operator on a status change
+    // (authority / OOS / USDOT status / MCS-150). Default OFF (FMCSA_MONITOR_ENABLED).
+    Promise.resolve().then(async () => {
+      try {
+        const { fmcsaMonitorCron } = await import('./fmcsa-monitor-cron');
+        await fmcsaMonitorCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize FMCSA monitor cron:', error);
+      }
+    });
+
     console.log('✅ Background service initialization started');
   } catch (error) {
     console.error('❌ Error starting background services:', error);
@@ -1103,6 +1114,36 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { hosCheckCron } = await import('./hos-check-cron');
       res.json({ ok: true, ...hosCheckCron.getStatus() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FMCSA monitor — read-only status (safe to expose).
+  app.get('/api/fmcsa-monitor/status', async (_req, res) => {
+    try {
+      const { fmcsaMonitorCron } = await import('./fmcsa-monitor-cron');
+      res.json({ ok: true, ...fmcsaMonitorCron.getStatus() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FMCSA monitor — manual tick for verification. Key-gated: disabled (404)
+  // unless CRON_TRIGGER_KEY is set AND the request supplies the matching key.
+  // A tick respects every safety gate (default-OFF, kill switches, baseline
+  // watermark, dedup), so the worst case is one SMS to the operator's own phone
+  // on a genuine, not-yet-alerted change.
+  app.post('/api/fmcsa-monitor/run', async (req, res) => {
+    const expected = process.env.CRON_TRIGGER_KEY;
+    const provided = (req.query.key as string) || req.headers['x-cron-key'];
+    if (!expected || provided !== expected) {
+      return res.status(404).json({ ok: false, error: 'not found' });
+    }
+    try {
+      const { fmcsaMonitorCron } = await import('./fmcsa-monitor-cron');
+      const result = await fmcsaMonitorCron.triggerNow();
+      res.json({ ok: true, result });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
     }

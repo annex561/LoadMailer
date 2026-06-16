@@ -370,6 +370,36 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ hos_check_log table: ${e.message}`);
     }
 
+    // fmcsa_carrier_snapshots — last-seen FMCSA SAFER status per DOT, used by the
+    // FMCSA monitor cron (server/fmcsa-monitor-cron.ts) to detect changes and
+    // dedup alerts. One row per dot_number (PRIMARY KEY) → ON CONFLICT upsert.
+    // last_alerted_hash is the per-state dedup guard; baseline_recorded_at marks
+    // the first-sight watermark that suppresses the deploy-time blast.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS fmcsa_carrier_snapshots (
+          dot_number TEXT PRIMARY KEY,
+          legal_name TEXT,
+          usdot_status TEXT,
+          authority_status TEXT,
+          out_of_service TEXT,
+          mcs150 TEXT,
+          mcs150_form_date TEXT,
+          out_of_service_date TEXT,
+          monitored_hash TEXT,
+          last_alerted_hash TEXT,
+          baseline_recorded_at TIMESTAMP,
+          last_snapshot_at TIMESTAMP,
+          last_alert_sent_at TIMESTAMP,
+          raw JSONB,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+    } catch (e: any) {
+      log(`⚠️ fmcsa_carrier_snapshots table: ${e.message}`);
+    }
+
     // load_documents — Phase 2 OCR address verification columns.
     // ADDRESS_VERIFY_ENABLED writes here; downstream review UI reads
     // ocr_status to surface mismatches and overrides. ALTER TABLE ADD
