@@ -286,16 +286,16 @@ export function dialerWidget(token: string, contacts: Array<{ name: string; phon
   #lampFab{width:58px;height:58px;border-radius:50%;background:#2563eb;color:#fff;border:none;font-size:24px;box-shadow:0 8px 20px rgba(37,99,235,.55)}
   #lampPad,#lampCallUI{position:fixed;inset:0;background:#0b1220;color:#e2e8f0;z-index:9001;display:none;flex-direction:column;align-items:center;padding:18px 18px calc(28px + env(safe-area-inset-bottom,0px));font-family:-apple-system,system-ui,sans-serif;overflow-y:auto}
   #lampClose{position:absolute;top:12px;right:16px;background:none;border:none;color:#94a3b8;font-size:32px;line-height:1;z-index:2}
-  .lampTitle{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#64748b;font-weight:700;margin:34px 0 8px;align-self:center}
-  #lampPadNum{width:100%;max-width:300px;text-align:center;font-size:30px;font-weight:700;letter-spacing:1px;background:transparent;border:none;border-bottom:2px solid #1e2c47;color:#fff;padding:8px 0;outline:none}
-  #lampPadNum::placeholder{color:#3b4a63;font-size:16px;font-weight:500;letter-spacing:normal}
-  .lampKeys{display:grid;grid-template-columns:repeat(3,70px);gap:12px;margin:18px 0 4px}
-  .lampKey{height:60px;border-radius:50%;background:#111a2e;border:1px solid #1e2c47;color:#e2e8f0;font-size:22px}
+  .lampTitle{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#64748b;font-weight:700;margin:18px 0 10px;align-self:center}
+  #lampPadNum{width:100%;max-width:380px;text-align:center;font-size:36px;font-weight:700;letter-spacing:1px;background:transparent;border:none;border-bottom:2px solid #1e2c47;color:#fff;padding:10px 0;outline:none}
+  #lampPadNum::placeholder{color:#3b4a63;font-size:17px;font-weight:500;letter-spacing:normal}
+  .lampKeys{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:22px auto 6px;width:100%;max-width:380px}
+  .lampKey{aspect-ratio:1;border-radius:50%;background:#111a2e;border:1px solid #1e2c47;color:#e2e8f0;font-size:30px;display:flex;align-items:center;justify-content:center}
   .lampKey:active{background:#1e2c47}
-  .lampRow{display:flex;align-items:center;justify-content:center;gap:26px;margin-top:10px}
-  .lampGreen{width:62px;height:62px;border-radius:50%;background:#16a34a;border:none;color:#fff;font-size:26px}
-  .lampBack{width:50px;height:50px;border-radius:50%;background:#1e293b;border:none;color:#cbd5e1;font-size:22px}
-  .lampSpacer{width:50px}
+  .lampRow{display:flex;align-items:center;justify-content:center;gap:42px;margin-top:22px;width:100%;max-width:380px}
+  .lampGreen{width:82px;height:82px;border-radius:50%;background:#16a34a;border:none;color:#fff;font-size:34px}
+  .lampBack{width:64px;height:64px;border-radius:50%;background:#1e293b;border:none;color:#cbd5e1;font-size:26px}
+  .lampSpacer{width:64px}
   .lampContacts{width:100%;max-width:320px;margin-top:18px}
   .lampContact{display:flex;justify-content:space-between;align-items:center;width:100%;background:#111a2e;border:1px solid #1e2c47;border-radius:12px;padding:12px 14px;margin-bottom:8px;color:#e2e8f0;text-align:left}
   .lampContact:active{background:#1e2c47}
