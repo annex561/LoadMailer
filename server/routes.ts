@@ -796,6 +796,17 @@ async function initializeAllServices() {
       }
     });
 
+    // FreightGuard monitor cron — SMS the operator when a Carrier411 FreightGuard
+    // case is open and un-alerted. Default OFF (FREIGHTGUARD_MONITOR_ENABLED).
+    Promise.resolve().then(async () => {
+      try {
+        const { freightGuardMonitorCron } = await import('./freightguard-monitor-cron');
+        await freightGuardMonitorCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize FreightGuard monitor cron:', error);
+      }
+    });
+
     console.log('✅ Background service initialization started');
   } catch (error) {
     console.error('❌ Error starting background services:', error);
@@ -1143,6 +1154,54 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { fmcsaMonitorCron } = await import('./fmcsa-monitor-cron');
       const result = await fmcsaMonitorCron.triggerNow();
+      res.json({ ok: true, result });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FreightGuard monitor — read-only status (safe to expose).
+  app.get('/api/freightguard/status', async (_req, res) => {
+    try {
+      const { freightGuardMonitorCron } = await import('./freightguard-monitor-cron');
+      res.json({ ok: true, ...freightGuardMonitorCron.getStatus() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FreightGuard ingestion — key-gated. The operator forwards Carrier411
+  // notification emails (Gmail filter / Apps Script) here as { email: "<raw body>" }.
+  // Parses + upserts a case (dedup on response_code). No SMS — the cron sends.
+  app.post('/api/freightguard/ingest', async (req, res) => {
+    const expected = process.env.CRON_TRIGGER_KEY;
+    const provided = (req.query.key as string) || req.headers['x-cron-key'];
+    if (!expected || provided !== expected) {
+      return res.status(404).json({ ok: false, error: 'not found' });
+    }
+    try {
+      const email = (req.body?.email ?? req.body?.text ?? '') as string;
+      const sourceId = (req.body?.sourceId as string) || undefined;
+      const { freightGuardMonitorCron } = await import('./freightguard-monitor-cron');
+      const result = await freightGuardMonitorCron.ingestEmail(email, sourceId);
+      res.status(result.ok ? 200 : 422).json(result);
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FreightGuard monitor — manual tick for verification. Key-gated (404 unless
+  // CRON_TRIGGER_KEY set + supplied). Respects every guard (default-OFF, kill
+  // switches, dedup, watermark, rate ceiling).
+  app.post('/api/freightguard/run', async (req, res) => {
+    const expected = process.env.CRON_TRIGGER_KEY;
+    const provided = (req.query.key as string) || req.headers['x-cron-key'];
+    if (!expected || provided !== expected) {
+      return res.status(404).json({ ok: false, error: 'not found' });
+    }
+    try {
+      const { freightGuardMonitorCron } = await import('./freightguard-monitor-cron');
+      const result = await freightGuardMonitorCron.triggerNow();
       res.json({ ok: true, result });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });

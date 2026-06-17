@@ -400,6 +400,41 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ fmcsa_carrier_snapshots table: ${e.message}`);
     }
 
+    // freightguard_cases — Carrier Defense Kit Phase 2. One row per Carrier411
+    // FreightGuard report parsed from the notification email (see
+    // server/freightguard-service.ts). response_code is UNIQUE = the dedup key, so
+    // re-ingesting the same email is a no-op via ON CONFLICT DO NOTHING and the
+    // operator is alerted at most once per report. deadline_at drives the 72-hour
+    // countdown; alerted_at gates the (default-OFF, approval-gated) alert path.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS freightguard_cases (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+          mc_number TEXT NOT NULL,
+          reported_company TEXT,
+          broker_company TEXT,
+          broker_contact TEXT,
+          broker_phone TEXT,
+          items_reported JSONB,
+          additional_comments TEXT,
+          response_code TEXT UNIQUE,
+          window_hours INTEGER,
+          filed_at TIMESTAMP,
+          deadline_at TIMESTAMP,
+          status TEXT DEFAULT 'open',
+          alerted_at TIMESTAMP,
+          raw_email TEXT,
+          source_email_id TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_fg_cases_mc ON freightguard_cases(mc_number)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_fg_cases_status ON freightguard_cases(status)`);
+    } catch (e: any) {
+      log(`⚠️ freightguard_cases table: ${e.message}`);
+    }
+
     // load_documents — Phase 2 OCR address verification columns.
     // ADDRESS_VERIFY_ENABLED writes here; downstream review UI reads
     // ocr_status to surface mismatches and overrides. ALTER TABLE ADD
