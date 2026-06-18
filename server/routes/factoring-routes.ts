@@ -14,7 +14,7 @@ import { db } from "../db";
 import { loads, factoringSubmissions, rateconIntake, loadDocuments } from "@shared/schema";
 import { and, desc, eq, isNotNull, isNull, ne, inArray } from "drizzle-orm";
 import { requireRole } from "../auth";
-import { buildFactoringPacket, submitToLoves, pastTodayCutoff } from "../factoring-loves";
+import { buildFactoringPacket, submitToLoves, queueForApproval, pastTodayCutoff } from "../factoring-loves";
 
 /**
  * Accepts either an authenticated admin session OR the ADMIN_API_KEY header.
@@ -172,23 +172,55 @@ export function registerFactoringRoutes(app: Express) {
     }
   });
 
-  // Manual submit — admin click. This is the ONLY path that sends a packet
-  // to Love's in phase 1. No background workers, no scheduled jobs.
+  // Submit — sends an approval SMS to FACTORING_APPROVAL_PHONE first.
+  // The dispatcher replies "APPROVE <loadNumber>" to actually fire the packet
+  // to Love's. If FACTORING_SKIP_SMS_APPROVAL=true, sends immediately.
+  // Calling again on a load already in pending_approval state triggers the
+  // direct send (web "Confirm Send" button path).
   app.post("/api/factoring/submit/:loadId", requireAdminOrApiKey, async (req, res) => {
     try {
       const userId = (req as any).user?.id ?? null;
-      const result = await submitToLoves(req.params.loadId, userId);
+      const loadId = req.params.loadId;
+      const skip = process.env.FACTORING_SKIP_SMS_APPROVAL === "true";
+
+      // If already queued for approval, this is the web "Confirm Send" path
+      const [row] = await db.select({ factoringStatus: loads.factoringStatus })
+        .from(loads).where(eq(loads.id, loadId)).limit(1);
+      const alreadyQueued = row?.factoringStatus === "pending_approval";
+
+      if (skip || alreadyQueued) {
+        const result = await submitToLoves(loadId, userId);
+        if (!result.ok) {
+          return res.status(400).json({ ok: false, error: result.error, blocked: result.blocked });
+        }
+        return res.json(result);
+      }
+
+      // Default: validate packet + SMS dispatcher for approval
+      const result = await queueForApproval(loadId, userId);
       if (!result.ok) {
-        return res.status(400).json({
-          ok: false,
-          error: result.error,
-          blocked: result.blocked,
-        });
+        return res.status(400).json({ ok: false, error: result.error, blocked: result.blocked });
       }
       res.json(result);
     } catch (err: any) {
       console.error("[factoring:submit]", err);
       res.status(500).json({ error: err?.message ?? "submit failed" });
+    }
+  });
+
+  // Confirm send — web UI bypass for loads already in pending_approval.
+  // Equivalent to admin clicking "Confirm Send" without waiting for the SMS reply.
+  app.post("/api/factoring/confirm-send/:loadId", requireAdminOrApiKey, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id ?? null;
+      const result = await submitToLoves(req.params.loadId, userId);
+      if (!result.ok) {
+        return res.status(400).json({ ok: false, error: result.error, blocked: result.blocked });
+      }
+      res.json(result);
+    } catch (err: any) {
+      console.error("[factoring:confirm-send]", err);
+      res.status(500).json({ error: err?.message ?? "confirm-send failed" });
     }
   });
 

@@ -61,14 +61,16 @@ export default function FactoringPage() {
   const failedSubs = (subs ?? []).filter((s) => s.status === "rejected" || s.status === "bounced");
 
   const handleSubmit = async (loadId: string) => {
-    if (!confirm("Send this packet to Love's? An email will go out to schedulesLS@loves.com.")) return;
+    if (!confirm("Submit this packet to Love's? You'll get a text to approve before it sends.")) return;
     setSubmitting(loadId);
     setLastResult(null);
     try {
       const res = await fetch(`/api/factoring/submit/${loadId}`, { method: "POST" });
       const data = await res.json();
-      if (data.ok) {
-        setLastResult({ loadId, ok: true, msg: `✅ Sent. SMTP message ID: ${data.emailMessageId}` });
+      if (data.ok && data.pendingApproval) {
+        setLastResult({ loadId, ok: true, msg: `📱 Approval SMS sent — reply APPROVE to submit to Love's. Or click "Confirm Send" below to skip.` });
+      } else if (data.ok) {
+        setLastResult({ loadId, ok: true, msg: `✅ Sent to Love's. Msg ID: ${data.emailMessageId}` });
       } else {
         setLastResult({
           loadId,
@@ -87,6 +89,31 @@ export default function FactoringPage() {
 
   const handlePreview = (loadId: string) => {
     window.open(`/api/factoring/preview/${loadId}`, "_blank");
+  };
+
+  const handleConfirmSend = async (loadId: string) => {
+    if (!confirm("Send this packet to Love's Financial now?")) return;
+    setSubmitting(loadId);
+    setLastResult(null);
+    try {
+      const res = await fetch(`/api/factoring/confirm-send/${loadId}`, { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setLastResult({ loadId, ok: true, msg: `✅ Sent to Love's. Msg ID: ${data.emailMessageId}` });
+      } else {
+        setLastResult({
+          loadId,
+          ok: false,
+          msg: data.blocked ? `⛔ Blocked: ${data.blocked}` : `❌ ${data.error}`,
+        });
+      }
+      refetchQueue();
+      refetchSubs();
+    } catch (e: any) {
+      setLastResult({ loadId, ok: false, msg: `❌ ${e?.message}` });
+    } finally {
+      setSubmitting(null);
+    }
   };
 
   return (
@@ -183,14 +210,30 @@ export default function FactoringPage() {
                       >
                         Preview Packet
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleSubmit(q.loadId)}
-                        disabled={!q.ready || submitting === q.loadId}
-                        className="w-full sm:w-auto"
-                      >
-                        {submitting === q.loadId ? "Sending…" : "Submit to Love's"}
-                      </Button>
+                      {q.factoringStatus === "pending_approval" ? (
+                        <>
+                          <Badge variant="outline" className="text-amber-400 border-amber-400/50 whitespace-nowrap">
+                            Awaiting approval
+                          </Badge>
+                          <Button
+                            size="sm"
+                            onClick={() => handleConfirmSend(q.loadId)}
+                            disabled={submitting === q.loadId}
+                            className="w-full sm:w-auto bg-green-700 hover:bg-green-600"
+                          >
+                            {submitting === q.loadId ? "Sending…" : "Confirm Send"}
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => handleSubmit(q.loadId)}
+                          disabled={!q.ready || submitting === q.loadId}
+                          className="w-full sm:w-auto"
+                        >
+                          {submitting === q.loadId ? "Sending…" : "Submit to Love's"}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -7480,6 +7480,61 @@ TRAQ IQ Dispatch Team
         console.error('❌ MMS branch error (falling through to legacy):', mmsErr);
       }
 
+      // ---- Factoring approval gate ----
+      // If the SMS is from FACTORING_APPROVAL_PHONE and the body starts with
+      // APPROVE or REJECT, handle it here — don't pass to the driver router.
+      // APPROVE <loadNumber> → submitToLoves()
+      // REJECT  <loadNumber> → cancel pending_approval, reset to not_ready
+      {
+        const approvalPhoneRaw = (process.env.FACTORING_APPROVAL_PHONE ?? '').replace(/\D/g, '');
+        const fromNorm = From.replace(/\D/g, '');
+        if (approvalPhoneRaw && fromNorm === approvalPhoneRaw) {
+          const cmd = (Body || '').trim().toUpperCase();
+          if (cmd.startsWith('APPROVE') || cmd.startsWith('REJECT')) {
+            const [action, loadNumber = ''] = cmd.split(/\s+/);
+            // Reply immediately so Twilio doesn't time out
+            res.set('Content-Type', 'text/xml');
+            res.send(`<?xml version="1.0" encoding="UTF-8"?><Response><Message>Processing — confirmation coming shortly.</Message></Response>`);
+            // Fire-and-forget the actual approval
+            (async () => {
+              const sendReply = async (msg: string) => {
+                try { await (smsLoadService as any).sendSMS(From, msg); } catch {}
+              };
+              try {
+                const whereClause = loadNumber
+                  ? eq(loads.loadNumber, loadNumber)
+                  : eq(loads.factoringStatus as any, 'pending_approval');
+                const { db: fdb } = await import('./db');
+                const [load] = await fdb.select().from(loads).where(whereClause).limit(1);
+                if (!load) {
+                  await sendReply(`❌ Load ${loadNumber || '?'} not found.`);
+                  return;
+                }
+                if (action === 'APPROVE') {
+                  const { submitToLoves } = await import('./factoring-loves');
+                  const result = await submitToLoves(load.id, 'sms-approval');
+                  if (result.ok) {
+                    await sendReply(`✅ Load #${load.loadNumber} submitted to Love's Financial.`);
+                  } else {
+                    await sendReply(`❌ Submit failed: ${result.error ?? result.blocked}`);
+                  }
+                } else {
+                  await fdb
+                    .update(loads)
+                    .set({ factoringStatus: 'not_ready', updatedAt: new Date() } as any)
+                    .where(eq(loads.id, load.id));
+                  await sendReply(`✅ Load #${load.loadNumber} factoring cancelled.`);
+                }
+              } catch (e: any) {
+                console.error('[factoring-approval-sms]', e);
+                await sendReply(`❌ Error: ${e.message}`).catch(() => {});
+              }
+            })();
+            return; // Don't fall through to driver SMS handler
+          }
+        }
+      }
+
       // Respond to Twilio IMMEDIATELY with empty TwiML to avoid the 15-second timeout.
       // Processing is done async below — getAllLoads() alone can take 13+ seconds.
       // Using empty <Response> instead of <Message> to avoid sending a duplicate

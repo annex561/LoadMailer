@@ -106,6 +106,62 @@ interface PacketResult {
 }
 
 /**
+ * Queue a load for factoring approval.
+ *
+ * Validates the packet (same check as submitToLoves), marks the load
+ * factoringStatus='pending_approval', then sends an approval SMS to
+ * FACTORING_APPROVAL_PHONE so the dispatcher can review the details
+ * and reply "APPROVE <loadNumber>" before the packet goes to Love's.
+ *
+ * The actual send happens in submitToLoves(), called either from the
+ * SMS webhook (APPROVE reply) or the web UI "Confirm Send" button.
+ */
+export async function queueForApproval(
+  loadId: string,
+  submittedBy: string | null = null,
+): Promise<{ ok: boolean; error?: string; blocked?: string; pendingApproval?: boolean }> {
+  const enabled = isModuleEnabled();
+  if (!enabled.ok) return { ok: false, blocked: enabled.reason };
+
+  const packet = await buildFactoringPacket(loadId);
+  if (!packet.ok) return { ok: false, error: packet.error };
+
+  const [load] = await db.select().from(loads).where(eq(loads.id, loadId));
+  if (!load) return { ok: false, error: "Load not found" };
+
+  await db
+    .update(loads)
+    .set({ factoringStatus: "pending_approval", updatedAt: new Date() } as any)
+    .where(eq(loads.id, loadId));
+
+  const approvalPhone = process.env.FACTORING_APPROVAL_PHONE?.trim();
+  if (approvalPhone) {
+    const msgBody =
+      `📋 LAMP Factoring — APPROVAL NEEDED\n` +
+      `Load #${load.loadNumber} · ${load.brokerName ?? "Unknown Broker"}\n` +
+      `Rate: $${Number(load.rate ?? 0).toFixed(2)}\n` +
+      `${load.originCity ?? ""}, ${load.originState ?? ""} → ${load.destCity ?? ""}, ${load.destState ?? ""}\n` +
+      `Docs: ✅ RateCon + ✅ BOL (approved)\n\n` +
+      `Reply: APPROVE ${load.loadNumber}\n` +
+      `Reply: REJECT ${load.loadNumber}`;
+    try {
+      const { smsLoadService } = await import("./sms-service");
+      await (smsLoadService as any).sendSMS(approvalPhone, msgBody);
+      console.log(`[factoring] approval SMS → ${approvalPhone} for load ${load.loadNumber}`);
+    } catch (err: any) {
+      // Non-fatal — load is already marked pending_approval; dispatcher can confirm via web UI
+      console.error(`[factoring] approval SMS failed (non-fatal): ${err.message}`);
+    }
+  } else {
+    console.warn(
+      "[factoring] FACTORING_APPROVAL_PHONE not set — load marked pending_approval but no SMS sent. Set this env var or use Confirm Send in the UI.",
+    );
+  }
+
+  return { ok: true, pendingApproval: true };
+}
+
+/**
  * Build the merged factoring packet for one load. Returns the PDF bytes plus
  * a warnings list (e.g. "no signed BOL on file"). Caller decides whether to
  * proceed with submission given the warnings.
