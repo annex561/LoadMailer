@@ -216,7 +216,7 @@ export default function DriverDocuments() {
         </Card>
 
         <div className="text-center text-sm text-slate-500">
-          Questions? Email recruit@lamplogistics.com or call (833) 362-9813
+          Questions? Email recruit@lampslogistics.com or call (833) 362-9813
         </div>
       </div>
     </main>

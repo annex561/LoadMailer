@@ -236,7 +236,7 @@ export default function RecruitingStatus() {
                     </ul>
                   )}
                   <p className="mt-3 text-sm text-slate-600">
-                    You may reapply in 12 months. Questions: recruit@lamplogistics.com.
+                    You may reapply in 12 months. Questions: recruit@lampslogistics.com.
                   </p>
                 </>
               )}
@@ -266,7 +266,7 @@ export default function RecruitingStatus() {
         )}
 
         <div className="text-center text-sm text-slate-500">
-          Questions? Email recruit@lamplogistics.com
+          Questions? Email recruit@lampslogistics.com
         </div>
       </div>
     </main>

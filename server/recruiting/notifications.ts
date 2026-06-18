@@ -17,6 +17,7 @@ import { eq, and, gte, sql, lt, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { smsLoadService } from "../sms-service";
 import { log } from "../vite";
+import { SMS_TEMPLATES, type TemplateRender } from "./sms-templates";
 
 // Lazy import to avoid circular deps at load time
 async function notificationQueueTable() {
@@ -47,41 +48,7 @@ function checkAndConsumeRateBudget(): boolean {
   return true;
 }
 
-// Templates — single source of truth for content
-type TemplateRender = { subject?: string; html?: string; text: string };
-
-const SMS_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender> = {
-  LEAD_CAPTURE_SMS: (p) => ({
-    text: `Thanks ${p.first_name || "for applying"} to LAMP Logistics. Open your application: ${p.app_url || "https://traqiq.app"}. Reply STOP to opt out.`,
-  }),
-  APP_RECEIVED_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, application received. We'll text you when pre-screening completes — usually within 24 hours.`,
-  }),
-  DOCS_REQUEST_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, you passed pre-screening. Upload your documents here: ${p.docs_url || "https://traqiq.app"}.`,
-  }),
-  DOCS_RECEIVED_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, docs received. Background check starting. We'll text you the result in 24-72 hrs.`,
-  }),
-  BACKGROUND_PASS_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, background check cleared. Drug test + DOT physical next. Check your email for the appointment.`,
-  }),
-  MEDICAL_PASS_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, medical cleared. Your contractor agreement is on the way for e-signature.`,
-  }),
-  AGREEMENT_SIGNED_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, agreement signed. Orientation course unlocked: ${p.orientation_url || "https://traqiq.app"}.`,
-  }),
-  TRUCK_ASSIGNED_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, your truck is ready. First load coming through TraqIQ shortly.`,
-  }),
-  ACTIVE_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, you're ACTIVE at LAMP. Open your driver portal: ${p.portal_url || "https://traqiq.app"}. First settlement Friday.`,
-  }),
-  DISQUALIFICATION_SMS: (p) => ({
-    text: `${p.first_name || "Driver"}, your LAMP application was not approved at this time. See your portal for details.`,
-  }),
-};
+// SMS templates moved to ./sms-templates (pure + unit-tested). Email templates below.
 
 // Branded HTML email frame — single source of truth for the LAMP look.
 function brandedEmail(opts: {
@@ -117,7 +84,7 @@ function brandedEmail(opts: {
         ${opts.footer ? `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:13px;color:#64748b">${opts.footer}</div>` : ""}
       </td></tr>
       <tr><td style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b">
-        Questions? <a href="tel:+18333629813" style="color:#059669;text-decoration:none">📞 (833) 362-9813</a> · <a href="mailto:recruit@lamplogistics.com" style="color:#059669;text-decoration:none">recruit@lamplogistics.com</a><br>
+        Questions? <a href="tel:+18333629813" style="color:#059669;text-decoration:none">📞 (833) 362-9813</a> · <a href="mailto:recruit@lampslogistics.com" style="color:#059669;text-decoration:none">recruit@lampslogistics.com</a><br>
         © ${new Date().getFullYear()} LAMP Logistics LLC · MC-1725755 · DOT 4397421
       </td></tr>
     </table>
@@ -178,7 +145,7 @@ const EMAIL_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender
   }),
   DISQUALIFICATION_EMAIL: (p) => ({
     subject: "Your LAMP Logistics application",
-    text: `Hi ${p.first_name || "there"},\n\nWe're unable to move forward with your application at this time. You may re-apply in 12 months.\n\nQuestions: recruit@lamplogistics.com.`,
+    text: `Hi ${p.first_name || "there"},\n\nWe're unable to move forward with your application at this time. You may re-apply in 12 months.\n\nQuestions: recruit@lampslogistics.com.`,
     html: brandedEmail({
       preview: "Application not approved at this time",
       heading: `${p.first_name || "Driver"}, your application`,
@@ -206,7 +173,7 @@ function emailTransporter(): nodemailer.Transporter {
   return _transporter;
 }
 
-const FROM_EMAIL = process.env.RECRUITING_FROM_EMAIL || process.env.SMTP_USER || "recruit@lamplogistics.com";
+const FROM_EMAIL = process.env.RECRUITING_FROM_EMAIL || process.env.SMTP_USER || "recruit@lampslogistics.com";
 
 /**
  * Queue a recruiting notification. Always safe to call — gated at processor.

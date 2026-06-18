@@ -111,7 +111,7 @@ export default function DriverOrientation() {
     } catch (err) {
       toast({
         title: "Could not complete",
-        description: "Try again or contact recruit@lamplogistics.com",
+        description: "Try again or contact recruit@lampslogistics.com",
         variant: "destructive",
       });
       setSubmitting(false);
@@ -216,7 +216,7 @@ export default function DriverOrientation() {
         </Card>
 
         <div className="text-center text-sm text-slate-500">
-          Questions? Email recruit@lamplogistics.com or call (833) 362-9813
+          Questions? Email recruit@lampslogistics.com or call (833) 362-9813
         </div>
       </div>
     </main>
