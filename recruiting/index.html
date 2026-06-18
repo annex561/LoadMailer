@@ -5,6 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Own Your Truck in 3 Years | LAMP Logistics Driver Program</title>
 <meta name="description" content="Lease-to-own a box truck. $5,000 down, no credit check. Run on our established authority and start earning week one. Own your truck in 3 years." />
+
+<!-- Meta Pixel — replace YOUR_PIXEL_ID with your Meta Pixel ID (Events Manager). Fires PageView here, Lead on /thanks -->
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init','YOUR_PIXEL_ID');
+fbq('track','PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript>
+<!-- End Meta Pixel -->
+
+<!-- Optional: paste Google Ads / GA4 gtag.js snippet here when running Search ads -->
+
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
@@ -200,7 +216,7 @@
     <p class="lead">Fill this out and our team will reach out to get you seated. We onboard drivers as trucks and freight come available, so apply now to hold your spot.</p>
 
     <!-- Netlify Forms: auto-captured on deploy. In Netlify: Forms -> Form notifications -> add email to dispatch@lampslogistics.com -->
-    <form name="driver-application" method="POST" data-netlify="true" netlify-honeypot="bot-field">
+    <form name="driver-application" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/thanks">
       <input type="hidden" name="form-name" value="driver-application" />
       <p hidden><label>Skip this field: <input name="bot-field" /></label></p>
       <div class="row">
