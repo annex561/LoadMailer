@@ -27,6 +27,97 @@ interface SeoPageConfig {
 
 const SEO_PAGES: SeoPageConfig[] = [
   {
+    path: "/lease-to-own-box-truck",
+    title:
+      "Lease-To-Own Box Truck — $5,000 Down, No Credit Check | LAMP Logistics",
+    description:
+      "Own your box truck in 3 years with LAMP Logistics. $5,000 down, no credit check, no CDL required. Run on our authority and earn your first week. Weekly Friday settlements, itemized in TraqIQ. Apply in 5 minutes.",
+    canonicalUrl: "https://traqiq.app/lease-to-own-box-truck",
+    ogImage: "https://traqiq.app/apple-touch-icon.png",
+    jsonLd: [
+      {
+        "@context": "https://schema.org",
+        "@type": "JobPosting",
+        title: "Lease-To-Own Box Truck Owner-Operator — $5,000 Down",
+        description:
+          "LAMP Logistics is hiring box truck drivers on a lease-to-own path. $5,000 down, no credit check, no CDL required for most loads. Run on LAMP's authority, keep 80% of gross, and own the truck in 36 months. Weekly Friday settlements.",
+        datePosted: new Date().toISOString().slice(0, 10),
+        validThrough: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10),
+        employmentType: "CONTRACTOR",
+        hiringOrganization: {
+          "@type": "Organization",
+          name: "LAMP Logistics",
+          sameAs: "https://traqiq.app",
+          identifier: { "@type": "PropertyValue", name: "USDOT", value: "4397421" },
+        },
+        jobLocation: {
+          "@type": "Place",
+          address: {
+            "@type": "PostalAddress",
+            addressCountry: "US",
+            addressRegion: "TN",
+            addressLocality: "Chattanooga",
+          },
+        },
+        baseSalary: {
+          "@type": "MonetaryAmount",
+          currency: "USD",
+          value: {
+            "@type": "QuantitativeValue",
+            minValue: 4000,
+            maxValue: 6000,
+            unitText: "WEEK",
+          },
+        },
+        qualifications:
+          "Valid driver's license, clean MVR, current DOT physical, no DUI in last 5 years, ability to pass DOT drug test and FMCSA Clearinghouse query. $6,500 to start ($5,000 truck down + $1,500 first-month insurance). No credit check.",
+        responsibilities:
+          "Operate a LAMP box truck on dedicated and OTR freight under LAMP's authority, complete pre- and post-trip inspections, communicate with dispatch.",
+        applicantLocationRequirements: { "@type": "Country", name: "United States" },
+        directApply: true,
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: [
+          {
+            "@type": "Question",
+            name: "Do I need a CDL for the lease-to-own program?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "For most loads, no. The box trucks are under 26,001 GVWR, so a regular driver's license works. You still need a current DOT physical and a clean record.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Do you check credit?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "No. The $5,000 down payment secures the truck, so your credit score does not decide whether you get in.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "How long until I own the truck?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "36 months on the standard schedule, and you can pay it off early anytime for the remaining balance. When it is paid, the title is yours.",
+            },
+          },
+        ],
+      },
+    ],
+    fallbackHtml: `
+      <h1>Own your box truck in 3 years — LAMP Logistics</h1>
+      <p>$5,000 down, no credit check, no CDL required for most loads. Run on LAMP Logistics' authority and earn your first week. Keep 80% of gross while you lease, with weekly Friday settlements itemized in TraqIQ.</p>
+      <h2>How it works</h2>
+      <p>1) Apply and qualify, no credit pull. 2) Put $6,500 down ($5,000 truck + $1,500 first-month insurance). 3) Get seated on our authority and earn week one. 4) Own the truck free and clear in 36 months.</p>
+      <p><a href="/lease-to-own-box-truck#apply">Start your application</a> or call (833) 362-9813. LAMP Logistics · MC-1725755 · DOT 4397421.</p>
+    `,
+  },
+  {
     path: "/drive-with-lamp",
     title:
       "Box Truck Driver Jobs — LAMP Logistics | $4,000–$6,000/Week | Most Loads No CDL",
