@@ -23,7 +23,7 @@ async function countAdmins(): Promise<number> {
 }
 
 function requireAdminOrApiKey(req: Request, res: Response, next: NextFunction) {
-  if ((req as any).isAuthenticated?.() && (req as any).user) return next();
+  if ((req as any).isAuthenticated?.() && (req as any).user?.role === "admin") return next();
   const key = process.env.ADMIN_API_KEY;
   if (key && key !== "replace-with-random-string" && req.headers["x-admin-api-key"] === key) return next();
   res.status(401).json({ message: "Unauthorized" });
