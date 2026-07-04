@@ -3736,7 +3736,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const { randomUUID } = await import('crypto');
       const tokenValue = randomUUID();
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // 7-day expiry
+      expiresAt.setDate(expiresAt.getDate() + 30); // 30-day expiry
 
       const tokenData = await storage.createOnboardingToken({
         token: tokenValue,
