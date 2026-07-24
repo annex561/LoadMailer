@@ -188,8 +188,6 @@ export default function RecruitingLanding() {
         </div>
       </nav>
       <div id="top" />
-      {/* Section anchor: Why LAMP fallback to How (no separate section yet) */}
-      <a id="why" />
       {/* Apply form anchor sits inside the hero below */}
 
       {/* HERO */}
@@ -321,7 +319,7 @@ export default function RecruitingLanding() {
       </section>
 
       {/* HOW IT WORKS */}
-      <section className="px-6 py-16 bg-slate-50">
+      <section id="how" className="px-6 py-16 bg-slate-50">
         <div className="mx-auto max-w-6xl">
           <h2 className="text-3xl font-bold text-center text-slate-900">How LAMP Works</h2>
           <p className="mt-3 text-center text-slate-600 max-w-xl mx-auto">
@@ -355,7 +353,7 @@ export default function RecruitingLanding() {
           <div className="mt-10 grid gap-6 md:grid-cols-2">
             <div className="rounded-2xl p-6 border" style={{ backgroundColor: "#1e293b", borderColor: "#334155" }}>
               <div className="text-sm font-bold tracking-wide" style={{ color: "#34d399" }}>OWNER-OPERATOR</div>
-              <div className="mt-2 text-4xl font-bold" style={{ color: "#ffffff" }}>$3,800/wk avg</div>
+              <div className="mt-2 text-4xl font-bold" style={{ color: "#ffffff" }}>$4,000/wk avg</div>
               <ul className="mt-5 space-y-2.5 text-sm" style={{ color: "#cbd5e1" }}>
                 <li>✓ $5,000 average gross revenue per week</li>
                 <li>✓ You keep 80% = $4,000</li>
@@ -408,7 +406,7 @@ export default function RecruitingLanding() {
       </section>
 
       {/* WHAT YOU GET */}
-      <section className="px-6 py-20 bg-slate-50">
+      <section id="why" className="px-6 py-20 bg-slate-50">
         <div className="mx-auto max-w-6xl">
           <h2 className="text-3xl sm:text-4xl font-bold text-center text-slate-900">What You Get With LAMP</h2>
           <p className="mt-3 text-center text-slate-600 max-w-2xl mx-auto">
