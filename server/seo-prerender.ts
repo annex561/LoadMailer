@@ -408,6 +408,63 @@ const SEO_PAGES: SeoPageConfig[] = [
           "Own (or lease) a box truck under 26,001 GVWR with current registration + commercial insurance, valid driver's license, clean MVR, current DOT physical.",
         directApply: true,
       },
+      // Objection-handling FAQ. Text MUST stay in sync with the `faqs` array on
+      // the "/owner-operator-jobs" variant in client/src/pages/recruiting/landing.tsx —
+      // Google de-ranks FAQPage markup that isn't visible on the rendered page.
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: [
+          {
+            "@type": "Question",
+            name: "My truck is parked because I can't find a driver. Can LAMP help?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Parked trucks are the number one problem in the box truck market right now. The drivers who used to apply went out and bought their own trucks. LAMP recruits box truck drivers every week for our own fleet, and applicants who clear MVR, DOT physical, and background sit on a bench waiting for a seat. Bring your truck onto our authority and tell your dispatcher you need that seat filled, and your truck goes into the same pipeline instead of sitting on Indeed. Freight is ready the day a driver is.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "My last driver stopped showing up and I found out from the broker.",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "That is the miss that costs you the load and the score. LAMP dispatch runs through TraqIQ, so pickup, BOL upload, and delivery confirmation are timestamped against the load. When a driver has not moved, your dispatcher sees the gap and starts re-covering while there is still time to save it. You hear it from us before you hear it from a shipper.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "I have a full-time job. Can I own a truck here without driving it?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Yes, with one honest caveat. Drivers quit without notice and the note on your truck does not pause when they do. Every owner here who does not drive keeps a fallback: their own license and a week they can clear, or a standing arrangement with dispatch to move the truck to a bench driver. We will work your truck into our driver pipeline and we will keep it loaded. We will not tell you it runs itself.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "One late load zeroed out my Amazon Relay acceptance. Does that happen here?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Relay punishes a single miss hard and it takes weeks of clean runs to climb back. LAMP freight comes from brokers, direct shippers, and our own contracts, so one bad week does not lock you out of everything. Keep your Relay account. Run our loads in the gaps and stop depending on one board for your whole week.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "My truck has been sitting for two months. Is it too late to bring it on?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "No. Onboarding runs 10 to 21 days once your paperwork is in, and the truck starts running the week it clears. Bring the title or lease agreement, current commercial insurance, and your last inspection. If the truck needs a DOT inspection before it can run, your dispatcher tells you that up front, before you spend money on it.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "I already have my own MC authority. Why would I run under yours?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "You keep yours. New authorities wait 90 days and carry a $100,000 insurance ask before most brokers will load them, which is 90 days of payments on a truck that cannot work. Run under LAMP's authority, insurance, and factoring while yours seasons, then switch over when brokers stop screening you out. Nothing here stops you from leaving with your own book.",
+            },
+          },
+        ],
+      },
     ],
     fallbackHtml: `
       <main style="max-width: 720px; margin: 0 auto; padding: 32px 24px; font-family: system-ui, sans-serif; color: #0f172a; background: #ffffff;">
