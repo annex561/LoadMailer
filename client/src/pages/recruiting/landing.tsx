@@ -20,6 +20,12 @@ type LandingVariant = {
   subhead: string;
   badges: string[];
   leadSource: string;
+  // Optional per-variant objection handling. These render ABOVE the shared
+  // driver FAQ so the variant's specific buyer sees their own objection first.
+  // Variants that omit these render exactly the shared list, as before.
+  faqHeading?: string;
+  faqSubhead?: string;
+  faqs?: { q: string; a: string }[];
 };
 
 const VARIANTS: Record<string, LandingVariant> = {
@@ -64,6 +70,34 @@ const VARIANTS: Record<string, LandingVariant> = {
       "Weekly pay Friday",
     ],
     leadSource: "owner-operator-landing",
+    faqHeading: "Owner-Operator Questions",
+    faqSubhead: "The objections we hear from owners with a truck already in the driveway.",
+    faqs: [
+      {
+        q: "My truck is parked because I can't find a driver. Can LAMP help?",
+        a: "Parked trucks are the number one problem in the box truck market right now. The drivers who used to apply went out and bought their own trucks. LAMP recruits box truck drivers every week for our own fleet, and applicants who clear MVR, DOT physical, and background sit on a bench waiting for a seat. Bring your truck onto our authority and tell your dispatcher you need that seat filled, and your truck goes into the same pipeline instead of sitting on Indeed. Freight is ready the day a driver is.",
+      },
+      {
+        q: "My last driver stopped showing up and I found out from the broker.",
+        a: "That is the miss that costs you the load and the score. LAMP dispatch runs through TraqIQ, so pickup, BOL upload, and delivery confirmation are timestamped against the load. When a driver has not moved, your dispatcher sees the gap and starts re-covering while there is still time to save it. You hear it from us before you hear it from a shipper.",
+      },
+      {
+        q: "I have a full-time job. Can I own a truck here without driving it?",
+        a: "Yes, with one honest caveat. Drivers quit without notice and the note on your truck does not pause when they do. Every owner here who does not drive keeps a fallback: their own license and a week they can clear, or a standing arrangement with dispatch to move the truck to a bench driver. We will work your truck into our driver pipeline and we will keep it loaded. We will not tell you it runs itself.",
+      },
+      {
+        q: "One late load zeroed out my Amazon Relay acceptance. Does that happen here?",
+        a: "Relay punishes a single miss hard and it takes weeks of clean runs to climb back. LAMP freight comes from brokers, direct shippers, and our own contracts, so one bad week does not lock you out of everything. Keep your Relay account. Run our loads in the gaps and stop depending on one board for your whole week.",
+      },
+      {
+        q: "My truck has been sitting for two months. Is it too late to bring it on?",
+        a: "No. Onboarding runs 10 to 21 days once your paperwork is in, and the truck starts running the week it clears. Bring the title or lease agreement, current commercial insurance, and your last inspection. If the truck needs a DOT inspection before it can run, your dispatcher tells you that up front, before you spend money on it.",
+      },
+      {
+        q: "I already have my own MC authority. Why would I run under yours?",
+        a: "You keep yours. New authorities wait 90 days and carry a $100,000 insurance ask before most brokers will load them, which is 90 days of payments on a truck that cannot work. Run under LAMP's authority, insurance, and factoring while yours seasons, then switch over when brokers stop screening you out. Nothing here stops you from leaving with your own book.",
+      },
+    ],
   },
   "/box-truck-careers-tennessee": {
     badge: "Now hiring · Chattanooga + Tennessee",
@@ -468,9 +502,16 @@ export default function RecruitingLanding() {
       {/* FAQ */}
       <section className="px-6 py-20 bg-slate-50">
         <div className="mx-auto max-w-3xl">
-          <h2 className="text-3xl sm:text-4xl font-bold text-center text-slate-900">Driver Questions</h2>
-          <p className="mt-3 text-center text-slate-600">The stuff every driver asks before signing on.</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-center text-slate-900">
+            {variant.faqHeading ?? "Driver Questions"}
+          </h2>
+          <p className="mt-3 text-center text-slate-600">
+            {variant.faqSubhead ?? "The stuff every driver asks before signing on."}
+          </p>
           <div className="mt-12 space-y-3">
+            {variant.faqs?.map((f) => (
+              <Faq key={f.q} q={f.q} a={f.a} />
+            ))}
             <Faq q="Do I need a CDL to drive for LAMP?" a="For most LAMP loads, no. Our box trucks are under 26,001 GVWR which doesn't require a CDL — just a regular driver's license. You still need a current DOT physical and a clean driving record." />
             <Faq q="How fast can I start driving?" a="Most drivers go from application to first load in 10–21 days. The timeline depends on how fast your background check, MVR, drug test, and DOT physical come back." />
             <Faq q="Do I have to own my own truck?" a="No. We offer both options. Owner-operators get an 80/20 split (you keep 80% of gross). Company drivers lease one of our trucks and run as an Independent Contractor — guaranteed $1,200/week minimum plus mileage bonuses, no truck payment, no fuel out of pocket." />
