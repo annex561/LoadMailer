@@ -420,7 +420,7 @@ const SEO_PAGES: SeoPageConfig[] = [
             name: "My truck is parked because I can't find a driver. Can LAMP help?",
             acceptedAnswer: {
               "@type": "Answer",
-              text: "Parked trucks are the number one problem in the box truck market right now. The drivers who used to apply went out and bought their own trucks. LAMP recruits box truck drivers every week for our own fleet, and applicants who clear MVR, DOT physical, and background sit on a bench waiting for a seat. Bring your truck onto our authority and tell your dispatcher you need that seat filled, and your truck goes into the same pipeline instead of sitting on Indeed. Freight is ready the day a driver is.",
+              text: "Parked trucks are the number one problem in the box truck market right now. The drivers who used to apply went out and bought their own trucks. LAMP recruits box truck drivers every week for our own fleet, and applicants who clear MVR, DOT physical, and background sit on a bench waiting for a seat. Bring your truck onto our authority and tell your dispatcher you need that seat filled, and your truck goes into the same pipeline instead of sitting on Indeed. Placement is a paid service, and you pay nothing until a driver is seated and running your freight. Freight is ready the day a driver is.",
             },
           },
           {
@@ -437,6 +437,14 @@ const SEO_PAGES: SeoPageConfig[] = [
             acceptedAnswer: {
               "@type": "Answer",
               text: "Yes, with one honest caveat. Drivers quit without notice and the note on your truck does not pause when they do. Every owner here who does not drive keeps a fallback: their own license and a week they can clear, or a standing arrangement with dispatch to move the truck to a bench driver. We will work your truck into our driver pipeline and we will keep it loaded. We will not tell you it runs itself.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "What does it cost to have you place a driver in my truck?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Placement is a paid service, billed per driver we seat in your truck. You pay nothing up front and nothing at all until that driver is running your freight, so a candidate who never shows costs you zero. Your dispatcher covers the fee and the replacement terms on your first call, once we know your truck, your lanes, and how fast you need the seat filled.",
             },
           },
           {
