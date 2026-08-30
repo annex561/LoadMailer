@@ -1,0 +1,64 @@
+{
+  "description": "Daily inventory watch state for LAMP Logistics Freightliner M2-106 sleeper box truck search. Do not report units in 'seen' again unless their listing materially changes (relist, price drop, etc.).",
+  "spec": {
+    "model": "Freightliner M2-106 (M2 106 / Business Class M2 106 / M2 106 Plus)",
+    "year_min": 2023,
+    "box_ft": 26,
+    "gvwr_max": 26000,
+    "mileage_max": 150000,
+    "price_max": 110000,
+    "requires": ["lift gate", "sleeper or extended-cab-with-bunk"]
+  },
+  "seen": [
+    {
+      "id": "MHC-0629432",
+      "source": "MHC South Denver",
+      "date": "2026-08-30",
+      "verdict": "too_many_miles",
+      "notes": "2023 M2-106, $74,950, 283,037 mi, South Denver. Converted 36in sleeper but MHC 'Sleeper Size' field misleadingly reads NON-SLEEPER."
+    },
+    {
+      "id": "FacebookMarketplace-DavidBlankenshipJr-0629432relist",
+      "source": "Facebook Marketplace",
+      "date": "2026-08-30",
+      "verdict": "too_many_miles",
+      "notes": "Same unit as MHC 0629432, relisted by David Blankenship Jr. at $74,750, pinned Chattanooga TN. Same mileage reject applies."
+    },
+    {
+      "id": "ProxyEquipment-WPZ0bx2O524861",
+      "vin": "1FVACWD27NHNM0288",
+      "source": "Proxy Equipment, Greensboro NC",
+      "date": "2026-08-30",
+      "verdict": "too_many_miles",
+      "notes": "2022 M2 106, $29,900, 511,073 mi."
+    },
+    {
+      "id": "VelocityGreensboro-M2106Plus-new-139900",
+      "source": "Velocity Truck Centers Greensboro NC",
+      "date": "2026-08-30",
+      "verdict": "wrong_spec",
+      "notes": "New 2027 M2 106 Plus extended cab with lower bunk, $139,900. New, not used; also over budget."
+    },
+    {
+      "id": "VelocityGreensboro-M2106Plus-cabchassis-115990",
+      "source": "Velocity Truck Centers Greensboro NC",
+      "date": "2026-08-30",
+      "verdict": "wrong_spec",
+      "notes": "New 2027 M2 106 Plus cab chassis, $115,990. New, not used."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-08-30",
+      "verdict": "match",
+      "notes": "2025 M2-106 Extended Cab with Sleeper/bunk, 31,422 mi, 26ft box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL. Same listing ID as the previously 'sold' ideal truck. On 2026-08-30 the DTI listing page for this ID is again showing active financing/payment quotes ($1,917.56/mo @48mo etc.) via search snippet, suggesting it has relisted. Could NOT confirm directly via WebFetch (dtitrucks.com is egress-blocked in this environment) - buyer should call (720)360-4022 to confirm current availability and price before acting. THIS IS THE IDEAL TRUCK IF STILL AVAILABLE."
+    },
+    {
+      "id": "CommercialTruckTrader-2022-M2106-ExtSleeperCab-Huntersville-128990mi-65000",
+      "source": "Commercial Truck Trader (private seller), Huntersville NC",
+      "date": "2026-08-30",
+      "verdict": "wrong_spec",
+      "notes": "2022 M2-106 Extended Sleeper Cab, 26'L/102\"W/103\"H box, 128,990 mi, $65,000, private seller. Misses year (2023+ required, this is 2022) - reported as 5/6 secondary match per rules. Could not retrieve direct listing URL or confirm liftgate/exact GVWR via WebSearch snippets; category page: https://www.commercialtrucktrader.com/2022-Freightliner-Business-Class-M2-106-Box-Straight/trucks-for-sale?make=Freightliner%7C2310628&model=BUSINESS%20CLASS%20M2%20106%7C764865763&category=Box%20Truck%20-%20Straight%20Truck%7C2002281&year=2022"
+    }
+  ]
+}
