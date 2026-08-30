@@ -125,7 +125,7 @@ const SEO_PAGES: SeoPageConfig[] = [
     title:
       "Start Your Own Box Truck Business — Authority, Dispatch & Trucks | LAMP Logistics",
     description:
-      "Start your own box truck business with LAMP Logistics. We file your MC and DOT authority, source a road-ready box truck, and dispatch you from day one so your new authority never sits. Take one service or all three.",
+      "Start your own box truck business with LAMP Logistics. Authority formation $2,500, dispatch 10% of gross, road-ready box trucks $25,000–$45,000, or the full package for $30,000. We dispatch you from day one so your new authority never sits.",
     canonicalUrl: "https://traqiq.app/start-your-box-truck-business",
     ogImage: "https://traqiq.app/apple-touch-icon.png",
     jsonLd: [
@@ -150,29 +150,50 @@ const SEO_PAGES: SeoPageConfig[] = [
           itemListElement: [
             {
               "@type": "Offer",
+              priceCurrency: "USD",
+              price: 2500,
               itemOffered: {
                 "@type": "Service",
                 name: "Authority Formation",
                 description:
-                  "MC operating authority and USDOT number filed in your business name, BOC-3 blanket process agent filing, UCR registration, and insurance filings submitted to FMCSA.",
+                  "MC operating authority and USDOT number filed in your business name, BOC-3 blanket process agent filing, UCR registration, and insurance filings submitted to FMCSA. $2,500 one-time.",
               },
             },
             {
+              // Percentage of gross — no fixed price, so no price field.
               "@type": "Offer",
+              priceCurrency: "USD",
               itemOffered: {
                 "@type": "Service",
                 name: "Freight Dispatch",
                 description:
-                  "Load sourcing, booking, rate negotiation, broker paperwork, and factoring setup with weekly settlements itemized in the TraqIQ portal.",
+                  "Load sourcing, booking, rate negotiation, broker paperwork, and factoring setup with weekly settlements itemized in the TraqIQ portal. 10% of gross.",
               },
             },
             {
               "@type": "Offer",
+              priceSpecification: {
+                "@type": "PriceSpecification",
+                priceCurrency: "USD",
+                minPrice: 25000,
+                maxPrice: 45000,
+              },
               itemOffered: {
                 "@type": "Service",
                 name: "Truck Sourcing",
                 description:
-                  "Inspected, road-ready box trucks with financing options. Most units are under 26,001 lbs GVWR, so no CDL is required.",
+                  "Inspected, road-ready box trucks from $25,000 to $45,000, with financing options. Most units are under 26,001 lbs GVWR, so no CDL is required.",
+              },
+            },
+            {
+              "@type": "Offer",
+              priceCurrency: "USD",
+              price: 30000,
+              itemOffered: {
+                "@type": "Service",
+                name: "Full Startup Package",
+                description:
+                  "Truck sourcing and authority formation together for $30,000, sequenced so the truck is ready before the authority activates. Dispatch continues at 10% of gross once you are hauling.",
               },
             },
           ],
@@ -229,9 +250,10 @@ const SEO_PAGES: SeoPageConfig[] = [
       <h1>Start your own box truck business — LAMP Logistics</h1>
       <p>We file your MC and DOT authority in your name, source a road-ready box truck, and dispatch you from day one, so the months most new carriers spend sitting never happen. You own the business and the truck.</p>
       <h2>Take one service or all three</h2>
-      <p><strong>Authority Formation</strong> — MC operating authority and USDOT number, BOC-3 process agent filing, UCR registration, and insurance filings submitted to FMCSA.</p>
-      <p><strong>Dispatch</strong> — we source and book your freight, negotiate rates, handle broker paperwork, and set up factoring so you are paid weekly.</p>
-      <p><strong>Truck Sourcing</strong> — inspected, road-ready box trucks with financing options. Most units are under 26,001 lbs GVWR, so no CDL is required.</p>
+      <p><strong>Authority Formation — $2,500 one-time</strong> — MC operating authority and USDOT number, BOC-3 process agent filing, UCR registration, and insurance filings submitted to FMCSA.</p>
+      <p><strong>Dispatch — 10% of gross</strong> — we source and book your freight, negotiate rates, handle broker paperwork, and set up factoring so you are paid weekly.</p>
+      <p><strong>Truck Sourcing — $25,000 to $45,000</strong> — inspected, road-ready box trucks with financing options. Most units are under 26,001 lbs GVWR, so no CDL is required.</p>
+      <p><strong>Full startup package — $30,000</strong> — truck and authority together, sequenced so the truck is ready before the authority activates. Dispatch continues at 10% of gross once you are hauling.</p>
       <h2>Why a new authority sits</h2>
       <p>Brokers will not hand good freight to an MC with no history, so new carriers sit for months while payments come due. A new authority sits because nobody is feeding it. LAMP dispatches you from the day yours activates.</p>
       <p><a href="/start-your-box-truck-business#start">Get a quote</a> or call (833) 362-9813. LAMP Logistics · MC-1725755 · DOT 4397421.</p>

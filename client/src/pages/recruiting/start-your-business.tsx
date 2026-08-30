@@ -31,15 +31,22 @@ import {
 // PRICING — set these, THEN flip SHOW_PRICING to true.
 // While SHOW_PRICING is false every price slot renders "Get a quote" instead,
 // so this page is safe to publish before the numbers are final.
+//
+// NOTE on the bundle: dispatch is a recurring % of gross, so it cannot be
+// folded into a one-time figure. The $30,000 covers the truck and the
+// authority filing; dispatch continues at 10% once the customer is running.
+// The bundle is therefore NOT cheaper than à la carte at the bottom of the
+// truck range ($25,000 truck + $2,500 authority = $27,500), which is why the
+// card claims "complete package" rather than "best value".
 // ---------------------------------------------------------------------------
-const SHOW_PRICING = false;
+const SHOW_PRICING = true;
 
 const PRICING = {
-  bundle: "$0,000", // all-in: authority + dispatch + truck placement
-  authority: "$0,000", // one-time authority formation package
-  dispatch: "0%", // of gross — or replace with a flat weekly rate
-  truckLow: "$00,000", // low end of the box trucks you source
-  truckHigh: "$00,000", // high end
+  bundle: "$30,000", // truck + authority filing; dispatch billed separately
+  authority: "$2,500", // one-time authority formation package
+  dispatch: "10%", // of gross, ongoing
+  truckLow: "$25,000", // low end of the box trucks you source
+  truckHigh: "$45,000", // high end
 };
 
 function price(value: string) {
@@ -391,7 +398,7 @@ export default function StartYourBusinessLanding() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white">
-                  BEST VALUE
+                  COMPLETE PACKAGE
                 </div>
                 <h3 className="mt-3 text-2xl font-bold text-slate-900">
                   The full startup package
@@ -400,11 +407,21 @@ export default function StartYourBusinessLanding() {
                   All three, sequenced so nothing sits idle: we source the truck while your
                   authority is in the FMCSA queue, and dispatch is live the day it activates.
                 </p>
+                {SHOW_PRICING && (
+                  <p className="mt-3 text-sm text-slate-600 max-w-2xl">
+                    Covers the truck and your authority filing. Dispatch runs at{" "}
+                    {PRICING.dispatch} of gross once you are hauling, same as it does on its
+                    own.
+                  </p>
+                )}
               </div>
               <div className="text-center sm:text-right shrink-0">
                 <div className="text-3xl font-bold text-emerald-700">
                   {price(PRICING.bundle)}
                 </div>
+                {SHOW_PRICING && (
+                  <div className="text-xs text-slate-500">truck + authority</div>
+                )}
                 <a
                   href="#start"
                   className="mt-3 inline-flex rounded-lg bg-emerald-600 px-5 py-2.5 text-white text-sm font-semibold hover:bg-emerald-700"
