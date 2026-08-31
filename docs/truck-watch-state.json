@@ -59,6 +59,27 @@
       "date": "2026-08-30",
       "verdict": "wrong_spec",
       "notes": "2022 M2-106 Extended Sleeper Cab, 26'L/102\"W/103\"H box, 128,990 mi, $65,000, private seller. Misses year (2023+ required, this is 2022) - reported as 5/6 secondary match per rules. Could not retrieve direct listing URL or confirm liftgate/exact GVWR via WebSearch snippets; category page: https://www.commercialtrucktrader.com/2022-Freightliner-Business-Class-M2-106-Box-Straight/trucks-for-sale?make=Freightliner%7C2310628&model=BUSINESS%20CLASS%20M2%20106%7C764865763&category=Box%20Truck%20-%20Straight%20Truck%7C2002281&year=2022"
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-08-31",
+      "verdict": "unverified",
+      "notes": "Re-checked. Still shows as 'For Sale/Lease' in WebSearch snippets/title, unchanged specs from 2026-08-30 (2025 M2-106 ext cab sleeper/bunk, 31,422 mi, $unknown, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). dtitrucks.com egress-blocked again this run (WebFetch tested, EGRESS_BLOCKED). No material change vs prior entry - not re-reported per 'already seen' rule. Still needs a phone call to (720)360-4022 to confirm live availability/price before it can be pushed."
+    },
+    {
+      "id": "Soarr-16178030-UG1297",
+      "source": "Soarr.com / Orlando Freightliner, Apopka FL",
+      "date": "2026-08-31",
+      "verdict": "unverified",
+      "notes": "2023 Freightliner M2 106, stock #UG1297, listed as '26\\' | Non CDL' box truck per search snippet, but WebSearch summary also described it as 'under CDL' (contradictory) and gave no sleeper/extended-cab mention, no mileage, no price. soarr.com egress-blocked (WebFetch tested, EGRESS_BLOCKED). Likely a straight box truck without sleeper - would miss required spec even if confirmed. Not reported: cannot verify via (a) live URL or (b) dealer+phone, and configuration doesn't clearly meet spec."
+    },
+    {
+      "id": "CTT-2023-M2106-BoxStraight-category-64783mi-81408mi",
+      "source": "Commercial Truck Trader (general 2023 M2-106 Box Truck category page)",
+      "date": "2026-08-31",
+      "verdict": "unverified",
+      "notes": "WebSearch AI summary surfaced two 2023 M2-106 box trucks at 64,783 mi and 81,408 mi from a non-sleeper-filtered category page, no individual listing URL, no dealer name, no price, no sleeper/liftgate confirmation. Could not obtain a direct listing URL or stock/VIN to pin down; category page: https://www.commercialtrucktrader.com/2023-Freightliner-Business-Class-M2-106-Box-Straight/trucks-for-sale?make=Freightliner%7C2310628&model=BUSINESS%20CLASS%20M2%20106%7C764865763&category=Box%20Truck%20-%20Straight%20Truck%7C2002281&year=2023 . Worth a future sweep re-check with narrower search to try to isolate direct URLs."
     }
   ]
 }
