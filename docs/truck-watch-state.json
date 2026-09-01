@@ -80,6 +80,35 @@
       "date": "2026-08-31",
       "verdict": "unverified",
       "notes": "WebSearch AI summary surfaced two 2023 M2-106 box trucks at 64,783 mi and 81,408 mi from a non-sleeper-filtered category page, no individual listing URL, no dealer name, no price, no sleeper/liftgate confirmation. Could not obtain a direct listing URL or stock/VIN to pin down; category page: https://www.commercialtrucktrader.com/2023-Freightliner-Business-Class-M2-106-Box-Straight/trucks-for-sale?make=Freightliner%7C2310628&model=BUSINESS%20CLASS%20M2%20106%7C764865763&category=Box%20Truck%20-%20Straight%20Truck%7C2002281&year=2023 . Worth a future sweep re-check with narrower search to try to isolate direct URLs."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-01",
+      "verdict": "unverified",
+      "notes": "Re-checked again. Still shows as 'For Sale/Lease' in WebSearch snippets/title, same specs (2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). dtitrucks.com egress-blocked again (WebFetch tested, EGRESS_BLOCKED). No material change vs prior entries - not re-reported. Still needs a phone call to (720)360-4022 to confirm live availability/price."
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "vin": "3ALACWFC7SDVZ8439",
+      "source": "Comvoy.com listing / Truck and Van Outlet, Miami FL",
+      "date": "2026-09-01",
+      "verdict": "unverified",
+      "notes": "2025 Freightliner M2-106 Plus Extended Cab with sleeper bunk, 26' box (103\"H x 102\"W), Morgan aluminum body, aluminum tuckaway liftgate, Cummins ISB 6.7L, 39,821 mi, $93,995. Stock VZ8439. Dealer: Truck and Van Outlet, 8300 NW 7th Ave, Miami, FL, (305) 315-0667. Direct URL https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244 - comvoy.com egress-blocked (WebFetch tested, EGRESS_BLOCKED), so listing NOT opened live (gate a fails). Clears gate (b): named dealer + phone. GVWR/non-CDL status not explicitly confirmed in snippets. On paper this is a strong spec match (year, box, liftgate, sleeper, mileage, price all fit) - buyer should call to confirm live availability, price, mileage, and GVWR/CDL rating before acting. NOT pushed - gate (a) not cleared."
+    },
+    {
+      "id": "NJTruckSpot-MV607-2024-SouthAmboy-43964mi",
+      "source": "NJ Truck Spot, South Amboy NJ",
+      "date": "2026-09-01",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (International MV607). 2024 International MV607, 26ft dry box, Cummins engine, liftgate, no CDL required, 43,964 mi, price seen as both $64,995 and $76,900 across sources (ambiguous). Dealer: NJ Truck Spot, 929 US Hwy 9, South Amboy, NJ, (732) 952-3535. Rejected: no sleeper or extended-cab-with-bunk mentioned in any listing snippet despite dedicated search - appears to be a regular/day cab, missing the required sleeper spec."
+    },
+    {
+      "id": "VelocityGreensboro-2026-ExtCabSleeper-126990to127990",
+      "source": "Velocity Truck Centers Greensboro NC (via search snippet)",
+      "date": "2026-09-01",
+      "verdict": "wrong_spec",
+      "notes": "New 2026 Freightliner M2 Plus Extended Cab 26' box truck with lower sleeper bunk, $126,990-$127,990. Rejected: over budget (>$110,000); appears to be new inventory, not used."
     }
   ]
 }
