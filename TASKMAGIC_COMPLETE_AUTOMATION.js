@@ -28,8 +28,8 @@ const puppeteer = require('puppeteer');
 
     // Wait for login fields
     await page.waitForSelector('input[name="username"]', { timeout: 15000 });
-    await page.type('input[name="username"]', 'dispatch@lampslogistics.com', { delay: 100 });
-    await page.type('input[name="password"]', 'Anonymous#56111', { delay: 100 });
+    await page.type('input[name="username"]', process.env.DAT_EMAIL, { delay: 100 });
+    await page.type('input[name="password"]', process.env.DAT_PASSWORD, { delay: 100 });
 
     console.log("🔐 Submitting login...");
     await page.click('button[type="submit"]');
@@ -239,7 +239,7 @@ const puppeteer = require('puppeteer');
                         miles: miles,
                         dat_load_id: `DAT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                         automation_run_id: 'taskmagic_dat_scraper',
-                        webhook_secret: 'taskmagic-webhook-secret-2025'
+                        webhook_secret: process.env.TASKMAGIC_WEBHOOK_SECRET
                     });
                 }
                 
@@ -262,7 +262,7 @@ const puppeteer = require('puppeteer');
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-taskmagic-secret': 'taskmagic-webhook-secret-2025'
+                    'x-taskmagic-secret': process.env.TASKMAGIC_WEBHOOK_SECRET
                 },
                 body: JSON.stringify(loads[i])
             });

@@ -14,8 +14,8 @@ Update your existing automation to scrape actual DAT load data instead of test d
 ### 2. DAT Login Steps in TaskMagic:
 1. **Navigate to**: `https://www.dat.com/login`
 2. **Enter credentials**:
-   - Email: `dispatch@lampslogistics.com`
-   - Password: `Anonymous#56111`
+   - Email: `$DAT_EMAIL`
+   - Password: `$DAT_PASSWORD`
 3. **Handle 2FA** if prompted
 4. **Navigate to load search** after successful login
 
@@ -72,7 +72,7 @@ Modify your TaskMagic automation to send this data structure:
   "hazmat": false,
   "dat_load_id": "DAT123456",
   "automation_run_id": "taskmagic_run_789",
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 

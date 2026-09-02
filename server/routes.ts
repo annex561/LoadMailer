@@ -2969,7 +2969,7 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
   
-  app.get('/api/drivers', async (req, res) => {
+  app.get('/api/drivers', isAuthenticated, async (req, res) => {
     try {
       const drivers = await storage.getAllDrivers();
       res.json(drivers);
@@ -4244,7 +4244,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
   
   // Critical load CRUD routes - must be available immediately for frontend
-  app.get('/api/loads', async (req, res) => {
+  app.get('/api/loads', isAuthenticated, async (req, res) => {
     try {
       const { status, driverId } = req.query;
       

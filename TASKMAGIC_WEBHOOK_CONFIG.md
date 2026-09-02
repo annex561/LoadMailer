@@ -25,7 +25,7 @@ https://webhooks.taskmagic.com/hook/i7BFrUC4Yk7ubrLYIkSW
 Add these HTTP headers:
 ```
 Content-Type: application/json
-x-taskmagic-secret: taskmagic-webhook-secret-2025
+x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET
 ```
 
 ## Step 3: Setup Payload
@@ -53,7 +53,7 @@ In the "Setup payload" section, configure the JSON structure. Here's what you ne
   "hazmat": {{hazmat_boolean_variable}},
   "dat_load_id": "{{dat_load_id_variable}}",
   "automation_run_id": "{{taskmagic_run_id}}",
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 
@@ -110,7 +110,7 @@ https://[YOUR-REPLIT-DOMAIN].replit.app/taskmagic-status
 ## Required Headers for LoadMaster Integration
 ```
 Content-Type: application/json
-x-taskmagic-secret: taskmagic-webhook-secret-2025
+x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET
 ```
 
 ## Sample Test Payload
@@ -130,7 +130,7 @@ Once configured, your webhook should send data like this:
   "commodity": "Electronics",
   "pickup_date": "2025-08-23T08:00:00Z",
   "miles": 248,
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 

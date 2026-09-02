@@ -3,7 +3,7 @@
 ## Your Current Setup ✅
 - **TaskMagic Webhook**: `https://webhooks.taskmagic.com/hook/i7BFrUC4Yk7ubrLYIkSW` (TESTED & WORKING)
 - **LoadMaster Ready**: All endpoints configured and tested
-- **DAT Credentials**: `dispatch@lampslogistics.com` / `Anonymous#56111`
+- **DAT Credentials**: `$DAT_EMAIL` / `$DAT_PASSWORD`
 
 ## Step 1: Create DAT Scraping Automation in TaskMagic
 
@@ -15,8 +15,8 @@
 ### 1.2 Configure DAT Login
 1. **Starting URL**: `https://www.dat.com/login`
 2. **Add login steps**:
-   - Click email field, enter: `dispatch@lampslogistics.com`
-   - Click password field, enter: `Anonymous#56111`
+   - Click email field, enter: `$DAT_EMAIL`
+   - Click password field, enter: `$DAT_PASSWORD`
    - Click "Sign In" button
    - Handle 2FA if prompted (check email for code)
 
@@ -70,7 +70,7 @@ For each scraped load, configure TaskMagic to send:
 **Headers**:
 ```
 Content-Type: application/json
-x-taskmagic-secret: taskmagic-webhook-secret-2025
+x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET
 ```
 
 ### 3.2 Choose Integration Method
@@ -111,7 +111,7 @@ Configure TaskMagic to send this JSON structure:
   "hazmat": {{extracted_hazmat}},
   "dat_load_id": "{{extracted_load_id}}",
   "automation_run_id": "{{taskmagic_run_id}}",
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 
@@ -158,7 +158,7 @@ You can also test with this sample payload:
 ```bash
 curl -X POST https://your-replit.app/api/taskmagic/webhook/single-load \
   -H "Content-Type: application/json" \
-  -H "x-taskmagic-secret: taskmagic-webhook-secret-2025" \
+  -H "x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET" \
   -d '{
     "company": "Test DAT Company",
     "phone": "555-123-4567",

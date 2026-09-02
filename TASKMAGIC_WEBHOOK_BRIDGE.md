@@ -19,8 +19,8 @@ Create automation with these settings:
 - **Name:** "DAT Login for LoadMaster"
 - **Starting URL:** `https://www.dat.com/login`
 - **Credentials:** 
-  - Email: `dispatch@lampslogistics.com`
-  - Password: `Anonymous#56111`
+  - Email: `$DAT_EMAIL`
+  - Password: `$DAT_PASSWORD`
 
 ### Step 2: Load Scraping Workflow
 Configure data extraction for these fields:
@@ -45,7 +45,7 @@ Configure data extraction for these fields:
   "special_requirements": "Extract special notes",
   "hazmat": "Extract hazmat flag (true/false)",
   "dat_load_id": "Extract DAT load ID",
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 
@@ -58,7 +58,7 @@ URL: https://your-replit-domain.replit.app/api/taskmagic/webhook/single-load
 Method: POST
 Headers:
   Content-Type: application/json
-  x-taskmagic-secret: taskmagic-webhook-secret-2025
+  x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET
 ```
 
 #### Method 2: Use TaskMagic Webhook Bridge
@@ -77,7 +77,7 @@ Your system is configured to receive loads at these endpoints:
 ```bash
 curl -X POST https://your-replit.app/api/taskmagic/webhook/single-load \
   -H "Content-Type: application/json" \
-  -H "x-taskmagic-secret: taskmagic-webhook-secret-2025" \
+  -H "x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET" \
   -d '{
     "company": "Test Freight Company",
     "phone": "555-987-6543",
@@ -98,7 +98,7 @@ curl -X POST https://your-replit.app/api/taskmagic/webhook/single-load \
 ```bash
 curl -X POST https://your-replit.app/api/taskmagic/webhook/batch-loads \
   -H "Content-Type: application/json" \
-  -H "x-taskmagic-secret: taskmagic-webhook-secret-2025" \
+  -H "x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET" \
   -d '{
     "loads": [
       { /* load 1 data */ },

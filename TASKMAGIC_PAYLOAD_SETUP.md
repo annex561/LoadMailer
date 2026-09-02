@@ -3,7 +3,7 @@
 ## Your Headers Are Perfect ✅
 I can see you've configured the headers correctly:
 - `Content-Type: application/json`
-- `x-taskmagic-secret: taskmagic-webhook-secret-2025`
+- `x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET`
 
 ## Setup Payload Configuration
 
@@ -34,7 +34,7 @@ Then configure this JSON structure:
   "hazmat": {{hazmat_flag}},
   "dat_load_id": "{{dat_load_id}}",
   "automation_run_id": "{{$run_id}}",
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 
@@ -90,7 +90,7 @@ Once configured with your variables, it should look something like:
   "commodity": "Electronics",
   "pickup_date": "2025-08-23T08:00:00Z",
   "miles": 248,
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 

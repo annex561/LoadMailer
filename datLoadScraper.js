@@ -4,8 +4,8 @@
 import puppeteer from 'puppeteer';
 
 // Configuration
-const DAT_EMAIL = 'dispatch@lampslogistics.com';
-const DAT_PASSWORD = 'Anonymous#56111';
+const DAT_EMAIL = process.env.DAT_EMAIL || '';
+const DAT_PASSWORD = process.env.DAT_PASSWORD || '';
 const LOGIN_URL = 'https://login.dat.com/u/login/identifier?state=hKFo2SBidC1XNWZvSHpVWi05TVo4THBKYmlwdnhaNnR4ZFVnb6Fur3VuaXZlcnNhbC1sb2dpbqN0aWTZIHFLczlTMkhZbUdVS0lUc0pkSVpqU2VjMU8tTFEwdkswo2NpZNkgZTlsek1YYm5XTkowRDUwQzJoYWFkbzdEaVcxYWt3YUM';
 const LOADBOARD_URL = 'https://app.dat.com/loadboard/search';
 
