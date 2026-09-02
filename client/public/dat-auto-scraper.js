@@ -9,6 +9,12 @@
  * 4. Script will automatically process all visible loads
  */
 
+// The webhook secret is NOT baked into this file: this asset is served
+// publicly at /dat-auto-scraper.js, so anything hardcoded here is readable
+// by anyone. Set it here after pasting the script into the console, or
+// define window.TASKMAGIC_SECRET before running.
+const TASKMAGIC_SECRET = window.TASKMAGIC_SECRET || '';
+
 class DATAutoScraper {
   constructor(webhookUrl = 'https://66c29e54-1226-40b2-99a7-6591af2210d8-00-rjlpbou3l6wt.spock.replit.dev/api/taskmagic/webhook/single-load') {
     this.webhookUrl = webhookUrl;
@@ -187,7 +193,7 @@ class DATAutoScraper {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-taskmagic-secret': 'taskmagic-webhook-secret-2025'
+          'x-taskmagic-secret': TASKMAGIC_SECRET
         },
         body: JSON.stringify(loadData)
       });

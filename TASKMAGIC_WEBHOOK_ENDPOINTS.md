@@ -15,7 +15,7 @@ URL: https://[YOUR-REPLIT-DOMAIN].replit.app/api/taskmagic/webhook/single-load
 Method: POST
 Headers:
   Content-Type: application/json
-  x-taskmagic-secret: taskmagic-webhook-secret-2025
+  x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET
 ```
 
 ### Batch Loads Endpoint (if scraping multiple loads)
@@ -24,7 +24,7 @@ URL: https://[YOUR-REPLIT-DOMAIN].replit.app/api/taskmagic/webhook/batch-loads
 Method: POST
 Headers:
   Content-Type: application/json
-  x-taskmagic-secret: taskmagic-webhook-secret-2025
+  x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET
 ```
 
 ## Method 2: Via TaskMagic Webhook (Alternative)
@@ -64,7 +64,7 @@ Then configure TaskMagic to forward the data to LoadMaster endpoints above.
   "hazmat": false,
   "dat_load_id": "DAT123456",
   "automation_run_id": "taskmagic_run_789",
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 
@@ -102,7 +102,7 @@ Use this curl command to test (replace [YOUR-REPLIT-DOMAIN] with your actual dom
 ```bash
 curl -X POST https://[YOUR-REPLIT-DOMAIN].replit.app/api/taskmagic/webhook/single-load \
   -H "Content-Type: application/json" \
-  -H "x-taskmagic-secret: taskmagic-webhook-secret-2025" \
+  -H "x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET" \
   -d '{
     "company": "TaskMagic Test Freight",
     "phone": "555-999-7777",

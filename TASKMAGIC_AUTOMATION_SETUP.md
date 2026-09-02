@@ -28,12 +28,12 @@ https://[YOUR-REPLIT-DOMAIN].replit.app/api/taskmagic/webhook/single-load
 
 **Login Actions:**
 1. **Wait for page load** (2 seconds)
-2. **Click email field** and enter: `dispatch@lampslogistics.com`
-3. **Click password field** and enter: `Anonymous#56111`
+2. **Click email field** and enter: `$DAT_EMAIL`
+3. **Click password field** and enter: `$DAT_PASSWORD`
 4. **Click "Sign In" button**
 5. **Handle 2FA if prompted:**
    - Wait for 2FA screen
-   - Check email: `dispatch@lampslogistics.com`
+   - Check email: `$DAT_EMAIL`
    - Enter verification code from email
    - Click "Verify" or "Continue"
 
@@ -91,7 +91,7 @@ Map DAT equipment types to these values:
 **Headers:**
 ```
 Content-Type: application/json
-x-taskmagic-secret: taskmagic-webhook-secret-2025
+x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET
 ```
 
 **JSON Payload Structure:**
@@ -116,7 +116,7 @@ x-taskmagic-secret: taskmagic-webhook-secret-2025
   "hazmat": {{hazmat_variable}},
   "dat_load_id": "{{dat_load_id_variable}}",
   "automation_run_id": "{{taskmagic_run_id}}",
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 
@@ -165,7 +165,7 @@ You can test LoadMaster endpoint with this sample:
 ```bash
 curl -X POST https://[YOUR-REPLIT-DOMAIN].replit.app/api/taskmagic/webhook/single-load \
   -H "Content-Type: application/json" \
-  -H "x-taskmagic-secret: taskmagic-webhook-secret-2025" \
+  -H "x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET" \
   -d '{
     "company": "TaskMagic Test Freight Co",
     "contact_name": "Test Dispatcher",

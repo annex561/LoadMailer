@@ -19,7 +19,7 @@ https://[YOUR-REPLIT-DOMAIN].replit.app/api/taskmagic/webhook/single-load
 
 **Header 2:**
 - Key: `x-taskmagic-secret`
-- Value: `taskmagic-webhook-secret-2025`
+- Value: `$TASKMAGIC_WEBHOOK_SECRET`
 
 ## Step 2: Payload Configuration ✅
 
@@ -48,7 +48,7 @@ You need to map your extracted DAT variables to this structure:
   "hazmat": {{hazmat_boolean_from_dat}},
   "dat_load_id": "{{dat_load_id_from_dat}}",
   "automation_run_id": "{{$run_id}}",
-  "webhook_secret": "taskmagic-webhook-secret-2025"
+  "webhook_secret": "$TASKMAGIC_WEBHOOK_SECRET"
 }
 ```
 

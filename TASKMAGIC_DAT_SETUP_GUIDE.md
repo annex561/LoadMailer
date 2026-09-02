@@ -3,7 +3,7 @@
 ## Using Your DAT Login Script with TaskMagic
 
 I can see you have a perfectly configured DAT login script that:
-✅ Uses correct DAT credentials (dispatch@lampslogistics.com / Anonymous#56111)
+✅ Uses correct DAT credentials ($DAT_EMAIL / $DAT_PASSWORD)
 ✅ Handles 2FA authentication flow
 ✅ Navigates to DAT One Web properly
 ✅ Waits for manual 2FA entry
@@ -95,7 +95,7 @@ const loads = await page.evaluate(() => {
                     miles: parseInt(miles?.replace(/[^0-9]/g, '')) || 0,
                     dat_load_id: `DAT_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                     automation_run_id: 'taskmagic_dat_scraper',
-                    webhook_secret: 'taskmagic-webhook-secret-2025'
+                    webhook_secret: '$TASKMAGIC_WEBHOOK_SECRET'
                 });
             }
         } catch (error) {
@@ -133,7 +133,7 @@ Your webhook is already configured:
 - **URL**: `https://[YOUR-REPLIT-DOMAIN].replit.app/api/taskmagic/webhook/single-load`
 - **Headers**: 
   - `Content-Type: application/json`
-  - `x-taskmagic-secret: taskmagic-webhook-secret-2025`
+  - `x-taskmagic-secret: $TASKMAGIC_WEBHOOK_SECRET`
 
 ### Step 5: Loop Through Multiple Loads
 
