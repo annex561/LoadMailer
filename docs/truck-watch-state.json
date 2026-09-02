@@ -109,6 +109,36 @@
       "date": "2026-09-01",
       "verdict": "wrong_spec",
       "notes": "New 2026 Freightliner M2 Plus Extended Cab 26' box truck with lower sleeper bunk, $126,990-$127,990. Rejected: over budget (>$110,000); appears to be new inventory, not used."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-02",
+      "verdict": "unverified",
+      "notes": "Re-checked again. Direct listing URL now surfaced in snippet: https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743 - dtitrucks.com still egress-blocked (WebFetch tested directly this run, EGRESS_BLOCKED), so URL could NOT be opened live - gate (a) still fails. Snippet now shows a price for the first time: $115,500, 31,422 mi, 6.7L Cummins 240HP, Allison 2100RDS, 26,000lb GVWR non-CDL. Note $115,500 is over the $110,000 budget ceiling if accurate, but snippet-sourced prices have proven unreliable (conflicting figures seen on other listings) - needs a live page or phone call to confirm real price. Named dealer + phone (720) 360-4022 would clear gate (b), but per prior sweep guidance this specific unit (previously showed 'sold' then reappeared) is held for gate (a) confirmation only before reporting/pushing. No push.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "Blackrock-Branford-CT-M2106Plus-WD0626-new-123900",
+      "source": "Black Rock Truck Sales, Branford CT (via search snippet)",
+      "date": "2026-09-02",
+      "verdict": "wrong_spec",
+      "notes": "NEW 2025 Freightliner M2-106 Plus, stock WD0626, 26,000 GVW non-CDL, 26' Morgan box, Maxon GPT-3 liftgate 3000lb, Cummins B6.7 250HP. Price $123,900. Rejected: new inventory (not used) and over budget (>$110,000). URL: https://www.blackrocktruck.com/PrintInventory-FREIGHTLINER-Medium-Duty-Truck-M2-106-PLUS-BOX-TRUCK-Branford-id-17067952"
+    },
+    {
+      "id": "unknown-2025-M2106Plus-76900-103665mi",
+      "source": "unknown dealer, likely TruckPaper.com listing (via search snippet)",
+      "date": "2026-09-02",
+      "verdict": "unverified",
+      "notes": "2025 Freightliner Business Class M2 106 Plus, $76,900, 103,665 mi, Cummins 260HP, Allison automatic, Morgan 97x102x26 box. On paper this could be a strong match (under budget, under mileage, 2025 MY) but no dealer name, location, URL, sleeper/extended-cab, liftgate, or GVWR/CDL info surfaced in any search snippet despite follow-up query. Cannot clear gate (a) or (b) - no direct link and no named dealer/phone. Worth a targeted re-search next sweep (try TruckPaper.com listing search by price/mileage) to try to pin down dealer and confirm sleeper spec.",
+      "next_steps": "Search truckpaper.com listings for 2025 M2 106 Plus around $76,900 / 103,665 mi to find dealer name and confirm sleeper/liftgate/GVWR."
+    },
+    {
+      "id": "unknown-2023-MV607-55000mi-aluminum-liftgate",
+      "source": "unknown dealer (via search snippet)",
+      "date": "2026-09-02",
+      "verdict": "unverified",
+      "notes": "SECONDARY candidate (International MV607). 2023 International MV607, 55,000 mi, 26ft box, aluminum liftgate, air ride suspension, non-CDL per snippet. No sleeper/extended-cab mention, no dealer name, no URL, no price. Cannot clear gate (a) or (b) - not reported."
     }
   ]
 }
