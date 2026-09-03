@@ -139,6 +139,49 @@
       "date": "2026-09-02",
       "verdict": "unverified",
       "notes": "SECONDARY candidate (International MV607). 2023 International MV607, 55,000 mi, 26ft box, aluminum liftgate, air ride suspension, non-CDL per snippet. No sleeper/extended-cab mention, no dealer name, no URL, no price. Cannot clear gate (a) or (b) - not reported."
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-03",
+      "verdict": "unverified",
+      "notes": "NEW listing (distinct stock/URL from 18242743). 2025 Freightliner M2-106 L9 Cummins Plus Extended Cab With Sleeper Bunk, 26' box, 8.9L Cummins L9 300HP, Allison 3000HS, only 181 mi (essentially new/demo unit), 26,000 GVWR non-CDL per snippet. No price surfaced in two targeted searches. dtitrucks.com egress-blocked (WebFetch tested this run). Cannot clear gate (a) (no live page open) or (b) meaningfully without a price. Given 181 mi is near-new, likely priced well above budget but unconfirmed - needs phone call to (720)360-4022 for price before any further action.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-03",
+      "verdict": "unverified",
+      "notes": "Re-checked again. No material change vs 2026-09-02 entry: still $115,500 (over $110k budget, unconfirmed), 31,422 mi, same specs. dtitrucks.com egress-blocked again this run (WebFetch tested directly, EGRESS_BLOCKED). Not re-reported."
+    },
+    {
+      "id": "RhodeIslandTruckCenter-2025-M2106-sleeperbunk-139983",
+      "source": "Rhode Island Truck Center, Riverside RI (via search snippet)",
+      "date": "2026-09-03",
+      "verdict": "wrong_spec",
+      "notes": "2025 Freightliner Business Class M2 106 with sleeper bunk, 26,000 lb GVWR non-CDL, $139,983. Rejected: over budget (>$110,000)."
+    },
+    {
+      "id": "Comvoy-21081710-Lansing-MI-ConventionalCab",
+      "source": "Comvoy.com / dealer, Lansing MI (via search snippet)",
+      "date": "2026-09-03",
+      "verdict": "wrong_spec",
+      "notes": "Used 2023 Freightliner M2 106 CONVENTIONAL CAB box truck with liftgate. Rejected: conventional (day) cab, not extended cab - no sleeper/berth possible. https://www.comvoy.com/work-truck/lansing-mi/used-2023-freightliner-m2-106-conventional-cab-box-truck-with-liftgate-21081710"
+    },
+    {
+      "id": "unknown-2023-MV607-HarwoodHeightsIL-55000mi-56000",
+      "source": "Commercial Truck Trader, private seller, Harwood Heights IL (via search snippet)",
+      "date": "2026-09-03",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (International MV607) - more detail than prior 2026-09-02 entry for the same unit. 2023 International MV607, 55,000 mi, 26ft box, aluminum liftgate, air ride, non-CDL, DOT inspected, private seller, $56,000, Harwood Heights IL. Rejected: no sleeper/extended-cab mention despite detail; also private seller with no dealer name or phone surfaced - cannot clear gate (b) either way."
+    },
+    {
+      "id": "YoungTruckAndTrailer-2025-HinoL6-6N376-dayCab",
+      "source": "Young Truck and Trailer, Kaysville UT",
+      "date": "2026-09-03",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY spec family search turned up Hino L6, not MV607/Hino/T280 match. 2025 Hino L6 Extended Day Cab (NOT sleeper), 26' box, Maxon liftgate, 26,000 GVW, 1,928 mi (new), $124,000. Rejected: day cab (no sleeper/bunk), new inventory, over budget. https://youngtruckandtrailer.com/products/2025-hino-l6-extended-cab-26-box-truck-with-liftgate"
     }
   ]
 }
