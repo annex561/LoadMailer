@@ -182,6 +182,45 @@
       "date": "2026-09-03",
       "verdict": "wrong_spec",
       "notes": "SECONDARY spec family search turned up Hino L6, not MV607/Hino/T280 match. 2025 Hino L6 Extended Day Cab (NOT sleeper), 26' box, Maxon liftgate, 26,000 GVW, 1,928 mi (new), $124,000. Rejected: day cab (no sleeper/bunk), new inventory, over budget. https://youngtruckandtrailer.com/products/2025-hino-l6-extended-cab-26-box-truck-with-liftgate"
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-04",
+      "verdict": "unverified",
+      "notes": "Re-checked again. WebSearch AI overview now surfaced a specific price for the first time: $94,500 (financing $1,917.56/48mo, $1,749.83/60mo, $1,617.00/72mo - same finance figures previously attached to the unconfirmed $115,500 snippet, so the finance numbers look stale/templated rather than tied to a fresh price - treat $94,500 with caution). Also saw stock #17951W / VIN 3ALACWFC0SDWC8375 attached to this unit in one result. Same specs otherwise (2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). Tested WebFetch directly on the dtitrucks.com listing URL this run - still EGRESS_BLOCKED. Per prior sweep guidance and the seed instruction for this specific unit ('if you open a LIVE listing for this one, report it and push'), this is held for gate (a) live-URL confirmation only - not reported, not pushed, despite named dealer+phone (720) 360-4022 which would otherwise clear gate (b).",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-04",
+      "verdict": "unverified",
+      "notes": "Re-checked. No price surfaced again this run (searches for this stock number returned only unrelated 2026-2027 DTI new-inventory prices, not this unit's). dtitrucks.com egress-blocked. No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "source": "Comvoy.com / Truck and Van Outlet, Miami FL",
+      "date": "2026-09-04",
+      "verdict": "unverified",
+      "notes": "Re-checked. Same as 2026-09-01 entry: 2025 M2-106 Plus ext cab sleeper, 26' box, liftgate, $93,995, Truck and Van Outlet, (305) 315-0667. Mileage not reconfirmed this run. comvoy.com egress-blocked, gate (a) not cleared. No material change - not re-reported/pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244"
+    },
+    {
+      "id": "unknown-2022-M2106-MZRNL4368-99600mi-69989",
+      "source": "carsforsale.com aggregator (via search snippet)",
+      "date": "2026-09-04",
+      "verdict": "unverified",
+      "notes": "2022 Freightliner M2 106, stock/VIN fragment MZRNL4368 / 3ALACWFC3NDNL4368, 99,600 mi, $69,989, Cummins B6.7, Allison automatic. On paper price/mileage/year would be a 5/6 match (misses 2023+ year) IF it has a sleeper/ext-cab, but no search result actually confirmed sleeper/extended-cab, liftgate, or GVWR - one AI overview implied 'extended cab sleeper configuration' but that appears to be the search assistant echoing my query terms rather than sourced fact. No dealer name, city, or direct URL surfaced despite two targeted searches. Cannot clear gate (a) or (b) - not reported.",
+      "next_steps": "Retry with a dealer/location-focused search or try carsforsale.com listing search directly to identify the selling dealer and confirm sleeper/liftgate/GVWR."
+    },
+    {
+      "id": "Transwest-Brighton-CO-2022-FreightlinerM2-sleeper-tractor",
+      "source": "SOARR.com / Transwest, Brighton CO",
+      "date": "2026-09-04",
+      "verdict": "wrong_spec",
+      "notes": "2022 Freightliner M2 sleeper truck, Cummins 325, air-ride suspension, RA capacity 18,000 lb / FA capacity 10,000 lb, wheelbase 244in, 'Request Price', no mileage shown. Rejected: this is a heavy-duty sleeper TRACTOR (semi tractor with high axle capacities), not an M2-106 box truck - wrong vehicle category entirely, not a box-truck/liftgate configuration. Dealer: Transwest, Brighton CO, (303) 289-3161."
     }
   ]
 }
