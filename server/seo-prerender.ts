@@ -118,6 +118,148 @@ const SEO_PAGES: SeoPageConfig[] = [
     `,
   },
   {
+    // Service offering, NOT a JobPosting — these customers become independent
+    // carriers, they are not hired by LAMP. Uses Service + FAQPage schema.
+    // No `offers` block until pricing is set (see SHOW_PRICING in the page).
+    path: "/start-your-box-truck-business",
+    title:
+      "Start Your Own Box Truck Business — Authority, Dispatch & Trucks | LAMP Logistics",
+    description:
+      "Start your own box truck business with LAMP Logistics. Authority formation $2,500, dispatch 10% of gross, road-ready box trucks $25,000–$45,000, or the full package for $30,000. We dispatch you from day one so your new authority never sits.",
+    canonicalUrl: "https://traqiq.app/start-your-box-truck-business",
+    ogImage: "https://traqiq.app/apple-touch-icon.png",
+    jsonLd: [
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        name: "Box Truck Business Startup — Authority, Dispatch and Truck Sourcing",
+        serviceType: "Trucking authority formation and freight dispatch",
+        description:
+          "LAMP Logistics sets up new box truck carriers: MC and USDOT authority filed in your name, BOC-3 and UCR registration, road-ready truck sourcing, and in-house dispatch that books freight from the day your authority activates. Services available individually or as a full startup package.",
+        provider: {
+          "@type": "Organization",
+          name: "LAMP Logistics",
+          sameAs: "https://traqiq.app",
+          telephone: "+1-833-362-9813",
+          identifier: { "@type": "PropertyValue", name: "USDOT", value: "4397421" },
+        },
+        areaServed: { "@type": "Country", name: "United States" },
+        hasOfferCatalog: {
+          "@type": "OfferCatalog",
+          name: "Box truck carrier startup services",
+          itemListElement: [
+            {
+              "@type": "Offer",
+              priceCurrency: "USD",
+              price: 2500,
+              itemOffered: {
+                "@type": "Service",
+                name: "Authority Formation",
+                description:
+                  "MC operating authority and USDOT number filed in your business name, BOC-3 blanket process agent filing, UCR registration, and insurance filings submitted to FMCSA. $2,500 one-time.",
+              },
+            },
+            {
+              // Percentage of gross — no fixed price, so no price field.
+              "@type": "Offer",
+              priceCurrency: "USD",
+              itemOffered: {
+                "@type": "Service",
+                name: "Freight Dispatch",
+                description:
+                  "Load sourcing, booking, rate negotiation, broker paperwork, and factoring setup with weekly settlements itemized in the TraqIQ portal. 10% of gross.",
+              },
+            },
+            {
+              "@type": "Offer",
+              priceSpecification: {
+                "@type": "PriceSpecification",
+                priceCurrency: "USD",
+                minPrice: 25000,
+                maxPrice: 45000,
+              },
+              itemOffered: {
+                "@type": "Service",
+                name: "Truck Sourcing",
+                description:
+                  "Inspected, road-ready box trucks from $25,000 to $45,000, with financing options. Most units are under 26,001 lbs GVWR, so no CDL is required.",
+              },
+            },
+            {
+              "@type": "Offer",
+              priceCurrency: "USD",
+              price: 30000,
+              itemOffered: {
+                "@type": "Service",
+                name: "Full Startup Package",
+                description:
+                  "Truck sourcing and authority formation together for $30,000, sequenced so the truck is ready before the authority activates. Dispatch continues at 10% of gross once you are hauling.",
+              },
+            },
+          ],
+        },
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: [
+          {
+            "@type": "Question",
+            name: "Do I own the authority, or does LAMP?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "You do. The MC and DOT numbers are filed in your business name and stay yours whether or not you keep using LAMP's dispatch service.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "How long does it take to get operating authority?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "FMCSA sets that timeline. Filing to active authority usually runs 4 to 6 weeks, including the mandatory public protest period. LAMP uses those weeks to source the truck and put insurance in place.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Do I need a CDL to run a box truck business?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Not for most box truck freight. Trucks under 26,001 lbs GVWR run on a regular driver's license. You still need a current DOT physical and a clean driving record.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Who pays for maintenance and repairs?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "You do, because it is your truck. LAMP does not operate a repair shop. Trucks are inspected before purchase and maintenance is budgeted into the quote.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Can I use dispatch only if I already have authority?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Yes. If you already have an active MC and a truck, dispatch stands alone and can start immediately. Authority formation and truck sourcing are also available separately.",
+            },
+          },
+        ],
+      },
+    ],
+    fallbackHtml: `
+      <h1>Start your own box truck business — LAMP Logistics</h1>
+      <p>We file your MC and DOT authority in your name, source a road-ready box truck, and dispatch you from day one, so the months most new carriers spend sitting never happen. You own the business and the truck.</p>
+      <h2>Take one service or all three</h2>
+      <p><strong>Authority Formation — $2,500 one-time</strong> — MC operating authority and USDOT number, BOC-3 process agent filing, UCR registration, and insurance filings submitted to FMCSA.</p>
+      <p><strong>Dispatch — 10% of gross</strong> — we source and book your freight, negotiate rates, handle broker paperwork, and set up factoring so you are paid weekly.</p>
+      <p><strong>Truck Sourcing — $25,000 to $45,000</strong> — inspected, road-ready box trucks with financing options. Most units are under 26,001 lbs GVWR, so no CDL is required.</p>
+      <p><strong>Full startup package — $30,000</strong> — truck and authority together, sequenced so the truck is ready before the authority activates. Dispatch continues at 10% of gross once you are hauling.</p>
+      <h2>Why a new authority sits</h2>
+      <p>Brokers will not hand good freight to an MC with no history, so new carriers sit for months while payments come due. A new authority sits because nobody is feeding it. LAMP dispatches you from the day yours activates.</p>
+      <p><a href="/start-your-box-truck-business#start">Get a quote</a> or call (833) 362-9813. LAMP Logistics · MC-1725755 · DOT 4397421.</p>
+    `,
+  },
+  {
     path: "/drive-with-lamp",
     title:
       "Box Truck Driver Jobs — LAMP Logistics | $4,000–$6,000/Week | Most Loads No CDL",
