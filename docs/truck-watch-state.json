@@ -221,6 +221,29 @@
       "date": "2026-09-04",
       "verdict": "wrong_spec",
       "notes": "2022 Freightliner M2 sleeper truck, Cummins 325, air-ride suspension, RA capacity 18,000 lb / FA capacity 10,000 lb, wheelbase 244in, 'Request Price', no mileage shown. Rejected: this is a heavy-duty sleeper TRACTOR (semi tractor with high axle capacities), not an M2-106 box truck - wrong vehicle category entirely, not a box-truck/liftgate configuration. Dealer: Transwest, Brighton CO, (303) 289-3161."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-05",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. Search snippets show no material change vs 2026-09-04 (same 2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL; no fresh price surfaced this run). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-05",
+      "verdict": "unverified",
+      "notes": "Re-checked. No material change vs 2026-09-04 entry, no price surfaced. dtitrucks.com egress-blocked. Not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "sweep-2026-09-05-no-new-candidates",
+      "source": "WebSearch sweep (11 queries) + 1 WebFetch egress test",
+      "date": "2026-09-05",
+      "verdict": "unverified",
+      "notes": "Ran 11 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6/T280) specs plus site-specific searches on commercialtrucktrader.com, truckpaper.com, and mhc.com. No new individual units surfaced beyond those already tracked (DTI 18242743, DTI 18714978, Black Rock WD0626 - all previously logged). All other results were category/listing-search pages with no unit-specific detail (price, mileage, dealer) attributable to a distinct new truck. WebFetch egress test on dtitrucks.com listing 18242743 confirmed still EGRESS_BLOCKED."
     }
   ]
 }
