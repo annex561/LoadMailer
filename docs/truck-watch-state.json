@@ -244,6 +244,61 @@
       "date": "2026-09-05",
       "verdict": "unverified",
       "notes": "Ran 11 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6/T280) specs plus site-specific searches on commercialtrucktrader.com, truckpaper.com, and mhc.com. No new individual units surfaced beyond those already tracked (DTI 18242743, DTI 18714978, Black Rock WD0626 - all previously logged). All other results were category/listing-search pages with no unit-specific detail (price, mileage, dealer) attributable to a distinct new truck. WebFetch egress test on dtitrucks.com listing 18242743 confirmed still EGRESS_BLOCKED."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-06",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. No fresh price/mileage surfaced this run (search snippets unchanged: 2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-06",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries, no new price/detail found this run. dtitrucks.com egress-blocked. No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "TruckCountry-2024-M2106-VZ3530",
+      "source": "Truck Country (via search snippet)",
+      "date": "2026-09-06",
+      "verdict": "cdl",
+      "notes": "2024 Freightliner M2 106+ extended cab, 392 mi, $55,900, Cummins B6.7 250HP, Allison automatic, VIN 3ALACXFC4SDVZ3530. Rejected: GVWR listed as 33,000 lb - over the 26,000 lb non-CDL ceiling (non-negotiable per spec). https://www.truckcountry.com/product/2024-freightliner-m2-106-5/"
+    },
+    {
+      "id": "Soarr-A215I-2025-MV607-ExtCabSleeper-London-OH",
+      "vin": "3HAEUMML4SL672215",
+      "source": "SOARR.com / dealer, London OH",
+      "date": "2026-09-06",
+      "verdict": "unverified",
+      "notes": "SECONDARY candidate (International MV607). 2025 International MV607, stock A215I, titled 'Extended Cab Sleeper', condition New, 300 mi, Cummins ISB 300HP, Allison 2200 RDS. Dealer: 1305 US-42, London, OH, (740) 206-2121. No price, box length/dimensions, liftgate, or GVWR/CDL status surfaced in search snippets ('Contact Us For Price'). Cannot confirm 5/6 spec match - not reported.",
+      "listing_url": "https://www.soarr.com/for-sale/trucks/specs/16372521/2025-International-MV607"
+    },
+    {
+      "id": "Soarr-550620-2025-MV607-ExtCabSleeper-London-OH",
+      "source": "SOARR.com / dealer, likely London OH (same dealer group as A215I)",
+      "date": "2026-09-06",
+      "verdict": "unverified",
+      "notes": "SECONDARY candidate (International MV607). 2025 International MV607, stock #550620, titled 'Extended Cab Sleeper' (listing mislabeled internally as '2025 International LT625'), condition New, ~300 mi, Cummins 300HP, Allison 6-speed. No price, box length/dimensions, liftgate, or GVWR/CDL status surfaced. Cannot confirm 5/6 spec match - not reported.",
+      "listing_url": "https://www.soarr.com/for-sale/trucks/specs/16316137/2025-International-LT625"
+    },
+    {
+      "id": "Lakeside-2025-MV607-Milwaukee-22479mi",
+      "source": "Lakeside International Trucks, Milwaukee WI",
+      "date": "2026-09-06",
+      "verdict": "unverified",
+      "notes": "SECONDARY candidate (International MV607). 2025 International MV607, certified pre-owned (ex-lease), 22,479 mi, 26'Lx103\"Hx102\"W aluminum box, aluminum liftgate, Cummins B6.7 250HP, Allison 2500RDS, air ride, GVWR 25,999 lb (non-CDL), warranty to 2026-10-01. Strong mileage/box/GVWR match but no sleeper or extended-cab mention in any snippet (search results explicitly noted this looks like a straight box truck, not confirmed extended cab/sleeper) and no price surfaced ('Like New, Priced to Move' only). Cannot confirm required sleeper/ext-cab spec or price - not reported.",
+      "listing_url": "https://www.lakesidetrucks.com/product/2025-international-mv607-7/"
+    },
+    {
+      "id": "sweep-2026-09-06-no-new-verified",
+      "source": "WebSearch sweep (12 queries) + 1 WebFetch egress test",
+      "date": "2026-09-06",
+      "verdict": "unverified",
+      "notes": "Ran 12 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and general dealer sweeps (Truck Country, Lakeside, SOARR). WebFetch egress test on dtitrucks.com listing 18242743 confirmed still EGRESS_BLOCKED (mhc.com, penskeusedtrucks.com, dtitrucks.com, velocitytruckcenters.com, comvoy.com, soarr.com, lakesidetrucks.com, truckcountry.com all inaccessible via WebFetch this run). No unit cleared verification gate (a) or (b) with a confirmed spec+price match. New leads found and logged as unverified: Truck Country M2-106 (rejected - GVWR 33,000 breaks non-CDL requirement), two new-inventory International MV607 'Extended Cab Sleeper' units in London OH (no price/box/liftgate info), and a promising low-mile ex-lease MV607 at Lakeside Milwaukee (no sleeper/ext-cab confirmed, no price). No push sent."
     }
   ]
 }
