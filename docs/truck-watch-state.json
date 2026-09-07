@@ -299,6 +299,37 @@
       "date": "2026-09-06",
       "verdict": "unverified",
       "notes": "Ran 12 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and general dealer sweeps (Truck Country, Lakeside, SOARR). WebFetch egress test on dtitrucks.com listing 18242743 confirmed still EGRESS_BLOCKED (mhc.com, penskeusedtrucks.com, dtitrucks.com, velocitytruckcenters.com, comvoy.com, soarr.com, lakesidetrucks.com, truckcountry.com all inaccessible via WebFetch this run). No unit cleared verification gate (a) or (b) with a confirmed spec+price match. New leads found and logged as unverified: Truck Country M2-106 (rejected - GVWR 33,000 breaks non-CDL requirement), two new-inventory International MV607 'Extended Cab Sleeper' units in London OH (no price/box/liftgate info), and a promising low-mile ex-lease MV607 at Lakeside Milwaukee (no sleeper/ext-cab confirmed, no price). No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-07",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. No material change vs prior entries (same 2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL; no fresh price surfaced this run). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-07",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries (this run's snippet listed box height as 109in vs 103in in earlier entries - likely a data inconsistency on the source page, not a different unit). No price surfaced again. dtitrucks.com egress-blocked. No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Lakeside-2025-MV607-Milwaukee-22479mi",
+      "source": "Lakeside International Trucks, Milwaukee WI",
+      "date": "2026-09-07",
+      "verdict": "unverified",
+      "notes": "Re-surfaced (product page URL now ends -8 instead of -7 seen 2026-09-06, same unit: 22,479 mi, 26'x103\"Hx102\"W aluminum box, aluminum liftgate, Cummins B6.7 250HP, Allison 2500RDS, air ride, non-CDL, warranty to 2026-10-01). Still no price and no explicit sleeper/extended-cab confirmation in snippet. No material change - not re-reported.",
+      "listing_url": "https://www.lakesidetrucks.com/product/2025-international-mv607-8/"
+    },
+    {
+      "id": "sweep-2026-09-07-no-new-verified",
+      "source": "WebSearch sweep (14 queries) + 1 WebFetch egress test",
+      "date": "2026-09-07",
+      "verdict": "unverified",
+      "notes": "Ran 14 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, soarr.com, and DTI/Lakeside follow-ups. WebFetch egress test on dtitrucks.com listing 18242743 confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b). All results mapped to previously tracked units (DTI 18242743, DTI 18714978, Lakeside MV607, Black Rock WD0626, Comvoy listings, TruckPaper/CTT category pages) with no material change, or were new-inventory/over-budget/wrong-cab-type units not matching spec. No push sent."
     }
   ]
 }
