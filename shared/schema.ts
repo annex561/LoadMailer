@@ -3428,12 +3428,6 @@ export const recruitingApplications = pgTable("recruiting_applications", {
   prescreenReasons: jsonb("prescreen_reasons"),
   prescreenCompletedAt: timestamp("prescreen_completed_at"),
 
-  // Application sections beyond basic info
-  addressHistory: jsonb("address_history"),
-  employmentHistory: jsonb("employment_history"),
-  accidents3yr: jsonb("accidents_3yr"),
-  violations3yr: jsonb("violations_3yr"),
-
   // Stage 5 — Background results
   mvrPullVendor: text("mvr_pull_vendor"),
   mvrPullStatus: text("mvr_pull_status"),
@@ -3471,7 +3465,8 @@ export const recruitingApplications = pgTable("recruiting_applications", {
   eldProvisioned: boolean("eld_provisioned"),
 
   // Stage 10 — ACTIVE
-  driverId: text("driver_id"),
+  // NOTE: driverId is declared at the top of this table as
+  // varchar("driver_id").references(() => drivers.id) — do not redeclare it here.
   activeFromDate: timestamp("active_from_date"),
   i9Verified: boolean("i9_verified"),
   w9OrW4Submitted: boolean("w9_or_w4_submitted"),

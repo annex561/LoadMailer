@@ -179,3 +179,49 @@ Format:
   `TRUCK_FREE_LOOKBACK_MINUTES` to "catch up on missed notifications" — the narrow
   window IS the blast-radius cap, and a missed notification is cheaper than a blast.
 - `2026-09-10 · uncommitted`
+
+---
+
+### Duplicate `driverId` (and 4 more) keys in the `recruitingApplications` pgTable
+
+- **Symptom** — every `npx vitest run` printed
+  `[vite] warning: Duplicate key "driverId" in object literal`, plus the same warning for
+  `addressHistory`, `employmentHistory`, `accidents3yr`, `violations3yr`. `tsc --noEmit`
+  emitted 5 matching errors on `shared/schema.ts`. No runtime failure — this was a silent
+  latent bug, not a crash.
+- **Root cause** — `8b7bda0` ("fix massive Drizzle schema drift on recruiting_applications")
+  swept 30+ production columns into the `recruitingApplications` table definition without
+  checking which ones were already declared at the top of the table. Five were. In a JS
+  object literal the **last** key wins, so drizzle silently used the sweep's versions.
+  For the four jsonb fields the two declarations were byte-identical, so nothing changed.
+  For `driverId` they were not: the original at the top of the table is
+  `varchar("driver_id").references(() => drivers.id, { onDelete: "set null" })`, and the
+  sweep's shadowing copy was a bare `text("driver_id")` with **no foreign key**. The live
+  column is the FK version — `server/ensure-schema.ts` creates
+  `driver_id VARCHAR REFERENCES drivers(id) ON DELETE SET NULL` in its `CREATE TABLE`
+  (`eb5518d`), and the `["driver_id", "TEXT"]` entry the same sweep added to `stageColumns`
+  is an `ADD COLUMN IF NOT EXISTS` that no-ops against it. So the schema drizzle built was
+  the one nobody intended, and `drizzle-kit push` against it would have proposed dropping
+  the FK constraint.
+- **Fix** — deleted the five shadowing declarations from `shared/schema.ts`
+  (`recruitingApplications`), keeping the FK-bearing `driverId` at the top of the table and
+  the single copy of each jsonb field in the Stage 2 / 49 CFR 391.21 block. Left a NOTE
+  comment where the `driverId` duplicate was so the next sweep does not re-add it.
+  `server/ensure-schema.ts` was deliberately left alone: its `["driver_id", "TEXT"]` ALTER
+  is a harmless no-op on any DB whose table came from the `CREATE TABLE`, and it is the
+  only rescue path for a stale deploy whose table predates the column.
+- **Guard** — none added. The condition is a compile-time warning, not a code path a unit
+  test can exercise; `tsc --noEmit` and the vite transform both already flag it, and
+  `server/__tests__/schema-completeness.test.ts` (the existing schema guard) only parses
+  the `drivers` and `loads` tables. The greppable check is
+  `npx vitest run 2>&1 | grep -i "duplicate key"` returning nothing.
+- **Do NOT** — do **not** "fix" this by deleting the top-of-table declaration and keeping
+  the Stage 10 one. It reads like the newer, more deliberate line (it sits under a
+  `// Stage 10 — ACTIVE` header next to the other activation fields, and it matches the
+  `["driver_id", "TEXT"]` entry in `ensure-schema.ts`), but it is the accident, and keeping
+  it silently drops the FK to `drivers.id` that the activate endpoint at
+  `server/recruiting/routes.ts` (`/api/recruiting/applications/:id/activate`) depends on.
+  Also do not assume the `stageColumns` ALTER in `ensure-schema.ts` describes the live
+  column type — `ADD COLUMN IF NOT EXISTS` tells you nothing when the column already
+  exists. Read the `CREATE TABLE` block, not the ALTER list.
+- `2026-09-09 · (this commit)`
