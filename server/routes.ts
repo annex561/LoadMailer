@@ -36,6 +36,7 @@ import { registerUserRoutes } from "./routes/users";
 import { registerTestDispatchRoutes } from "./routes/test-dispatch";
 import { registerAdminHealthRoutes } from "./routes/admin-health";
 import { registerFactoringRoutes } from "./routes/factoring-routes";
+import { registerBrokerScoreRoutes } from "./routes/broker-score-routes";
 import { registerLoadsAuditRoutes } from "./routes/loads-audit";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
@@ -910,6 +911,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Phase 1: manual click-to-submit only. Module is dormant until
   // LOVES_FACTORING_ENABLED=true is set in env.
   registerFactoringRoutes(app);
+  registerBrokerScoreRoutes(app);
 
   // Admin: bulk-archive bad loads. Two-step audit → archive flow with a
   // single-use confirm token so destructive cleanup can't fire by accident.
