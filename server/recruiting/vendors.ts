@@ -23,6 +23,73 @@ function guardLive(vendor: string): void {
   }
 }
 
+/**
+ * DocuSeal template-configuration guards.
+ *
+ * Both driver types once pointed at DocuSeal's sample template (id 8, "Independent
+ * Contractor Agreement (DEMO)"), so Stage 7 would have sent a real driver a three-field
+ * demo document that looks plausible enough to sign. These predicates make that failure
+ * loud instead of silent. They only ever BLOCK a send — they never originate one.
+ *
+ * Regression guard: server/__tests__/docuseal-template-guard.test.ts
+ * Background: docs/FIX-LEDGER.md, "Recruiting Stage 7 points both driver types at a
+ * DocuSeal demo template".
+ */
+export function isDemoTemplateName(name: string | null | undefined): boolean {
+  return /\bdemo\b|\bsample\b|\btest template\b/i.test(String(name ?? ""));
+}
+
+export function assertTemplateConfigSafe(opts: {
+  companyDriverTemplateId?: string | null;
+  ownerOpTemplateId?: string | null;
+  templateId: string;
+  templateName?: string | null;
+}): void {
+  const company = (opts.companyDriverTemplateId ?? "").trim();
+  const ownerOp = (opts.ownerOpTemplateId ?? "").trim();
+
+  if (company && ownerOp && company === ownerOp) {
+    throw new Error(
+      `DocuSeal misconfigured: company-driver and owner-operator templates are both ` +
+        `id ${company}. The two driver types must use different packets — an ` +
+        `owner-operator needs the 49 CFR Part 376 lease, not the 1099 contractor agreement.`
+    );
+  }
+
+  if (isDemoTemplateName(opts.templateName)) {
+    throw new Error(
+      `DocuSeal misconfigured: template ${opts.templateId} is named ` +
+        `"${opts.templateName}", which looks like a sample template. Refusing to send it ` +
+        `to a driver. Point the env var at the real packet.`
+    );
+  }
+}
+
+/** Cache of template id -> name, so the guard costs one read per template per boot. */
+const templateNameCache = new Map<string, string | null>();
+
+async function lookupTemplateName(
+  docusealUrl: string,
+  apiKey: string,
+  templateId: string
+): Promise<string | null> {
+  if (templateNameCache.has(templateId)) return templateNameCache.get(templateId) ?? null;
+  let name: string | null = null;
+  try {
+    const resp = await fetch(`${docusealUrl}/api/templates/${templateId}`, {
+      headers: { "X-Auth-Token": apiKey },
+    });
+    if (resp.ok) {
+      name = ((await resp.json()) as { name?: string }).name ?? null;
+    }
+  } catch {
+    // A lookup failure must not block a legitimate send; the id-collision check still runs.
+    name = null;
+  }
+  templateNameCache.set(templateId, name);
+  return name;
+}
+
 export type MvrResult = {
   vendor: string;
   pullDate: string;
@@ -170,6 +237,16 @@ export async function createSignatureRequest(opts: {
       : process.env.DOCUSEAL_COMPANY_DRIVER_TEMPLATE_ID;
 
   if (docusealUrl && apiKey && templateId) {
+    // Deliberately OUTSIDE the try below: that catch falls through to the mock vendor, so
+    // a guard failure swallowed there would hand back a fake signing URL and look like it
+    // worked. A misconfigured template must fail loudly, not degrade quietly.
+    assertTemplateConfigSafe({
+      companyDriverTemplateId: process.env.DOCUSEAL_COMPANY_DRIVER_TEMPLATE_ID,
+      ownerOpTemplateId: process.env.DOCUSEAL_OWNER_OP_TEMPLATE_ID,
+      templateId,
+      templateName: await lookupTemplateName(docusealUrl, apiKey, templateId),
+    });
+
     try {
       const resp = await fetch(`${docusealUrl}/api/submissions`, {
         method: "POST",
