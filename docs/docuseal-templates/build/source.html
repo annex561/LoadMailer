@@ -1,0 +1,694 @@
+<!--
+  DocuSeal template source — LAMP PLLC driver onboarding
+  ------------------------------------------------------
+  One block per template, delimited by DOC:filename comments.
+  Run build.py to split this into per-template HTML + upload-ready PDFs.
+
+  Field tags use DocuSeal text-tag syntax: doubled braces wrapping
+  name, then role=Driver or role=Carrier, then type=text|signature|date|
+  checkbox|radio|file. DocuSeal parses them from the PDF text layer on
+  upload and creates the fields.
+
+  Tag visibility: tags render in grey so placement is verifiable on the PDF.
+  To make them invisible in the final document, set .f { color: #fff } in STYLE
+  below and rebuild — DocuSeal still reads them from the text layer.
+
+  Rule followed throughout: a field name appears ONCE per document. Repeating a
+  name makes DocuSeal collapse or duplicate the field.
+-->
+<!--STYLE
+  @page { size: letter; margin: 0.7in 0.75in 0.8in;
+    @bottom-left { content: "LAMP PLLC · MC-1725755 / DOT 4397421"; font-size: 7.5pt; color: #888; }
+    @bottom-right { content: counter(page) " / " counter(pages); font-size: 7.5pt; color: #888; } }
+  * { box-sizing: border-box; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; line-height: 1.5; color: #111; margin: 0; }
+  h1 { font-size: 15pt; margin: 0 0 3px; letter-spacing: -0.3px; }
+  h2 { font-size: 10.5pt; margin: 16px 0 5px; text-transform: uppercase; letter-spacing: 0.7px; color: #444; }
+  p { margin: 0 0 8px; }
+  ul { margin: 0 0 9px; padding-left: 18px; } li { margin-bottom: 3px; }
+  .cite { font-size: 8.5pt; color: #666; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 2px solid #111; }
+  .box { border: 1px solid #111; padding: 10px 12px; margin: 10px 0 14px; }
+  .box.alert { border-width: 2px; background: #f5f5f5; }
+  .box h4 { margin: 0 0 5px; font-size: 10pt; }
+  .muted { color: #666; font-size: 8.8pt; }
+  hr { border: 0; border-top: 1px solid #ddd; margin: 14px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 9pt; }
+  th { text-align: left; border-bottom: 1.5px solid #111; padding: 5px 4px; font-size: 8.3pt; text-transform: uppercase; letter-spacing: 0.5px; }
+  td { border-bottom: 1px solid #ccc; padding: 7px 4px; vertical-align: bottom; }
+  .f { font-family: "Courier New", Courier, monospace; font-size: 8pt; color: #555; white-space: nowrap; }
+  .f.blk { display: block; white-space: normal; margin: 4px 0 10px; }
+  .f.tall { display: block; white-space: normal; margin: 4px 0 26px; }
+  .sig { display: table; width: 100%; margin-top: 16px; }
+  .sig > div { display: table-cell; width: 50%; padding-right: 20px; vertical-align: bottom; }
+  .siglabel { font-size: 8pt; color: #555; border-top: 1px solid #111; padding-top: 3px; margin-top: 4px; }
+  .lbl { font-size: 8.5pt; color: #444; }
+STYLE-->
+
+<!--DOC:02-dot-driver-application-->
+<h1>Driver's Application for Employment</h1>
+<p class="cite">LAMP PLLC · 49 CFR 391.21 · Answer every question. An omission or false statement is grounds for disqualification or termination.</p>
+
+<h2>Applicant</h2>
+<p><span class="lbl">Full legal name</span><span class="f blk">{{Driver Legal Name;role=Driver;type=text}}</span>
+<span class="lbl">Date of birth</span> <span class="f">{{Driver DOB;role=Driver;type=date}}</span> &nbsp;&nbsp; <span class="lbl">Social Security number</span> <span class="f">{{Driver SSN;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Phone</span> <span class="f">{{Driver Phone;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Email</span> <span class="f">{{Driver Email;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Current address</span><span class="f blk">{{Current Address;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Addresses for the past 3 years — street, city, state, ZIP, and dates at each</span><span class="f tall">{{Address History 3yr;role=Driver;type=text}}</span></p>
+
+<h2>License</h2>
+<p><span class="lbl">CDL number</span> <span class="f">{{CDL Number;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Issuing state</span> <span class="f">{{CDL State;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Expires</span> <span class="f">{{CDL Expiration;role=Driver;type=date}}</span></p>
+<p><span class="lbl">Class and endorsements</span> <span class="f">{{CDL Class and Endorsements;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Restrictions — write "automatic only" if your CDL carries the automatic-transmission restriction</span> <span class="f">{{CDL Restrictions;role=Driver;type=text}}</span></p>
+<p><span class="lbl">DOT medical certificate expires</span> <span class="f">{{Medical Card Expiration;role=Driver;type=date}}</span></p>
+<p><span class="lbl">Has any license, permit, or privilege ever been suspended, revoked, or denied? If yes, give dates and reasons. Write NONE if none.</span><span class="f tall">{{License Denied or Revoked;role=Driver;type=text}}</span></p>
+
+<h2>Employment history</h2>
+<p class="muted">10 years for any job operating a commercial motor vehicle, 3 years for all other employment. For each: company, city and state, phone, position, dates from and to, reason for leaving, and whether the position was subject to DOT drug and alcohol testing. Account for every gap.</p>
+<span class="f blk" style="margin-bottom:60px">{{Employment History 10yr;role=Driver;type=text}}</span>
+
+<h2>Accident record — past 3 years</h2>
+<p class="muted">Every accident, regardless of fault: date, city and state, nature (injury, fatality, property damage), number injured, number of fatalities, whether hazardous materials were released. Write NONE if none.</p>
+<span class="f blk" style="margin-bottom:36px">{{Accident History 3yr;role=Driver;type=text}}</span>
+
+<h2>Traffic convictions and bond forfeitures — past 3 years</h2>
+<p class="muted">Any type of vehicle, not only commercial. Parking excluded. Date, location, charge, penalty. Write NONE if none.</p>
+<span class="f blk" style="margin-bottom:36px">{{Violation History 3yr;role=Driver;type=text}}</span>
+
+<h2>Emergency contact</h2>
+<p><span class="lbl">Name</span> <span class="f">{{Emergency Contact Name;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Phone</span> <span class="f">{{Emergency Contact Phone;role=Driver;type=text}}</span></p>
+
+<div class="box">
+  <h4>Certification and release</h4>
+  <p>I certify that the information in this application is true and complete. I understand that any misstatement or omission is grounds for rejection of this application or termination of the working relationship at any time.</p>
+  <p style="margin:0">I authorize LAMP PLLC to investigate my background, including my motor vehicle record, my Pre-Employment Screening Program record, my FMCSA Drug and Alcohol Clearinghouse record, and my safety performance history from previous DOT-regulated employers under 49 CFR 391.23, and to contact the employers and agencies named above.</p>
+</div>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Driver signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:03-drug-alcohol-consent-->
+<h1>DOT Drug &amp; Alcohol Testing Consent and Policy Receipt</h1>
+<p class="cite">LAMP PLLC · 49 CFR Part 382 · Sign before the pre-employment specimen is collected.</p>
+
+<p><span class="lbl">Driver</span> <span class="f">{{Driver Legal Name;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Date of birth</span> <span class="f">{{Driver DOB;role=Driver;type=date}}</span></p>
+<p><span class="lbl">CDL number</span> <span class="f">{{CDL Number;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Issuing state</span> <span class="f">{{CDL State;role=Driver;type=text}}</span></p>
+
+<h2>1. Testing I agree to</h2>
+<ul>
+  <li><strong>Pre-employment</strong> — before I perform any safety-sensitive function</li>
+  <li><strong>Random</strong> — selected by a scientifically valid method from the carrier's testing pool</li>
+  <li><strong>Post-accident</strong> — as required by §382.303</li>
+  <li><strong>Reasonable suspicion</strong> — based on a trained supervisor's observation</li>
+  <li><strong>Return-to-duty and follow-up</strong> — after any violation, per §382.309 and §382.311</li>
+</ul>
+
+<h2>2. Collection and results</h2>
+<p>I authorize the collection site, laboratory, and Medical Review Officer to release results to LAMP PLLC and to report violations to the FMCSA Drug and Alcohol Clearinghouse as required by 49 CFR Part 382 Subpart G.</p>
+
+<h2>3. Consequences</h2>
+<p>A positive test, an adulterated or substituted specimen, or a refusal to test immediately removes me from all safety-sensitive functions, is reported to the Clearinghouse, and ends my working relationship with LAMP PLLC. A refusal includes failing to appear, leaving the collection site, or failing to provide a sufficient specimen without a valid medical explanation.</p>
+
+<h2>4. Prior violations</h2>
+<p>I certify that I have no unresolved drug or alcohol program violation and that I am not currently prohibited from performing safety-sensitive functions under any DOT regulation.</p>
+
+<h2>5. Policy receipt</h2>
+<p>I have received, read, and understand LAMP PLLC's written drug and alcohol policy, including the designated employer representative's contact information, the substances tested for, the testing procedures, and the consequences of a violation.</p>
+
+<p style="margin-top:14px"><span class="f">{{Consent Acknowledged;role=Driver;type=checkbox}}</span> I consent to testing as described above.<br>
+<span class="f">{{Policy Received;role=Driver;type=checkbox}}</span> I received and read the written policy.</p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Driver signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:04-clearinghouse-consent-->
+<h1>Clearinghouse Limited Query Consent</h1>
+<p class="cite">LAMP PLLC · FMCSA Drug and Alcohol Clearinghouse · This form covers annual limited queries only.</p>
+
+<div class="box alert">
+  <h4>This form does not replace your online registration</h4>
+  <p style="margin:0">The <strong>pre-employment full query</strong> — the one that has to clear before you drive — requires your <strong>electronic consent inside your own Clearinghouse account</strong>. Paper cannot do it. Register at <strong>clearinghouse.fmcsa.dot.gov</strong>, add LAMP PLLC as an employer, and approve the request when it arrives. This form is the separate, ongoing consent for the yearly check.</p>
+</div>
+
+<p><span class="lbl">Driver</span> <span class="f">{{Driver Legal Name;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">CDL number</span> <span class="f">{{CDL Number;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">State</span> <span class="f">{{CDL State;role=Driver;type=text}}</span></p>
+
+<p>I authorize LAMP PLLC to conduct <strong>limited queries</strong> of the FMCSA Commercial Driver's License Drug and Alcohol Clearinghouse to determine whether any information about me exists in the Clearinghouse.</p>
+
+<p>I understand:</p>
+<ul>
+  <li>A limited query tells the carrier only whether information exists about me. It does not release the details of that information.</li>
+  <li>If a limited query shows information exists, I must grant electronic consent in my own Clearinghouse account within 24 hours so the carrier can run a full query. If I do not, LAMP PLLC must remove me from all safety-sensitive functions.</li>
+  <li>This consent covers limited queries for the period below, and I may revoke it in writing at any time — with the same result: removal from safety-sensitive functions.</li>
+  <li>Separate electronic consent is required for the pre-employment full query and for any later full query. This form does not replace that consent.</li>
+</ul>
+
+<p><span class="lbl">Consent period</span> <span class="f">{{Consent Period;role=Carrier;type=text}}</span></p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Driver signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:05-psp-disclosure-authorization-->
+<h1>PSP Disclosure and Authorization</h1>
+<p class="cite">LAMP PLLC · FMCSA Pre-Employment Screening Program · Fair Credit Reporting Act, 15 U.S.C. § 1681b(b)(2)</p>
+
+<div class="box">
+  <h4>Disclosure</h4>
+  <p style="margin:0">LAMP PLLC may obtain a consumer report about you for employment purposes from the Federal Motor Carrier Safety Administration's Pre-Employment Screening Program. The PSP report contains your five-year crash history and three-year roadside inspection history from the FMCSA Motor Carrier Management Information System. This disclosure is provided to you as a standalone document.</p>
+</div>
+
+<p><strong>Authorization.</strong> I authorize LAMP PLLC to obtain my PSP report.</p>
+
+<p><span class="lbl">Full legal name</span><span class="f blk">{{Driver Legal Name;role=Driver;type=text}}</span>
+<span class="lbl">Date of birth</span> <span class="f">{{Driver DOB;role=Driver;type=date}}</span> &nbsp;&nbsp; <span class="lbl">Social Security number</span> <span class="f">{{Driver SSN;role=Driver;type=text}}</span></p>
+<p><span class="lbl">CDL number</span> <span class="f">{{CDL Number;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Issuing state</span> <span class="f">{{CDL State;role=Driver;type=text}}</span></p>
+
+<p>I understand:</p>
+<ul>
+  <li>The PSP report reflects data reported by state and federal enforcement. FMCSA cannot correct data a state submitted — disputes go to the reporting state through DataQs at <strong>dataqs.fmcsa.dot.gov</strong>.</li>
+  <li>A crash appearing on the report does not mean I was at fault.</li>
+  <li>If LAMP PLLC takes adverse action based in whole or in part on this report, I will receive a copy of the report and a written summary of my rights under the Fair Credit Reporting Act before the decision becomes final.</li>
+  <li>I may request my own PSP record at any time at <strong>psp.fmcsa.dot.gov</strong>.</li>
+</ul>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Driver signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<p class="muted" style="margin-top:16px">A Summary of Your Rights Under the Fair Credit Reporting Act is attached to this document.</p>
+
+<!--DOC:06-previous-employer-safety-release-->
+<h1>Previous Employer Safety Performance Release</h1>
+<p class="cite">LAMP PLLC · 49 CFR 391.23 · Covers the three years before this request.</p>
+
+<p>I, <span class="f">{{Driver Legal Name;role=Driver;type=text}}</span> (date of birth <span class="f">{{Driver DOB;role=Driver;type=date}}</span>, Social Security number <span class="f">{{Driver SSN;role=Driver;type=text}}</span>, CDL number <span class="f">{{CDL Number;role=Driver;type=text}}</span>), authorize each DOT-regulated employer listed below to release my safety performance history to LAMP PLLC, and I release those employers from liability for good-faith disclosure.</p>
+
+<p>The information released covers, for the past three years:</p>
+<ul>
+  <li>General driving employment verification</li>
+  <li>Accidents reportable under 49 CFR 390.5, and any other accidents the employer retained records on</li>
+  <li>Alcohol tests with a result of 0.04 or higher, verified positive drug tests, refusals to test, and other violations of 49 CFR Part 382 Subpart B</li>
+  <li>Documentation of completed return-to-duty and follow-up testing, where applicable</li>
+</ul>
+
+<h2>DOT-regulated employers — past 3 years</h2>
+<p class="muted">Company, address, phone or email, and dates from and to, for each.</p>
+<span class="f blk" style="margin-bottom:70px">{{Prior Employers 3yr;role=Driver;type=text}}</span>
+
+<p>I understand I have the right to review the information received, to have errors corrected, and to have my rebuttal attached to the file.</p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Driver signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:07-certificate-of-violations-->
+<h1>Driver's Certificate of Violations</h1>
+<p class="cite">LAMP PLLC · 49 CFR 391.27 · Signed at hire, then once every 12 months.</p>
+
+<p><span class="lbl">Driver</span> <span class="f">{{Driver Legal Name;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">CDL number</span> <span class="f">{{CDL Number;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">State</span> <span class="f">{{CDL State;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Reporting period</span> <span class="f">{{Reporting Period;role=Carrier;type=text}}</span></p>
+
+<p>I certify that the following is a complete list of every traffic violation for which I was convicted, or forfeited bond or collateral, during the period above — in any type of motor vehicle, not only commercial vehicles. Parking violations are excluded.</p>
+
+<p class="muted">Date, offense, location, and vehicle type (CMV or other) for each.</p>
+<span class="f blk" style="margin-bottom:70px">{{Violations Listed;role=Driver;type=text}}</span>
+
+<p><span class="f">{{No Violations;role=Driver;type=checkbox}}</span> <strong>I certify that I have no traffic violations to report for the period above.</strong></p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Driver signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<hr>
+<p class="muted">Carrier use. The carrier has reviewed this certificate against the driver's motor vehicle record and determined the driver is qualified to operate a commercial motor vehicle.</p>
+<div class="sig">
+  <div><span class="f">{{Carrier Reviewer;role=Carrier;type=text}}</span><div class="siglabel">Reviewed by</div></div>
+  <div><span class="f">{{Carrier Review Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:01-independent-contractor-agreement-->
+<h1>Independent Contractor Driver Agreement</h1>
+<p class="cite">LAMP PLLC · MC-1725755 / DOT 4397421 · Read every section. Ask about anything that is not clear before you sign.</p>
+
+<p>This Agreement is entered into as of <span class="f">{{Effective Date;role=Carrier;type=date}}</span> between <strong>LAMP PLLC</strong>, an authorized motor carrier operating under MC/DOT <span class="f">{{Carrier MC DOT;role=Carrier;type=text}}</span> ("Carrier"), and <span class="f">{{Driver Legal Name;role=Driver;type=text}}</span>, residing at <span class="f">{{Driver Address;role=Driver;type=text}}</span> ("Contractor").</p>
+
+<p><strong>1. Relationship of the parties.</strong> Contractor is an independent contractor, not an employee, agent, or partner of Carrier. Contractor controls the manner and means of performing transportation services, including routes, rest, and methods, subject only to the results required by the shipper and by law. Nothing in this Agreement creates an employment relationship.</p>
+
+<p><strong>2. Services.</strong> Contractor will transport freight tendered and accepted under load confirmations. <strong>Contractor may accept or decline any individual load without penalty.</strong> Contractor operates CDL number <span class="f">{{CDL Number;role=Driver;type=text}}</span> issued by <span class="f">{{CDL State;role=Driver;type=text}}</span>; date of birth <span class="f">{{Driver DOB;role=Driver;type=date}}</span>. Assigned equipment, where provided: Unit <span class="f">{{Truck Unit Number;role=Carrier;type=text}}</span>.</p>
+
+<p><strong>3. Compensation.</strong> Carrier will pay Contractor <span class="f">{{Pay Rate;role=Carrier;type=text}}</span>, settled per the schedule in the Settlement Terms attached. Contractor is responsible for his or her own taxes. Carrier issues Form 1099-NEC. No withholding is made.</p>
+
+<p><strong>4. Expenses and equipment.</strong> Operating costs are allocated as stated in the Settlement Terms. Any cost borne by Contractor is set out there in writing. Advances, if any, are governed by a separate Advance and Repayment Agreement.</p>
+
+<p><strong>5. Compliance.</strong> Contractor will maintain a valid CDL, current medical certification, and compliance with FMCSA hours-of-service and drug-and-alcohol regulations, 49 CFR Parts 382 and 395. Contractor consents to testing under the separate DOT Drug &amp; Alcohol Consent.</p>
+
+<p><strong>6. Insurance.</strong> Carrier maintains primary liability and cargo coverage as required by 49 CFR Part 387 while Contractor operates under Carrier's authority. <strong>That coverage does not cover Contractor's own injury.</strong> Occupational accident coverage is addressed in the separate acknowledgment.</p>
+
+<p><strong>7. Term and termination.</strong> This Agreement continues until terminated by either party on written notice. Termination does not affect settlements owed for completed loads.</p>
+
+<p><strong>8. Indemnity.</strong> Each party indemnifies the other for losses arising from its own negligence or breach, to the extent permitted by law.</p>
+
+<p><strong>9. Confidentiality.</strong> Contractor keeps Carrier's lane, rate, customer, and broker information confidential during and after the term.</p>
+
+<p><strong>10. Governing law.</strong> This Agreement is governed by the law of the state of Carrier's principal place of business, and any dispute is resolved there.</p>
+
+<p><strong>11. Entire agreement.</strong> This document, with the referenced addenda — W-9, Drug &amp; Alcohol Consent, Settlement Terms, Occupational Accident Acknowledgment — is the entire agreement and supersedes prior understandings.</p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Contractor signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC · Manager</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:09-settlement-and-direct-deposit-->
+<h1>Settlement Terms and Direct Deposit Authorization</h1>
+<p class="cite">LAMP PLLC · Attach a voided check or a bank letter. A wrong routing number costs you a week.</p>
+
+<p><span class="lbl">Contractor</span> <span class="f">{{Driver Legal Name;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Payee, if payments run to a business entity</span> <span class="f">{{Payee Name;role=Driver;type=text}}</span></p>
+
+<h2>1. Pay</h2>
+<p><span class="lbl">Pay model</span> <span class="f">{{Pay Model;role=Carrier;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Rate</span> <span class="f">{{Pay Rate;role=Carrier;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Settlement day</span> <span class="f">{{Settlement Day;role=Carrier;type=text}}</span></p>
+<p>Each settlement comes with an itemized statement showing each load, the miles, the gross, every deduction, and the net.</p>
+<p>Payments are made as an independent contractor. No federal, state, Social Security, or Medicare tax is withheld. A Form 1099-NEC is issued for each calendar year in which total payments meet the IRS reporting threshold. <strong>A completed Form W-9 must be on file before the first settlement</strong> — without one, backup withholding applies at the statutory rate.</p>
+
+<h2>2. Deductions</h2>
+<p>Only these may be taken from a settlement, and each is itemized:</p>
+<ul>
+  <li>Repayment of advances under a signed Advance and Repayment Agreement</li>
+  <li>Amounts authorized in writing on this form or a later signed addendum</li>
+  <li>Amounts required by law, court order, or garnishment</li>
+</ul>
+<p>No deduction is taken for an operating cost the parties have not agreed to in writing.</p>
+
+<h2>3. Direct deposit</h2>
+<p>I authorize LAMP PLLC to deposit settlements to the account below, and to reverse any deposit made in error. This authorization stays in effect until I revoke it in writing with enough notice for the carrier to act on it.</p>
+<p><span class="lbl">Bank</span> <span class="f">{{Bank Name;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Account type</span> <span class="f">{{Account Type;role=Driver;type=select;options=Checking,Savings}}</span></p>
+<p><span class="lbl">Routing number</span> <span class="f">{{Routing Number;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Account number</span> <span class="f">{{Account Number;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Voided check or bank letter</span> <span class="f">{{Voided Check;role=Driver;type=file}}</span></p>
+<p>I confirm the account above is mine, or that I am authorized to direct deposits into it.</p>
+
+<h2>4. Disputes</h2>
+<p>A settlement question is raised within 30 days of the statement date. The carrier responds in writing within 10 business days.</p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Contractor signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:11-occupational-accident-acknowledgment-->
+<h1>Occupational Accident Coverage Acknowledgment</h1>
+<p class="cite">LAMP PLLC · Independent contractors only · Read this one slowly. It decides what happens if you get hurt.</p>
+
+<p><span class="lbl">Contractor</span> <span class="f">{{Driver Legal Name;role=Driver;type=text}}</span></p>
+
+<p><strong>1. No workers' compensation.</strong> As an independent contractor I am not covered by LAMP PLLC's workers' compensation insurance, and LAMP PLLC does not pay workers' compensation premiums on my behalf. If I am injured while performing services, no workers' compensation benefit is available to me through LAMP PLLC.</p>
+
+<p><strong>2. What the carrier's insurance does and does not cover.</strong> LAMP PLLC maintains primary liability and cargo coverage under 49 CFR Part 387 while I operate under its authority. That coverage protects the public and the freight. <strong>It does not cover my own injury, my own medical bills, or my lost income.</strong></p>
+
+<p><strong>3. My election</strong> — choose one:</p>
+
+<div class="box">
+  <p><span class="f">{{Coverage Election;role=Driver;type=radio;options=I have my own policy,I elect coverage through LAMP PLLC,I decline coverage}}</span></p>
+  <p class="muted" style="margin-bottom:10px">Options: I have my own policy · I elect coverage through LAMP PLLC · I decline coverage</p>
+
+  <p><strong>If I have my own policy:</strong><br>
+  <span class="lbl">Insurance carrier</span> <span class="f">{{Policy Carrier;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Policy number</span> <span class="f">{{Policy Number;role=Driver;type=text}}</span> &nbsp;&nbsp; <span class="lbl">Expires</span> <span class="f">{{Policy Expiration;role=Driver;type=date}}</span><br>
+  <span class="lbl">Certificate of insurance naming LAMP PLLC as certificate holder</span> <span class="f">{{Insurance Certificate;role=Driver;type=file}}</span><br>
+  <span class="muted">I will provide a renewal certificate before each expiration, and I understand I may not be dispatched with lapsed coverage.</span></p>
+
+  <p><strong>If I elect coverage through LAMP PLLC:</strong><br>
+  I authorize the premium of <span class="f">{{Premium Deduction Amount;role=Carrier;type=text}}</span> to be deducted from each settlement and itemized on the statement. I have received the coverage summary showing benefit limits, the deductible, and exclusions.</p>
+
+  <p style="margin:0"><strong>If I decline:</strong><br>
+  <span class="muted">I understand I am carrying the entire financial risk of my own injury, including medical costs and lost income, and that this decision is mine.</span></p>
+</div>
+
+<p><strong>4. Health insurance.</strong> I am responsible for my own health insurance. LAMP PLLC does not provide it.</p>
+<p><strong>5. Reporting.</strong> I will report any injury occurring while performing services to LAMP PLLC within 24 hours, whether or not I intend to seek treatment.</p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Contractor signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:08-road-test-or-cdl-in-lieu-->
+<h1>Road Test Certificate, or CDL Accepted in Lieu</h1>
+<p class="cite">LAMP PLLC · 49 CFR 391.31 and 391.33 · Carrier completes. Use Part A or Part B, not both.</p>
+
+<p><span class="lbl">Driver</span> <span class="f">{{Driver Legal Name;role=Carrier;type=text}}</span> &nbsp;&nbsp; <span class="lbl">CDL number</span> <span class="f">{{CDL Number;role=Carrier;type=text}}</span> &nbsp;&nbsp; <span class="lbl">State</span> <span class="f">{{CDL State;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Which applies</span> <span class="f">{{Certificate Type;role=Carrier;type=radio;options=Road test performed,CDL accepted in lieu}}</span> &nbsp; <span class="muted">Options: Road test performed · CDL accepted in lieu</span></p>
+
+<hr>
+<h2>Part A — Road test certificate (49 CFR 391.31)</h2>
+<p><span class="lbl">Date of test</span> <span class="f">{{Test Date;role=Carrier;type=date}}</span> &nbsp;&nbsp; <span class="lbl">Vehicle operated</span> <span class="f">{{Vehicle Type and Unit;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Route and distance</span> <span class="f">{{Test Route and Miles;role=Carrier;type=text}}</span></p>
+
+<p>The driver was tested on, and demonstrated competence in:</p>
+<ul>
+  <li>Pre-trip inspection</li>
+  <li>Coupling and uncoupling the combination unit</li>
+  <li>Placing the vehicle in operation</li>
+  <li>Use of the vehicle's controls and emergency equipment</li>
+  <li>Operating in traffic and passing other vehicles</li>
+  <li>Turning the vehicle</li>
+  <li>Braking, and slowing by means other than braking</li>
+  <li>Backing and parking</li>
+  <li>Post-trip inspection and required records</li>
+</ul>
+
+<p><span class="lbl">Result</span> <span class="f">{{Result;role=Carrier;type=text}}</span></p>
+<p>I certify that the driver named above was given a road test under my supervision on the date shown, covering the operations listed, and that in my opinion the driver possesses sufficient skill to operate safely the type of vehicle tested.</p>
+
+<hr>
+<h2>Part B — CDL accepted in lieu of road test (49 CFR 391.33)</h2>
+<p><span class="lbl">CDL expiration</span> <span class="f">{{CDL Expiration;role=Carrier;type=date}}</span> &nbsp;&nbsp; <span class="lbl">Class and endorsements</span> <span class="f">{{CDL Class and Endorsements;role=Carrier;type=text}}</span></p>
+<p>LAMP PLLC has examined the license above and accepts it in lieu of a road test for the type of vehicle this driver will operate. A legible copy of the license is retained in the driver qualification file.</p>
+<p class="muted">A CDL may not be accepted in lieu of a road test for doubles or triples, or for tank vehicles. Those require the actual test under Part A.</p>
+
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">Examiner or accepting official · LAMP PLLC</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<p><span class="lbl">Print name</span> <span class="f">{{Examiner Name;role=Carrier;type=text}}</span></p>
+
+<!--DOC:12-equipment-lease-376-->
+<h1>Equipment Lease Agreement</h1>
+<p class="cite">LAMP PLLC · MC-1725755 / DOT 4397421 · Written under the federal Truth-in-Leasing regulations, 49 CFR Part 376. Paragraph letters below track 49 CFR 376.12.</p>
+
+<p><strong>(a) Parties.</strong> This Lease is between <strong>LAMP PLLC</strong>, an authorized motor carrier operating under MC-1725755 / DOT 4397421 ("Carrier"), and <span class="f">{{Lessor Legal Name;role=Driver;type=text}}</span>, of <span class="f">{{Lessor Address;role=Driver;type=text}}</span> ("Lessor"), who is the owner of the equipment described below or is authorized to lease it. Operating entity, if any: <span class="f">{{Lessor Entity Name;role=Driver;type=text}}</span>. Both parties sign this Lease.</p>
+
+<h2>Equipment leased</h2>
+<p><span class="lbl">Year</span> <span class="f">{{Equipment Year;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Make</span> <span class="f">{{Equipment Make;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Model</span> <span class="f">{{Equipment Model;role=Driver;type=text}}</span></p>
+<p><span class="lbl">VIN</span> <span class="f">{{Equipment VIN;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Plate and state</span> <span class="f">{{Equipment Plate;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Unit number assigned</span> <span class="f">{{Assigned Unit Number;role=Carrier;type=text}}</span></p>
+
+<p><strong>(b) Duration.</strong> This Lease begins on <span class="f">{{Lease Start Date;role=Carrier;type=date}}</span> and continues until terminated. Either party may terminate on <span class="f">{{Termination Notice Days;role=Carrier;type=text}}</span> days written notice, or immediately for a material breach, loss of required insurance, loss of the Lessor's driving privileges, or an out-of-service order.</p>
+
+<p><strong>(c) Exclusive possession and responsibility.</strong> Carrier has exclusive possession, control, and use of the equipment for the full duration of this Lease, and Carrier assumes complete responsibility for its operation, as 49 CFR 376.12(c) requires. Nothing in this paragraph makes the Lessor an employee of Carrier. The Lessor remains an independent contractor for tax purposes and receives Form 1099-NEC.</p>
+
+<p><strong>(d) Compensation.</strong> Carrier pays Lessor <span class="f">{{Lessor Percentage;role=Carrier;type=text}}</span> of the gross linehaul revenue on each load Lessor hauls, or the flat amount stated on the load confirmation where a flat rate applies. Accessorial charges are allocated as follows: <span class="f">{{Accessorial Split;role=Carrier;type=text}}</span>. Lessor may accept or decline any individual load without penalty.</p>
+
+<p><strong>(e) Items specified.</strong> Unless a load confirmation says otherwise in writing:</p>
+<table>
+  <tr><th style="width:52%">Item</th><th>Paid by</th></tr>
+  <tr><td>Fuel</td><td>Lessor</td></tr>
+  <tr><td>Tolls, scales, lumpers, parking</td><td>Lessor</td></tr>
+  <tr><td>Maintenance, tires, repairs</td><td>Lessor</td></tr>
+  <tr><td>Base plate, IRP, IFTA, HVUT</td><td>Lessor</td></tr>
+  <tr><td>Primary liability and cargo insurance under 49 CFR Part 387</td><td>Carrier</td></tr>
+  <tr><td>Physical damage, occupational accident, non-trucking liability</td><td>Lessor</td></tr>
+  <tr><td>Freight, dispatch, load confirmations, factoring</td><td>Carrier</td></tr>
+</table>
+
+<p><strong>(f) Payment period.</strong> Carrier pays Lessor within <strong>15 days</strong> after Lessor submits the delivery documents needed to bill the load, as 49 CFR 376.12(f) requires. Settlements run every <span class="f">{{Settlement Day OO;role=Carrier;type=text}}</span>.</p>
+
+<p><strong>(g) Copies of freight bill.</strong> Because compensation is a percentage of revenue, Lessor may examine a copy of the rated freight bill, or a Carrier document showing the same revenue detail, for any load Lessor hauled. Carrier provides it on request and may redact only information not bearing on the compensation for that load.</p>
+
+<p><strong>(h) Charge-back items.</strong> Only the items below may be charged back to Lessor, and each is itemized on the settlement showing how it was computed. No other deduction is taken.</p>
+<table>
+  <tr><th style="width:52%">Charge-back item</th><th>How computed</th></tr>
+  <tr><td>Fuel advances and comdata / fuel card draws</td><td>actual amount advanced</td></tr>
+  <tr><td>Cash advances on a load</td><td>actual amount advanced</td></tr>
+  <tr><td>Insurance premiums Lessor elects through Carrier</td><td>actual premium, certificate provided</td></tr>
+  <tr><td>Cargo claims or damage caused by Lessor</td><td>documented cost, capped at the deductible</td></tr>
+  <tr><td>Tolls, citations, or fines incurred by Lessor</td><td>actual amount, documentation provided</td></tr>
+  <tr><td>Escrow contribution, if any</td><td>as stated in paragraph (k)</td></tr>
+</table>
+
+<p><strong>(i) Products, equipment, or services from Carrier.</strong> Lessor is <strong>not</strong> required to buy or rent any product, equipment, or service from Carrier or from anyone Carrier designates, as a condition of this Lease.</p>
+
+<p><strong>(j) Insurance.</strong> Carrier maintains primary liability and cargo coverage as required by 49 CFR Part 387 while Lessor operates under Carrier's authority, and provides a certificate on request. <strong>That coverage does not insure Lessor's own injury or Lessor's equipment.</strong> Lessor maintains physical damage, occupational accident, and non-trucking liability coverage as set out in the Insurance Requirements document. Where Lessor elects coverage through Carrier, Carrier provides a copy of the policy or certificate and charges only the actual premium.</p>
+
+<p><strong>(k) Escrow.</strong> Escrow required: <span class="f">{{Escrow Required;role=Carrier;type=select;options=No escrow,Escrow required}}</span>. If escrow is required, the amount is <span class="f">{{Escrow Amount;role=Carrier;type=text}}</span>, held for the specific items listed in paragraph (h), accounted for on each settlement, and returned to Lessor <strong>within 45 days</strong> of termination, less any lawful deduction itemized in writing. Carrier accounts for any interest as 49 CFR 376.12(k) requires.</p>
+
+<p><strong>(l) Copies of the Lease.</strong> Carrier keeps the original. Lessor receives a signed copy, and a copy is carried on the equipment while it operates under this Lease.</p>
+
+<p><strong>Compliance.</strong> Lessor maintains a valid CDL where required, current medical certification, and compliance with 49 CFR Parts 382 and 395, and consents to Carrier's drug and alcohol testing program while operating under Carrier's authority.</p>
+
+<p><strong>Governing law.</strong> This Lease is governed by the law of the state of Carrier's principal place of business.</p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Lessor signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC · Manager</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:13-equipment-receipt-->
+<h1>Receipt for Equipment</h1>
+<p class="cite">LAMP PLLC · 49 CFR 376.11(b) · A receipt is given when Carrier takes possession and again when the equipment is returned. Both halves stay with the lease file.</p>
+
+<h2>Part A — Carrier takes possession</h2>
+<p><span class="lbl">Lessor</span> <span class="f">{{Lessor Legal Name;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Unit</span> <span class="f">{{Assigned Unit Number;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">VIN</span> <span class="f">{{Equipment VIN;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Date and time received</span> <span class="f">{{Receipt Date In;role=Carrier;type=date}}</span> &nbsp; <span class="lbl">Odometer in</span> <span class="f">{{Odometer In;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Condition, damage noted, and equipment on board (straps, ramp, pallet jack, ELD, permits)</span></p>
+<span class="f blk" style="margin-bottom:44px">{{Condition In;role=Carrier;type=text}}</span>
+<p>Carrier acknowledges receipt of the equipment described above and assumes exclusive possession, control, and use under the Equipment Lease Agreement.</p>
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<hr>
+<h2>Part B — Equipment returned to Lessor</h2>
+<p><span class="lbl">Date and time returned</span> <span class="f">{{Receipt Date Out;role=Carrier;type=date}}</span> &nbsp; <span class="lbl">Odometer out</span> <span class="f">{{Odometer Out;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Condition on return and any new damage</span></p>
+<span class="f blk" style="margin-bottom:40px">{{Condition Out;role=Carrier;type=text}}</span>
+<p>Lessor acknowledges the equipment has been returned. Any escrow held is returned within 45 days of termination, less lawful deductions itemized in writing.</p>
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Lessor signature on return</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:14-oo-settlement-->
+<h1>Owner-Operator Settlement and Direct Deposit</h1>
+<p class="cite">LAMP PLLC · Read with paragraphs (d), (f), (g), (h) and (k) of the Equipment Lease. Where the two differ, the Lease governs.</p>
+
+<p><span class="lbl">Lessor</span> <span class="f">{{Lessor Legal Name;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Payee if paid to an entity</span> <span class="f">{{Payee Name;role=Driver;type=text}}</span></p>
+
+<h2>1. What you are paid</h2>
+<p><span class="lbl">Percentage of gross linehaul</span> <span class="f">{{Lessor Percentage;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Settlement day</span> <span class="f">{{Settlement Day OO;role=Carrier;type=text}}</span></p>
+<p>Carrier pays within <strong>15 days</strong> of receiving the documents needed to bill the load, per 49 CFR 376.12(f). Each settlement is itemized by load, showing the gross, your percentage, every charge-back, and the net.</p>
+<p>You may examine the rated freight bill for any load you hauled. Ask and it is sent, per 49 CFR 376.12(g).</p>
+
+<h2>2. What can be deducted</h2>
+<p>Only the charge-back items listed in paragraph (h) of the Lease, each itemized with the computation shown. Nothing else is deducted. No deduction is made for an operating cost the Lease assigns to Carrier.</p>
+<p><span class="lbl">Advance policy — maximum advance per load</span> <span class="f">{{Advance Limit;role=Carrier;type=text}}</span></p>
+
+<h2>3. Taxes</h2>
+<p>No federal, state, Social Security, or Medicare tax is withheld. Form 1099-NEC is issued for each calendar year in which payments meet the IRS reporting threshold. <strong>A completed Form W-9 must be on file before the first settlement</strong> — without one, backup withholding applies at the statutory rate.</p>
+
+<h2>4. Direct deposit</h2>
+<p><span class="lbl">Bank</span> <span class="f">{{Bank Name;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Account type</span> <span class="f">{{Account Type;role=Driver;type=select;options=Checking,Savings}}</span></p>
+<p><span class="lbl">Routing number</span> <span class="f">{{Routing Number;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Account number</span> <span class="f">{{Account Number;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Voided check or bank letter</span> <span class="f">{{Voided Check;role=Driver;type=file}}</span></p>
+<p>I authorize Carrier to deposit settlements to this account and to reverse any deposit made in error. This stays in effect until I revoke it in writing.</p>
+
+<h2>5. Disputes</h2>
+<p>Raise a settlement question within 30 days of the statement date. Carrier answers in writing within 10 business days.</p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Lessor signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:15-oo-insurance-->
+<h1>Insurance Requirements and Certificates</h1>
+<p class="cite">LAMP PLLC · 49 CFR 376.12(j) · Three coverages are yours. Read what each one does before you decide you already have it.</p>
+
+<p><span class="lbl">Lessor</span> <span class="f">{{Lessor Legal Name;role=Driver;type=text}}</span></p>
+
+<h2>What Carrier covers</h2>
+<p>Carrier maintains primary liability and cargo coverage under 49 CFR Part 387 while you operate under its authority. That protects the public and the freight. <strong>It does not cover your truck, your injury, or your income.</strong> A certificate is provided on request.</p>
+
+<h2>What you carry</h2>
+
+<p><strong>1. Physical damage.</strong> Covers your own truck. Carrier's policy does not. Name LAMP PLLC as additional insured and certificate holder.<br>
+<span class="lbl">Insurer</span> <span class="f">{{Physical Damage Insurer;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Policy number</span> <span class="f">{{Physical Damage Policy;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Expires</span> <span class="f">{{Physical Damage Expiration;role=Driver;type=date}}</span></p>
+
+<p><strong>2. Occupational accident.</strong> Covers your injury and lost income. As an independent contractor you are not on Carrier's workers' compensation, and no workers' compensation benefit is available to you through Carrier. If you are hurt without this, the entire cost is yours.<br>
+<span class="lbl">Election</span> <span class="f">{{Occ Acc Election;role=Driver;type=select;options=I carry my own,I elect coverage through LAMP,I decline}}</span><br>
+<span class="lbl">Insurer</span> <span class="f">{{Occ Acc Insurer;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Policy number</span> <span class="f">{{Occ Acc Policy;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Expires</span> <span class="f">{{Occ Acc Expiration;role=Driver;type=date}}</span></p>
+
+<p><strong>3. Non-trucking liability (bobtail).</strong> Covers you when the truck moves outside Carrier's dispatch — home, the shop, personal use. Carrier's policy does not follow you off dispatch.<br>
+<span class="lbl">Insurer</span> <span class="f">{{Non Trucking Insurer;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Policy number</span> <span class="f">{{Non Trucking Policy;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Expires</span> <span class="f">{{Non Trucking Expiration;role=Driver;type=date}}</span></p>
+
+<h2>Certificates</h2>
+<p><span class="lbl">Upload certificates naming LAMP PLLC as certificate holder</span> <span class="f">{{Insurance Certificates;role=Driver;type=file}}</span></p>
+<p>I will provide a renewal certificate before each expiration. <strong>I understand I may not be dispatched with lapsed coverage</strong>, and that a lapse suspends this lease until it is cured.</p>
+
+<h2>Premiums deducted through Carrier</h2>
+<p>Where I elect a coverage through Carrier, Carrier charges only the actual premium, itemizes it on the settlement, and provides the policy or certificate, per 49 CFR 376.12(j).<br>
+<span class="lbl">Premium deducted per settlement</span> <span class="f">{{OO Premium Deduction;role=Carrier;type=text}}</span></p>
+
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Lessor signature</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<!--DOC:16-trip-lease-addendum-->
+<h1>Trip Lease Addendum — Box Truck</h1>
+<p class="cite">LAMP PLLC · MC-1725755 / DOT 4397421 · One per load. Issued under the Master Trip Lease Agreement between Carrier and Lessor. The receipts in Parts B and C are the receipts required by 49 CFR 376.11(b), and they are the parties' record of which carrier held operating control at any given moment.</p>
+
+<p><span class="lbl">Addendum number</span> <span class="f">{{Addendum Number;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Master Agreement dated</span> <span class="f">{{Master Agreement Date;role=Carrier;type=date}}</span></p>
+<p><span class="lbl">Lessor</span> <span class="f">{{Lessor Legal Name;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Lessor MC</span> <span class="f">{{Lessor MC Number;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Lessor DOT</span> <span class="f">{{Lessor DOT Number;role=Driver;type=text}}</span></p>
+
+<h2>Part A — the load</h2>
+<p><span class="lbl">Carrier load number</span> <span class="f">{{Load Number;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Broker or shipper</span> <span class="f">{{Broker Name;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Origin</span> <span class="f">{{Origin City State;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Pickup date and time</span> <span class="f">{{Pickup DateTime;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Delivery</span> <span class="f">{{Destination City State;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Delivery date and time</span> <span class="f">{{Delivery DateTime;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Commodity</span> <span class="f">{{Commodity;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Declared cargo value</span> <span class="f">{{Declared Cargo Value;role=Carrier;type=text}}</span></p>
+
+<h2>Box truck and driver for this trip</h2>
+<p><span class="lbl">Unit number</span> <span class="f">{{Assigned Unit Number;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">VIN</span> <span class="f">{{Equipment VIN;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Plate and state</span> <span class="f">{{Equipment Plate;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Box length</span> <span class="f">{{Box Length;role=Driver;type=select;options=16 ft,20 ft,22 ft,24 ft,26 ft}}</span> &nbsp; <span class="lbl">GVWR</span> <span class="f">{{Box GVWR;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Pallet positions</span> <span class="f">{{Pallet Positions;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Liftgate</span> <span class="f">{{Has Liftgate;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">Loading ramp</span> <span class="f">{{Has Ramp;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">E-track or logistics posts</span> <span class="f">{{Has Etrack;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">Dock height</span> <span class="f">{{Dock Height;role=Driver;type=checkbox}}</span></p>
+<p class="cite">Box length, liftgate, ramp, and dock height are the specs brokers ask for on box-truck freight. They are recorded here so the Addendum matches what was quoted at booking.</p>
+<p><span class="lbl">Driver name</span> <span class="f">{{Trip Driver Name;role=Driver;type=text}}</span> &nbsp; <span class="lbl">License number and state</span> <span class="f">{{Trip Driver CDL;role=Driver;type=text}}</span></p>
+<p><span class="lbl">License class</span> <span class="f">{{License Class;role=Driver;type=select;options=Non-CDL (GVWR 26000 or under),CDL Class B,CDL Class A}}</span> &nbsp; <span class="lbl">Current DOT medical card on file</span> <span class="f">{{Medical Card Current;role=Driver;type=checkbox}}</span></p>
+<p class="cite">A straight truck at or under 26,000 lbs GVWR does not require a CDL, but in interstate commerce over 10,001 lbs it is still a commercial motor vehicle: driver qualification file under 49 CFR Part 391, records of duty status under Part 395, DOT medical certification, and minimum age 21 all still apply.</p>
+<p><span class="lbl">Duty status method for this trip</span> <span class="f">{{RODS Method;role=Driver;type=select;options=ELD,Paper RODS,Short-haul exception 395.1(e)}}</span></p>
+
+<h2>Compensation for this trip</h2>
+<table>
+  <tr><th style="width:60%">Item</th><th>Amount</th></tr>
+  <tr><td>Line-haul to Lessor</td><td><span class="f">{{Trip Linehaul;role=Carrier;type=text}}</span></td></tr>
+  <tr><td>Fuel surcharge</td><td><span class="f">{{Trip Fuel Surcharge;role=Carrier;type=text}}</span></td></tr>
+  <tr><td>Accessorials (detention, layover, lumper, tarp, stop-off)</td><td><span class="f">{{Trip Accessorials;role=Carrier;type=text}}</span></td></tr>
+  <tr><td>Advances issued on this trip</td><td><span class="f">{{Trip Advances;role=Carrier;type=text}}</span></td></tr>
+  <tr><td>Charge-backs, itemized under Master Section 9</td><td><span class="f">{{Trip Chargebacks;role=Carrier;type=text}}</span></td></tr>
+  <tr><td><strong>Net payable to Lessor</strong></td><td><span class="f">{{Trip Net Payable;role=Carrier;type=text}}</span></td></tr>
+</table>
+<p>Payment is due within <strong>15 days</strong> after Lessor submits the signed bill of lading, the signed proof of delivery, and this executed Addendum, per 49 CFR 376.12(f). Because compensation is revenue-based, Lessor may request a copy of the rated freight bill for this load under 49 CFR 376.12(g).</p>
+
+<h2>Part B — equipment receipt, possession to Carrier</h2>
+<p>Lessor transfers possession of the equipment above to Carrier. <strong>Carrier's exclusive possession, control, and use, and Carrier's complete responsibility for the operation under 49 CFR 376.12(c)(1), begin at the date and time below</strong> and continue until Part C is executed. Lessor shall not operate this equipment under Lessor's own authority, or any third party's authority, between Part B and Part C.</p>
+<p><span class="lbl">Date</span> <span class="f">{{Possession In Date;role=Carrier;type=date}}</span> &nbsp; <span class="lbl">Time</span> <span class="f">{{Possession In Time;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Location</span> <span class="f">{{Possession In Location;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Odometer in</span> <span class="f">{{Trip Odometer In;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Carrier identification devices affixed per 49 CFR 390.21</span> <span class="f">{{Placards On;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">ELD switched to Carrier profile</span> <span class="f">{{ELD Switched In;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">Lessor coverage verified current</span> <span class="f">{{Coverage Verified;role=Carrier;type=checkbox}}</span></p>
+<p><span class="lbl">Condition and equipment on board</span></p>
+<span class="f blk" style="margin-bottom:40px">{{Trip Condition In;role=Carrier;type=text}}</span>
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Lessor signature, possession out</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC, possession in</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<hr>
+<h2>Part C — equipment return receipt, possession to Lessor</h2>
+<p>Carrier returns possession of the equipment to Lessor. <strong>Carrier's exclusive possession, control, and use, and Carrier's responsibility for the operation, end at the date and time below.</strong> Lessor is released and may operate under Lessor's own authority from this moment.</p>
+<p><span class="lbl">Date</span> <span class="f">{{Possession Out Date;role=Carrier;type=date}}</span> &nbsp; <span class="lbl">Time</span> <span class="f">{{Possession Out Time;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Location</span> <span class="f">{{Possession Out Location;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Odometer out</span> <span class="f">{{Trip Odometer Out;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Loaded miles this trip</span> <span class="f">{{Trip Loaded Miles;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Carrier identification devices removed per 49 CFR 376.12(e)</span> <span class="f">{{Placards Off;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">ELD switched to Lessor profile</span> <span class="f">{{ELD Switched Out;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">Delivery documents submitted</span> <span class="f">{{Delivery Docs Submitted;role=Driver;type=checkbox}}</span></p>
+<p><span class="lbl">Condition on return and any new damage</span></p>
+<span class="f blk" style="margin-bottom:40px">{{Trip Condition Out;role=Carrier;type=text}}</span>
+<div class="sig">
+  <div><span class="f">{{Carrier Return Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC, possession out</div></div>
+  <div><span class="f">{{Carrier Return Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Driver Return Signature;role=Driver;type=signature}}</span><div class="siglabel">Lessor signature, possession returned</div></div>
+  <div><span class="f">{{Driver Return Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<p class="cite">Retain this Addendum with both receipts for not less than three years. Neither party shall permit the equipment to move under Carrier's authority without Part B executed.</p>
+
+<!--DOC:17-trip-lease-addendum-tractor-->
+<h1>Trip Lease Addendum — Tractor-Trailer</h1>
+<p class="cite">LAMP PLLC · MC-1725755 / DOT 4397421 · One per load. Issued under the Master Trip Lease Agreement between Carrier and Lessor. The receipts in Parts B and C are the receipts required by 49 CFR 376.11(b), and they are the parties' record of which carrier held operating control at any given moment.</p>
+
+<p><span class="lbl">Addendum number</span> <span class="f">{{Addendum Number;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Master Agreement dated</span> <span class="f">{{Master Agreement Date;role=Carrier;type=date}}</span></p>
+<p><span class="lbl">Lessor</span> <span class="f">{{Lessor Legal Name;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Lessor MC</span> <span class="f">{{Lessor MC Number;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Lessor DOT</span> <span class="f">{{Lessor DOT Number;role=Driver;type=text}}</span></p>
+
+<h2>Part A — the load</h2>
+<p><span class="lbl">Carrier load number</span> <span class="f">{{Load Number;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Broker or shipper</span> <span class="f">{{Broker Name;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Origin</span> <span class="f">{{Origin City State;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Pickup date and time</span> <span class="f">{{Pickup DateTime;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Delivery</span> <span class="f">{{Destination City State;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Delivery date and time</span> <span class="f">{{Delivery DateTime;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Commodity</span> <span class="f">{{Commodity;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Declared cargo value</span> <span class="f">{{Declared Cargo Value;role=Carrier;type=text}}</span></p>
+
+<h2>Tractor, trailer, and driver for this trip</h2>
+<p><span class="lbl">Tractor unit number</span> <span class="f">{{Assigned Unit Number;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Tractor VIN</span> <span class="f">{{Equipment VIN;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Plate and state</span> <span class="f">{{Equipment Plate;role=Driver;type=text}}</span></p>
+<p><span class="lbl">Trailer furnished by</span> <span class="f">{{Trailer Furnished By;role=Carrier;type=select;options=Carrier,Lessor}}</span> &nbsp; <span class="lbl">Trailer number</span> <span class="f">{{Trailer Number;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Trailer VIN</span> <span class="f">{{Trailer VIN;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Trailer type</span> <span class="f">{{Trailer Type;role=Carrier;type=select;options=Dry van,Reefer,Flatbed,Step deck,Power only}}</span> &nbsp; <span class="lbl">Trailer interchange agreement on file</span> <span class="f">{{Trailer Interchange On File;role=Carrier;type=checkbox}}</span></p>
+<p class="cite">Where Carrier furnishes the trailer, trailer interchange coverage applies and the trailer returns to Carrier at Part C. Where Lessor furnishes it, the trailer is part of the leased equipment and is covered by Lessor's physical damage.</p>
+<p><span class="lbl">Driver name</span> <span class="f">{{Trip Driver Name;role=Driver;type=text}}</span> &nbsp; <span class="lbl">CDL number and state</span> <span class="f">{{Trip Driver CDL;role=Driver;type=text}}</span></p>
+<p><span class="lbl">CDL class and endorsements</span> <span class="f">{{CDL Endorsements;role=Driver;type=text}}</span> &nbsp; <span class="lbl">Current DOT medical card on file</span> <span class="f">{{Medical Card Current;role=Driver;type=checkbox}}</span></p>
+<p><span class="lbl">Duty status method for this trip</span> <span class="f">{{RODS Method;role=Driver;type=select;options=ELD,Paper RODS,Short-haul exception 395.1(e)}}</span></p>
+
+<h2>Compensation for this trip</h2>
+<table>
+  <tr><th style="width:60%">Item</th><th>Amount</th></tr>
+  <tr><td>Line-haul to Lessor</td><td><span class="f">{{Trip Linehaul;role=Carrier;type=text}}</span></td></tr>
+  <tr><td>Fuel surcharge</td><td><span class="f">{{Trip Fuel Surcharge;role=Carrier;type=text}}</span></td></tr>
+  <tr><td>Accessorials (detention, layover, lumper, tarp, stop-off)</td><td><span class="f">{{Trip Accessorials;role=Carrier;type=text}}</span></td></tr>
+  <tr><td>Advances issued on this trip</td><td><span class="f">{{Trip Advances;role=Carrier;type=text}}</span></td></tr>
+  <tr><td>Charge-backs, itemized under Master Section 9</td><td><span class="f">{{Trip Chargebacks;role=Carrier;type=text}}</span></td></tr>
+  <tr><td><strong>Net payable to Lessor</strong></td><td><span class="f">{{Trip Net Payable;role=Carrier;type=text}}</span></td></tr>
+</table>
+<p>Payment is due within <strong>15 days</strong> after Lessor submits the signed bill of lading, the signed proof of delivery, and this executed Addendum, per 49 CFR 376.12(f). Because compensation is revenue-based, Lessor may request a copy of the rated freight bill for this load under 49 CFR 376.12(g).</p>
+
+<h2>Part B — equipment receipt, possession to Carrier</h2>
+<p>Lessor transfers possession of the equipment above to Carrier. <strong>Carrier's exclusive possession, control, and use, and Carrier's complete responsibility for the operation under 49 CFR 376.12(c)(1), begin at the date and time below</strong> and continue until Part C is executed. Lessor shall not operate this equipment under Lessor's own authority, or any third party's authority, between Part B and Part C.</p>
+<p><span class="lbl">Date</span> <span class="f">{{Possession In Date;role=Carrier;type=date}}</span> &nbsp; <span class="lbl">Time</span> <span class="f">{{Possession In Time;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Location</span> <span class="f">{{Possession In Location;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Odometer in</span> <span class="f">{{Trip Odometer In;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Carrier identification devices affixed per 49 CFR 390.21</span> <span class="f">{{Placards On;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">ELD switched to Carrier profile</span> <span class="f">{{ELD Switched In;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">Lessor coverage verified current</span> <span class="f">{{Coverage Verified;role=Carrier;type=checkbox}}</span></p>
+<p><span class="lbl">Condition and equipment on board</span></p>
+<span class="f blk" style="margin-bottom:40px">{{Trip Condition In;role=Carrier;type=text}}</span>
+<div class="sig">
+  <div><span class="f">{{Driver Signature;role=Driver;type=signature}}</span><div class="siglabel">Lessor signature, possession out</div></div>
+  <div><span class="f">{{Driver Sign Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Carrier Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC, possession in</div></div>
+  <div><span class="f">{{Carrier Sign Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<hr>
+<h2>Part C — equipment return receipt, possession to Lessor</h2>
+<p>Carrier returns possession of the equipment to Lessor. <strong>Carrier's exclusive possession, control, and use, and Carrier's responsibility for the operation, end at the date and time below.</strong> Lessor is released and may operate under Lessor's own authority from this moment.</p>
+<p><span class="lbl">Date</span> <span class="f">{{Possession Out Date;role=Carrier;type=date}}</span> &nbsp; <span class="lbl">Time</span> <span class="f">{{Possession Out Time;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Location</span> <span class="f">{{Possession Out Location;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Odometer out</span> <span class="f">{{Trip Odometer Out;role=Carrier;type=text}}</span> &nbsp; <span class="lbl">Loaded miles this trip</span> <span class="f">{{Trip Loaded Miles;role=Carrier;type=text}}</span></p>
+<p><span class="lbl">Carrier identification devices removed per 49 CFR 376.12(e)</span> <span class="f">{{Placards Off;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">ELD switched to Lessor profile</span> <span class="f">{{ELD Switched Out;role=Driver;type=checkbox}}</span> &nbsp; <span class="lbl">Delivery documents submitted</span> <span class="f">{{Delivery Docs Submitted;role=Driver;type=checkbox}}</span></p>
+<p><span class="lbl">Condition on return and any new damage</span></p>
+<span class="f blk" style="margin-bottom:40px">{{Trip Condition Out;role=Carrier;type=text}}</span>
+<div class="sig">
+  <div><span class="f">{{Carrier Return Signature;role=Carrier;type=signature}}</span><div class="siglabel">LAMP PLLC, possession out</div></div>
+  <div><span class="f">{{Carrier Return Date;role=Carrier;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+<div class="sig">
+  <div><span class="f">{{Driver Return Signature;role=Driver;type=signature}}</span><div class="siglabel">Lessor signature, possession returned</div></div>
+  <div><span class="f">{{Driver Return Date;role=Driver;type=date}}</span><div class="siglabel">Date</div></div>
+</div>
+
+<p class="cite">Retain this Addendum with both receipts for not less than three years. Neither party shall permit the equipment to move under Carrier's authority without Part B executed.</p>

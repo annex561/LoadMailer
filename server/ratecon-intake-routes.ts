@@ -454,8 +454,17 @@ export function registerRateconIntakeRoutes(app: Express) {
         .update(rateconIntake)
         .set({ reviewedBy: userId, reviewedAt: new Date() })
         .where(eq(rateconIntake.id, req.params.id));
+      // Split-authority owner-operators (Master Trip Lease) get a per-load Trip
+      // Addendum. No-op for every other driver: returns applies:false and dispatch is
+      // untouched. Blocks the SMS only when the driver's own coverage is lapsed —
+      // Master Section 10.4. See server/trip-addendum-service.ts.
+      const { tripAddendumForDispatchedLoad } = await import("./trip-addendum-service");
+      const addendum = await tripAddendumForDispatchedLoad(outcome.loadId!);
+      if (addendum.blocked) {
+        return res.status(400).json({ ...outcome, tripAddendum: addendum, error: addendum.reason });
+      }
       const smsResult = await sendDispatchSms(outcome.loadId!);
-      res.json({ ...outcome, sms: smsResult });
+      res.json({ ...outcome, sms: smsResult, ...(addendum.applies ? { tripAddendum: addendum } : {}) });
     } catch (err: any) {
       // Surface the Postgres detail (the underlying root cause that Drizzle
       // wraps but doesn't expose by default in `err.message`).
