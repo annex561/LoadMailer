@@ -796,6 +796,29 @@ async function initializeAllServices() {
       }
     });
 
+    // Truck-free notifier — SMS the DRIVER when his truck frees up and LAMP's first
+    // look is running. Default OFF (TRUCK_FREE_SMS_ENABLED). This is the only
+    // driver-facing SMS path in the split-authority feature set.
+    Promise.resolve().then(async () => {
+      try {
+        const { truckFreeNotifyCron } = await import('./truck-free-notify-cron');
+        await truckFreeNotifyCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize truck-free notifier cron:', error);
+      }
+    });
+
+    // COI lapse monitor cron — SMS the operator when a split-authority owner-operator's
+    // insurance certificate nears expiry. Default OFF (COI_MONITOR_ENABLED).
+    Promise.resolve().then(async () => {
+      try {
+        const { coiMonitorCron } = await import('./coi-monitor-cron');
+        await coiMonitorCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize COI monitor cron:', error);
+      }
+    });
+
     // FreightGuard monitor cron — SMS the operator when a Carrier411 FreightGuard
     // case is open and un-alerted. Default OFF (FREIGHTGUARD_MONITOR_ENABLED).
     Promise.resolve().then(async () => {
@@ -1131,6 +1154,42 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // FMCSA monitor — read-only status (safe to expose).
+  app.get('/api/truck-free/status', async (_req, res) => {
+    try {
+      const { truckFreeNotifyCron } = await import('./truck-free-notify-cron');
+      res.json({ ok: true, ...truckFreeNotifyCron.getStatus() });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'status failed' });
+    }
+  });
+
+  app.post('/api/truck-free/run', async (_req, res) => {
+    try {
+      const { truckFreeNotifyCron } = await import('./truck-free-notify-cron');
+      res.json({ ok: true, result: await truckFreeNotifyCron.triggerNow() });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'run failed' });
+    }
+  });
+
+  app.get('/api/coi-monitor/status', async (_req, res) => {
+    try {
+      const { coiMonitorCron } = await import('./coi-monitor-cron');
+      res.json({ ok: true, ...coiMonitorCron.getStatus() });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'status failed' });
+    }
+  });
+
+  app.post('/api/coi-monitor/run', async (_req, res) => {
+    try {
+      const { coiMonitorCron } = await import('./coi-monitor-cron');
+      res.json({ ok: true, result: await coiMonitorCron.triggerNow() });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'run failed' });
+    }
+  });
+
   app.get('/api/fmcsa-monitor/status', async (_req, res) => {
     try {
       const { fmcsaMonitorCron } = await import('./fmcsa-monitor-cron');
@@ -4880,6 +4939,63 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.status(500).type('html').send('<h1>Error</h1>');
     }
   });
+  // My Truck — split-authority availability. GET renders, POST holds a window,
+  // POST .../delete releases one. Same trackingToken auth as the rest of /driver/:token.
+  app.get('/driver/:token/availability', async (req, res) => {
+    try {
+      const { renderAvailability } = await import('./driver-portal');
+      res.type('html').send(await renderAvailability(req.params.token, req.query.ok ? 'Saved.' : undefined));
+    } catch (e: any) {
+      res.status(500).send(`Error: ${e?.message || e}`);
+    }
+  });
+
+  app.post('/driver/:token/availability', async (req, res) => {
+    try {
+      const { driverFromToken } = await import('./driver-portal');
+      const driver = await driverFromToken(req.params.token);
+      if (!driver) return res.status(404).send('Invalid link');
+
+      const startsAt = new Date(req.body?.startsAt);
+      const endsAt = new Date(req.body?.endsAt);
+      if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
+        const { renderAvailability } = await import('./driver-portal');
+        return res.type('html').send(
+          await renderAvailability(req.params.token, 'Check the dates — the end has to be after the start.'),
+        );
+      }
+      const id = `blk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const { sql } = await import('drizzle-orm');
+      const { db } = await import('./db');
+      await db.execute(sql`
+        INSERT INTO driver_availability_blocks (id, driver_id, starts_at, ends_at, note, created_by, created_at)
+        VALUES (${id}, ${driver.id}, ${startsAt}, ${endsAt},
+                ${req.body?.note ? String(req.body.note).slice(0, 200) : null}, 'driver', NOW())
+      `);
+      res.redirect(`/driver/${req.params.token}/availability?ok=1`);
+    } catch (e: any) {
+      res.status(500).send(`Error: ${e?.message || e}`);
+    }
+  });
+
+  app.post('/driver/:token/availability/:blockId/delete', async (req, res) => {
+    try {
+      const { driverFromToken } = await import('./driver-portal');
+      const driver = await driverFromToken(req.params.token);
+      if (!driver) return res.status(404).send('Invalid link');
+      const { sql } = await import('drizzle-orm');
+      const { db } = await import('./db');
+      // Scoped to the token's own driver — a token can only release its own windows.
+      await db.execute(sql`
+        DELETE FROM driver_availability_blocks
+        WHERE id = ${req.params.blockId} AND driver_id = ${driver.id}
+      `);
+      res.redirect(`/driver/${req.params.token}/availability?ok=1`);
+    } catch (e: any) {
+      res.status(500).send(`Error: ${e?.message || e}`);
+    }
+  });
+
   app.get('/driver/:token/sop', async (req, res) => {
     try {
       const { renderSop } = await import('./driver-portal');
@@ -8752,6 +8868,13 @@ TRAQ IQ Dispatch Team
 
   // ==================== GA Loads SQLite Routes ====================
   app.use('/api/ga', gaLoadsRouter);
+
+  // Owner-operator insurance certificates — admin CRUD behind /coverage. Feeds the
+  // Coverage Verified interlock on the Trip Lease Addendum. COI rows are driver-scoped
+  // and never carry a truck_id, so the dispatch gate is untouched. See
+  // server/coverage-routes.ts.
+  const { default: coverageRoutes } = await import('./coverage-routes');
+  app.use('/api/coverage', coverageRoutes);
   console.log('✅ GA Loads SQLite routes registered');
   // ==================== End GA Loads Routes ====================
 

@@ -154,3 +154,28 @@ Format:
   send a real driver a demo document. The mock fallback in `vendors.ts` only engages when
   the URL, key, or template ID is missing — all three are present, so the live path runs.
 - `2026-08-12 · uncommitted`
+
+### Split-authority driver SMS must never blast a backlog (preventive entry)
+- **Symptom** — none yet. This entry exists so the next agent does not have to
+  rediscover why `truck_free_notifications` and `coi_alert_state` look over-engineered
+  for what they store.
+- **Root cause** — the shape of the PR #62 incident: a code change that turns dead code
+  into live code is a NEW outbound path, and processing a backlog on first boot is how
+  1,000+ Twilio messages went out. Any monitor that reads existing rows and sends is
+  one deploy away from repeating it.
+- **Fix** — every monitor in this feature set carries the same five-part shape:
+  default-OFF env flag, a first-sight baseline that records silently and never sends,
+  a per-entity dedup row (`coi_alert_state.last_alerted_threshold` is a monotonic
+  ratchet; `truck_free_notifications.load_id` is a PRIMARY KEY), a per-tick ceiling,
+  and — for `truck-free-notify-cron.ts` only — a SQL-level recency bound so a stale
+  backlog cannot even be read into memory.
+- **Guard** — `server/__tests__/coi-monitor.test.ts` walks one certificate from 45 days
+  out to 40 days expired and asserts exactly 5 messages ever leave.
+  `server/__tests__/truck-free-notify.test.ts` runs 40 ticks against one freeing load
+  and asserts exactly 1. Both fail if the baseline or the dedup is loosened.
+- **Do NOT** — do not "simplify" the baseline branch away because it looks like it does
+  nothing. It does nothing *on purpose*, exactly once per entity, and that is the only
+  thing standing between a deploy and everyone's phone. Also do not widen
+  `TRUCK_FREE_LOOKBACK_MINUTES` to "catch up on missed notifications" — the narrow
+  window IS the blast-radius cap, and a missed notification is cheaper than a blast.
+- `2026-09-10 · uncommitted`

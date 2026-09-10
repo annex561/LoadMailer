@@ -187,6 +187,124 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ drivers voice_number columns: ${e.message}`);
     }
 
+    // Split-authority owner-operators — drivers who hold their own MC and run part
+    // of their weeks under LAMP's authority on the Master Trip Lease
+    // (docs/agreements/master-trip-lease-lamp-to-owner-operator.md). Deliberately
+    // defined here rather than in shared/schema.ts, matching how
+    // fmcsa_carrier_snapshots is handled: the trip-addendum path reads these with
+    // raw SQL (server/trip-addendum-service.ts) and another agent is in
+    // shared/schema.ts right now.
+    //
+    // split_authority_enabled defaults FALSE, so every existing driver is untouched
+    // and no dispatch behaviour changes until a driver is explicitly opted in.
+    try {
+      await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS split_authority_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
+      await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS own_mc_number TEXT`);
+      await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS own_dot_number TEXT`);
+      await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS power_unit_type TEXT NOT NULL DEFAULT 'box_truck'`);
+      await pool.query(`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS trip_lease_signed_at TIMESTAMP`);
+    } catch (e: any) {
+      log(`⚠️ drivers split-authority columns: ${e.message}`);
+    }
+
+    // trip_addenda — one row per executed Trip Lease Addendum. Written by
+    // server/trip-addendum-service.ts at Approve & Dispatch. Two jobs:
+    //   1. 49 CFR 376.11(b) retention — the record of which carrier held operating
+    //      control on which load, kept three years.
+    //   2. The monthly trip-leased gross receipts report the insurer asks for, which
+    //      is how a trip-lease endorsement is rated (server/trip-lease-report.ts).
+    // load_id is UNIQUE = the dedup key, so a retried dispatch updates rather than
+    // opening a second lease on one trip.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS trip_addenda (
+          id TEXT PRIMARY KEY,
+          load_id TEXT NOT NULL UNIQUE,
+          driver_id TEXT,
+          addendum_number TEXT NOT NULL,
+          submission_id TEXT,
+          signing_url TEXT,
+          coverage_verified BOOLEAN,
+          power_unit_type TEXT,
+          gross_linehaul REAL,
+          load_number TEXT,
+          delivery_date TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_trip_addenda_driver ON trip_addenda(driver_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_trip_addenda_created ON trip_addenda(created_at)`);
+    } catch (e: any) {
+      log(`⚠️ trip_addenda table: ${e.message}`);
+    }
+
+    // coi_alert_state — per-document dedup for the COI lapse monitor
+    // (server/coi-monitor-cron.ts). last_alerted_threshold is a monotonic ratchet:
+    // an alert fires only when the current threshold bucket is strictly MORE urgent
+    // than the last one alerted, so a restart, a double tick, or a re-detect is a
+    // no-op. baseline_recorded_at marks first sight, which never alerts — that is the
+    // watermark that stops a deploy from blasting a backlog of expired certificates.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS coi_alert_state (
+          document_id TEXT PRIMARY KEY,
+          driver_id TEXT,
+          doc_type TEXT,
+          expiry_date TIMESTAMP,
+          last_alerted_threshold INTEGER,
+          baseline_recorded_at TIMESTAMP,
+          last_checked_at TIMESTAMP,
+          last_alert_sent_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+    } catch (e: any) {
+      log(`⚠️ coi_alert_state table: ${e.message}`);
+    }
+
+    // driver_availability_blocks — a split-authority owner-operator reserving his own
+    // truck for his own authority. Written by the driver (or the operator on his
+    // behalf) so LAMP's dispatch can refuse to offer a load into a window he has
+    // already claimed. This is the double-booking interlock; see
+    // server/truck-availability-service.ts.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS driver_availability_blocks (
+          id TEXT PRIMARY KEY,
+          driver_id TEXT NOT NULL,
+          starts_at TIMESTAMP NOT NULL,
+          ends_at TIMESTAMP NOT NULL,
+          note TEXT,
+          created_by TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_avail_blocks_driver ON driver_availability_blocks(driver_id, starts_at)`);
+    } catch (e: any) {
+      log(`⚠️ driver_availability_blocks table: ${e.message}`);
+    }
+
+    // truck_free_notifications — dedup for the "your truck is free" driver SMS
+    // (server/truck-free-notify-cron.ts). Keyed on the LOAD whose delivery freed the
+    // truck, PRIMARY KEY, so a driver is notified at most once per load, ever. Not
+    // keyed on the driver: he should be told again the next time a DIFFERENT load
+    // frees him. This is the table that makes a re-tick, a restart, or a redeploy a
+    // no-op instead of a second text.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS truck_free_notifications (
+          load_id TEXT PRIMARY KEY,
+          driver_id TEXT,
+          notified_at TIMESTAMP,
+          suppressed_reason TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+    } catch (e: any) {
+      log(`⚠️ truck_free_notifications table: ${e.message}`);
+    }
+
     // Loads confirmation columns
     let loadsOk = 0;
     for (const [col, def] of loadsColumns) {

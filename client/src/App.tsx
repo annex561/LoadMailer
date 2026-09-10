@@ -50,6 +50,7 @@ const FleetTrucks = lazy(() => import("@/pages/fleet-trucks"));
 const FleetWorkOrders = lazy(() => import("@/pages/fleet-work-orders"));
 const FleetInspections = lazy(() => import("@/pages/fleet-inspections"));
 const FleetVendors = lazy(() => import("@/pages/fleet-vendors"));
+const DriverCoverage = lazy(() => import("@/pages/driver-coverage"));
 const LoadsInbox = lazy(() => import("@/pages/loads-inbox"));
 const ActiveLoads = lazy(() => import("@/pages/active-loads"));
 const ItemsPage = lazy(() => import("@/pages/items"));
@@ -111,6 +112,7 @@ function Router() {
       <Route path="/contacts" component={Contacts} />
       <Route path="/templates" component={Templates} />
       <Route path="/driver-management" component={DriverManagement} />
+      <Route path="/driver-coverage" component={DriverCoverage} />
       <Route path="/recruiting" component={RecruitingDashboard} />
       <Route path="/recruiting/:id" component={RecruitingApplicant} />
       <Route path="/scrapers" component={ScraperManagement} />
