@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import nodemailer from "nodemailer";
 import type { PayDriverInput, PayLoadInput } from "./pay-calculator";
 import { calculatePay } from "./pay-calculator";
+import { evaluateDispatchGateForDriver } from "./dispatch-gate-guard";
 
 // Reuse the same SMTP transport as load-lifecycle-service / bidding-service.
 // Defaults align with the existing wiring (Gmail SMTP via SMTP_USER/SMTP_PASS).
@@ -26,7 +27,10 @@ export interface DispatchOutcome {
   error?: string;
 }
 
-export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutcome> {
+export async function dispatchFromIntake(
+  intakeId: string,
+  opts?: { gateOverrideReason?: string | null },
+): Promise<DispatchOutcome> {
   const [intake] = await db.select().from(rateconIntake).where(eq(rateconIntake.id, intakeId));
   if (!intake) return { ok: false, error: "Intake not found" };
   // Defense in depth (I-1): a call-sourced intake came from a phone transcript,
@@ -39,6 +43,15 @@ export async function dispatchFromIntake(intakeId: string): Promise<DispatchOutc
 
   const [driver] = await db.select().from(drivers).where(eq(drivers.id, intake.matchedDriverId));
   if (!driver) return { ok: false, error: "Driver not found" };
+
+  // Dispatch Gate — refuse a truck that is RED on compliance docs, overdue PM, or an open work
+  // order. Observe-only until DISPATCH_GATE_ENFORCE=true; a driver with no truck linked is never
+  // blocked. Decision logic and its guard test live in server/dispatch-gate-guard.ts.
+  const gate = await evaluateDispatchGateForDriver(driver.id, opts?.gateOverrideReason);
+  console.log(`[dispatch] intake=${intakeId} driver=${driver.id} ${gate.logLine}`);
+  if (!gate.allow) {
+    return { ok: false, error: gate.blockReason };
+  }
 
   // FK consistency: loads table has a composite FK (driver_id, company_id) →
   // drivers (id, company_id). If the driver was created without a companyId,
