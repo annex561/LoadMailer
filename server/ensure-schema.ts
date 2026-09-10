@@ -99,6 +99,21 @@ export async function ensureSchema(): Promise<void> {
 
   // Universal Ratecon Intake — loads.confirmation_* columns (PR #1)
   const loadsColumns: [string, string][] = [
+    // BOL verification + factoring lifecycle. These lived in a SECOND
+    // `ALTER TABLE loads ADD COLUMN` block further down until 2026-09-10. Two
+    // registration sites meant schema-completeness.test.ts — which only reads
+    // THIS array — reported all nine as missing when they were in fact being
+    // created at boot. The test was crying wolf, and a real missing column
+    // would have been indistinguishable from the noise. One site now.
+    ['bol_verified_at', 'TIMESTAMP'],
+    ['bol_verify_attempts', 'INTEGER DEFAULT 0'],
+    ['good_to_go_sent_at', 'TIMESTAMP'],
+    ['factoring_status', "TEXT DEFAULT 'not_ready'"],
+    ['factoring_submitted_at', 'TIMESTAMP'],
+    ['factoring_funded_at', 'TIMESTAMP'],
+    ['factoring_loves_invoice_id', 'TEXT'],
+    ['factoring_schedule_id', 'TEXT'],
+    ['factoring_amount_advanced', 'REAL'],
     // Detention terms parsed from the ratecon (see shared/schema.ts loads.detention*)
     ['detention_free_minutes', 'INTEGER'],
     ['detention_rate_per_hour', 'REAL'],
@@ -428,27 +443,6 @@ export async function ensureSchema(): Promise<void> {
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_factoring_submitted_at ON factoring_submissions(submitted_at)`);
     } catch (e: any) {
       log(`⚠️ factoring_submissions table: ${e.message}`);
-    }
-
-    // Add new columns to loads for BOL verification + factoring lifecycle.
-    // ALTER TABLE ADD COLUMN IF NOT EXISTS is supported on PG 9.6+.
-    try {
-      const newLoadCols: Array<[string, string]> = [
-        ["bol_verified_at", "TIMESTAMP"],
-        ["bol_verify_attempts", "INTEGER DEFAULT 0"],
-        ["good_to_go_sent_at", "TIMESTAMP"],
-        ["factoring_status", "TEXT DEFAULT 'not_ready'"],
-        ["factoring_submitted_at", "TIMESTAMP"],
-        ["factoring_funded_at", "TIMESTAMP"],
-        ["factoring_loves_invoice_id", "TEXT"],
-        ["factoring_schedule_id", "TEXT"],
-        ["factoring_amount_advanced", "REAL"],
-      ];
-      for (const [col, type] of newLoadCols) {
-        await pool.query(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS ${col} ${type}`);
-      }
-    } catch (e: any) {
-      log(`⚠️ loads factoring columns: ${e.message}`);
     }
 
     // ratecon_corrections — every dispatcher correction becomes a learning

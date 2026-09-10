@@ -200,3 +200,63 @@ describe("schema completeness — loads table", () => {
     }
   });
 });
+
+/**
+ * Why this block exists (2026-09-10):
+ *
+ * The loads assertions above only read the `loadsColumns` array. For months a
+ * SECOND `ALTER TABLE loads ADD COLUMN` block sat further down ensure-schema.ts
+ * holding nine BOL-verification and factoring columns. Those columns WERE being
+ * created at boot, but this test could not see them, so it reported all nine as
+ * missing on every run.
+ *
+ * That is worse than a silent gap. A permanently red test is noise, and a
+ * genuinely missing column — the exact production outage this file was written
+ * to prevent — would have been indistinguishable from it.
+ *
+ * The nine were folded into `loadsColumns` and the second block deleted. This
+ * guard pins the invariant that made the fix work: ONE registration site. If a
+ * future change adds another ALTER TABLE loads block instead of appending to the
+ * array, the assertions above go blind again and this fails loudly instead.
+ */
+describe("schema completeness — single registration site", () => {
+  const ensureSchemaSrc = readFileSync(
+    resolve(__dirname, "../ensure-schema.ts"),
+    "utf8",
+  );
+
+  it("has exactly ONE `ALTER TABLE loads ADD COLUMN` query in ensure-schema.ts", () => {
+    // Match the query itself, not prose: require the backtick-template form the
+    // real call uses, so explanatory comments mentioning the phrase don't count.
+    const sites = ensureSchemaSrc.match(
+      /pool\.query\(`ALTER TABLE loads ADD COLUMN IF NOT EXISTS/g,
+    ) ?? [];
+    expect(
+      sites.length,
+      "More than one place registers loads columns. The loads assertions in this " +
+        "file only read the `loadsColumns` array, so any column added elsewhere is " +
+        "invisible to them. Append to `loadsColumns` instead of adding a new block.",
+    ).toBe(1);
+  });
+
+  it("registers the BOL + factoring columns in loadsColumns, not a separate block", () => {
+    const ensureCols = extractLoadColumnsFromEnsureSchema();
+    for (const col of [
+      "bol_verified_at",
+      "bol_verify_attempts",
+      "good_to_go_sent_at",
+      "factoring_status",
+      "factoring_submitted_at",
+      "factoring_funded_at",
+      "factoring_loves_invoice_id",
+      "factoring_schedule_id",
+      "factoring_amount_advanced",
+    ]) {
+      expect(ensureCols, `${col} must live in the loadsColumns array`).toContain(col);
+    }
+  });
+
+  it("does not reintroduce a newLoadCols array", () => {
+    expect(ensureSchemaSrc).not.toMatch(/const newLoadCols/);
+  });
+});
