@@ -61,7 +61,35 @@ export function registerDriverLineRoutes(app: Express) {
   app.post("/api/twilio/voice/office-inbound", async (req, res) => {
     if (!validTwilioSig(req)) return res.status(403).send("Forbidden");
     const from = (req.body?.From as string) || "";
-    return sendTwiml(res, buildInboundTwiml({ phone: process.env.OFFICE_FORWARD_NUMBER || "+12058614115" }, from, "Office"));
+    const baseTwiml = buildInboundTwiml(
+      { phone: process.env.OFFICE_FORWARD_NUMBER || "+12058614115" },
+      from,
+      "Office",
+    );
+
+    // Broker check-call auto-answer. Speaks the truck's position BEFORE the bridge, then the
+    // call continues to the human exactly as it always has — the <Dial> is never removed, so
+    // this can only ever add a sentence, never cost a missed call. Default OFF
+    // (CHECKCALL_AUTOANSWER_ENABLED); when unset, baseTwiml goes out byte for byte unchanged.
+    // Decision logic and its guard test: server/checkcall-service.ts,
+    // server/__tests__/checkcall-guards.test.ts
+    try {
+      const { resolveCheckCall, spliceCheckCallSpeech, recordAutoAnswer } = await import("./checkcall-service");
+      const decision = await resolveCheckCall(from);
+      if (decision.reason !== "disabled") {
+        console.log(`[checkcall] from=${from} ${decision.logLine}`);
+      }
+      if (decision.answer && decision.speech && decision.loadId) {
+        recordAutoAnswer(from, decision.loadId);
+        return sendTwiml(res, spliceCheckCallSpeech(baseTwiml, decision.speech));
+      }
+    } catch (err: any) {
+      // A broker call must never drop because this feature threw. Fall through to the
+      // untouched office TwiML.
+      console.error("[checkcall] error, forwarding to human:", err?.message || err);
+    }
+
+    return sendTwiml(res, baseTwiml);
   });
 
   // AUTH-GUARDED (sits under the /api/voice adminOrDispatcherOrApiKey prefix guard).
