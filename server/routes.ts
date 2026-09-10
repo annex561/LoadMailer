@@ -785,6 +785,51 @@ async function initializeAllServices() {
       }
     });
 
+    // FMCSA monitor cron — daily SAFER check, SMS the operator on a status change
+    // (authority / OOS / USDOT status / MCS-150). Default OFF (FMCSA_MONITOR_ENABLED).
+    Promise.resolve().then(async () => {
+      try {
+        const { fmcsaMonitorCron } = await import('./fmcsa-monitor-cron');
+        await fmcsaMonitorCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize FMCSA monitor cron:', error);
+      }
+    });
+
+    // Truck-free notifier — SMS the DRIVER when his truck frees up and LAMP's first
+    // look is running. Default OFF (TRUCK_FREE_SMS_ENABLED). This is the only
+    // driver-facing SMS path in the split-authority feature set.
+    Promise.resolve().then(async () => {
+      try {
+        const { truckFreeNotifyCron } = await import('./truck-free-notify-cron');
+        await truckFreeNotifyCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize truck-free notifier cron:', error);
+      }
+    });
+
+    // COI lapse monitor cron — SMS the operator when a split-authority owner-operator's
+    // insurance certificate nears expiry. Default OFF (COI_MONITOR_ENABLED).
+    Promise.resolve().then(async () => {
+      try {
+        const { coiMonitorCron } = await import('./coi-monitor-cron');
+        await coiMonitorCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize COI monitor cron:', error);
+      }
+    });
+
+    // FreightGuard monitor cron — SMS the operator when a Carrier411 FreightGuard
+    // case is open and un-alerted. Default OFF (FREIGHTGUARD_MONITOR_ENABLED).
+    Promise.resolve().then(async () => {
+      try {
+        const { freightGuardMonitorCron } = await import('./freightguard-monitor-cron');
+        await freightGuardMonitorCron.initialize();
+      } catch (error) {
+        console.error('Failed to initialize FreightGuard monitor cron:', error);
+      }
+    });
+
     console.log('✅ Background service initialization started');
   } catch (error) {
     console.error('❌ Error starting background services:', error);
@@ -1103,6 +1148,120 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { hosCheckCron } = await import('./hos-check-cron');
       res.json({ ok: true, ...hosCheckCron.getStatus() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FMCSA monitor — read-only status (safe to expose).
+  app.get('/api/truck-free/status', async (_req, res) => {
+    try {
+      const { truckFreeNotifyCron } = await import('./truck-free-notify-cron');
+      res.json({ ok: true, ...truckFreeNotifyCron.getStatus() });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'status failed' });
+    }
+  });
+
+  app.post('/api/truck-free/run', async (_req, res) => {
+    try {
+      const { truckFreeNotifyCron } = await import('./truck-free-notify-cron');
+      res.json({ ok: true, result: await truckFreeNotifyCron.triggerNow() });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'run failed' });
+    }
+  });
+
+  app.get('/api/coi-monitor/status', async (_req, res) => {
+    try {
+      const { coiMonitorCron } = await import('./coi-monitor-cron');
+      res.json({ ok: true, ...coiMonitorCron.getStatus() });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'status failed' });
+    }
+  });
+
+  app.post('/api/coi-monitor/run', async (_req, res) => {
+    try {
+      const { coiMonitorCron } = await import('./coi-monitor-cron');
+      res.json({ ok: true, result: await coiMonitorCron.triggerNow() });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message || 'run failed' });
+    }
+  });
+
+  app.get('/api/fmcsa-monitor/status', async (_req, res) => {
+    try {
+      const { fmcsaMonitorCron } = await import('./fmcsa-monitor-cron');
+      res.json({ ok: true, ...fmcsaMonitorCron.getStatus() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FMCSA monitor — manual tick for verification. Key-gated: disabled (404)
+  // unless CRON_TRIGGER_KEY is set AND the request supplies the matching key.
+  // A tick respects every safety gate (default-OFF, kill switches, baseline
+  // watermark, dedup), so the worst case is one SMS to the operator's own phone
+  // on a genuine, not-yet-alerted change.
+  app.post('/api/fmcsa-monitor/run', async (req, res) => {
+    const expected = process.env.CRON_TRIGGER_KEY;
+    const provided = (req.query.key as string) || req.headers['x-cron-key'];
+    if (!expected || provided !== expected) {
+      return res.status(404).json({ ok: false, error: 'not found' });
+    }
+    try {
+      const { fmcsaMonitorCron } = await import('./fmcsa-monitor-cron');
+      const result = await fmcsaMonitorCron.triggerNow();
+      res.json({ ok: true, result });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FreightGuard monitor — read-only status (safe to expose).
+  app.get('/api/freightguard/status', async (_req, res) => {
+    try {
+      const { freightGuardMonitorCron } = await import('./freightguard-monitor-cron');
+      res.json({ ok: true, ...freightGuardMonitorCron.getStatus() });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FreightGuard ingestion — key-gated. The operator forwards Carrier411
+  // notification emails (Gmail filter / Apps Script) here as { email: "<raw body>" }.
+  // Parses + upserts a case (dedup on response_code). No SMS — the cron sends.
+  app.post('/api/freightguard/ingest', async (req, res) => {
+    const expected = process.env.CRON_TRIGGER_KEY;
+    const provided = (req.query.key as string) || req.headers['x-cron-key'];
+    if (!expected || provided !== expected) {
+      return res.status(404).json({ ok: false, error: 'not found' });
+    }
+    try {
+      const email = (req.body?.email ?? req.body?.text ?? '') as string;
+      const sourceId = (req.body?.sourceId as string) || undefined;
+      const { freightGuardMonitorCron } = await import('./freightguard-monitor-cron');
+      const result = await freightGuardMonitorCron.ingestEmail(email, sourceId);
+      res.status(result.ok ? 200 : 422).json(result);
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // FreightGuard monitor — manual tick for verification. Key-gated (404 unless
+  // CRON_TRIGGER_KEY set + supplied). Respects every guard (default-OFF, kill
+  // switches, dedup, watermark, rate ceiling).
+  app.post('/api/freightguard/run', async (req, res) => {
+    const expected = process.env.CRON_TRIGGER_KEY;
+    const provided = (req.query.key as string) || req.headers['x-cron-key'];
+    if (!expected || provided !== expected) {
+      return res.status(404).json({ ok: false, error: 'not found' });
+    }
+    try {
+      const { freightGuardMonitorCron } = await import('./freightguard-monitor-cron');
+      const result = await freightGuardMonitorCron.triggerNow();
+      res.json({ ok: true, result });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
     }
@@ -4780,6 +4939,63 @@ export async function registerRoutes(app: Express): Promise<void> {
       res.status(500).type('html').send('<h1>Error</h1>');
     }
   });
+  // My Truck — split-authority availability. GET renders, POST holds a window,
+  // POST .../delete releases one. Same trackingToken auth as the rest of /driver/:token.
+  app.get('/driver/:token/availability', async (req, res) => {
+    try {
+      const { renderAvailability } = await import('./driver-portal');
+      res.type('html').send(await renderAvailability(req.params.token, req.query.ok ? 'Saved.' : undefined));
+    } catch (e: any) {
+      res.status(500).send(`Error: ${e?.message || e}`);
+    }
+  });
+
+  app.post('/driver/:token/availability', async (req, res) => {
+    try {
+      const { driverFromToken } = await import('./driver-portal');
+      const driver = await driverFromToken(req.params.token);
+      if (!driver) return res.status(404).send('Invalid link');
+
+      const startsAt = new Date(req.body?.startsAt);
+      const endsAt = new Date(req.body?.endsAt);
+      if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()) || endsAt <= startsAt) {
+        const { renderAvailability } = await import('./driver-portal');
+        return res.type('html').send(
+          await renderAvailability(req.params.token, 'Check the dates — the end has to be after the start.'),
+        );
+      }
+      const id = `blk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const { sql } = await import('drizzle-orm');
+      const { db } = await import('./db');
+      await db.execute(sql`
+        INSERT INTO driver_availability_blocks (id, driver_id, starts_at, ends_at, note, created_by, created_at)
+        VALUES (${id}, ${driver.id}, ${startsAt}, ${endsAt},
+                ${req.body?.note ? String(req.body.note).slice(0, 200) : null}, 'driver', NOW())
+      `);
+      res.redirect(`/driver/${req.params.token}/availability?ok=1`);
+    } catch (e: any) {
+      res.status(500).send(`Error: ${e?.message || e}`);
+    }
+  });
+
+  app.post('/driver/:token/availability/:blockId/delete', async (req, res) => {
+    try {
+      const { driverFromToken } = await import('./driver-portal');
+      const driver = await driverFromToken(req.params.token);
+      if (!driver) return res.status(404).send('Invalid link');
+      const { sql } = await import('drizzle-orm');
+      const { db } = await import('./db');
+      // Scoped to the token's own driver — a token can only release its own windows.
+      await db.execute(sql`
+        DELETE FROM driver_availability_blocks
+        WHERE id = ${req.params.blockId} AND driver_id = ${driver.id}
+      `);
+      res.redirect(`/driver/${req.params.token}/availability?ok=1`);
+    } catch (e: any) {
+      res.status(500).send(`Error: ${e?.message || e}`);
+    }
+  });
+
   app.get('/driver/:token/sop', async (req, res) => {
     try {
       const { renderSop } = await import('./driver-portal');
@@ -8707,6 +8923,13 @@ TRAQ IQ Dispatch Team
 
   // ==================== GA Loads SQLite Routes ====================
   app.use('/api/ga', gaLoadsRouter);
+
+  // Owner-operator insurance certificates — admin CRUD behind /coverage. Feeds the
+  // Coverage Verified interlock on the Trip Lease Addendum. COI rows are driver-scoped
+  // and never carry a truck_id, so the dispatch gate is untouched. See
+  // server/coverage-routes.ts.
+  const { default: coverageRoutes } = await import('./coverage-routes');
+  app.use('/api/coverage', coverageRoutes);
   console.log('✅ GA Loads SQLite routes registered');
   // ==================== End GA Loads Routes ====================
 

@@ -454,6 +454,14 @@ export async function renderHome(token: string): Promise<string> {
   const driver = await driverFromToken(token);
   if (!driver) return layout({ title: 'Not Found', token, active: 'home', body: '<p>Invalid driver link.</p>' });
 
+  // Split-authority owner-operators get the "My Truck" tile; nobody else sees it, so a
+  // company driver is never shown a page that does not apply to him.
+  let splitAuthority = false;
+  try {
+    const { getSplitAuthorityDriver } = await import('./trip-addendum-service');
+    splitAuthority = (await getSplitAuthorityDriver(driver.id))?.splitAuthorityEnabled === true;
+  } catch { /* tile hidden if the lookup fails — never break the home page over it */ }
+
   // Active load(s) — assigned + not delivered
   const active = await db
     .select()
@@ -539,6 +547,9 @@ export async function renderHome(token: string): Promise<string> {
       <a class="qa-tile" href="/driver/${token}/sop">
         <div class="qa-ico">📖</div><div class="qa-lbl">LAMP SOP</div>
       </a>
+      ${splitAuthority ? `<a class="qa-tile" href="/driver/${token}/availability">
+        <div class="qa-ico">🚚</div><div class="qa-lbl">My Truck</div>
+      </a>` : ''}
       <a class="qa-tile" href="/driver/${token}#tracking">
         <div class="qa-ico">📍</div><div class="qa-lbl">Location</div>
       </a>
@@ -1115,4 +1126,152 @@ export async function renderSop(token: string): Promise<string> {
     <a class="btn block secondary" href="/sop" style="margin-top:14px">Open printable version</a>
   `;
   return layout({ title: 'LAMP SOP', token, active: 'home', showBack: true, backHref: `/driver/${token}`, body, driverId: driver.id });
+}
+
+// ---------------------------------------------------------------------------
+// My Truck — availability for split-authority owner-operators.
+//
+// A driver who holds his own MC runs part of his weeks under LAMP and part under his
+// own authority. This page is how he claims a window for himself so LAMP's dispatch
+// physically cannot offer a load into it. Without it the operator is entering blocks by
+// hand off a phone call, which is how a truck gets double-booked.
+//
+// Only reachable for drivers with split_authority_enabled=true. Everyone else gets a
+// plain "not applicable" page and no tile on the home screen.
+//
+// Regression guard: server/__tests__/driver-availability-page.test.ts
+// ---------------------------------------------------------------------------
+
+function fmtWhen(d: Date | null | undefined): string {
+  if (!d) return '—';
+  return d.toLocaleString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  });
+}
+
+/** Plain-language state for a driver reading this on a phone at a dock. */
+export function availabilityHeadline(a: {
+  state: string;
+  availableFrom: Date | null;
+  availableAt: string | null;
+  firstLookExpiresAt: Date | null;
+  blockedUntil: Date | null;
+  currentLoadNumber: string | null;
+}): { tone: 'busy' | 'wait' | 'free' | 'yours'; title: string; detail: string } {
+  switch (a.state) {
+    case 'committed':
+      return {
+        tone: 'busy',
+        title: `On load ${a.currentLoadNumber ?? ''}`.trim(),
+        detail: `Free ${fmtWhen(a.availableFrom)}${a.availableAt ? ` in ${a.availableAt}` : ''}.`,
+      };
+    case 'first_look':
+      return {
+        tone: 'wait',
+        title: 'LAMP has first look',
+        detail: `Until ${fmtWhen(a.firstLookExpiresAt)}. After that the truck is yours to book.`,
+      };
+    case 'blocked':
+      return {
+        tone: 'yours',
+        title: 'This window is yours',
+        detail: `Held until ${fmtWhen(a.blockedUntil)}. LAMP cannot dispatch you into it.`,
+      };
+    default:
+      return {
+        tone: 'free',
+        title: 'Open — first to book it wins',
+        detail: a.availableFrom
+          ? `Free since ${fmtWhen(a.availableFrom)}${a.availableAt ? ` in ${a.availableAt}` : ''}.`
+          : 'Book your own load, or hold the window below.',
+      };
+  }
+}
+
+export async function renderAvailability(token: string, flash?: string): Promise<string> {
+  const driver = await driverFromToken(token);
+  if (!driver) return layout({ title: 'Not found', token, active: 'home', body: '<h1>Link not valid</h1>' });
+
+  const { getSplitAuthorityDriver } = await import('./trip-addendum-service');
+  const sa = await getSplitAuthorityDriver(driver.id);
+  if (!sa?.splitAuthorityEnabled) {
+    return layout({
+      title: 'My Truck', token, active: 'home', showBack: true,
+      body: `<h1>My Truck</h1>
+        <div class="card"><div class="muted">This page is for owner-operators running
+        their own authority alongside LAMP. Ask dispatch if that should be you.</div></div>`,
+    });
+  }
+
+  const { getDriverAvailability } = await import('./truck-availability-service');
+  const a = await getDriverAvailability(driver.id, new Date());
+  const head = availabilityHeadline(a as any);
+
+  const { sql } = await import('drizzle-orm');
+  const r = await db.execute(sql`
+    SELECT id, starts_at, ends_at, note FROM driver_availability_blocks
+    WHERE driver_id = ${driver.id} AND ends_at > NOW()
+    ORDER BY starts_at ASC
+  `);
+  const blocks: any[] = (r as any).rows ?? [];
+
+  const toneColor = { busy: '#f59e0b', wait: '#38bdf8', free: '#4ade80', yours: '#a78bfa' }[head.tone];
+
+  const blockList = blocks.length
+    ? blocks.map((b) => `
+      <div class="card">
+        <div class="row">
+          <div>
+            <div style="font-weight:700">${fmtWhen(new Date(b.starts_at))}</div>
+            <div class="muted">to ${fmtWhen(new Date(b.ends_at))}</div>
+            ${b.note ? `<div class="muted">${String(b.note).replace(/[<>&]/g, '')}</div>` : ''}
+          </div>
+          <form method="post" action="/driver/${token}/availability/${b.id}/delete">
+            <button class="btn" style="background:#334155" type="submit">Release</button>
+          </form>
+        </div>
+      </div>`).join('')
+    : `<div class="card"><div class="muted">Nothing held. LAMP can offer you a load any
+       time the truck is free.</div></div>`;
+
+  return layout({
+    title: 'My Truck', token, active: 'home', showBack: true,
+    body: `
+    <h1>My Truck</h1>
+    ${flash ? `<div class="card" style="border-color:#4ade80"><div style="color:#4ade80">${flash}</div></div>` : ''}
+
+    <div class="card" style="border-color:${toneColor}">
+      <div style="font-size:18px;font-weight:800;color:${toneColor}">${head.title}</div>
+      <div class="muted" style="margin-top:6px">${head.detail}</div>
+    </div>
+
+    <h2>Hold time for your own authority</h2>
+    <div class="card">
+      <form method="post" action="/driver/${token}/availability">
+        <div class="muted" style="margin-bottom:8px">
+          LAMP will not dispatch you into a window you hold. Release it early any time.
+        </div>
+        <label class="muted">From</label>
+        <input type="datetime-local" name="startsAt" required
+          style="width:100%;padding:12px;margin:6px 0 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#f1f5f9;font-size:16px">
+        <label class="muted">Until</label>
+        <input type="datetime-local" name="endsAt" required
+          style="width:100%;padding:12px;margin:6px 0 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#f1f5f9;font-size:16px">
+        <input type="text" name="note" placeholder="Optional note, e.g. own load to Nashville"
+          style="width:100%;padding:12px;margin:0 0 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#f1f5f9;font-size:16px">
+        <button class="btn" type="submit" style="width:100%;padding:14px;font-size:16px">Hold this window</button>
+      </form>
+    </div>
+
+    <h2>Held windows</h2>
+    ${blockList}
+
+    <div class="card" style="background:#0f172a;border-style:dashed">
+      <div class="muted">
+        When a load of yours delivers, LAMP gets first look for 4 hours. If nothing comes
+        through by then the truck is yours without holding anything.
+      </div>
+    </div>`,
+  });
 }
