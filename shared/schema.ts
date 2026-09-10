@@ -204,6 +204,12 @@ export const drivers = pgTable("drivers", {
   isOnDuty: boolean("is_on_duty").notNull().default(true),
   lastHosCheckAt: timestamp("last_hos_check_at"),
 
+  // Telematics / ELD linkage. When set, server/telematics-cron.ts can pull this
+  // driver's truck position straight from the ELD provider, which keeps working
+  // when the phone feed dies (screen lock, closed tab, dead battery). The phone
+  // is still primary — see shouldIngestTelematicsFix in server/telematics-service.ts.
+  telematicsVehicleId: text("telematics_vehicle_id"),
+
   // Settlement / pay config
   payType: text("pay_type").default("percent"), // percent, per_mile, flat
   payRate: real("pay_rate").default(80),               // percent => 0-100; per_mile => loaded $/mi; flat => $/load
@@ -364,6 +370,12 @@ export const loads = pgTable("loads", {
   offeredAt: timestamp("offered_at"),
   bookedAt: timestamp("booked_at"),
   deliveredAt: timestamp("delivered_at"),
+
+  // Detention terms, parsed off the rate confirmation. Used with the dwell window derived from
+  // driver_locations in server/detention-service.ts to produce a billable claim. Null means the
+  // ratecon stated no detention terms — never substitute a market rate.
+  detentionFreeMinutes: integer("detention_free_minutes"),
+  detentionRatePerHour: real("detention_rate_per_hour"),
   rateconPath: text("ratecon_path"),
   confirmationToken: varchar("confirmation_token", { length: 32 }).unique(),
   confirmationStatus: text("confirmation_status").default("pending"), // pending, accepted, declined

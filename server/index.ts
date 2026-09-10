@@ -394,6 +394,20 @@ app.use((req, res, next) => {
         })();
       }, 750);
       
+      // 0.6 Telematics ingest cron — pulls ELD position as a FALLBACK for the phone feed.
+      // Gated by TELEMATICS_ENABLED (default off). Sends nothing; read from the provider
+      // plus an insert into driver_locations. See server/telematics-service.ts.
+      setTimeout(() => {
+        (async () => {
+          try {
+            const { telematicsCron } = await import('./telematics-cron');
+            await telematicsCron.initialize();
+          } catch (error: any) {
+            log(`⚠️ Telematics cron failed to initialize: ${error?.message || error}`);
+          }
+        })();
+      }, 800);
+
       // 0.75 Document Reminder Service (automated SMS reminders for missing documents)
       setTimeout(() => {
         (async () => {

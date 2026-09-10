@@ -93,10 +93,15 @@ export async function ensureSchema(): Promise<void> {
     // Daily HOS check
     ['is_on_duty', 'BOOLEAN NOT NULL DEFAULT true'],
     ['last_hos_check_at', 'TIMESTAMP'],
+    // Telematics / ELD linkage (see shared/schema.ts drivers.telematicsVehicleId)
+    ['telematics_vehicle_id', 'TEXT'],
   ];
 
   // Universal Ratecon Intake — loads.confirmation_* columns (PR #1)
   const loadsColumns: [string, string][] = [
+    // Detention terms parsed from the ratecon (see shared/schema.ts loads.detention*)
+    ['detention_free_minutes', 'INTEGER'],
+    ['detention_rate_per_hour', 'REAL'],
     // Core load fields. Many were added to the Drizzle schema over time without
     // being registered here, causing INSERT INTO loads to fail in prod with
     // "column does not exist" — the same class of bug PR #41 fixed for drivers.
