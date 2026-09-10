@@ -393,6 +393,13 @@
       "notes": "'Freightliner M2 106 sleeper' $59,900 lead turned out to be a heavy-duty sleeper TRACTOR, not a box truck: Detroit engine 475HP, raised-roof 72in sleeper, 456,326 mi. Rejected: wrong vehicle category (tractor, not 26ft box truck) and far over mileage cap. Dealer phone (601) 909-7026."
     },
     {
+      "id": "sweep-2026-09-10-tool-outage",
+      "source": "N/A - tool outage",
+      "date": "2026-09-10",
+      "verdict": "unverified",
+      "notes": "Sweep could not run. The WebSearch tool itself returned 'Web search error: unavailable' for every query this run (tested 6 distinct queries, including a trivial unrelated query 'weather today', to rule out query-specific or domain-specific blocking) - this is a different failure mode than the known dtitrucks.com/mhc.com/etc. egress-proxy blocking seen on prior days. Confirmed the egress proxy itself is up (curl to $HTTPS_PROXY/__agentproxy/status succeeded, enabled:true) and separately confirmed WebFetch still returns the expected EGRESS_BLOCKED for dtitrucks.com (proxy differentiates domains normally), so the WebSearch outage looks like a genuine tool-service failure, not proxy misconfiguration. No searches completed, no new units evaluated, no re-checks of tracked unverified leads (DTI 18242743, DTI 18714978, Comvoy VZ8439, etc.) performed today."
+    },
+    {
       "id": "sweep-2026-09-09-no-new-verified",
       "source": "WebSearch sweep (11 queries) + 1 WebFetch egress test",
       "date": "2026-09-09",
