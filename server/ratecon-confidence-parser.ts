@@ -120,6 +120,10 @@ export interface ParsedRateconV2 {
   driverName: FieldWithConfidence<string | null>; // can be null if not on ratecon
   commodity: FieldWithConfidence<string | null>;
   specialInstructions: FieldWithConfidence<string | null>;
+  // Detention terms. Null when the ratecon states none — the claim builder refuses to
+  // invent a market rate, so null here means "no claim", not "use a default".
+  detentionFreeMinutes: FieldWithConfidence<number | null>;
+  detentionRatePerHour: FieldWithConfidence<number | null>;
 
   rawText?: string;
   model: string;
@@ -146,8 +150,17 @@ Return ONLY JSON matching this exact schema:
   "drop": { ...same shape as pickup },
   "driverName": { "value": "<driver name or null>", "confidence": 0.0-1.0 },
   "commodity": { "value": "<commodity or null>", "confidence": 0.0-1.0 },
-  "specialInstructions": { "value": "<instructions or null>", "confidence": 0.0-1.0 }
+  "specialInstructions": { "value": "<instructions or null>", "confidence": 0.0-1.0 },
+  "detentionFreeMinutes": { "value": <number or null>, "confidence": 0.0-1.0 },
+  "detentionRatePerHour": { "value": <number or null>, "confidence": 0.0-1.0 }
 }
+
+Detention terms:
+- Usually read like "2 hours free time, then $50/hour", "Free time: 120 minutes. Detention: $75/hr after", or "Detention paid at $40/hr after 2 hrs".
+- Convert free time to MINUTES (2 hours => 120).
+- detentionRatePerHour is dollars per hour as a plain number, no $ or commas.
+- If the document states NO detention terms, return null for both with confidence 1.0.
+- NEVER invent or estimate a market detention rate. A number not written on the document is wrong.
 
 Confidence rules — BE HONEST:
 - 1.0 only if the field is unambiguous, clearly labeled, and you are certain.
@@ -229,6 +242,8 @@ export function parseRateconFixture(fixture: "tql-standard" | "missing-ampm"): P
       driverName: { value: "John Smith", confidence: 0.91 },
       commodity: { value: "General freight", confidence: 0.85 },
       specialInstructions: { value: null, confidence: 1.0 },
+      detentionFreeMinutes: { value: null, confidence: 1.0 },
+      detentionRatePerHour: { value: null, confidence: 1.0 },
       model: "fixture",
     };
   }
@@ -245,6 +260,8 @@ export function parseRateconFixture(fixture: "tql-standard" | "missing-ampm"): P
     driverName: { value: null, confidence: 1.0 },
     commodity: { value: "Frozen produce", confidence: 0.9 },
     specialInstructions: { value: "Keep at 34F", confidence: 0.95 },
+    detentionFreeMinutes: { value: 120, confidence: 0.9 },
+    detentionRatePerHour: { value: 50, confidence: 0.9 },
     model: "fixture",
   };
 }
