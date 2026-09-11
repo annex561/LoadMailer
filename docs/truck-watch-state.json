@@ -405,6 +405,89 @@
       "date": "2026-09-09",
       "verdict": "unverified",
       "notes": "Ran 11 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6-L7/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and general price-banded/marketplace sweeps. WebFetch egress test on dtitrucks.com listing 18242743 confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b). All results mapped to previously tracked units (DTI 18242743, DTI 18714978, Comvoy VZ8439, Black Rock WD0626, TruckPaper/CTT category pages, MHC non-sleeper-only inventory) with no material change, or were new leads rejected as wrong_spec (Empire Truck Sales Richland MS - heavy sleeper tractor not box truck; 2012 M2-106 sleeper $27,000 - too old; various conventional-cab/no-sleeper MV607 and M2-106 units). No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-11",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. No price surfaced in this run's snippets (same base specs: 2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-11",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries, no price surfaced. dtitrucks.com egress-blocked. No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "source": "Comvoy.com / Truck and Van Outlet, Miami FL",
+      "date": "2026-09-11",
+      "verdict": "unverified",
+      "notes": "Re-surfaced with same URL (site now describes it as 2025 M2-106 Plus Extended Cab w/ in-cab single bunk sleeper, Morgan aluminum body, Cummins ISB 6.7L 260HP, Allison 2100RDS - consistent with prior entries, listing URL text itself still says 'conventional-cab' despite extended-cab/sleeper description, a pre-existing inconsistency). comvoy.com egress-blocked, gate (a) not cleared. No material change - not re-reported/pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244"
+    },
+    {
+      "id": "MIGTrucks-2023-InternationalHV607-ExtCab-Sleeper-Atlanta",
+      "source": "MIG Trucks, Atlanta GA (Facebook video, via search snippet)",
+      "date": "2026-09-11",
+      "verdict": "unverified",
+      "notes": "2023 International HV607, 26ft extended cab box truck with sleeper and liftgate per video title. NOTE: HV607 is not one of the tracked secondary models (MV607/Hino L6-L7/Kenworth T280) - HV-series International trucks typically run heavier GVWR (Class 7, often CDL-required), so this is likely wrong_spec on the non-negotiable 26,000 GVWR/non-CDL requirement, but could not confirm GVWR, price, or mileage from search snippets. Not reported - fails verification gate regardless of model-family question.",
+      "listing_url": "https://www.facebook.com/migtrucks/videos/2023-international-hv607-26ft-extended-cab-box-truck-with-sleeper-lift-gate-non-/746017964502592/"
+    },
+    {
+      "id": "MIGTrucks-2022-M2106-ExtCab-348kmi",
+      "source": "MIG Trucks, Atlanta GA (Facebook, via search snippet)",
+      "date": "2026-09-11",
+      "verdict": "too_many_miles",
+      "notes": "2022 Freightliner M2 106 26ft box truck extended cab w/ liftgate, swing doors, 348,000 mi per post title. Rejected: far over mileage cap."
+    },
+    {
+      "id": "MIGTrucks-2021-MV607-240kmi",
+      "source": "MIG Trucks, Atlanta GA (Facebook, via search snippet)",
+      "date": "2026-09-11",
+      "verdict": "too_many_miles",
+      "notes": "SECONDARY candidate (International MV607). 2021 International MV607 26ft box truck with liftgate, non-CDL, 240,000 mi per video title. Rejected: over mileage cap; no sleeper/extended-cab mentioned either."
+    },
+    {
+      "id": "Soarr-UX8058-2024-M2106-Apopka",
+      "source": "SOARR.com, Apopka FL (via search snippet)",
+      "date": "2026-09-11",
+      "verdict": "unverified",
+      "notes": "2024 Freightliner M2 106, stock #UX8058, 'Box Truck | Non CDL' per listing title, Cummins 240HP, Allison 6-speed automatic. No sleeper/extended-cab, mileage, price, or GVWR confirmed in snippets - appears to be same dealer group as previously-tracked UG1297 (Orlando/Apopka FL SOARR listings). Not reported - cannot confirm required sleeper spec or price/mileage.",
+      "listing_url": "https://www.soarr.com/for-sale/trucks/specs/16202813/2024-Freightliner-M2-106"
+    },
+    {
+      "id": "TAGTruckCenter-Tupelo-MS-M2106-lowmileage",
+      "source": "TAG Truck Center / TAG Tupelo, Tupelo MS (Facebook video caption, via search snippet)",
+      "date": "2026-09-11",
+      "verdict": "unverified",
+      "notes": "Facebook video caption referenced as '2024 freightliner m2 106 box truck ... low mileage non-cdl' with a page title mentioning '2025 Freightliner M2-106 Extended Cab 26' Box Truck, 2500...' (liftgate capacity likely truncated). Could not pin down actual price, exact mileage, sleeper/extended-cab confirmation, or a clean direct listing URL - search kept resolving to TAG's general TruckPaper dealer page (36 listings) rather than the specific unit. Not reported - insufficient confirmed detail; worth a follow-up call to TAG Truck Center Tupelo, MS if a direct URL can be isolated next sweep."
+    },
+    {
+      "id": "FacebookMarketplace-1041785434696690-2024-M2106-NonCDL",
+      "source": "Facebook Marketplace (via search snippet)",
+      "date": "2026-09-11",
+      "verdict": "unverified",
+      "notes": "'2024 Freightliner M2 106 NON CDL 26ft Box Truck' - listing title only, no price, mileage, location, sleeper/extended-cab, or GVWR surfaced in search snippets (Facebook Marketplace listings are not well-indexed for detail). Not reported.",
+      "listing_url": "https://www.facebook.com/marketplace/item/1041785434696690/"
+    },
+    {
+      "id": "CaliforniaTruckCenters-2023-M2106-sleeper-new",
+      "source": "California Truck Centers (Facebook, via search snippet)",
+      "date": "2026-09-11",
+      "verdict": "wrong_spec",
+      "notes": "'Discover the new 2023 Freightliner M2-106 26ft Box Truck with a sleeper available...' - marketing language ('the new... available') strongly suggests new/dealer-stock inventory rather than used, consistent with the pattern seen at Velocity/Black Rock (new stock, typically over budget). No price surfaced despite two targeted searches. Rejected as likely new inventory; not reported."
+    },
+    {
+      "id": "sweep-2026-09-11-no-new-verified",
+      "source": "WebSearch sweep (17 queries) + 1 WebFetch egress test",
+      "date": "2026-09-11",
+      "verdict": "unverified",
+      "notes": "Ran 17 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6-L7/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, penskeusedtrucks.com, and a Chattanooga/TN-Georgia regional search. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED (mhc.com, penskeusedtrucks.com, dtitrucks.com, velocitytruckcenters.com class of domains remains blocked). No unit cleared verification gate (a) or (b) with a confirmed spec+price match. New leads surfaced and logged individually as unverified/too_many_miles/wrong_spec: MIG Trucks Atlanta GA (2023 International HV607 ext cab sleeper - wrong model family/likely CDL-required; 2022 M2-106 348k mi; 2021 MV607 240k mi), SOARR Apopka FL stock UX8058 (no sleeper/price confirmed), TAG Truck Center Tupelo MS (unit undetermined), Facebook Marketplace item 1041785434696690 (no detail), California Truck Centers (likely new inventory). All previously tracked leads (DTI 18242743, DTI 18714978, Comvoy VZ8439) re-checked with no material change. No push sent."
     }
   ]
 }
