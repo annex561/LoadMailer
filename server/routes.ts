@@ -950,9 +950,10 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Register routes immediately
   
   // Add only the most essential routes for immediate startup
-  app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
+  // NOTE: /api/health is NOT registered here. server/index.ts registers it at import time,
+  // long before registerRoutes() runs, so an Express route declared here never matches — the
+  // duplicate that used to sit at this spot was dead code and silently diverged from the live
+  // one. Change the handler in server/index.ts, and the payload in server/version.ts.
 
   // Ops Monitor — snapshot of state
   app.get('/api/ops/snapshot', async (_req, res) => {

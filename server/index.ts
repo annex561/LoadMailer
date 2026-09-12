@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import compression from "compression";
 import { registerRoutes, createHTTPServer } from "./routes";
+import { healthPayload } from "./version";
 import { setupVite, serveStatic, log } from "./vite";
 import { registerSeoPrerender } from "./seo-prerender";
 import path from "path";
@@ -60,9 +61,11 @@ app.post(
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Health check for Railway (must respond quickly)
+// Health check for Railway (must respond quickly).
+// Carries the build commit so a deploy can be verified from outside — see server/version.ts.
+// BUILD_INFO is resolved once at import, so this stays a constant-time response.
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json(healthPayload());
 });
 
 // Diagnostic: show actual DB columns and test insert
