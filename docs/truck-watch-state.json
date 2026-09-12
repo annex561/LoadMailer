@@ -483,6 +483,45 @@
       "notes": "'Discover the new 2023 Freightliner M2-106 26ft Box Truck with a sleeper available...' - marketing language ('the new... available') strongly suggests new/dealer-stock inventory rather than used, consistent with the pattern seen at Velocity/Black Rock (new stock, typically over budget). No price surfaced despite two targeted searches. Rejected as likely new inventory; not reported."
     },
     {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-12",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. No price surfaced in this run's snippets (same base specs: 2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-12",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries, no price surfaced. dtitrucks.com egress-blocked. No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "source": "Comvoy.com / Truck and Van Outlet, Miami FL",
+      "date": "2026-09-12",
+      "verdict": "unverified",
+      "notes": "Re-checked. No material change vs prior entries: 2025 M2-106 Plus ext cab sleeper, 26' box, liftgate, Truck and Van Outlet, (305) 315-0667. Price not reconfirmed this run (prior snippets showed $93,995). comvoy.com egress-blocked, gate (a) not cleared. Not re-reported/pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244"
+    },
+    {
+      "id": "unknown-2022-MV607-132169mi-48987",
+      "source": "unknown dealer (via search snippet)",
+      "date": "2026-09-12",
+      "verdict": "unverified",
+      "notes": "SECONDARY candidate (International MV607). 2022 International MV607 26' box truck with liftgate, $48,987, 132,169 mi. No sleeper/extended-cab mention, no dealer name, no URL surfaced. Cannot clear gate (a) or (b) - not reported.",
+      "next_steps": "Retry with dealer-focused search to identify seller and confirm sleeper/extended-cab spec."
+    },
+    {
+      "id": "sweep-2026-09-12-no-new-verified",
+      "source": "WebSearch sweep (11 queries) + 1 WebFetch egress test",
+      "date": "2026-09-12",
+      "verdict": "unverified",
+      "notes": "Ran 11 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6-L7/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and a Chattanooga/Knoxville/Nashville regional search. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price match. One new lead logged as unverified (2022 MV607, 132,169mi, $48,987, no sleeper confirmed, no dealer/URL). All other results mapped to previously tracked units (DTI 18242743, DTI 18714978, Comvoy VZ8439, Black Rock WD0626, Harwood Heights MV607, TruckPaper/CTT category pages) with no material change, or were generic category/marketplace pages with no unit-specific detail. No push sent."
+    },
+    {
       "id": "sweep-2026-09-11-no-new-verified",
       "source": "WebSearch sweep (17 queries) + 1 WebFetch egress test",
       "date": "2026-09-11",
