@@ -527,6 +527,61 @@
       "date": "2026-09-11",
       "verdict": "unverified",
       "notes": "Ran 17 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6-L7/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, penskeusedtrucks.com, and a Chattanooga/TN-Georgia regional search. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED (mhc.com, penskeusedtrucks.com, dtitrucks.com, velocitytruckcenters.com class of domains remains blocked). No unit cleared verification gate (a) or (b) with a confirmed spec+price match. New leads surfaced and logged individually as unverified/too_many_miles/wrong_spec: MIG Trucks Atlanta GA (2023 International HV607 ext cab sleeper - wrong model family/likely CDL-required; 2022 M2-106 348k mi; 2021 MV607 240k mi), SOARR Apopka FL stock UX8058 (no sleeper/price confirmed), TAG Truck Center Tupelo MS (unit undetermined), Facebook Marketplace item 1041785434696690 (no detail), California Truck Centers (likely new inventory). All previously tracked leads (DTI 18242743, DTI 18714978, Comvoy VZ8439) re-checked with no material change. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-13",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. No material change vs prior entries (same 2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL; no fresh price surfaced this run). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-13",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries, no price surfaced. dtitrucks.com egress-blocked. No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "source": "Comvoy.com / Truck and Van Outlet, Miami FL",
+      "date": "2026-09-13",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries, no material change vs prior entries (2025 M2-106 Plus ext cab sleeper, 26' box, liftgate, Truck and Van Outlet, (305) 315-0667). comvoy.com egress-blocked, gate (a) not cleared. Not re-reported/pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244"
+    },
+    {
+      "id": "GoodyearMotors-LodiNJ-2022-M2106-ExtCabSleeper",
+      "source": "Goodyear Motors, Lodi NJ (via Commercial Truck Trader search snippet)",
+      "date": "2026-09-13",
+      "verdict": "unverified",
+      "notes": "NEW lead. 2022 Freightliner M2 106 26' extended cab sleeper, NON CDL 26,000 GVW, Cummins ISB 6.7L 260HP, per Commercial Truck Trader snippet attributed to Goodyear Motors, 86 Route 46 E, Lodi, NJ 07644, (800) 542-0978. Misses year (2023+ required, this is 2022). No mileage, no price, and no direct listing URL surfaced despite 3 targeted searches (goodyearmotors.com inventory page did not return this specific unit). Cannot clear gate (a) (no live URL) or complete the required report fields (price/mileage unknown) - not reported.",
+      "next_steps": "Call (800) 542-0978 or browse goodyearmotors.com/inventory directly to identify this unit's stock number, price, and mileage."
+    },
+    {
+      "id": "RhodeIslandTruckCenter-13545319",
+      "source": "Rhode Island Truck Center, Riverside/East Providence RI",
+      "date": "2026-09-13",
+      "verdict": "unverified",
+      "notes": "NEW lead. '2025 Freightliner M2-106 Plus Extended Cab 26' Box Truck For Sale' - distinct listing URL from the previously logged $139,983 sleeper-bunk unit. No price, mileage, or explicit sleeper confirmation surfaced in search snippets; rhodeislandtruckcenter.com egress-blocked (WebFetch tested, EGRESS_BLOCKED). Likely new dealer stock (consistent with this dealer's other listings seen in prior sweeps, all new/over-budget) but unconfirmed. Cannot clear gate (a) or complete report fields - not reported.",
+      "listing_url": "https://www.rhodeislandtruckcenter.com/for-sale/2025-freightliner-m2-106-plus-extended-cab-box-truck-13545319"
+    },
+    {
+      "id": "RhodeIslandTruckCenter-13552213",
+      "source": "Rhode Island Truck Center, Riverside/East Providence RI",
+      "date": "2026-09-13",
+      "verdict": "unverified",
+      "notes": "NEW lead. '2025 Freightliner M2 Extended Cab 26' Box Truck - 260HP, Automatic' - distinct listing URL, same dealer as 13545319 above. No price, mileage, or sleeper confirmation surfaced despite 2 targeted searches; rhodeislandtruckcenter.com egress-blocked (WebFetch tested, EGRESS_BLOCKED). Cannot clear gate (a) or complete report fields - not reported.",
+      "listing_url": "https://www.rhodeislandtruckcenter.com/for-sale/2025-freightliner-m2-106-extended-cab-box-truck-automatic-13552213"
+    },
+    {
+      "id": "sweep-2026-09-13-no-new-verified",
+      "source": "WebSearch sweep (13 queries) + 1 WebFetch egress test",
+      "date": "2026-09-13",
+      "verdict": "unverified",
+      "notes": "Ran 13 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, and regional/dealer follow-ups (Goodyear Motors Lodi NJ, Rhode Island Truck Center). WebFetch egress tests on dtitrucks.com and rhodeislandtruckcenter.com both confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with confirmed price+mileage. New leads logged as unverified: Goodyear Motors Lodi NJ 2022 M2-106 ext cab sleeper (misses year, no price/mileage/URL), two new Rhode Island Truck Center 2025 M2-106(Plus) extended cab listing URLs (no price/mileage/sleeper confirmation). All previously tracked leads (DTI 18242743, DTI 18714978, Comvoy VZ8439) re-checked with no material change. No push sent."
     }
   ]
 }
