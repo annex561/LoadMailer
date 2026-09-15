@@ -620,6 +620,51 @@
       "date": "2026-09-14",
       "verdict": "unverified",
       "notes": "Ran 14 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and a Chattanooga/Knoxville/Nashville regional search. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price match. One new lead noted (Stoops Freightliner, Fort Wayne IN - only generic new-inventory M2 extended-cab-sleeper description surfaced, no specific used unit/price/stock number, not logged as a distinct unit). Harwood Heights MV607 re-surfaced with a new price figure ($89,500 vs previously seen $56,000) but still no sleeper/extended-cab confirmation - still wrong_spec. All previously tracked leads (DTI 18242743, DTI 18714978, Comvoy VZ8439, Black Rock WD0626, Rhode Island Truck Center, Goodyear Motors) re-checked or unchanged. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-15",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. No material change vs prior entries (same 2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL; no fresh price surfaced this run). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-09-15",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries, no price surfaced. dtitrucks.com egress-blocked. No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "source": "Comvoy.com / Truck and Van Outlet, Miami FL",
+      "date": "2026-09-15",
+      "verdict": "unverified",
+      "notes": "Re-checked. No material change vs prior entries: 2025 M2-106 ext cab, Morgan aluminum body/liftgate, Cummins ISB 6.7L 260HP, Allison 2100RDS, 295in wheelbase, 26,000 GVWR, $93,995, Truck and Van Outlet, (305) 315-0667. comvoy.com egress-blocked, gate (a) not cleared. Not re-reported/pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244"
+    },
+    {
+      "id": "SelectTrucksAtlanta-2024-M2106-ForestPark-268mi",
+      "source": "Select Trucks of Atlanta, Forest Park GA (via search snippet)",
+      "date": "2026-09-15",
+      "verdict": "wrong_spec",
+      "notes": "2024 Freightliner Business Class M2 106 'Cab and Chassis' listing, Forest Park GA, 268 mi. Rejected: listed as cab-and-chassis (no box/liftgate/sleeper config confirmed) and 268 mi implies unused dealer/demo stock, not a used sale-ready sleeper box truck. Dealer (888) 768-5907."
+    },
+    {
+      "id": "unknown-2023-MV607-HarwoodHeightsIL-wr14071-55000mi-89500",
+      "source": "Commercial Truck Trader (private seller), Harwood Heights IL",
+      "date": "2026-09-15",
+      "verdict": "wrong_spec",
+      "notes": "Re-surfaced, same as 2026-09-14 entry ($89,500, 55,000 mi). Still no sleeper/extended-cab confirmation - wrong_spec stands."
+    },
+    {
+      "id": "sweep-2026-09-15-no-new-verified",
+      "source": "WebSearch sweep (11 queries) + 1 WebFetch egress test",
+      "date": "2026-09-15",
+      "verdict": "unverified",
+      "notes": "Ran 11 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, comvoy.com, and selectrucksofatlantaonline.com (Georgia dealer, new lead this run). WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price match. New lead logged and rejected as wrong_spec: Select Trucks of Atlanta 2024 M2-106 cab-and-chassis, Forest Park GA, 268 mi (demo stock, no box/sleeper confirmed). All previously tracked leads (DTI 18242743, DTI 18714978, Comvoy VZ8439, Harwood Heights MV607) re-checked with no material change. No push sent."
     }
   ]
 }
