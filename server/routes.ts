@@ -981,7 +981,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Settlements — weekly driver pay computed from delivered loads
-  app.get('/api/settlements', async (req, res) => {
+  app.get('/api/settlements', isAuthenticated, async (req, res) => {
     try {
       const { computeSettlements, fmtYMD, weekRange } = await import('./settlements-service');
       const weekRef =
@@ -1006,7 +1006,7 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  app.get('/api/settlements/:driverId', async (req, res) => {
+  app.get('/api/settlements/:driverId', isAuthenticated, async (req, res) => {
     try {
       const { computeSettlementForDriver, fmtYMD } = await import('./settlements-service');
       const weekRef =
@@ -5171,7 +5171,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // GET /api/documents/all - Get all documents across all loads with load details
-  app.get('/api/documents/all', async (req, res) => {
+  app.get('/api/documents/all', isAuthenticated, async (req, res) => {
     try {
       const documents = await storage.getAllDocuments();
       res.json(documents);
@@ -8929,7 +8929,10 @@ TRAQ IQ Dispatch Team
   // ==================== End MVFRS Routes ====================
 
   // ==================== GA Loads SQLite Routes ====================
-  app.use('/api/ga', gaLoadsRouter);
+  // Cap $0 SECURITY 2026-09-21: GA inbox leaked broker PII unauthenticated.
+  // Session required for all /api/ga/* ops UI. TaskMagic ingest uses dedicated
+  // /api/taskmagic/webhook/* routes below (secret-verified, no session).
+  app.use('/api/ga', isAuthenticated, gaLoadsRouter);
 
   // Owner-operator insurance certificates — admin CRUD behind /coverage. Feeds the
   // Coverage Verified interlock on the Trip Lease Addendum. COI rows are driver-scoped
@@ -8938,6 +8941,17 @@ TRAQ IQ Dispatch Team
   const { default: coverageRoutes } = await import('./coverage-routes');
   app.use('/api/coverage', coverageRoutes);
   console.log('✅ GA Loads SQLite routes registered');
+
+  // Cap $0: register TaskMagic webhooks (was imported but never mounted).
+  // Secret-verified inside TaskMagicIntegration — not session auth.
+  app.post('/api/taskmagic/webhook/single', (req, res) =>
+    taskMagicIntegration.processSingleLoad(req, res));
+  app.post('/api/taskmagic/webhook/batch', (req, res) =>
+    taskMagicIntegration.processBatchLoads(req, res));
+  app.get('/api/taskmagic/status', isAuthenticated, (req, res) =>
+    taskMagicIntegration.getStatus(req, res));
+  console.log('✅ TaskMagic webhook routes registered');
+
   // ==================== End GA Loads Routes ====================
 
   // ==================== TraqIQ SOP Victory Protocol Routes ====================
