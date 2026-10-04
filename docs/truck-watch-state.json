@@ -796,6 +796,52 @@
       "date": "2026-09-20",
       "verdict": "unverified",
       "notes": "Ran 13 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6-L7/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, hgregtrucks.com, and a Chattanooga/Nashville/Knoxville/Atlanta regional search. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price match. One new price data point logged and rejected as wrong_spec (over budget): $114,500 attributed via Facebook snippet to one of the two previously-tracked Rhode Island Truck Center 2025 M2-106(Plus) extended cab listings. All other results mapped to previously tracked units (DTI 18242743, DTI 18714978, Comvoy VZ8439, TLC MV607, Black Rock WD0626, MHC non-sleeper-only inventory) or were generic category/marketplace pages (TruckPaper, Fastline, TractorHouse, HGreg Trucks, CarsForSale price-range summaries) with no unit-specific detail. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-04",
+      "verdict": "unverified",
+      "notes": "Re-checked after a 2-week gap in sweeps (last run 2026-09-20). WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. Search snippet now consistently shows $115,500, 31,422 mi, 650 engine hours, 240HP Cummins B6.7, same 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL. At $115,500 this would be over the $110,000 budget ceiling if the price is accurate (snippet-sourced prices have proven unreliable for this unit historically - prior runs saw $94,500 and unknown). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-04",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries, no material change (still near-new 2025 M2-106 L9 Plus ext cab w/ sleeper bunk, no price surfaced). dtitrucks.com egress-blocked. Not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "source": "Comvoy.com / Truck and Van Outlet, Miami FL",
+      "date": "2026-10-04",
+      "verdict": "unverified",
+      "notes": "Re-checked. No material change vs prior entries: 2025 M2-106 Plus ext cab sleeper, 26' box, Morgan aluminum body, liftgate, Cummins ISB 6.7L, <40,000 mi, 1-owner Carfax clean, $93,995, VIN 3ALACWFC7SDVZ8439, Truck and Van Outlet, (305) 315-0667. comvoy.com egress-blocked, gate (a) not cleared. Not re-reported/pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244"
+    },
+    {
+      "id": "eBay-2023-M2106-13931mi-74499",
+      "source": "eBay (via search snippet, no direct item URL surfaced)",
+      "date": "2026-10-04",
+      "verdict": "unverified",
+      "notes": "NEW lead. '2023 Freightliner Business Class M2 106' with 13,931 mi, Cummins/Allison automatic, $74,499, listed on eBay per AI summary. No sleeper/extended-cab, box dimensions, liftgate, GVWR, dealer, or direct item URL surfaced despite a targeted follow-up search - search only resolved to eBay's general Freightliner-M2 category page. On paper price/mileage/likely-year would be a strong match if sleeper+liftgate confirmed. Cannot clear gate (a) or (b) - not reported.",
+      "next_steps": "Browse ebay.com/b/Freightliner-M2 category page directly (egress-blocked for WebFetch) or retry WebSearch with item-number-style queries to isolate the specific listing and confirm sleeper/liftgate/GVWR."
+    },
+    {
+      "id": "CTT-2023-M2106-SouthAmboyNJ-28116mi-62995",
+      "source": "Commercial Truck Trader, South Amboy NJ (via search snippet)",
+      "date": "2026-10-04",
+      "verdict": "wrong_spec",
+      "notes": "2023 Freightliner Business Class M2 106 box truck, 28,116 mi, Cummins ISB 6.7L, $62,995, South Amboy NJ. No sleeper or extended-cab mention surfaced despite a dedicated follow-up search (same general area/dealer cluster as the previously-tracked NJ Truck Spot MV607 lead). Appears to be a standard/conventional cab box truck. Rejected: missing required sleeper/extended-cab-with-bunk spec."
+    },
+    {
+      "id": "sweep-2026-10-04-no-new-verified",
+      "source": "WebSearch sweep (15 queries) + 1 WebFetch egress test",
+      "date": "2026-10-04",
+      "verdict": "unverified",
+      "notes": "First sweep after a 2-week gap (last run logged was 2026-09-20). Ran 15 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6-L7/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, usedsemitrucks.com, soarr.com, eBay, and a Chattanooga/Nashville/Knoxville/Atlanta/Alabama regional search. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price match. Two new leads logged: an eBay 2023 M2-106 at 13,931 mi/$74,499 with no sleeper/liftgate/URL confirmed (unverified, worth a follow-up search), and a South Amboy NJ 2023 M2-106 at 28,116 mi/$62,995 with no sleeper confirmed (wrong_spec). All other results mapped to previously tracked units (DTI 18242743 - price re-confirmed at $115,500 via snippet, over budget if accurate; DTI 18714978; Comvoy VZ8439; Black Rock WD0626; MHC/Soarr non-sleeper inventory; new 2026/2027 dealer stock all over budget) or were generic category/marketplace pages with no unit-specific detail. No push sent."
     }
   ]
 }
