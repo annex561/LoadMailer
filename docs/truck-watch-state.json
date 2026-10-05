@@ -842,6 +842,80 @@
       "date": "2026-10-04",
       "verdict": "unverified",
       "notes": "First sweep after a 2-week gap (last run logged was 2026-09-20). Ran 15 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6-L7/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, usedsemitrucks.com, soarr.com, eBay, and a Chattanooga/Nashville/Knoxville/Atlanta/Alabama regional search. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price match. Two new leads logged: an eBay 2023 M2-106 at 13,931 mi/$74,499 with no sleeper/liftgate/URL confirmed (unverified, worth a follow-up search), and a South Amboy NJ 2023 M2-106 at 28,116 mi/$62,995 with no sleeper confirmed (wrong_spec). All other results mapped to previously tracked units (DTI 18242743 - price re-confirmed at $115,500 via snippet, over budget if accurate; DTI 18714978; Comvoy VZ8439; Black Rock WD0626; MHC/Soarr non-sleeper inventory; new 2026/2027 dealer stock all over budget) or were generic category/marketplace pages with no unit-specific detail. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-05",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. Snippets unchanged vs 2026-10-04 (2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL; price snippet still showing ~$115,500, over budget if accurate and historically unreliable). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-05",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries, no material change (still near-new ~181 mi 2025 M2-106 L9 Plus ext cab w/ sleeper bunk, no price surfaced). dtitrucks.com egress-blocked. Not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "source": "Comvoy.com / Truck and Van Outlet, Miami FL",
+      "date": "2026-10-05",
+      "verdict": "unverified",
+      "notes": "Re-checked. No material change vs prior entries: 2025 M2-106 Plus ext cab sleeper, 26' box, Morgan aluminum body, liftgate, Cummins ISB 6.7L, <40,000 mi, $93,995, VIN 3ALACWFC7SDVZ8439, Truck and Van Outlet, (305) 315-0667. comvoy.com egress-blocked, gate (a) not cleared. Not re-reported/pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244"
+    },
+    {
+      "id": "GoodyearMotors-LodiNJ-2022-M2106-ExtCabSleeper-60000",
+      "source": "Goodyear Motors, Lodi NJ (via Commercial Truck Trader search snippet)",
+      "date": "2026-10-05",
+      "verdict": "wrong_spec",
+      "notes": "Re-surfaced with a price for the first time ($60,000, previously seen 2026-09-13 with no price) but a follow-up search for mileage returned 451,659 mi with a DD13 400HP engine, DT12 12-speed automatic, 6x4 driveline - none of which matches the M2-106's actual Cummins ISB/Allison medium-duty spec, so this looks like mismatched/unreliable snippet data (likely conflated with a heavy-duty sleeper tractor listing from the same dealer). Rejected regardless: misses year (2022 vs 2023+ required) and the mileage figure, if attributable to this unit at all, is far over the 150,000 mi cap. Not reported - data too unreliable and spec miss(es) too large."
+    },
+    {
+      "id": "eBay-2023-M2106-JacksonOH-13931mi-74499-flatbed",
+      "source": "eBay (via search snippet), Jackson OH 45651",
+      "date": "2026-10-05",
+      "verdict": "wrong_spec",
+      "notes": "Follow-up on 2026-10-04 lead. Confirmed via two independent searches: this is a 26-FOOT FLATBED, not a box truck (Cummins/Allison, power windows, engine brake, locking rear diff - flatbed-typical features). Rejected: fails the required 26ft box/liftgate/sleeper box-truck configuration outright."
+    },
+    {
+      "id": "eBay-TLCTruckEquipment-2023-M2106-167000mi-56900",
+      "vin": null,
+      "source": "eBay / seller tlctruckandequipment",
+      "date": "2026-10-05",
+      "verdict": "too_many_miles",
+      "notes": "2023 Freightliner M2 106 w/ 26ft Dry Freight Moving Box Truck, Non CDL, clean title, $56,900, 167,000 mi. Rejected: over the 150,000 mi cap."
+    },
+    {
+      "id": "unknown-2022-M2106-KennesawGA-221857mi-52250",
+      "source": "unknown dealer, Kennesaw GA (via search snippet)",
+      "date": "2026-10-05",
+      "verdict": "too_many_miles",
+      "notes": "2022 Freightliner Business Class M2 106 box truck, Kennesaw GA, 221,857 mi (price previously associated with this lead, $52,250, not reconfirmed this run). Rejected: far over mileage cap. No sleeper/extended-cab or liftgate info surfaced."
+    },
+    {
+      "id": "unknown-2019-M2106-MickeyBody-GadsdenAL-177880mi-53250",
+      "source": "unknown dealer, Gadsden AL (via search snippet)",
+      "date": "2026-10-05",
+      "verdict": "too_many_miles",
+      "notes": "2019 Freightliner M2 106 with 26' Mickey Truck Bodies box, Gadsden AL, $53,250, 177,880 mi. Rejected: fails both year (2019 << 2023+) and mileage cap. No sleeper/extended-cab confirmed."
+    },
+    {
+      "id": "unknown-2022-MV607-100950mi-tuckunderliftgate",
+      "source": "unknown dealer (via search snippet)",
+      "date": "2026-10-05",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (International MV607). 2022 International MV607, 100,950 mi, Cummins B6.7 250HP, Allison 2500RDS, tuck-under liftgate, described as 'under CDL' (i.e. non-CDL) per snippet. Rejected: no sleeper or extended-cab mentioned in any snippet - appears to be a standard/day cab box truck. No dealer name or URL surfaced either."
+    },
+    {
+      "id": "sweep-2026-10-05-no-new-verified",
+      "source": "WebSearch sweep (18 queries) + 1 WebFetch egress test",
+      "date": "2026-10-05",
+      "verdict": "unverified",
+      "notes": "Ran 18 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, eBay, and Chattanooga/TN/GA/AL regional + dealer follow-ups (Goodyear Motors Lodi NJ, Kennesaw GA, Mickey Truck Bodies/Gadsden AL). WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price+mileage match. New leads surfaced and rejected: Goodyear Motors Lodi NJ 2022 M2-106 (unreliable/mismatched spec data, also wrong year), eBay Jackson OH listing confirmed to be a 26ft FLATBED not a box truck (resolves the 2026-10-04 unverified lead as wrong_spec), eBay tlctruckandequipment 2023 M2-106 167,000 mi (too many miles), Kennesaw GA 2022 M2-106 221,857 mi (too many miles), Gadsden AL 2019 M2-106 Mickey body 177,880 mi (too old + too many miles), and a non-sleeper International MV607 at 100,950 mi (wrong_spec). All previously tracked leads (DTI 18242743, DTI 18714978, Comvoy VZ8439) re-checked with no material change. No push sent."
     }
   ]
 }
