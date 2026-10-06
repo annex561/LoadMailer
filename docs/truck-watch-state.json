@@ -916,6 +916,58 @@
       "date": "2026-10-05",
       "verdict": "unverified",
       "notes": "Ran 18 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, eBay, and Chattanooga/TN/GA/AL regional + dealer follow-ups (Goodyear Motors Lodi NJ, Kennesaw GA, Mickey Truck Bodies/Gadsden AL). WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price+mileage match. New leads surfaced and rejected: Goodyear Motors Lodi NJ 2022 M2-106 (unreliable/mismatched spec data, also wrong year), eBay Jackson OH listing confirmed to be a 26ft FLATBED not a box truck (resolves the 2026-10-04 unverified lead as wrong_spec), eBay tlctruckandequipment 2023 M2-106 167,000 mi (too many miles), Kennesaw GA 2022 M2-106 221,857 mi (too many miles), Gadsden AL 2019 M2-106 Mickey body 177,880 mi (too old + too many miles), and a non-sleeper International MV607 at 100,950 mi (wrong_spec). All previously tracked leads (DTI 18242743, DTI 18714978, Comvoy VZ8439) re-checked with no material change. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-06",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED. No material change vs 2026-10-04/05 (2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 650 engine hours, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL; price snippet again $115,500, over the $110,000 budget ceiling if accurate). Title still reads 'For Sale/Lease' (active). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-06",
+      "verdict": "unverified",
+      "notes": "Re-surfaced in general sweep queries, no material change (still near-new ~181 mi 2025 M2-106 L9 Plus ext cab w/ sleeper bunk, no price surfaced). dtitrucks.com egress-blocked. Not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "source": "Comvoy.com / Truck and Van Outlet, Miami FL",
+      "date": "2026-10-06",
+      "verdict": "unverified",
+      "notes": "Re-checked. No material change vs prior entries: 2025 M2-106 Plus ext cab sleeper, 26' box, Morgan aluminum body, liftgate, Cummins ISB 6.7L, <40,000 mi, $93,995, VIN 3ALACWFC7SDVZ8439, Truck and Van Outlet, (305) 315-0667. comvoy.com egress-blocked, gate (a) not cleared. Not re-reported/pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244"
+    },
+    {
+      "id": "DTITrucks-18353687-KenworthT280-AtticBody",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-06",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (Kenworth T280). 2023 Kenworth T280, 26'+3' Attic Moving Body with 3,300lb Maxon aluminum liftgate, PACCAR PX-7 260HP, Allison 2500RDS, 26,000lb GVWR non-CDL. Rejected: 'Attic' moving body is a furniture/attic-style box, not an extended-cab-with-sleeper configuration - no sleeper/berth mentioned in any snippet. https://www.dtitrucks.com/USED-Inventory-2023-Kenworth-Medium-Duty-Truck-T280-26-3-Attic-Moving-Body-With-3-300lb-Liftgate-Steele-St-18353687"
+    },
+    {
+      "id": "carsforsale-2023-M2106-87617mi-129995",
+      "source": "carsforsale.com aggregator, California (via search snippet)",
+      "date": "2026-10-06",
+      "verdict": "wrong_spec",
+      "notes": "2023 Freightliner M2 106, 87,617 mi, $129,995, Cummins B6.7. Rejected: over the $110,000 budget ceiling; no sleeper/extended-cab confirmation surfaced either."
+    },
+    {
+      "id": "PremierTruckKnoxville-1FVACWFC0SHVU8198",
+      "source": "Premier Truck Group, Knoxville TN",
+      "date": "2026-10-06",
+      "verdict": "wrong_spec",
+      "notes": "New 2025 Freightliner M2 106, VIN 1FVACWFC0SHVU8198, $94,108 dealer price. Rejected: confirmed Rollback Tow Truck body type, not a box truck, and new dealer stock. (865) 824-2400."
+    },
+    {
+      "id": "sweep-2026-10-06-no-new-verified",
+      "source": "WebSearch sweep (18 queries) + 1 WebFetch egress test",
+      "date": "2026-10-06",
+      "verdict": "unverified",
+      "notes": "Ran 18 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6-L7/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, soarr.com, vanderhaags.com, and Chattanooga/Knoxville/Nashville/Atlanta regional follow-ups. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price+mileage match. New leads surfaced and rejected: DTI Trucks Kenworth T280 Attic Moving Body (no sleeper, wrong body style), carsforsale.com 2023 M2-106 87,617mi/$129,995 (over budget), Premier Truck Group Knoxville 2025 M2-106 VIN ...HVU8198 (confirmed rollback tow truck body, new stock, not a box truck). All previously tracked leads (DTI 18242743 - still $115,500/over budget per snippet, title still active; DTI 18714978; Comvoy VZ8439) re-checked with no material change. No push sent."
     }
   ]
 }
