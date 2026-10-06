@@ -120,12 +120,12 @@ const SEO_PAGES: SeoPageConfig[] = [
   {
     // Service offering, NOT a JobPosting — these customers become independent
     // carriers, they are not hired by LAMP. Uses Service + FAQPage schema.
-    // No `offers` block until pricing is set (see SHOW_PRICING in the page).
+    // Offer prices here must match PRICING in the page — both are published.
     path: "/start-your-box-truck-business",
     title:
       "Start Your Own Box Truck Business — Authority, Dispatch & Trucks | LAMP Logistics",
     description:
-      "Start your own box truck business with LAMP Logistics. Authority formation $2,500, dispatch 10% of gross, road-ready box trucks $25,000–$45,000, or the full package for $30,000. We dispatch you from day one so your new authority never sits.",
+      "Start your own box truck business with LAMP Logistics. Authority formation $2,500, dispatch 10% of gross, road-ready box trucks $25,000–$45,000, or the full package for $30,000 — a $30,000–$35,000 truck plus your authority filing, saving $2,500 to $7,500 over buying them separately. We dispatch you from day one so your new authority never sits.",
     canonicalUrl: "https://traqiq.app/start-your-box-truck-business",
     ogImage: "https://traqiq.app/apple-touch-icon.png",
     jsonLd: [
@@ -193,7 +193,7 @@ const SEO_PAGES: SeoPageConfig[] = [
                 "@type": "Service",
                 name: "Full Startup Package",
                 description:
-                  "Truck sourcing and authority formation together for $30,000, sequenced so the truck is ready before the authority activates. Dispatch continues at 10% of gross once you are hauling.",
+                  "A $30,000 to $35,000 road-ready box truck and authority formation together for $30,000, sequenced so the truck is ready before the authority activates. Buying the same truck and filing separately runs $32,500 to $37,500, so the package saves $2,500 to $7,500. Dispatch continues at 10% of gross once you are hauling.",
               },
             },
           ],
@@ -237,6 +237,14 @@ const SEO_PAGES: SeoPageConfig[] = [
           },
           {
             "@type": "Question",
+            name: "Why is the full package more than the cheapest truck you source?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Because the package does not use the cheapest truck. It covers a $30,000 to $35,000 unit with more service life left in it. Against that same truck plus the $2,500 authority filing bought separately, the $30,000 package saves $2,500 to $7,500. Buyers on a tighter budget can take the services a la carte and start with an entry-level truck from $25,000.",
+            },
+          },
+          {
+            "@type": "Question",
             name: "Can I use dispatch only if I already have authority?",
             acceptedAnswer: {
               "@type": "Answer",
@@ -253,7 +261,7 @@ const SEO_PAGES: SeoPageConfig[] = [
       <p><strong>Authority Formation — $2,500 one-time</strong> — MC operating authority and USDOT number, BOC-3 process agent filing, UCR registration, and insurance filings submitted to FMCSA.</p>
       <p><strong>Dispatch — 10% of gross</strong> — we source and book your freight, negotiate rates, handle broker paperwork, and set up factoring so you are paid weekly.</p>
       <p><strong>Truck Sourcing — $25,000 to $45,000</strong> — inspected, road-ready box trucks with financing options. Most units are under 26,001 lbs GVWR, so no CDL is required.</p>
-      <p><strong>Full startup package — $30,000</strong> — truck and authority together, sequenced so the truck is ready before the authority activates. Dispatch continues at 10% of gross once you are hauling.</p>
+      <p><strong>Full startup package — $30,000</strong> — a $30,000 to $35,000 truck and your authority together, sequenced so the truck is ready before the authority activates. That same truck and filing bought separately run $32,500 to $37,500, so the package saves you $2,500 to $7,500. Dispatch continues at 10% of gross once you are hauling. Starting on a tighter budget? Entry-level trucks from $25,000 are available à la carte.</p>
       <h2>Why a new authority sits</h2>
       <p>Brokers will not hand good freight to an MC with no history, so new carriers sit for months while payments come due. A new authority sits because nobody is feeding it. LAMP dispatches you from the day yours activates.</p>
       <p><a href="/start-your-box-truck-business#start">Get a quote</a> or call (833) 362-9813. LAMP Logistics · MC-1725755 · DOT 4397421.</p>

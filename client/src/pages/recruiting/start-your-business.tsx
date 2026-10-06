@@ -35,9 +35,13 @@ import {
 // NOTE on the bundle: dispatch is a recurring % of gross, so it cannot be
 // folded into a one-time figure. The $30,000 covers the truck and the
 // authority filing; dispatch continues at 10% once the customer is running.
-// The bundle is therefore NOT cheaper than à la carte at the bottom of the
-// truck range ($25,000 truck + $2,500 authority = $27,500), which is why the
-// card claims "complete package" rather than "best value".
+//
+// The bundle covers a MID-TIER truck (bundleTruckLow–bundleTruckHigh), not the
+// bottom of the sourcing range. That is what makes the saving real: the same
+// truck plus the filing bought separately runs $32,500–$37,500 against a
+// $30,000 bundle. Keep the savings claim scoped to "the same truck" — an
+// entry-level $25,000 truck plus $2,500 authority is $27,500 à la carte, so an
+// unscoped "cheaper than buying the pieces" claim would be false at the floor.
 // ---------------------------------------------------------------------------
 const SHOW_PRICING = true;
 
@@ -47,10 +51,22 @@ const PRICING = {
   dispatch: "10%", // of gross, ongoing
   truckLow: "$25,000", // low end of the box trucks you source
   truckHigh: "$45,000", // high end
+  bundleTruckLow: "$30,000", // truck class the bundle covers — low
+  bundleTruckHigh: "$35,000", // truck class the bundle covers — high
+  bundleSavingLow: "$2,500", // vs. bundleTruckLow + authority bought separately
+  bundleSavingHigh: "$7,500", // vs. bundleTruckHigh + authority bought separately
 };
 
 function price(value: string) {
   return SHOW_PRICING ? value : "Get a quote";
+}
+
+// Adds the "$12,345"-shaped PRICING strings so the à-la-carte comparison on the
+// bundle card is derived from the numbers above rather than typed out a second
+// time and left to drift when a price changes.
+function dollars(...values: string[]) {
+  const total = values.reduce((sum, v) => sum + Number(v.replace(/[^0-9.]/g, "")), 0);
+  return `$${total.toLocaleString("en-US")}`;
 }
 
 const SERVICES = [
@@ -398,7 +414,9 @@ export default function StartYourBusinessLanding() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold text-white">
-                  COMPLETE PACKAGE
+                  {SHOW_PRICING
+                    ? `SAVE ${PRICING.bundleSavingLow}–${PRICING.bundleSavingHigh}`
+                    : "COMPLETE PACKAGE"}
                 </div>
                 <h3 className="mt-3 text-2xl font-bold text-slate-900">
                   The full startup package
@@ -409,8 +427,12 @@ export default function StartYourBusinessLanding() {
                 </p>
                 {SHOW_PRICING && (
                   <p className="mt-3 text-sm text-slate-600 max-w-2xl">
-                    Covers the truck and your authority filing. Dispatch runs at{" "}
-                    {PRICING.dispatch} of gross once you are hauling, same as it does on its
+                    Covers a {PRICING.bundleTruckLow}–{PRICING.bundleTruckHigh} truck plus your
+                    authority filing. Bought separately that same truck and filing run{" "}
+                    {dollars(PRICING.bundleTruckLow, PRICING.authority)}–
+                    {dollars(PRICING.bundleTruckHigh, PRICING.authority)}, so the package saves
+                    you {PRICING.bundleSavingLow} to {PRICING.bundleSavingHigh}. Dispatch runs
+                    at {PRICING.dispatch} of gross once you are hauling, same as it does on its
                     own.
                   </p>
                 )}
@@ -420,7 +442,9 @@ export default function StartYourBusinessLanding() {
                   {price(PRICING.bundle)}
                 </div>
                 {SHOW_PRICING && (
-                  <div className="text-xs text-slate-500">truck + authority</div>
+                  <div className="text-xs text-slate-500">
+                    {PRICING.bundleTruckLow}–{PRICING.bundleTruckHigh} truck + authority
+                  </div>
                 )}
                 <a
                   href="#start"
@@ -484,6 +508,15 @@ export default function StartYourBusinessLanding() {
               you that up front than surprise you later. What we do is inspect before you buy,
               so you are not starting out with someone else&apos;s problem, and budget
               maintenance into the numbers we quote you.
+            </Faq>
+            <Faq q="Why is the package more than your cheapest truck?">
+              Because it is not the cheapest truck. The package covers a{" "}
+              {PRICING.bundleTruckLow}–{PRICING.bundleTruckHigh} unit — more miles left in it,
+              and the one we would put our own driver in. Against that same truck plus the
+              filing bought separately you save {PRICING.bundleSavingLow} to{" "}
+              {PRICING.bundleSavingHigh}. If your budget is the {PRICING.truckLow} end, take
+              the pieces à la carte instead; we will tell you which units at that price are
+              worth owning.
             </Faq>
             <Faq q="Can I just take dispatch?">
               Yes. If you already have a truck and active authority, dispatch stands alone.
