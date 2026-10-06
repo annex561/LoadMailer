@@ -268,6 +268,148 @@ const SEO_PAGES: SeoPageConfig[] = [
     `,
   },
   {
+    // Carriers who already hold their own MC and need freight. Service +
+    // FAQPage, NOT JobPosting: these are independent carriers buying dispatch
+    // or running alongside us, not applicants being hired.
+    //
+    // The FAQ text here must stay in sync with the visible <Faq> entries in
+    // client/src/pages/recruiting/new-mc-no-loads.tsx — Google de-ranks
+    // FAQPage markup that is not on the rendered page. Figures come from TERMS
+    // in that file; 90 days is the site-wide number for broker seasoning.
+    path: "/new-mc-no-loads",
+    title: "New MC and No Loads? Run Alongside LAMP — 80/20 or Dispatch at 10%",
+    description:
+      "Brand-new MC authority and the phone isn't ringing? Brokers screen the MC, not the driver. Run alongside LAMP Logistics on our authority at 80/20 while yours seasons, or take dispatch at 10% of gross once your MC is 90 days or older. Weekly Friday settlements, no forced dispatch, loaded in 10 to 21 days.",
+    canonicalUrl: "https://traqiq.app/new-mc-no-loads",
+    ogImage: "https://traqiq.app/apple-touch-icon.png",
+    jsonLd: [
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        name: "Freight and Dispatch for New Box Truck Carriers",
+        serviceType: "Freight dispatch and motor carrier lease-on",
+        description:
+          "LAMP Logistics keeps independent box truck carriers loaded. Carriers whose MC authority is still too new for brokers run alongside LAMP on LAMP's authority, insurance and factoring at an 80/20 split while their own authority seasons. Carriers with an authority 90 days or older keep their own MC and buy dispatch at 10% of gross. No forced dispatch, weekly Friday settlements, every load itemized in TraqIQ.",
+        provider: {
+          "@type": "Organization",
+          name: "LAMP Logistics",
+          sameAs: "https://traqiq.app",
+          telephone: "+1-833-362-9813",
+          identifier: { "@type": "PropertyValue", name: "USDOT", value: "4397421" },
+        },
+        areaServed: { "@type": "Country", name: "United States" },
+        hasOfferCatalog: {
+          "@type": "OfferCatalog",
+          name: "Options for carriers who need freight",
+          itemListElement: [
+            {
+              // Revenue share, not a fixed price — percentage only.
+              "@type": "Offer",
+              priceCurrency: "USD",
+              itemOffered: {
+                "@type": "Service",
+                name: "Run Alongside LAMP (80/20)",
+                description:
+                  "For an MC authority under 90 days old, or not yet filed. Your truck moves freight under LAMP's authority, insurance and factoring while your own MC seasons, and you keep 80% of gross. Onboarding runs 10 to 21 days. No forced dispatch, weekly Friday settlements. Your authority stays yours and keeps aging, and you can leave with your own book of business.",
+              },
+            },
+            {
+              "@type": "Offer",
+              priceCurrency: "USD",
+              itemOffered: {
+                "@type": "Service",
+                name: "Dispatch Only (10% of gross)",
+                description:
+                  "For an MC authority 90 days or older that brokers will load. You stay the carrier on your own authority and insurance. LAMP sources and books your freight, negotiates every rate, handles rate confirmations and broker paperwork, and sets up factoring for weekly pay. 10% of gross.",
+              },
+            },
+          ],
+        },
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: [
+          {
+            "@type": "Question",
+            name: "I just paid for my own MC. Why would I run under yours?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "You keep yours. Nothing here cancels your authority and it keeps seasoning while you run. The question is not whose authority is better, it is whether you would rather spend the next 90 days loaded under LAMP's or parked under your own. When brokers stop screening you out, switch to dispatch and keep your own authority.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "What is the catch on the 80/20 split?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "There is no hidden one. LAMP takes 20% of gross, and out of it comes the authority, the insurance, the factoring, the broker relationships and the dispatcher. You keep 80% and your truck's costs: fuel, maintenance, and your own insurance where it applies. Your dispatcher walks the full settlement with you on the first call, before you sign anything.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Can I leave?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Yes, and you take your book of business with you. Your MC and your truck are yours throughout.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Do you guarantee what I will make?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "No. Owner-operators at LAMP run in the $4,000 to $6,000 per week gross range, and what you actually clear depends on your lanes, your uptime and the loads you accept. On the first call LAMP shows you real recent rates on your lanes rather than a headline number.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "My insurance limits are lower than what brokers are asking.",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "That is one of the main reasons new MCs get declined, since many brokers want to see $100,000 in cargo coverage. Running on LAMP's authority, the freight moves under LAMP's coverage. On dispatch, LAMP tells you exactly what the brokers on your lanes require before you spend money changing your policy.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Do I need a CDL?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Not for most box truck freight. Trucks under 26,001 lbs GVWR run on a regular driver's license. You still need a current DOT physical and a clean MVR.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "How long before dispatch-only works for my MC?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Around 90 days is the usual floor, but it is decided broker by broker rather than on a fixed date. LAMP watches it on your behalf and tells you when you are clearing their screens.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Am I an employee?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "No. You are an independent carrier running your own business. LAMP is a service provider to you, not your employer.",
+            },
+          },
+        ],
+      },
+    ],
+    fallbackHtml: `
+      <h1>New MC and no loads? Run alongside LAMP Logistics.</h1>
+      <p>Brokers screen the MC, not the driver. A new authority waits around 90 days before most brokers will touch it, and many want to see $100,000 in cargo coverage before they open your packet. That is 90 days of truck payments on a truck that legally can work and practically cannot. The truck payment is not what breaks new carriers — the empty weeks are.</p>
+      <h2>Two ways in, depending on your authority</h2>
+      <p><strong>MC under 90 days, or not filed yet — run alongside us, you keep 80% of gross.</strong> Your truck and your title, moving freight on LAMP's authority, insurance and factoring while your own MC seasons. Loaded in 10 to 21 days. No forced dispatch. Settlements every Friday, itemized in TraqIQ. Your authority stays yours and keeps aging, and you can leave with your own book.</p>
+      <p><strong>MC 90 days or older — keep your authority, dispatch at 10% of gross.</strong> You stay the carrier. We source and book your loads, negotiate every rate, handle rate cons and broker paperwork, and set up factoring so you are paid weekly. Freight from brokers, direct shippers and our own contracts.</p>
+      <h2>Why running alongside beats waiting</h2>
+      <p>90 days parked is 90 days of payments against zero revenue. 90 days at 80% of gross is 90 days of payments against freight, on the same truck, with the same MC quietly getting older. When brokers stop screening you out, move to dispatch and keep your own authority.</p>
+      <p>Most box truck freight needs no CDL — under 26,001 lbs GVWR runs on a regular license, with a current DOT physical and a clean MVR.</p>
+      <p><a href="/new-mc-no-loads#start">Tell us about your authority</a> or call (833) 362-9813. LAMP Logistics · MC-1725755 · DOT 4397421. Earnings depend on the loads you run and are not guaranteed.</p>
+    `,
+  },
+  {
     path: "/drive-with-lamp",
     title:
       "Box Truck Driver Jobs — LAMP Logistics | $4,000–$6,000/Week | Most Loads No CDL",

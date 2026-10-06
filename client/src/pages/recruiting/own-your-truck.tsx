@@ -186,10 +186,11 @@ export default function OwnYourTruckLanding() {
           <div className="text-sm font-bold tracking-wide text-emerald-600">The trap nobody warns you about</div>
           <h2 className="mt-2 text-3xl sm:text-4xl font-bold text-slate-900">Going it alone is how good drivers go broke.</h2>
           <p className="mt-5 text-lg text-slate-700">
-            You set up your own authority and then you sit. Brokers won&apos;t load a new MC for six
-            months. The good freight goes to carriers with history. You fight for factoring and a
-            dispatcher while the truck payment comes due. The truck payment doesn&apos;t sink most new
-            drivers. The empty months do. We took the empty months out.
+            You set up your own authority and then you sit. Most brokers won&apos;t load a new MC
+            for about 90 days, and the good freight goes to carriers with history long after
+            that. You fight for factoring and a dispatcher while the truck payment comes due.
+            The truck payment doesn&apos;t sink most new drivers. The empty months do. We took
+            the empty months out.
           </p>
         </div>
       </section>
