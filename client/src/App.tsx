@@ -77,6 +77,7 @@ const RecruitingDashboard = lazy(() => import("@/pages/recruiting/dashboard"));
 const RecruitingApplicant = lazy(() => import("@/pages/recruiting/applicant"));
 const OwnYourTruckLanding = lazy(() => import("@/pages/recruiting/own-your-truck"));
 const StartYourBusinessLanding = lazy(() => import("@/pages/recruiting/start-your-business"));
+const NewMcNoLoadsLanding = lazy(() => import("@/pages/recruiting/new-mc-no-loads"));
 
 import { DATVerificationDialog } from "@/components/DATVerificationDialog";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -182,6 +183,9 @@ function App() {
               <Route path="/own-your-truck" component={OwnYourTruckLanding} />
               <Route path="/start-your-box-truck-business" component={StartYourBusinessLanding} />
               <Route path="/box-truck-authority-and-dispatch" component={StartYourBusinessLanding} />
+              <Route path="/new-mc-no-loads" component={NewMcNoLoadsLanding} />
+              <Route path="/box-truck-dispatch-service" component={NewMcNoLoadsLanding} />
+              <Route path="/new-authority-dispatch" component={NewMcNoLoadsLanding} />
               <Route path="/apply/:id" component={RecruitingApplication} />
               <Route path="/apply/:id/status" component={RecruitingStatus} />
               <Route path="/apply/:id/documents" component={RecruitingDocuments} />

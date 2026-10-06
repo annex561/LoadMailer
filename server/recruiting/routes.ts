@@ -96,12 +96,36 @@ async function transitionStage(applicationId: string, toStage: string, reason?: 
   });
 }
 
-// Leads from the /start-your-box-truck-business landing arrive with a
-// leadSource shaped like:
+// Three landing pages feed POST /api/recruiting/leads, and each audience needs
+// different lead-capture copy. The landing encodes which it is as a leadSource
+// prefix, plus a segment the email echoes back:
+//
 //   start-your-business|services=authority,dispatch|src=fb-marketplace
-// The prefix routes them to business-services notification copy instead of the
-// driver-application copy; the services segment is echoed back in the email.
+//     -> buying authority / dispatch / truck services; a human sends a quote
+//   new-mc-no-loads|mc=new|src=fb-ads
+//     -> already a carrier and needs freight; a dispatcher calls
+//   (anything else, including empty)
+//     -> applying to drive for LAMP; finish the DOT application
+//
+// Getting this wrong is not cosmetic: a carrier who gets "finish your driver
+// application" was sent to a form asking for their SSN and MVR.
 const BUSINESS_LEAD_PREFIX = "start-your-business";
+const LOADS_LEAD_PREFIX = "new-mc-no-loads";
+
+type LeadKind = "driver" | "business" | "loads";
+
+const LEAD_CAPTURE_TEMPLATES: Record<LeadKind, { sms: string; email: string }> = {
+  driver: { sms: "LEAD_CAPTURE_SMS", email: "LEAD_CAPTURE_EMAIL" },
+  business: { sms: "BIZ_LEAD_CAPTURE_SMS", email: "BIZ_LEAD_CAPTURE_EMAIL" },
+  loads: { sms: "LOADS_LEAD_CAPTURE_SMS", email: "LOADS_LEAD_CAPTURE_EMAIL" },
+};
+
+function resolveLeadKind(leadSource?: string | null): LeadKind {
+  const src = leadSource ?? "";
+  if (src.startsWith(LOADS_LEAD_PREFIX)) return "loads";
+  if (src.startsWith(BUSINESS_LEAD_PREFIX)) return "business";
+  return "driver";
+}
 
 const SERVICE_LABELS: Record<string, string> = {
   authority: "Authority formation",
@@ -118,6 +142,21 @@ function describeRequestedServices(leadSource?: string | null): string {
     .map((s) => SERVICE_LABELS[s.trim()] ?? s.trim())
     .filter(Boolean)
     .join(", ");
+}
+
+// Which door the carrier is in, for the dispatcher making the first call. Keys
+// match MC_AGE_OPTIONS in client/src/pages/recruiting/new-mc-no-loads.tsx.
+const MC_AGE_LABELS: Record<string, string> = {
+  none: "Authority not filed yet",
+  new: "MC active under 90 days",
+  seasoned: "MC active 90+ days",
+};
+
+function describeMcAge(leadSource?: string | null): string {
+  const match = /\|mc=([^|]*)/.exec(leadSource ?? "");
+  const key = match?.[1]?.trim();
+  if (!key || key === "unspecified") return "";
+  return MC_AGE_LABELS[key] ?? key;
 }
 
 export function registerRecruitingRoutes(app: Express) {
@@ -185,24 +224,27 @@ export function registerRecruitingRoutes(app: Express) {
       // If kill switch is off, these queue but never send — safe by default.
       try {
         const baseUrl = process.env.PUBLIC_APP_URL || "https://traqiq.app";
-        // Business-services leads (from /start-your-box-truck-business) become
-        // their own carrier — they must NOT get the "finish your driver
-        // application" copy, and there is no application for them to open.
-        const isBusinessLead = (leadSource ?? "").startsWith(BUSINESS_LEAD_PREFIX);
-        const payload = isBusinessLead
-          ? { first_name: firstName, services: describeRequestedServices(leadSource) }
-          : { first_name: firstName, app_url: `${baseUrl}/apply/${created.id}` };
+        // Only driver applicants get an application link — the other two
+        // audiences are carriers (or becoming one) and have nothing to open.
+        const leadKind = resolveLeadKind(leadSource);
+        const templates = LEAD_CAPTURE_TEMPLATES[leadKind];
+        const payload =
+          leadKind === "business"
+            ? { first_name: firstName, services: describeRequestedServices(leadSource) }
+            : leadKind === "loads"
+              ? { first_name: firstName, mc_age: describeMcAge(leadSource) }
+              : { first_name: firstName, app_url: `${baseUrl}/apply/${created.id}` };
 
         await queueRecruitingNotification({
           applicationId: created.id,
           channel: "SMS",
-          templateKey: isBusinessLead ? "BIZ_LEAD_CAPTURE_SMS" : "LEAD_CAPTURE_SMS",
+          templateKey: templates.sms,
           payload,
         });
         await queueRecruitingNotification({
           applicationId: created.id,
           channel: "EMAIL",
-          templateKey: isBusinessLead ? "BIZ_LEAD_CAPTURE_EMAIL" : "LEAD_CAPTURE_EMAIL",
+          templateKey: templates.email,
           payload,
         });
       } catch (notifyErr) {

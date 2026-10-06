@@ -131,6 +131,27 @@ const EMAIL_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender
       }),
     };
   },
+  // Carrier with their own MC who needs freight. Counterpart to
+  // LOADS_LEAD_CAPTURE_SMS. No application CTA and no quote — a dispatcher
+  // calls. The mc_age line tells them we already know which door they are in.
+  LOADS_LEAD_CAPTURE_EMAIL: (p) => {
+    const heading = `${p.first_name ? p.first_name + ", l" : "L"}et's get your truck loaded`;
+    const mcAge = p.mc_age ? String(p.mc_age) : "";
+    return {
+      subject: "LAMP Logistics — a dispatcher is reaching out",
+      text: `Hi ${p.first_name || "there"},\n\nThanks for reaching out. A dispatcher will call you shortly to go over your authority, your lanes, and how fast we can get you loaded.${mcAge ? `\n\nWhat you told us: ${mcAge}` : ""}\n\nIf your MC is still new, brokers screen it rather than you — so you can run alongside us on our authority at 80/20 while yours seasons, then move to dispatch at 10% once it clears. We'll tell you straight which one fits.\n\nQuestions: (833) 362-9813.\n\nLAMP Logistics LLC · MC-1725755`,
+      html: brandedEmail({
+        preview: "A dispatcher is reaching out about your freight",
+        heading,
+        bodyHtml: `<p>Thanks for reaching out. A dispatcher will call you shortly to go over your authority, your lanes, and how fast we can get you loaded.</p>${
+          mcAge ? `<p><strong>What you told us:</strong> ${mcAge}</p>` : ""
+        }<p>If your MC is still new, understand that brokers screen the authority rather than you. You can run alongside us on our authority at 80/20 while yours seasons, then move to dispatch at 10% of gross once it clears their screens. We will tell you straight which one fits — including if the honest answer is to wait a few more weeks.</p>`,
+        ctaLabel: "Call (833) 362-9813",
+        ctaUrl: "tel:+18333629813",
+        footer: `Your truck, your MC. We keep it loaded.`,
+      }),
+    };
+  },
   APPLICATION_RECEIVED_EMAIL: (p) => ({
     subject: "We received your LAMP application",
     text: `Hi ${p.first_name || "there"},\n\nWe have your DOT application. Pre-screening result within 24 hours.\n\nQuestions: (833) 362-9813.`,

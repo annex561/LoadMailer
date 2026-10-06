@@ -15,6 +15,13 @@ export const SMS_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateR
   BIZ_LEAD_CAPTURE_SMS: (p) => ({
     text: `Hi ${p.first_name || "there"}, thanks for reaching out to LAMP Logistics about starting your box truck business. We're putting your quote together and will follow up shortly. Questions now: (833) 362-9813. Reply STOP to opt out.`,
   }),
+  // Carrier who already has (or is filing) their own MC and needs freight. Not
+  // a driver applicant and not a services buyer — a dispatcher calls them, so
+  // no application link and no quote. Selected in recruiting/routes.ts by the
+  // new-mc-no-loads leadSource prefix.
+  LOADS_LEAD_CAPTURE_SMS: (p) => ({
+    text: `Hi ${p.first_name || "there"}, thanks for reaching out to LAMP Logistics. A dispatcher will call you shortly to go over your authority, your lanes and how fast we can get you loaded. Questions now: (833) 362-9813. Reply STOP to opt out.`,
+  }),
   APP_RECEIVED_SMS: (p) => ({
     text: `${p.first_name || "Driver"}, application received. We'll text you when pre-screening completes — usually within 24 hours.`,
   }),
