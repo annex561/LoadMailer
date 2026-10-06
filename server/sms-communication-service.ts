@@ -1,3 +1,4 @@
+import { shouldReplyToUnknownSender } from "./unknown-sender-limiter";
 import { storage } from "./storage";
 import { smsService } from "./sms-service";
 import type { 
@@ -57,8 +58,13 @@ export class SMSCommunicationService {
       // Find driver by phone number
       const driver = await this.findDriverByPhone(fromPhone);
       if (!driver) {
-        await this.sendSMS(fromPhone, 
-          "I don't recognize you as a registered driver. Please contact dispatch for assistance.");
+        // At most one reply per unknown number per 24h. Without this, a marketing bot that
+        // answers every text ("Reply Yes to confirm") ping-pongs with us forever: 2026-09-22 →
+        // 10-05, ~1,590 texts to one Option Pit number before anyone noticed.
+        if (shouldReplyToUnknownSender(fromPhone)) {
+          await this.sendSMS(fromPhone,
+            "I don't recognize you as a registered driver. Please contact dispatch for assistance.");
+        }
         return;
       }
 
