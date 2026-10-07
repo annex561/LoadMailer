@@ -968,6 +968,42 @@
       "date": "2026-10-06",
       "verdict": "unverified",
       "notes": "Ran 18 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6-L7/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, soarr.com, vanderhaags.com, and Chattanooga/Knoxville/Nashville/Atlanta regional follow-ups. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price+mileage match. New leads surfaced and rejected: DTI Trucks Kenworth T280 Attic Moving Body (no sleeper, wrong body style), carsforsale.com 2023 M2-106 87,617mi/$129,995 (over budget), Premier Truck Group Knoxville 2025 M2-106 VIN ...HVU8198 (confirmed rollback tow truck body, new stock, not a box truck). All previously tracked leads (DTI 18242743 - still $115,500/over budget per snippet, title still active; DTI 18714978; Comvoy VZ8439) re-checked with no material change. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-07",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - still EGRESS_BLOCKED (confirms the block is environment-wide/proxy-level, not domain-specific - same result on a fresh target). Snippet this run shows $94,500 (via a 'extended cab sleeper bunk 26 foot box truck non CDL 2024 2025' search), same figure seen 2026-09-04 and treated with caution then as possibly stale/templated finance copy; no fresh confirmation this run that $94,500 is the real current price. Same base specs otherwise (2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "MLS-14487854-2023-M2106-205181mi-RegularCab",
+      "source": "MyLittleSalesman.com (via search snippet)",
+      "date": "2026-10-07",
+      "verdict": "wrong_spec",
+      "notes": "2023 Freightliner M2-106 box truck, automatic liftgate, VIN 3ALACWFC6PDUH3662, stock 18368W, 205,181 mi, Class 6, REGULAR CAB body style (not extended/sleeper), air ride, 228in wheelbase. Rejected: regular cab (no sleeper possible) and far over mileage cap. https://www.mylittlesalesman.com/2023-freightliner-m2-106-box-truck-automatic-liftgate-14487854"
+    },
+    {
+      "id": "MLS-14356488-2025-M2106-unconfirmed-cab",
+      "source": "MyLittleSalesman.com (via search snippet)",
+      "date": "2026-10-07",
+      "verdict": "unverified",
+      "notes": "2025 Freightliner M2 106, 26ft box, 240HP, 6-speed Allison RDS AMT, roll-up door, liftgate. No mileage, price, sleeper/extended-cab, or GVWR surfaced despite two targeted searches - absence of any sleeper/extended-cab mention alongside a plain 'roll up door, liftgate' spec list suggests a day-cab config (matching the pattern of most indexed M2-106 listings), but unconfirmed either way. Cannot clear gate (a) or (b) - not reported. https://www.mylittlesalesman.com/2025-freightliner-m2-106-26-ft-box-truck-240hp-6-speed-allison-rds-amt-roll-up-door-liftgate-14356488"
+    },
+    {
+      "id": "Penske-355199-2020-MV607-ExtCabSleeper-ParsippanyNJ-193840mi",
+      "source": "Penske Used Trucks, Parsippany NJ",
+      "date": "2026-10-07",
+      "verdict": "too_many_miles",
+      "notes": "SECONDARY candidate (International MV607). 2020 International MV607, extended cab with sleeper bunk, $57,000, 193,840 mi, non-CDL, Cummins B6.7 220HP, air suspension. Rejected: over mileage cap (193,840 > 150,000). https://penskeusedtrucks.com/truck-types/light-and-medium-duty/medium-duty-box-trucks/unit-355199"
+    },
+    {
+      "id": "sweep-2026-10-07-no-new-verified",
+      "source": "WebSearch sweep (11 queries) + 1 WebFetch egress test",
+      "date": "2026-10-07",
+      "verdict": "unverified",
+      "notes": "Ran 11 WebSearch queries covering primary (M2-106) and secondary (MV607) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and MLS/Penske/regional (Chattanooga/TN/GA/AL) follow-ups. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. No unit cleared verification gate (a) or (b) with a confirmed spec+price+mileage match. New leads surfaced and rejected: MLS 14487854 2023 M2-106 205,181mi regular cab (too many miles + wrong cab type), MLS 14356488 2025 M2-106 roll-up/liftgate with no sleeper confirmation (unverified, likely day cab), Penske Parsippany NJ 2020 MV607 ext cab sleeper 193,840mi (too many miles). All previously tracked leads (DTI 18242743 - snippet now shows $94,500, same figure flagged as possibly stale on 2026-09-04, still not price-confirmed live; DTI 18714978; Comvoy VZ8439; Velocity Greensboro M2 Plus $115,990 new stock) re-checked with no material change. No push sent."
     }
   ]
 }
