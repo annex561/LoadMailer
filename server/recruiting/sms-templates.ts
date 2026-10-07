@@ -8,6 +8,13 @@ export const SMS_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateR
   LEAD_CAPTURE_SMS: (p) => ({
     text: `Hi ${p.first_name || "there"}, thanks for applying to LAMP Logistics. Open your application: ${p.app_url || "https://traqiq.app"}. Reply STOP to opt out.`,
   }),
+  // Business-services lead (authority / dispatch / truck sourcing). These are
+  // prospective independent carriers, NOT driver applicants — no application
+  // link, a human follows up with a quote. Selected in recruiting/routes.ts by
+  // leadSource prefix.
+  BIZ_LEAD_CAPTURE_SMS: (p) => ({
+    text: `Hi ${p.first_name || "there"}, thanks for reaching out to LAMP Logistics about starting your box truck business. We're putting your quote together and will follow up shortly. Questions now: (833) 362-9813. Reply STOP to opt out.`,
+  }),
   APP_RECEIVED_SMS: (p) => ({
     text: `${p.first_name || "Driver"}, application received. We'll text you when pre-screening completes — usually within 24 hours.`,
   }),

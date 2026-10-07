@@ -108,6 +108,29 @@ const EMAIL_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender
       }),
     };
   },
+  // Business-services lead (authority / dispatch / truck sourcing). Counterpart
+  // to BIZ_LEAD_CAPTURE_SMS — no application CTA, because these prospects are
+  // becoming their own carrier, not applying to drive for LAMP.
+  BIZ_LEAD_CAPTURE_EMAIL: (p) => {
+    const heading = `${p.first_name ? p.first_name + ", l" : "L"}et's get your business started`;
+    const services = p.services ? String(p.services) : "";
+    return {
+      subject: "LAMP Logistics — your box truck business quote is on the way",
+      text: `Hi ${p.first_name || "there"},\n\nThanks for reaching out about starting your box truck business. We're putting your quote together and will follow up shortly.${services ? `\n\nWhat you asked about: ${services}` : ""}\n\nQuestions: (833) 362-9813.\n\nLAMP Logistics LLC · MC-1725755`,
+      html: brandedEmail({
+        preview: "We're putting your quote together",
+        heading,
+        bodyHtml: `<p>Thanks for reaching out about starting your own box truck business. We're pulling your numbers together now and will follow up shortly.</p>${
+          services
+            ? `<p><strong>What you asked about:</strong> ${services}</p>`
+            : ""
+        }<p>A quick reminder of why we do it this way: a brand-new authority sits because no broker will trust an MC with no history. We dispatch you from the day yours activates, so that gap never opens.</p>`,
+        ctaLabel: "Call (833) 362-9813",
+        ctaUrl: "tel:+18333629813",
+        footer: `You own the authority and the truck. We keep it loaded.`,
+      }),
+    };
+  },
   APPLICATION_RECEIVED_EMAIL: (p) => ({
     subject: "We received your LAMP application",
     text: `Hi ${p.first_name || "there"},\n\nWe have your DOT application. Pre-screening result within 24 hours.\n\nQuestions: (833) 362-9813.`,
