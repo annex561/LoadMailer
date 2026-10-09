@@ -7,7 +7,10 @@
     "gvwr_max": 26000,
     "mileage_max": 150000,
     "price_max": 110000,
-    "requires": ["lift gate", "sleeper or extended-cab-with-bunk"]
+    "requires": [
+      "lift gate",
+      "sleeper or extended-cab-with-bunk"
+    ]
   },
   "seen": [
     {
@@ -1063,6 +1066,53 @@
       "date": "2026-10-08",
       "verdict": "unverified",
       "notes": "Ran 10 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, and Chattanooga/TN/GA/AL regional follow-ups. WebFetch egress test on the DTI 18242743 listing URL confirmed still EGRESS_BLOCKED. Also tested WebFetch on a MyLittleSalesman aggregator URL (MLS 14356488, cross-referenced this run as the same unit as DTI 18242743) as an alternate path to clear gate (a) for the ideal truck - also EGRESS_BLOCKED, so mylittlesalesman.com is now confirmed blocked too. No unit cleared verification gate (a) or (b) with a confirmed live spec+price+mileage match. New leads surfaced and rejected: MHC 0630270 2024 M2-106 (non-sleeper + too many miles), Equipment Experts MV607 140,278mi (no sleeper), DTI Kenworth T270/T280 Denver (no sleeper), Ryder Birmingham 2022 M2-106 265,854mi (too many miles + too old). All previously tracked leads (DTI 18242743, DTI 18714978, Comvoy VZ8439) re-checked with no material change. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO (stock 17951W)",
+      "date": "2026-10-09",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch to dtitrucks.com failed with DNS error (getaddrinfo ENOTFOUND) this run - egress to the direct site still effectively blocked. WebSearch surfaced a Comvoy-hosted mirror of the same unit (stock 17951W, VIN tail WC8375) with List Price $94,500 but dealer page itself says 'Call For Pricing' - price still unconfirmed on a live page. Same base specs unchanged: 2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, Dhollandia liftgate, 26,000 GVWR non-CDL. Comvoy mirror URL: https://www.comvoy.com/work-truck/wheat-ridge-co/used-2025-freightliner-m2-106-conventional-cab-box-truck-20808696 (comvoy.com also egress-blocked, not opened live). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-09",
+      "verdict": "unverified",
+      "notes": "Re-checked. No new price surfaced; searches for this stock kept resolving to the other DTI unit (17951W/18242743) instead. dtitrucks.com egress-blocked (DNS error via WebFetch). No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "Comvoy-18525244-VZ8439",
+      "source": "Comvoy.com / Truck and Van Outlet, Miami FL",
+      "date": "2026-10-09",
+      "verdict": "unverified",
+      "notes": "Re-checked. Could not re-confirm specific stock VZ8439 this run via search (results surfaced other Truck and Van Outlet Miami units instead - 2018/2019 M2-106s, none matching). No material change vs prior entries assumed: 2025 M2-106 Plus ext cab sleeper, 26' box, liftgate, $93,995, 39,821 mi, (305) 315-0667. comvoy.com egress-blocked, gate (a) not cleared. Not re-reported/pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/miami-fl/used-2025-freightliner-m2-106-conventional-cab-morgan-truck-body-box-truck-with-liftgate-18525244"
+    },
+    {
+      "id": "EquipLinc-Auction-2025-M2-ExtCab-39000mi-DavieFL-RoanokeAL",
+      "source": "EquipLinc Auctions LLC (via Construction Equipment Guide listing, search snippet)",
+      "date": "2026-10-09",
+      "verdict": "unverified",
+      "notes": "2025 Freightliner M2 non-CDL box truck, extended cab, Cummins ISB, Allison automatic, 26ft box, liftgate, 39,000 mi, $1,000 minimum bid (auction, not a real price). Listing is unreliable/miscategorized: page title and URL reference a 'Chevrolet Impala', machine location field says Roanoke AL while description says Davie FL, and description phrase 'under CDL' is ambiguous. No sleeper explicitly confirmed (only 'extended cab'). Cannot clear gate (a) (no clean live URL) or (b) (no named dealer/phone, auction listing). Not reported.",
+      "next_steps": "If this resurfaces with a clean listing, search EquipLinc's own auction platform directly by VIN or lot number to resolve the location/category discrepancies."
+    },
+    {
+      "id": "Comvoy-19659299-KenworthT270T280-DTITrucks-Denver-83909mi",
+      "source": "Comvoy.com / DTI Trucks, Denver CO",
+      "date": "2026-10-09",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (Kenworth T280/T270 - listing title says T270, URL says T280, dealer is DTI Trucks Denver). Used 2022, 26' box, Maxon 3,000lb liftgate, Paccar PX7 300HP, Allison 6-speed, 83,909 mi, 26,000 GVWR non-CDL. No price shown. Rejected: no sleeper or extended-cab mention in listing (appears to be a standard day cab) - misses required sleeper/berth spec. https://www.comvoy.com/work-truck/wheat-ridge-co/used-2022-kenworth-t280-box-truck-19659299",
+      "listing_url": "https://www.comvoy.com/work-truck/wheat-ridge-co/used-2022-kenworth-t280-box-truck-19659299"
+    },
+    {
+      "id": "sweep-2026-10-09-no-new-verified",
+      "source": "WebSearch sweep (13 queries) + 1 WebFetch egress test",
+      "date": "2026-10-09",
+      "verdict": "unverified",
+      "notes": "Ran 13 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, and general/regional (Chattanooga/Atlanta/Nashville) sweeps. WebFetch test directly on dtitrucks.com listing 18242743 this run returned a DNS resolution error (getaddrinfo ENOTFOUND) rather than the usual EGRESS_BLOCKED message - functionally the same outcome (no direct site access); fell back to WebSearch-only sweep as instructed. No unit cleared verification gate (a) or (b). All results mapped to previously tracked units (DTI 17951W/18242743, DTI 18714978, Comvoy VZ8439, MHC non-sleeper inventory, Velocity/Black Rock new-inventory units) with no material change, or were new leads rejected/logged as unverified (EquipLinc auction listing with contradictory location/category data; Comvoy Kenworth T270/T280 day cab at DTI Denver, no sleeper). No push sent."
     }
   ]
 }
