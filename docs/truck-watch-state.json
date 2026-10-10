@@ -1113,6 +1113,35 @@
       "date": "2026-10-09",
       "verdict": "unverified",
       "notes": "Ran 13 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, and general/regional (Chattanooga/Atlanta/Nashville) sweeps. WebFetch test directly on dtitrucks.com listing 18242743 this run returned a DNS resolution error (getaddrinfo ENOTFOUND) rather than the usual EGRESS_BLOCKED message - functionally the same outcome (no direct site access); fell back to WebSearch-only sweep as instructed. No unit cleared verification gate (a) or (b). All results mapped to previously tracked units (DTI 17951W/18242743, DTI 18714978, Comvoy VZ8439, MHC non-sleeper inventory, Velocity/Black Rock new-inventory units) with no material change, or were new leads rejected/logged as unverified (EquipLinc auction listing with contradictory location/category data; Comvoy Kenworth T270/T280 day cab at DTI Denver, no sleeper). No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO / Comvoy mirror, Wheat Ridge CO",
+      "date": "2026-10-10",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch to dtitrucks.com again returned DNS error (getaddrinfo ENOTFOUND) - egress still blocked. Comvoy mirror (used-2025-freightliner-m2-106-conventional-cab-box-truck-20808696) snippet now states price $94,500 plainly (not just 'Call For Pricing') and 'available now in Wheat Ridge', 31,422 mi, Dhollandia liftgate, 26,000 GVWR non-CDL, 2 rows E-Track - same base specs as all prior entries. Tried WebFetch on the Comvoy URL as alternate path - also blocked (DNS/egress). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "RitchieBros-CEG-88676591-88824493-2023-M2106-ChicagoIL-34inFlatTopSleeper",
+      "source": "Ritchie Bros. auction via constructionequipmentguide.com / truckandtrailerguide.com, Chicago IL",
+      "date": "2026-10-10",
+      "verdict": "sold",
+      "notes": "2023 Freightliner M2-106, 34in flat-top sleeper cab, 26ft Mickey body with liftgate, Detroit DD8 7.7L 260HP, 26,000 lb GVWR, ~9,356-10,682 engine hours (no odometer mileage given - auction equipment listings use engine hours). Auction closed 2026-08-06, over two months before this sweep - no longer biddable, no price available, no dealer contact (auction house only). Rejected: cannot clear gate (a) (no live listing) or (b) (no dealer/phone, just an auction platform) and the sale window has passed. Related closed Ritchie Bros auction units also surfaced this run, all same disposition (closed Aug-Sep 2026, engine hours not mileage, no live purchase path): 2019 M2-106 48in sleeper Chicago IL (id 88840682/88867287), 2022 M2-106 34in sleeper Chicago IL, 2019 M2-106 34in sleeper Atlanta GA (id 88811148, closed 2026-09-02)."
+    },
+    {
+      "id": "unknown-2025-KenworthT280-FtLauderdaleFL-53073mi-118095",
+      "source": "unknown dealer, Fort Lauderdale FL (via search snippet)",
+      "date": "2026-10-10",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (Kenworth T280). 2025 Kenworth T280, 26ft box, 300HP, Allison 6-speed automatic, roll-up door, liftgate, 53,073 mi, $118,095. Rejected: over budget (>$110,000) and no sleeper/extended-cab mentioned - appears to be a standard day cab."
+    },
+    {
+      "id": "sweep-2026-10-10-no-new-verified",
+      "source": "WebSearch sweep (10 queries) + 1 WebFetch egress test",
+      "date": "2026-10-10",
+      "verdict": "unverified",
+      "notes": "Ran 10 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and regional (Chattanooga/TN/GA/AL/Nashville) follow-ups. WebFetch egress test on the DTI 18242743 listing URL returned DNS error (getaddrinfo ENOTFOUND) - same practical outcome as prior EGRESS_BLOCKED runs; fell back to WebSearch-only per instructions. No unit cleared verification gate (a) or (b). All previously tracked leads (DTI 18242743/Comvoy mirror, DTI 18714978, Comvoy VZ8439) re-checked with no material change. New leads surfaced and rejected/logged as unverified: several Ritchie Bros. auction M2-106 sleeper-cab units in Chicago IL and Atlanta GA (all auctions closed Aug-Sep 2026, engine-hours only, no live purchase path - logged as sold), and a 2025 Kenworth T280 Fort Lauderdale FL (over budget, no sleeper). No push sent."
     }
   ]
 }
