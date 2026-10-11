@@ -1142,6 +1142,51 @@
       "date": "2026-10-10",
       "verdict": "unverified",
       "notes": "Ran 10 WebSearch queries covering primary (M2-106) and secondary (MV607/Hino L6/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and regional (Chattanooga/TN/GA/AL/Nashville) follow-ups. WebFetch egress test on the DTI 18242743 listing URL returned DNS error (getaddrinfo ENOTFOUND) - same practical outcome as prior EGRESS_BLOCKED runs; fell back to WebSearch-only per instructions. No unit cleared verification gate (a) or (b). All previously tracked leads (DTI 18242743/Comvoy mirror, DTI 18714978, Comvoy VZ8439) re-checked with no material change. New leads surfaced and rejected/logged as unverified: several Ritchie Bros. auction M2-106 sleeper-cab units in Chicago IL and Atlanta GA (all auctions closed Aug-Sep 2026, engine-hours only, no live purchase path - logged as sold), and a 2025 Kenworth T280 Fort Lauderdale FL (over budget, no sleeper). No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO / Comvoy mirror, Wheat Ridge CO (stock 17951W)",
+      "date": "2026-10-11",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch to dtitrucks.com again returned DNS error (getaddrinfo ENOTFOUND) - egress still effectively blocked. No material change vs 2026-10-10 entry (2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, Dhollandia liftgate, 26,000 GVWR non-CDL, Comvoy mirror price $94,500). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-11",
+      "verdict": "unverified",
+      "notes": "Not resurfaced in this run's searches; no price ever confirmed. dtitrucks.com egress-blocked. No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "TruckAndVanOutlet-Miami-2023-M2106-UJ2670-136956mi-56995",
+      "vin": "3ALACWFC2PDUJ2670",
+      "source": "TruckPaper.com listing 260520491 / Truck and Van Outlet, Miami FL",
+      "date": "2026-10-11",
+      "verdict": "wrong_spec",
+      "notes": "2023 Freightliner Business Class M2 106, stock UJ2670, $56,995, 136,956 mi, 26ft non-CDL box truck with liftgate, Cummins diesel, Allison automatic. On price/mileage/year this would be a match, but listing category is 'moving box trucks' and no description field mentions a sleeper or extended cab despite a targeted follow-up search - appears to be a standard conventional/day cab. Rejected: missing required sleeper/extended-cab-with-bunk spec. https://www.truckpaper.com/listing/for-sale/260520491/2023-freightliner-business-class-m2-106-moving-box-trucks"
+    },
+    {
+      "id": "unknown-2015-M2106-expeditor-IL-351495mi-19990",
+      "source": "unknown IL dealer (via search snippet)",
+      "date": "2026-10-11",
+      "verdict": "too_many_miles",
+      "notes": "2015 Freightliner M2 expeditor with liftgate, 26,000 GVWR non-CDL, Cummins, automatic, aftermarket above-cab sleeper installed, 351,495 mi, $19,990, Illinois. Rejected: far over mileage cap and year; aftermarket sleeper conversion rather than factory/converted extended cab."
+    },
+    {
+      "id": "Comvoy-19659299-KenworthT270T280-DTITrucks-Denver-83909mi",
+      "source": "Comvoy.com / DTI Trucks, Denver CO",
+      "date": "2026-10-11",
+      "verdict": "wrong_spec",
+      "notes": "Re-surfaced, no material change vs 2026-10-09 entry (day cab, no sleeper). Not re-reported."
+    },
+    {
+      "id": "sweep-2026-10-11-no-new-verified",
+      "source": "WebSearch sweep (12 queries) + 1 WebFetch egress test",
+      "date": "2026-10-11",
+      "verdict": "unverified",
+      "notes": "Ran 12 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and regional (Chattanooga/TN/GA/AL/Nashville) follow-ups. WebFetch egress test on the DTI 18242743 listing URL returned DNS error (getaddrinfo ENOTFOUND) - fell back to WebSearch-only per instructions. No unit cleared verification gate (a) or (b). All previously tracked leads (DTI 18242743/Comvoy mirror, DTI 18714978, Comvoy VZ8439, Comvoy Kenworth T270/T280) re-checked with no material change. New leads surfaced and rejected: Truck and Van Outlet Miami 2023 M2-106 stock UJ2670 ($56,995, 136,956mi - good price/mileage/year but no sleeper/extended-cab confirmed, appears day cab), 2015 M2 expeditor IL ($19,990, 351,495mi - far over mileage cap), Penske Parsippany NJ 2020 MV607 ext cab sleeper (already tracked 2026-10-07, too many miles). No push sent."
     }
   ]
 }
