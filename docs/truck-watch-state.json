@@ -1187,6 +1187,36 @@
       "date": "2026-10-11",
       "verdict": "unverified",
       "notes": "Ran 12 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and regional (Chattanooga/TN/GA/AL/Nashville) follow-ups. WebFetch egress test on the DTI 18242743 listing URL returned DNS error (getaddrinfo ENOTFOUND) - fell back to WebSearch-only per instructions. No unit cleared verification gate (a) or (b). All previously tracked leads (DTI 18242743/Comvoy mirror, DTI 18714978, Comvoy VZ8439, Comvoy Kenworth T270/T280) re-checked with no material change. New leads surfaced and rejected: Truck and Van Outlet Miami 2023 M2-106 stock UJ2670 ($56,995, 136,956mi - good price/mileage/year but no sleeper/extended-cab confirmed, appears day cab), 2015 M2 expeditor IL ($19,990, 351,495mi - far over mileage cap), Penske Parsippany NJ 2020 MV607 ext cab sleeper (already tracked 2026-10-07, too many miles). No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO (also surfaced as Comvoy-20808696 and MyLittleSalesman-14356488)",
+      "date": "2026-10-12",
+      "verdict": "unverified",
+      "notes": "Re-checked. Same unit now consistently cross-listed: DTI Trucks stock 17951Wwts / dtitrucks.com 18242743, Comvoy listing 20808696 (Wheat Ridge CO, mislabeled 'Conventional Cab' in its title despite AI-summary text confirming Extended Cab With Sleeper/bunk), and MyLittleSalesman listing 14356488. Specs unchanged: 2025 M2-106 Extended Cab with Sleeper/bunk, 31,422 mi, 650 engine hrs, 26' box, 6.7L Cummins turbo diesel 240HP, Allison automatic, Dhollandia liftgate, 26,000 lb GVWR non-CDL. Price now consistently $94,500 across both aggregator snippets (within budget) - first time price has been stable across sources rather than conflicting. WebFetch tested THREE times this run (dtitrucks.com listing URL, comvoy.com listing URL, and a neutral control https://example.com) - ALL THREE returned getaddrinfo ENOTFOUND, confirming egress is fully DNS-blocked in this environment this run, not just for truck-dealer domains. Gate (a) cannot be cleared via WebFetch at all today. Named dealer + phone (720) 360-4022 clears gate (b), but per prior sweep guidance this specific unit is held for gate (a) live-URL confirmation before reporting/pushing, since it previously showed 'sold' and reappeared, and because multiple aggregator price figures have proven unreliable in the past. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-12",
+      "verdict": "unverified",
+      "notes": "Not re-surfaced in this run's searches (no new price/detail). No material change vs prior entries (2025 M2-106 L9 Cummins Plus ext cab w/ sleeper bunk, 181 mi near-new, 26,000 GVWR non-CDL, no price ever confirmed). Egress fully blocked this run (see DTITrucks-18242743 entry). Not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "KansasCity-2016-M2106-SleeperCab-253868mi",
+      "source": "Comvoy.com aggregator / Kansas City dealer (via search snippet)",
+      "date": "2026-10-12",
+      "verdict": "wrong_spec",
+      "notes": "2016 Freightliner M2-106, Cummins ISB, Allison automatic, 253,868 mi, categorized as 'Conventional - Sleeper Cab', 26' box, 102in wide, 97in tall, under CDL. Rejected: model year (2016) far below 2023+ requirement and mileage (253,868) far above 150,000 cap - fails on 2 of 6 criteria."
+    },
+    {
+      "id": "sweep-2026-10-12-no-new-verified",
+      "source": "WebSearch sweep (13 queries) + 3 WebFetch egress tests",
+      "date": "2026-10-12",
+      "verdict": "unverified",
+      "notes": "Ran 13 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and a Chattanooga/Nashville/Knoxville/Atlanta regional search. WebFetch tested on dtitrucks.com, comvoy.com, and a neutral control (example.com) - all three returned getaddrinfo ENOTFOUND, confirming total DNS/egress block this run (not domain-specific). No unit cleared verification gate (a) or (b) for a new match. All sleeper/ext-cab results mapped to previously tracked units (DTI 18242743/18714978, Ritchie Bros Chicago CEG 88676591/88824493 already logged 'sold' 2026-10-10, Atlanta Ritchie Bros 2019 auction past its close date) or were new leads rejected as wrong_spec (Kansas City 2016 M2-106 sleeper cab - too old and too many miles). Notable: DTI 18242743's price has stabilized at $94,500 across two independent aggregator sources this run (previously conflicting figures) - still cannot be reported without a live URL open or until price volatility resolves further. No push sent."
     }
   ]
 }
