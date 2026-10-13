@@ -1217,6 +1217,29 @@
       "date": "2026-10-12",
       "verdict": "unverified",
       "notes": "Ran 13 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and a Chattanooga/Nashville/Knoxville/Atlanta regional search. WebFetch tested on dtitrucks.com, comvoy.com, and a neutral control (example.com) - all three returned getaddrinfo ENOTFOUND, confirming total DNS/egress block this run (not domain-specific). No unit cleared verification gate (a) or (b) for a new match. All sleeper/ext-cab results mapped to previously tracked units (DTI 18242743/18714978, Ritchie Bros Chicago CEG 88676591/88824493 already logged 'sold' 2026-10-10, Atlanta Ritchie Bros 2019 auction past its close date) or were new leads rejected as wrong_spec (Kansas City 2016 M2-106 sleeper cab - too old and too many miles). Notable: DTI 18242743's price has stabilized at $94,500 across two independent aggregator sources this run (previously conflicting figures) - still cannot be reported without a live URL open or until price volatility resolves further. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO (also Comvoy-20808696 / MyLittleSalesman-14356488)",
+      "date": "2026-10-13",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch to dtitrucks.com again returned getaddrinfo ENOTFOUND (egress still DNS-blocked this run, tested once per instructions). WebSearch snippets unchanged: 2025 M2-106 Extended Cab With Sleeper/bunk, 31,422 mi, 26' box, 6.7L Cummins 240HP, Allison automatic, Dhollandia liftgate, 26,000 GVWR non-CDL, price $94,500 consistent across MyLittleSalesman/Comvoy aggregator mirrors. One MyLittleSalesman snippet this run flagged the front/rear axle weights (12,000+18,000=30,000lb) as a possible CDL-threshold conflict with the stated 26,000 GVWR - worth asking about on the eventual call, but GVWR (not sum of axle ratings) is the controlling non-CDL figure and the listing states 26,000 GVWR. Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-13",
+      "verdict": "unverified",
+      "notes": "Not resurfaced with new detail this run; no price ever confirmed. dtitrucks.com egress-blocked (DNS). No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "sweep-2026-10-13-no-new-verified",
+      "source": "WebSearch sweep (13 queries) + 1 WebFetch egress test",
+      "date": "2026-10-13",
+      "verdict": "unverified",
+      "notes": "Ran 13 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, and a Chattanooga/Nashville/Atlanta/Knoxville regional search. WebFetch egress test on the DTI 18242743 listing URL returned getaddrinfo ENOTFOUND (one attempt, per instructions) - fell back to WebSearch-only sweep. No unit cleared verification gate (a) or (b) for a new match. All sleeper/ext-cab/low-mileage results mapped to previously tracked units (DTI 18242743/18714978 price-stable at $94,500, Comvoy VZ8439 not resurfaced, Comvoy Kenworth T270/T280 day cab, Ritchie Bros Chicago/Atlanta auctions already logged sold/closed) or were rejected as wrong_spec (MHC non-sleeper 2024/2020 M2-106 inventory, 2016 Freightliner M2-106 sleeper cab 63,791mi $58,000 trucking classifieds - too old by 7 years despite good mileage, various MV607/Hino L6/T280 day-cab-only results with no sleeper mention). No new candidate cleared gate (a) or (b). No push sent."
     }
   ]
 }
