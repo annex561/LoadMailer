@@ -96,6 +96,30 @@ async function transitionStage(applicationId: string, toStage: string, reason?: 
   });
 }
 
+// Leads from the /start-your-box-truck-business landing arrive with a
+// leadSource shaped like:
+//   start-your-business|services=authority,dispatch|src=fb-marketplace
+// The prefix routes them to business-services notification copy instead of the
+// driver-application copy; the services segment is echoed back in the email.
+const BUSINESS_LEAD_PREFIX = "start-your-business";
+
+const SERVICE_LABELS: Record<string, string> = {
+  authority: "Authority formation",
+  dispatch: "Dispatch",
+  truck: "Truck sourcing",
+  bundle: "The full startup package",
+};
+
+function describeRequestedServices(leadSource?: string | null): string {
+  const match = /\|services=([^|]*)/.exec(leadSource ?? "");
+  if (!match || !match[1] || match[1] === "unspecified") return "";
+  return match[1]
+    .split(",")
+    .map((s) => SERVICE_LABELS[s.trim()] ?? s.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
 export function registerRecruitingRoutes(app: Express) {
   // -----------------------------------------------------------------------
   // POST /api/recruiting/leads — STAGE 1: Lead capture (public, no auth)
@@ -161,17 +185,25 @@ export function registerRecruitingRoutes(app: Express) {
       // If kill switch is off, these queue but never send — safe by default.
       try {
         const baseUrl = process.env.PUBLIC_APP_URL || "https://traqiq.app";
+        // Business-services leads (from /start-your-box-truck-business) become
+        // their own carrier — they must NOT get the "finish your driver
+        // application" copy, and there is no application for them to open.
+        const isBusinessLead = (leadSource ?? "").startsWith(BUSINESS_LEAD_PREFIX);
+        const payload = isBusinessLead
+          ? { first_name: firstName, services: describeRequestedServices(leadSource) }
+          : { first_name: firstName, app_url: `${baseUrl}/apply/${created.id}` };
+
         await queueRecruitingNotification({
           applicationId: created.id,
           channel: "SMS",
-          templateKey: "LEAD_CAPTURE_SMS",
-          payload: { first_name: firstName, app_url: `${baseUrl}/apply/${created.id}` },
+          templateKey: isBusinessLead ? "BIZ_LEAD_CAPTURE_SMS" : "LEAD_CAPTURE_SMS",
+          payload,
         });
         await queueRecruitingNotification({
           applicationId: created.id,
           channel: "EMAIL",
-          templateKey: "LEAD_CAPTURE_EMAIL",
-          payload: { first_name: firstName, app_url: `${baseUrl}/apply/${created.id}` },
+          templateKey: isBusinessLead ? "BIZ_LEAD_CAPTURE_EMAIL" : "LEAD_CAPTURE_EMAIL",
+          payload,
         });
       } catch (notifyErr) {
         console.error("[recruiting/leads] notification queue err:", notifyErr);
