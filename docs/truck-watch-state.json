@@ -1329,6 +1329,43 @@
       "date": "2026-10-17",
       "verdict": "unverified",
       "notes": "Ran 11 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280/Hino L6-L7) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, ebay.com, comvoy.com, and a Chattanooga/TN-GA-AL regional sweep. WebFetch egress test on commercialtrucktrader.com failed with DNS error (ENOTFOUND) - egress to direct sites still blocked this run. No unit cleared verification gate (a). All results mapped to the already-tracked DTI 18242743 unit (now confirmed also mirrored on Comvoy, same stock/specs/price) or were new leads rejected as wrong_spec (2022 Kenworth T280 no sleeper, various no-sleeper/CDL-required/too-old M2-106 and MV607 units) or too vague to log (generic SEO/aggregator category pages). DTI 18714978 did not resurface with any new detail this run. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO (also Comvoy-20808696, stock 17951W)",
+      "date": "2026-10-18",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch to dtitrucks.com returned getaddrinfo ENOTFOUND again this run (egress still DNS-blocked, tested once per instructions). WebSearch/Comvoy mirror confirms same unchanged specs and price: 2025 M2-106 Extended Cab With Sleeper/bunk, stock 17951W, 31,422 mi, 650 hrs, 26ft/102in/103in box, Dhollandia liftgate, 26,000 GVWR non-CDL, $94,500 list (plus $699 dealer/handling fee per DTI's standard terms), dealer (720) 360-4022 / Comvoy mirror phone (303) 990-8768. Price has now held at $94,500 across multiple consecutive runs. Still held for gate (a) live-URL confirmation only per seed instruction (this unit was previously flagged 'sold' then reappeared) - not reported, not pushed, despite gate (b) (named dealer + phone) being clearable.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18714978",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-18",
+      "verdict": "unverified",
+      "notes": "Not resurfaced with new detail this run; no price ever confirmed (2025 M2-106 L9 Cummins Plus ext cab w/ sleeper bunk, 181 mi near-new, 26,000 GVWR non-CDL). dtitrucks.com egress-blocked. No material change - not re-reported.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-L9-Cummins-Plus-Extended-Cab-With-Sleeper-Bunk-26-Box-Truck-Steele-St-18714978"
+    },
+    {
+      "id": "AllAmerican-TruckPaper-257527417-2024-M2106-ExtCab-Attic-95284mi-64900",
+      "source": "TruckPaper.com listing (likely All American Truck Sales, Philadelphia PA area, via search snippet)",
+      "date": "2026-10-18",
+      "verdict": "wrong_spec",
+      "notes": "2024 Freightliner Business Class M2 106 'moving box truck', extended cab with liftgate and an 'attic' (overhead storage compartment above the cab, not a sleeper berth), Detroit DD8 350HP, 95,284 mi, 26,000 lb GVWR, $64,900. Rejected: 'attic' is cargo storage, not a sleeper/bunk - no sleeper or converted berth confirmed in any snippet, so this misses the required sleeper/extended-cab-with-bunk spec despite otherwise fitting year/mileage/price/GVWR. Dealer name and location not confirmed (snippet did not clearly attribute to All American Truck Sales despite that name surfacing in a related search) - would also fail gate (b). URL: https://www.truckpaper.com/listing/for-sale/257527417/2024-freightliner-business-class-m2-106-moving-box-trucks"
+    },
+    {
+      "id": "Fyda-WaltonKY-2023-M2106-StandardCab-33267mi",
+      "source": "Equipment Experts / Fyda Freightliner Western Star of Northern Kentucky, Walton KY (via search snippet)",
+      "date": "2026-10-18",
+      "verdict": "wrong_spec",
+      "notes": "2023 Freightliner M2 106, 33,267 mi, 26ft box, Detroit DD5 engine, Allison automatic, extended engine warranty. Rejected: explicitly listed as Standard Cab, not extended cab - no sleeper/berth possible. No price surfaced."
+    },
+    {
+      "id": "sweep-2026-10-18-no-new-verified",
+      "source": "WebSearch sweep (13 queries) + 1 WebFetch egress test",
+      "date": "2026-10-18",
+      "verdict": "unverified",
+      "notes": "Ran 13 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Kenworth T280/Hino L6-L7) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, ebay.com, comvoy.com, and a TN/GA/AL/KY regional sweep plus targeted follow-ups on two new Comvoy Georgia leads (both resolved to generic multi-listing category pages, not single units). WebFetch egress test on dtitrucks.com returned getaddrinfo ENOTFOUND - fell back to WebSearch-only per instructions. No unit cleared verification gate (a) or (b) for a new match. DTI 18242743 price held stable at $94,500 for multiple consecutive runs (gate b clearable, still held on gate a per seed instruction for this specific previously-'sold' unit). Two new leads logged as wrong_spec (TruckPaper 2024 M2-106 ext cab with 'attic' storage, not a sleeper, Philadelphia PA area; Fyda Freightliner Walton KY 2023 M2-106 explicitly Standard Cab). All other results mapped to previously tracked units or were generic category/aggregator pages with no unit-specific detail. No push sent."
     }
   ]
 }
