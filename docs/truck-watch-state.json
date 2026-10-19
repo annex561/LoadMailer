@@ -1366,6 +1366,49 @@
       "date": "2026-10-18",
       "verdict": "unverified",
       "notes": "Ran 13 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Kenworth T280/Hino L6-L7) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, ebay.com, comvoy.com, and a TN/GA/AL/KY regional sweep plus targeted follow-ups on two new Comvoy Georgia leads (both resolved to generic multi-listing category pages, not single units). WebFetch egress test on dtitrucks.com returned getaddrinfo ENOTFOUND - fell back to WebSearch-only per instructions. No unit cleared verification gate (a) or (b) for a new match. DTI 18242743 price held stable at $94,500 for multiple consecutive runs (gate b clearable, still held on gate a per seed instruction for this specific previously-'sold' unit). Two new leads logged as wrong_spec (TruckPaper 2024 M2-106 ext cab with 'attic' storage, not a sleeper, Philadelphia PA area; Fyda Freightliner Walton KY 2023 M2-106 explicitly Standard Cab). All other results mapped to previously tracked units or were generic category/aggregator pages with no unit-specific detail. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO (Steele St / Wheat Ridge CO) via Comvoy listing",
+      "date": "2026-10-19",
+      "verdict": "unverified",
+      "notes": "Re-checked. New direct Comvoy mirror URL found: https://www.comvoy.com/work-truck/wheat-ridge-co/used-2025-freightliner-m2-106-conventional-cab-box-truck-20808696 . Same unit as prior dtitrucks.com entries: 2025 M2-106 extended cab w/ sleeper, 26ft box, 31,422 mi, 6.7L Cummins, Allison automatic, 26,000 GVWR non-CDL, stock #17951W. Listing shows 'List Price $94,500 + upfit, Call For Pricing' - price unchanged from 2026-09-04. Dealer phone (720) 360-4022 confirmed again. WebFetch tested on the dtitrucks.com URL this run - still getaddrinfo ENOTFOUND (egress blocked). Did not spend the one-WebFetch budget on the new comvoy.com mirror URL this run. Per seed instruction this specific unit is held for gate (a) live-URL-open confirmation only - not reported, not pushed.",
+      "listing_url": "https://www.comvoy.com/work-truck/wheat-ridge-co/used-2025-freightliner-m2-106-conventional-cab-box-truck-20808696"
+    },
+    {
+      "id": "MHC-0630270-2024-M2106-163376mi-54950",
+      "source": "MHC Springdale (via search snippet)",
+      "date": "2026-10-19",
+      "verdict": "too_many_miles",
+      "notes": "2024 Freightliner M2-106, 163,376 mi, $54,950, explicitly listed as Non-Sleeper. Rejected: mileage over 150,000 limit and no sleeper/extended-cab-with-bunk. URL: https://www.mhc.com/trucks/used/2024/freightliner/m2-106/0630270"
+    },
+    {
+      "id": "MLS-14487854-2023-M2106-205181mi-RegularCab",
+      "source": "MyLittleSalesman (via search snippet)",
+      "date": "2026-10-19",
+      "verdict": "wrong_spec",
+      "notes": "2023 Freightliner M2-106 Box Truck - Automatic, Liftgate, ~205,181 mi, Regular Cab (not extended/sleeper). Rejected: no sleeper/extended cab and over mileage limit. URL: https://www.mylittlesalesman.com/2023-freightliner-m2-106-box-truck-automatic-liftgate-14487854"
+    },
+    {
+      "id": "RitchieBros-88964948-2023-M2106-Orlando-34inSleeper-AUCTION",
+      "source": "Ritchie Bros auction (via Truck and Trailer Guide / Construction Equipment Guide)",
+      "date": "2026-10-19",
+      "verdict": "sold",
+      "notes": "On paper a strong spec match: 2023 Freightliner M2-106, 34in sleeper cab, 26ft Morgan body, Cummins B6.7 250hp, Allison 2200 automatic, 26,000 lb GVWR, liftgate. BUT this is a Ritchie Bros auction listing with closing date 2026-08-27, already passed as of today (2026-10-19) - auction closed/truck sold, not a live fixed-price listing. Not reported/pushed."
+    },
+    {
+      "id": "RitchieBros-88676591-and-88777720-2023-M2106-Chicago-34inFlatTopSleeper-AUCTION",
+      "source": "Ritchie Bros auction, Chicago (via Construction Equipment Guide / Truck and Trailer Guide)",
+      "date": "2026-10-19",
+      "verdict": "sold",
+      "notes": "Two 2023 Freightliner M2-106 units (serials ending L9358 and M0302), 34in flat-top sleeper cab, 26ft x 102in Mickey box w/ liftgate, Detroit DD8 engine, Allison automatic, 26,000 GVWR. Auction closing times shown as 2026-08-06, already passed as of today - auctions closed/sold. Also auction format (bid-based) is a poor fit for a straightforward cash-down purchase even when live. Not reported/pushed."
+    },
+    {
+      "id": "sweep-2026-10-19-no-new-verified",
+      "source": "WebSearch sweep (9 queries) + 1 WebFetch egress test",
+      "date": "2026-10-19",
+      "verdict": "unverified",
+      "notes": "Ran 9 WebSearch queries covering primary M2-106 spec variations, site-specific searches (commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com), secondary MV607/Hino/Kenworth T280 spec, and targeted follow-ups on Ritchie Bros auction leads and the recurring DTI Trucks unit. WebFetch egress test on dtitrucks.com returned getaddrinfo ENOTFOUND - fell back to WebSearch-only per instructions. No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. DTI 18242743 price held stable at $94,500, new Comvoy mirror URL found but not opened (gate a still fails) - still held per seed instruction. Three Ritchie Bros auction units (2023 M2-106, 34in sleeper, 26ft box, liftgate, 26,000 GVWR) were strong specs on paper but all had auction closing dates already passed - sold/closed. No push sent."
     }
   ]
 }
