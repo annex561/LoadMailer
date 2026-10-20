@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 import { apiRequest } from '@/lib/queryClient';
 import { useMessageNotification } from '@/hooks/useNotificationSound';
 import { useTypingIndicator } from '@/hooks/use-typing-indicator';
@@ -2589,10 +2590,30 @@ function MobileDriverDashboard() {
   );
 }
 
+// Drivers have no login; their portal is /driver/<token> (server/driver-portal.ts).
+// This page's /api/drivers/:id calls need a staff session, so a driver opening an
+// old ?driverId= SMS link gets this notice instead of a page of failed requests.
+// Do NOT redirect ?driverId= to /driver/<token>: that turns a leaked UUID into portal access.
+function LegacyDriverLinkGate() {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center max-w-md">
+          <h1 className="text-xl font-bold mb-2">This link has moved.</h1>
+          <p className="text-muted-foreground">Text dispatch for your new link.</p>
+        </div>
+      </div>
+    );
+  }
+  return <MobileDriverDashboard />;
+}
+
 function MobileDriverDashboardWithErrorBoundary() {
   return (
     <ErrorBoundary>
-      <MobileDriverDashboard />
+      <LegacyDriverLinkGate />
     </ErrorBoundary>
   );
 }
