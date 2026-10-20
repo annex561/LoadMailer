@@ -233,3 +233,27 @@ Format:
 - **Guard** — `server/__tests__/loads-drivers-auth.test.ts` → "mounts /api/coverage behind isAuthenticated".
 - **Do NOT** — do not copy this prefix guard onto `/api/drivers`. That prefix holds the public tokenized portal route `PATCH /api/drivers/self/:token`, and the test file header explains why it uses per-route guards there. Also note `GET /api/drivers/:id` is still unauthenticated as of this entry (a fake id returns 404, not 401); `client/src/pages/driver-dashboard.tsx` calls it, so gating it needs the driver-dashboard login path checked first.
 - `2026-10-19 · (this commit)`
+
+### Seven guard tests red on main for months: stale source pins, not broken sends
+- **Symptom** — `npx vitest run` on main fails 7 tests in 4 files:
+  `driver-stage-messages.test.ts` (3 snapshot mismatches + `expected 'Load #LD29505831 CONFIRMED…' to contain 'Upload a clear photo of the signed BO…'`),
+  `dry-run-mode.test.ts` ("submitToLoves gates BEFORE the SMTP sendMail call": `expected -1 to be greater than 0`),
+  `factoring-test-redirect.test.ts` ("test-mode branch skips the production factoring_submissions insert": `not to match /\.insert\(factoringSubmissions\)/`),
+  `upload-direct-cloudinary.test.ts` (`expected '// Driver photo upload page…' to match /cloudinaryUrl/`).
+- **Root cause** — each pin went stale when the code moved on purpose, and nothing ran the suite (the repo has no `.github/workflows`), so nobody saw it go red. Breaking commits found by `git bisect run`:
+  - driver-stage-messages: `2b6e269` (2026-05-31, owner request) changed the pickup prompt to "Upload the BOL + tie-down photos (both required):", the delivery prompt to "Upload the signed BOL + POD:", and added `?stages=pickup_bol,pickup_securement` / `?stages=delivery_pod,delivery_signed_bol` to the `/u/` links. Its own guard (`upload-stage-phasing.test.ts`) was added; these snapshots were not updated.
+  - upload-direct-cloudinary: `fcee3e2` (#93, merged 2026-05-27) replaced the #97 save-back (`POST /api/loads/:id/photos` with `cloudinaryUrl`) with `GET /photos/sign` → Cloudinary → `POST /photos/record` with `fileUrl`. The client and route agree on `fileUrl`.
+  - factoring-test-redirect: `e099872` (#111, Resend swap) made the test-mode branch shorter, so the test's fixed 4000-char window ran past the branch's `return` into the production `.insert(factoringSubmissions)`. The branch itself still returns on every path before the insert.
+  - dry-run-mode: went red at `d9227de` (#109), see the next entry. `e099872` (#111) then removed `factoringMailer.sendMail` entirely, so the anchor matched nothing.
+- **Fix** — tests only, no production code: updated the 3 inline snapshots and the flag-OFF wording; pinned the `/photos/record` + `fileUrl` contract on both client and route; bounded the test-mode block by the dedup comment instead of 4000 chars; re-anchored the dry-run pin on the one `sendViaResend({…})` call whose `to:` is `SCHEDULES_LS`.
+- **Guard** — the four files above. Each new pin was mutation-checked: removing the dry-run gate, routing the test branch to `SCHEDULES_LS`, adding an insert inside the test branch, and renaming `fileUrl` on either the client or the route each turn a test red.
+- **Do NOT** — do not "fix" a red source pin by deleting the assertion or widening it until it passes. Bisect it first (`git bisect run npx vitest run <file> -t "<name>"`) and read the breaking commit: the dry-run pin looked stale too, and it was the one catching a real gap. Do not anchor a pin on "the first send in the file" or a fixed character window; anchor on the specific call and bound the slice by text.
+- `2026-10-19 · (this commit)`
+
+### DRY_RUN_OUTBOUND does not stop the FACTORING_TEST_TO_EMAIL send (OPEN, approval-gated)
+- **Symptom** — with `DRY_RUN_OUTBOUND=true`, `LOVES_FACTORING_ENABLED=true` and `FACTORING_TEST_TO_EMAIL` set, Submit on `/factoring` still sends a real email through `api.resend.com` to the test inbox. Logs show `[factoring-loves] ✅ TEST sent loadId=…` and no `[DRY-RUN] loves-factoring.sendPacket` line.
+- **Root cause** — `d9227de` (#109) put the test-redirect branch at the top of `submitToLoves`, before the dry-run gate, and gave it its own send. The dry-run pin went red that day. Love's is never contacted: the only send to `SCHEDULES_LS` is still behind `if (isDryRunOutbound())`.
+- **Fix** — not applied. Moving the dry-run check above the test branch changes send behaviour on a paid vendor (Resend), so it waits for Annex's approval under the financial-impact rule.
+- **Guard** — `dry-run-mode.test.ts` holds an `it.todo` for it. Turn that into a real pin in the same PR that moves the gate.
+- **Do NOT** — do not assume `DRY_RUN_OUTBOUND=true` means zero outbound from `/factoring` while the test redirect is set. Unset `FACTORING_TEST_TO_EMAIL` first if you need a true no-send run.
+- `2026-10-19 · (open)`

@@ -170,7 +170,17 @@ describe('direct-upload client/server wiring (source-text pins)', () => {
       'utf8',
     );
     expect(src).toMatch(/api\.cloudinary\.com\/v1_1/);
-    expect(src).toMatch(/cloudinaryUrl/);
+    // Save-back goes to /photos/record with the Cloudinary URL as `fileUrl`
+    // (#93 replaced the #97 `cloudinaryUrl` JSON branch on /photos). The key
+    // must match what the route reads, or every upload 400s after the bytes
+    // already reached Cloudinary.
+    expect(src).toMatch(/\/photos\/record/);
+    expect(src).toMatch(/fileUrl:\s*cloudResult\.secure_url/);
+    const routes = fs.readFileSync(path.join(__dirname, '..', 'routes.ts'), 'utf8');
+    const recStart = routes.indexOf("app.post('/api/loads/:id/photos/record'");
+    expect(recStart).toBeGreaterThan(-1);
+    const recordRoute = routes.slice(recStart, routes.indexOf('\n  app.', recStart + 1));
+    expect(recordRoute).toMatch(/fileUrl:\s*req\.body\.fileUrl/);
     // The save-back POST must include the stage so the load_documents
     // row is correctly typed (pickup_bol vs delivery_signed_bol etc.).
     expect(src).toMatch(/stage:\s*stage/);
