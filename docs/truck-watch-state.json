@@ -1409,6 +1409,28 @@
       "date": "2026-10-19",
       "verdict": "unverified",
       "notes": "Ran 9 WebSearch queries covering primary M2-106 spec variations, site-specific searches (commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com), secondary MV607/Hino/Kenworth T280 spec, and targeted follow-ups on Ritchie Bros auction leads and the recurring DTI Trucks unit. WebFetch egress test on dtitrucks.com returned getaddrinfo ENOTFOUND - fell back to WebSearch-only per instructions. No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. DTI 18242743 price held stable at $94,500, new Comvoy mirror URL found but not opened (gate a still fails) - still held per seed instruction. Three Ritchie Bros auction units (2023 M2-106, 34in sleeper, 26ft box, liftgate, 26,000 GVWR) were strong specs on paper but all had auction closing dates already passed - sold/closed. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-20",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - DNS/egress failure (ENOTFOUND www.dtitrucks.com), same effective block as prior EGRESS_BLOCKED runs. Search-assistant summary again cited $94,500 'before upfit costs' for this unit (same figure seen 2026-09-04 and flagged then as possibly stale/templated finance copy, not a confirmed live price) alongside unchanged base specs (2025 M2-106 ext cab sleeper/bunk, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "unknown-2024-KenworthT280-FortWorthTX-35758mi-86900-DayCab",
+      "source": "unknown dealer, Fort Worth TX (via search snippet)",
+      "date": "2026-10-20",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (Kenworth T280). Used 2024 Kenworth T280, 26ft Morgan van body, Maxon liftgate, 26,000 lb GVWR, 35,758 mi, $86,900. Rejected: listing explicitly states 'Cab Sleeper Size: Non' - day cab, no sleeper/extended-cab berth. No dealer name or URL surfaced in snippet."
+    },
+    {
+      "id": "sweep-2026-10-20-no-new-verified",
+      "source": "WebSearch sweep (10 queries) + 1 WebFetch egress test",
+      "date": "2026-10-20",
+      "verdict": "unverified",
+      "notes": "Ran 10 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, and general expediter/sleeper-box-truck sweeps. WebFetch egress test on dtitrucks.com listing 18242743 failed (DNS ENOTFOUND, same effective block as prior days' EGRESS_BLOCKED). All results mapped to previously tracked units (DTI 18242743, DTI 17760W/T270-T280, Comvoy Wheat Ridge T280 19659299, RitchieBros Chicago 34in sleeper auction, Kansas City 2016 M2-106, MHC 0630270/0630680, Velocity/new-inventory M2 106 Plus units) with no material change, or were new day-cab/no-sleeper secondary units (Fort Worth T280, new Boise/Leawood T280 units) that fail the sleeper requirement outright. No unit cleared verification gate (a) or (b). No push sent."
     }
   ]
 }
