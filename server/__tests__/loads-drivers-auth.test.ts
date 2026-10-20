@@ -72,6 +72,37 @@ describe("load + driver list endpoints require authentication", () => {
     ).toBe(false);
   });
 
+  // 2026-10-19: every /api/drivers/:param route was open except the two /advances routes.
+  // GET /api/drivers/:id returned the full row incl. trackingToken; POST
+  // /:driverId/generate-tracking-token ROTATED it (hijacks /driver/:token, kills the
+  // driver's real link); PUT/DELETE edited or deleted the driver; send-dashboard-link
+  // sent a billable SMS per call. Driver UUIDs are not secret — anonymous GET
+  // /api/driver-locations/active lists them. Scans every route whose third path segment
+  // is a param, so a new unguarded /api/drivers/:id/... route fails here too. The
+  // tokenized portal route is /api/drivers/self/:token (literal "self"), not matched.
+  describe("every /api/drivers/:param route requires authentication", () => {
+    const routeRe =
+      /app\.(get|post|put|patch|delete)\(\s*(['"`])(\/api\/drivers\/:[^'"`]*)\2\s*,\s*([^,]*)/g;
+    const routes = [...routesSrc.matchAll(routeRe)].map((m) => ({
+      method: m[1],
+      path: m[3],
+      firstArg: m[4].trim(),
+    }));
+
+    it("finds the known routes (scan has not drifted)", () => {
+      expect(routes.length).toBeGreaterThanOrEqual(12);
+    });
+
+    for (const { method, path, firstArg } of routes) {
+      it(`${method.toUpperCase()} ${path} is gated`, () => {
+        expect(
+          /^(requireRole\(|isAuthenticated\b)/.test(firstArg),
+          `${method.toUpperCase()} ${path} must pass isAuthenticated (or requireRole(...)) before its handler. Driver UUIDs leak from public endpoints, so an unguarded /api/drivers/:id route is an anonymous read/write on that driver.`,
+        ).toBe(true);
+      });
+    }
+  });
+
   // 2026-10-19: /api/coverage was mounted bare. GET /drivers returned every driver's
   // name, phone, own MC/DOT and COI file paths to anonymous callers, and the PATCH/
   // DELETE routes let anyone edit a driver's authority or delete a certificate.
