@@ -17,6 +17,14 @@ export interface SessionBasedDATLoad {
   comments: string;
 }
 
+// Off unless DAT_SESSION_SCRAPER_ENABLED=true. A headless Chrome on Railway has no
+// DAT cookies, DAT redirects it to its marketing page (no "login" in the URL), and
+// checkAuthenticatedSession reads that as logged in. Left on, it launched Chrome
+// every 15s for 0 loads and pinned 1-3 vCPU / up to 24GB. See docs/FIX-LEDGER.md.
+export function isDatSessionScraperEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.DAT_SESSION_SCRAPER_ENABLED === 'true';
+}
+
 /**
  * Session-based DAT scraper that works with manually authenticated sessions
  * This bypasses login automation and works directly with authenticated DAT sessions
@@ -92,10 +100,12 @@ export class SessionBasedDATScraper {
 
   async scrapeAuthenticatedSession(): Promise<SessionBasedDATLoad[]> {
     console.log('🔍 Scraping loads from authenticated DAT session...');
-    
+
+    // Closed in finally: a navigation timeout used to skip close() and leak a Chrome per run.
+    let browser: import('puppeteer').Browser | undefined;
     try {
       const puppeteer = await import('puppeteer');
-      const browser = await puppeteer.default.launch({
+      browser = await puppeteer.default.launch({
         headless: true,
         args: [
           '--no-sandbox',
@@ -209,14 +219,14 @@ export class SessionBasedDATScraper {
         return extractedLoads;
       });
       
-      await browser.close();
-      
       console.log(`✅ Successfully extracted ${loads.length} real DAT loads from authenticated session`);
       return loads;
-      
+
     } catch (error) {
       console.error('❌ Failed to scrape authenticated session:', error);
       return [];
+    } finally {
+      await browser?.close().catch(() => {});
     }
   }
 
