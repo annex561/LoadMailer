@@ -116,17 +116,32 @@ describe("dry-run gates (source pins on each vendor wrapper)", () => {
       args: src.slice(m.index!, src.indexOf("});", m.index!)),
     }));
     const lovesSends = sends.filter((c) => /to:\s*SCHEDULES_LS/.test(c.args));
-    // Exactly one send path reaches Love's, and it sits behind the gate.
+    // Exactly one send path reaches Love's, and the nearest gate before it
+    // sits in the production path (after the dedup check), not in the
+    // test-redirect branch above.
     expect(lovesSends).toHaveLength(1);
+    const dedupIdx = src.indexOf("Dedup: if a submission row already exists for this load");
+    const nearestGate = src.lastIndexOf("isDryRunOutbound()", lovesSends[0].idx);
     expect(gateIdx).toBeGreaterThan(0);
-    expect(gateIdx).toBeLessThan(lovesSends[0].idx);
+    expect(dedupIdx).toBeGreaterThan(0);
+    expect(nearestGate).toBeGreaterThan(dedupIdx);
   });
 
-  // KNOWN GAP since #109 (d9227de): the FACTORING_TEST_TO_EMAIL branch sends a
-  // real Resend email to the test inbox BEFORE this gate, so DRY_RUN_OUTBOUND
-  // does not suppress it. Love's is never contacted. Changing send behaviour
-  // is approval-gated; see docs/FIX-LEDGER.md "DRY_RUN_OUTBOUND does not stop the FACTORING_TEST_TO_EMAIL send".
-  it.todo("factoring-loves.ts DRY_RUN_OUTBOUND also suppresses the FACTORING_TEST_TO_EMAIL send");
+  it("factoring-loves.ts FACTORING_TEST_TO_EMAIL send also gates on dry-run (gap from #109, fixed)", () => {
+    // Behaviour is pinned in factoring-dry-run-test-redirect.test.ts; this
+    // pin keeps the gate textually ahead of the test-inbox send.
+    const src = read("factoring-loves.ts");
+    const start = src.indexOf("TEST REDIRECT: loadId=");
+    const end = src.indexOf("Dedup: if a submission row already exists for this load");
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const block = src.slice(start, end);
+    const gateIdx = block.indexOf("isDryRunOutbound()");
+    const sendIdx = block.indexOf("sendViaResend({");
+    expect(gateIdx).toBeGreaterThan(0);
+    expect(sendIdx).toBeGreaterThan(0);
+    expect(gateIdx).toBeLessThan(sendIdx);
+  });
 
   it("dry-run gates return success-shaped responses (so chain continues, doesn't halt)", () => {
     // SMS gates return success:true messageSid:dry-...

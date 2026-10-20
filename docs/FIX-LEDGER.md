@@ -257,3 +257,11 @@ Format:
 - **Guard** — `dry-run-mode.test.ts` holds an `it.todo` for it. Turn that into a real pin in the same PR that moves the gate.
 - **Do NOT** — do not assume `DRY_RUN_OUTBOUND=true` means zero outbound from `/factoring` while the test redirect is set. Unset `FACTORING_TEST_TO_EMAIL` first if you need a true no-send run.
 - `2026-10-19 · (open)`
+
+### DRY_RUN_OUTBOUND now stops the FACTORING_TEST_TO_EMAIL send (supersedes the OPEN entry above)
+- **Symptom** — same as "DRY_RUN_OUTBOUND does not stop the FACTORING_TEST_TO_EMAIL send": with `DRY_RUN_OUTBOUND=true` and `FACTORING_TEST_TO_EMAIL` set, `/factoring` Submit sent a real Resend email to the test inbox and logged `[factoring-loves] ✅ TEST sent loadId=…`.
+- **Root cause** — the test-redirect branch (`d9227de`, #109) returns before the production dry-run gate and had no gate of its own.
+- **Fix** — `server/factoring-loves.ts` `submitToLoves`: the test-redirect branch now checks `isDryRunOutbound()` after it builds the packet and before `sendViaResend`. Under dry-run it logs `[DRY-RUN] loves-factoring.sendTestPacket`, returns `{ ok: true, emailMessageId: "dry-loves-test-…" }`, and still writes nothing to the DB (same as the live test path). Behaviour with `DRY_RUN_OUTBOUND` unset is unchanged. Approved by Annex 2026-10-20.
+- **Guard** — `server/__tests__/factoring-dry-run-test-redirect.test.ts` runs `submitToLoves` with the DB, PDF templates and `fetch` mocked, and asserts zero calls to `api.resend.com` under dry-run. A control case asserts exactly one send, to the test inbox, when dry-run is off. `dry-run-mode.test.ts` adds a source pin for the gate's position. It also re-checks that the gate nearest the Love's send sits after the dedup check, so the new test-branch gate cannot stand in for the production one.
+- **Do NOT** — do not move the production dry-run gate up to the top of `submitToLoves` to cover both paths. The production gate mirrors the live DB writes (`factoring_submissions` → `submitted`, `loads.factoringStatus`), and the test path must never write. They need separate gates. Do not anchor a dry-run pin on the first `isDryRunOutbound()` in the file: there are two now.
+- `2026-10-20 · (this commit)`
