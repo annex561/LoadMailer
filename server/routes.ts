@@ -43,6 +43,7 @@ import { registerLoadsAuditRoutes } from "./routes/loads-audit";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';
+import { driverPortalUrl } from './driver-portal-link';
 import { generateMessageSuggestions, improveMessage, extractLoadFromScreenshot } from './openai-helper';
 import { stripeService } from './stripe-service';
 import { calculateMiles } from './services/distance-calculator';
@@ -2144,7 +2145,7 @@ export async function registerRoutes(app: Express): Promise<void> {
           `View details: ${loadViewUrl}\n\n` +
           `Reply YES to confirm.`;
       } else if (type === 'TRIP') {
-        const dashboardUrl = `${process.env.REPLIT_DEPLOYMENT_URL || 'https://traq-iq.replit.app'}/driver-dashboard?driverId=${driver.id}`;
+        const dashboardUrl = await driverPortalUrl(getBaseUrl(), driver, storage);
         message = `🚚 TRIP STARTED\n\n` +
           `Load #${load.loadNumber}\n\n` +
           `Open your dashboard for GPS tracking:\n${dashboardUrl}\n\n` +
@@ -3998,12 +3999,9 @@ export async function registerRoutes(app: Express): Promise<void> {
         // Send SMS asynchronously without blocking
         setImmediate(async () => {
           try {
-            const dashboardUrl = `${getBaseUrl()}/mobile-driver-dashboard?driverId=${driver.id}`;
-            
-            // Shorten URL for professional appearance
-            const shortUrlResult = await urlShortener.shortenUrl(dashboardUrl);
-            const link = shortUrlResult.shortUrl || dashboardUrl;
-            
+            // Not shortened: the token is the driver's credential and is.gd links are public.
+            const link = await driverPortalUrl(getBaseUrl(), driver, storage);
+
             const smsMessage = `🚛 TRAQ IQ\n\n` +
               `Welcome, ${driver.name}!\n\n` +
               `Your driver portal is ready. Tap to access:\n` +
@@ -4147,15 +4145,9 @@ export async function registerRoutes(app: Express): Promise<void> {
 
       console.log(`✅ Phone normalized successfully: ${normalizedPhone}`);
 
-      // Create dashboard URL
-      const dashboardUrl = `${getBaseUrl()}/mobile-driver-dashboard?driverId=${driver.id}`;
-      console.log(`🔗 Dashboard URL: ${dashboardUrl}`);
-      
-      // Shorten URL for professional appearance
-      const shortUrlResult = await urlShortener.shortenUrl(dashboardUrl);
-      const link = shortUrlResult.shortUrl || dashboardUrl;
-      console.log(`🔗 ${shortUrlResult.shortUrl ? 'Shortened' : 'Original'} link: ${link}`);
-      
+      // Portal URL. Not shortened or logged: the token is the driver's credential.
+      const link = await driverPortalUrl(getBaseUrl(), driver, storage);
+
       // Create SMS message with TRAQ IQ branding
       const smsMessage = `🚛 TRAQ IQ\n\n` +
         `Hi ${driver.name}!\n\n` +
@@ -4292,12 +4284,9 @@ export async function registerRoutes(app: Express): Promise<void> {
             continue;
           }
 
-          const dashboardUrl = `${getBaseUrl()}/mobile-driver-dashboard?driverId=${driver.id}`;
-          
-          // Shorten URL for professional appearance
-          const shortUrlResult = await urlShortener.shortenUrl(dashboardUrl);
-          const link = shortUrlResult.shortUrl || dashboardUrl;
-          
+          // Not shortened: the token is the driver's credential and is.gd links are public.
+          const link = await driverPortalUrl(getBaseUrl(), driver, storage);
+
           const smsMessage = `🚛 TRAQ IQ\n\n` +
             `Hi ${driver.name}!\n\n` +
             `Access your driver portal:\n` +
