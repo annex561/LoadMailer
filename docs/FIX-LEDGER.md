@@ -257,3 +257,11 @@ Format:
 - **Guard** — `dry-run-mode.test.ts` holds an `it.todo` for it. Turn that into a real pin in the same PR that moves the gate.
 - **Do NOT** — do not assume `DRY_RUN_OUTBOUND=true` means zero outbound from `/factoring` while the test redirect is set. Unset `FACTORING_TEST_TO_EMAIL` first if you need a true no-send run.
 - `2026-10-19 · (open)`
+
+### Guard tests went red on main for 5 months and nobody saw: no CI ran vitest
+- **Symptom** — `npx vitest run` on main failed 7 tests in 4 files (driver dispatch SMS, Love's factoring email, BOL upload) from 2026-05-27 until #129 re-pinned them on 2026-10-19. Every PR in between merged with no failing check because there were no checks: the repo had no `.github/workflows`.
+- **Root cause** — the guards existed but nothing enforced them. Tests ran only when an agent thought to run them locally. The dry-run pin in `dry-run-mode.test.ts` went red the day `d9227de` (#109) opened a real send gap (see "DRY_RUN_OUTBOUND does not stop the FACTORING_TEST_TO_EMAIL send" above) and stayed red, unread, for months.
+- **Fix** — `.github/workflows/test.yml` runs `npm ci` then `npx vitest run` on Node 20 (matches `nixpacks.toml` `nodejs_20`) on every pull_request to main and every push to main. The job sets `DRY_RUN_OUTBOUND=true` and `SMS_DISABLED=true`, has no secrets, and has no deploy or vendor step.
+- **Guard** — the workflow is the guard. It reports a `test / vitest` check on every PR. It does not block a merge until that check is made required in the `main` branch protection, which `main` did not have as of this entry.
+- **Do NOT** — do not add `continue-on-error`, skip a failing file, or delete an assertion to turn the check green; bisect the red pin first (see the stale-pins entry above). Do not add DB URLs or vendor API keys to this workflow: the suite passes without them (it prints "DATABASE_URL is not set" and carries on), and a key in CI is one test away from a real send. Do not drop the two kill-switch env vars.
+- `2026-10-20 · (this commit)`

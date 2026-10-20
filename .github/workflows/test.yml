@@ -1,0 +1,28 @@
+name: test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # The suite needs no DB or vendor creds and no step here sends anything.
+      # These kill switches stay on anyway, so a future test can never reach a paid vendor.
+      DRY_RUN_OUTBOUND: "true"
+      SMS_DISABLED: "true"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20 # production: nixpacks.toml nodejs_20
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run
