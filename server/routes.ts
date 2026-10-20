@@ -8938,8 +8938,10 @@ TRAQ IQ Dispatch Team
   // Coverage Verified interlock on the Trip Lease Addendum. COI rows are driver-scoped
   // and never carry a truck_id, so the dispatch gate is untouched. See
   // server/coverage-routes.ts.
+  // Session required: this router leaked driver PII unauthenticated (2026-10-19).
+  // Regression guard: server/__tests__/loads-drivers-auth.test.ts
   const { default: coverageRoutes } = await import('./coverage-routes');
-  app.use('/api/coverage', coverageRoutes);
+  app.use('/api/coverage', isAuthenticated, coverageRoutes);
   console.log('✅ GA Loads SQLite routes registered');
 
   // Cap $0: register TaskMagic webhooks (was imported but never mounted).

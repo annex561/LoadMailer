@@ -225,3 +225,11 @@ Format:
   column type — `ADD COLUMN IF NOT EXISTS` tells you nothing when the column already
   exists. Read the `CREATE TABLE` block, not the ALTER list.
 - `2026-09-09 · (this commit)`
+
+### `/api/coverage/*` served driver PII and accepted edits with no login
+- **Symptom** — `curl -s -o /dev/null -w "%{http_code}" https://traqiq.app/api/coverage/drivers` returns `200` while `/api/drivers` and `/api/loads` return `401`. The body lists every driver's name, phone, own MC/DOT and COI file paths. `PATCH /api/coverage/drivers/:id` and `DELETE /api/coverage/documents/:id` also ran for anonymous callers.
+- **Root cause** — `server/routes.ts` mounted the router bare: `app.use('/api/coverage', coverageRoutes)`. PR #124 gated `/api/ga` two lines above it but the coverage router landed later without the guard.
+- **Fix** — `app.use('/api/coverage', isAuthenticated, coverageRoutes)`. Every route in `server/coverage-routes.ts` is admin CRUD, and its only caller is the logged-in `/driver-coverage` page.
+- **Guard** — `server/__tests__/loads-drivers-auth.test.ts` → "mounts /api/coverage behind isAuthenticated".
+- **Do NOT** — do not copy this prefix guard onto `/api/drivers`. That prefix holds the public tokenized portal route `PATCH /api/drivers/self/:token`, and the test file header explains why it uses per-route guards there. Also note `GET /api/drivers/:id` is still unauthenticated as of this entry (a fake id returns 404, not 401); `client/src/pages/driver-dashboard.tsx` calls it, so gating it needs the driver-dashboard login path checked first.
+- `2026-10-19 · (this commit)`

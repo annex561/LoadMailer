@@ -71,4 +71,16 @@ describe("load + driver list endpoints require authentication", () => {
       "PATCH /api/drivers/self/:token authenticates by token and must stay session-free — drivers have no login.",
     ).toBe(false);
   });
+
+  // 2026-10-19: /api/coverage was mounted bare. GET /drivers returned every driver's
+  // name, phone, own MC/DOT and COI file paths to anonymous callers, and the PATCH/
+  // DELETE routes let anyone edit a driver's authority or delete a certificate.
+  // A prefix guard is correct here (unlike /api/drivers above): every /api/coverage
+  // route is admin CRUD and the only caller is the logged-in /driver-coverage page.
+  it("mounts /api/coverage behind isAuthenticated", () => {
+    expect(
+      /app\.use\(\s*['"`]\/api\/coverage['"`]\s*,\s*(requireRole\(|isAuthenticated\b)/.test(routesSrc),
+      "app.use('/api/coverage', ...) must pass isAuthenticated before coverageRoutes — the router leaks driver PII and allows anonymous edits/deletes.",
+    ).toBe(true);
+  });
 });
