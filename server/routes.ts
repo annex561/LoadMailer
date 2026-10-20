@@ -245,6 +245,25 @@ const bulkSmsRateLimiter = rateLimit({
   }
 });
 
+// Per-driver ceiling for the manual GPS tracking link - max 5 SMS per driver per hour.
+// sendGPSTrackingSMS only throttles when a loadId is given; the no-loadId path had none.
+// ponytail: in-memory store, resets on deploy and is per-instance; fine as a ceiling.
+const gpsTrackingLinkRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  keyGenerator: (req) => `gps-link:${String(req.body?.driverId ?? '')}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    console.log('SECURITY: GPS tracking link rate limit exceeded:', { driverId: req.body?.driverId });
+    res.status(429).json({
+      success: false,
+      error: "GPS tracking link already sent to this driver 5 times this hour. Try again later.",
+      retryAfter: 3600
+    });
+  }
+});
+
 // Helper function to normalize and validate phone numbers for Twilio E.164 format
 // Supports US numbers (10 or 11 digits) and already-formatted E.164 international numbers
 function normalizePhoneToE164(phoneNumber: string | undefined | null): string | null {
@@ -3610,7 +3629,8 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Manual GPS Tracking Link Sender
   // Allows dispatchers to manually send GPS tracking links to drivers
   // loadId is optional - used for delivery tracking or general fleet visibility
-  app.post("/api/gps/send-tracking-link", async (req, res) => {
+  // Staff only: it sends a Twilio SMS. The only caller is the logged-in /gps-tracking page.
+  app.post("/api/gps/send-tracking-link", isAuthenticated, gpsTrackingLinkRateLimiter, async (req, res) => {
     try {
       const { driverId, loadId } = req.body;
       
