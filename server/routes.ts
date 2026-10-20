@@ -43,7 +43,7 @@ import { registerLoadsAuditRoutes } from "./routes/loads-audit";
 import { pdfService } from './pdf-service';
 import { documentReminderService } from './document-reminder-service';
 import { urlShortener } from './url-shortener-service';
-import { driverPortalUrl } from './driver-portal-link';
+import { driverPortalUrl, ensureTrackingToken } from './driver-portal-link';
 import { generateMessageSuggestions, improveMessage, extractLoadFromScreenshot } from './openai-helper';
 import { stripeService } from './stripe-service';
 import { calculateMiles } from './services/distance-calculator';
@@ -369,22 +369,17 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
       }
     }
     
-    // Generate GPS tracking token for the driver
-    const tokenResult = await storage.generateTrackingToken(driverId);
-    if (!tokenResult?.token) {
-      console.error('GPS TRACKING SMS: Failed to generate tracking token:', { driverId });
-      return { success: false, error: "Failed to generate tracking token" };
-    }
-    const token = tokenResult.token;
-    console.log('GPS TRACKING SMS: Generated token:', { driverId });
-    
     // Get driver details to get phone number
     const driver = await storage.getDriver(driverId);
     if (!driver) {
       console.error('GPS TRACKING SMS: Driver not found:', { driverId });
       return { success: false, error: "Driver not found" };
     }
-    
+
+    // Reuse the driver's token. Minting a new one overwrites it, which 401s any open
+    // tracker tab and kills every /driver/<token> portal link the driver already has.
+    const token = await ensureTrackingToken(driver, storage);
+
     // Get driver's phone number
     const driverPhone = driver.phoneNumber || driver.phone;
     const normalizedPhone = normalizePhoneToE164(driverPhone);
@@ -394,13 +389,9 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
       return { success: false, error: "Driver has no valid phone number" };
     }
     
-    // Create tracking URL
-    const trackingUrl = `${getBaseUrl()}/driver-tracker?driver=${driverId}&token=${token}`;
-    
-    // Shorten URL for professional appearance
-    const shortUrlResult = await urlShortener.shortenUrl(trackingUrl);
-    const link = shortUrlResult.shortUrl || trackingUrl;
-    
+    // Not shortened: the token is the driver's credential and is.gd codes are public.
+    const link = `${getBaseUrl()}/driver-tracker?driver=${driverId}&token=${token}`;
+
     // Create GPS tracking SMS message
     let smsMessage: string;
     let logContext: string;
@@ -432,7 +423,6 @@ async function sendGPSTrackingSMS(driverId: string, loadId: string | null, optio
     }
     
     console.log('GPS TRACKING SMS: Sending:', { driverName: driver.name, normalizedPhone, logContext });
-    console.log('GPS TRACKING SMS: URL:', { trackingUrl });
     
     // Send SMS using existing SMS service
     const smsResult = await smsService.sendSMS({
