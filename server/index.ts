@@ -441,11 +441,15 @@ app.use((req, res, next) => {
       setTimeout(() => {
         (async () => {
           try {
+            const { sessionBasedDATScraper, isDatSessionScraperEnabled } = await import('./session-based-dat-scraper');
+            if (!isDatSessionScraperEnabled()) {
+              log('[dat-session] disabled (set DAT_SESSION_SCRAPER_ENABLED=true to start)');
+              return;
+            }
+
             log('🔄 Starting session-based DAT scraper for manual authentication...');
             log('🚫 NO SAMPLE LOADS - Real DAT data only as requested');
-            
-            const { sessionBasedDATScraper } = await import('./session-based-dat-scraper');
-            
+
             log('🔍 Checking for existing authenticated DAT session...');
             const isAuthenticated = await sessionBasedDATScraper.checkAuthenticatedSession();
             
