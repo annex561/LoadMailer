@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { storage } from "./storage";
 import { smsService } from "./sms-service";
-import { urlShortener } from "./url-shortener-service";
+import { ensureTrackingToken } from "./driver-portal-link";
 import type { LoadWithRelations, Driver, DriverLocation } from "@shared/schema";
 
 export class GPSHealthMonitorService {
@@ -128,13 +128,11 @@ export class GPSHealthMonitorService {
         }
       }
       
-      const trackingToken = await storage.generateTrackingToken(load.driverId);
-      
-      if (!trackingToken?.token) {
-        console.error(`❌ Failed to generate tracking token for driver ${load.driver.name}`);
-        return false;
-      }
-      
+      // Reuse the driver's token. Minting a new one 401s the tracker tab they already
+      // have open (its GPS goes stale, so this reminder fires again) and kills every
+      // /driver/<token> portal link.
+      const token = await ensureTrackingToken(load.driver, storage);
+
       const driverPhone = load.driver.phoneNumber || load.driver.phone;
       
       if (!driverPhone) {
@@ -149,11 +147,8 @@ export class GPSHealthMonitorService {
         return false;
       }
       
-      const trackingUrl = `${this.getBaseUrl()}/driver-tracker?driver=${load.driverId}&token=${trackingToken.token}`;
-      
-      // Shorten URL for professional appearance
-      const shortUrlResult = await urlShortener.shortenUrl(trackingUrl);
-      const link = shortUrlResult.shortUrl || trackingUrl;
+      // Not shortened: the token is the driver's credential and is.gd codes are public.
+      const link = `${this.getBaseUrl()}/driver-tracker?driver=${load.driverId}&token=${token}`;
       
       // Build load context with route info if available
       let loadContext = '';
