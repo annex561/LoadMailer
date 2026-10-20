@@ -3191,7 +3191,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
   
   // Get active driver locations for real-time map tracking
-  app.get('/api/driver-locations/active', async (req, res) => {
+  app.get('/api/driver-locations/active', isAuthenticated, async (req, res) => {
     try {
       console.log('📋 Fetching driver locations from database...');
       
