@@ -17,6 +17,18 @@ import { join } from "node:path";
 
 const src = readFileSync(join(__dirname, "..", "factoring-loves.ts"), "utf8");
 
+// The test-mode branch: from its hallmark log line to the dedup comment that
+// opens the production path. Bounded by text, not a fixed char count: a fixed
+// 4000-char window overran into the production insert once #111 (Resend swap)
+// shortened the branch, and failed on correct code.
+function testModeBlock(): string {
+  const start = src.indexOf("TEST REDIRECT: loadId=");
+  const end = src.indexOf("Dedup: if a submission row already exists for this load");
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  return src.slice(start, end);
+}
+
 describe("factoring-loves: FACTORING_TEST_TO_EMAIL redirect gate", () => {
   it("reads FACTORING_TEST_TO_EMAIL with trim() (handles trailing whitespace)", () => {
     expect(src).toMatch(/process\.env\.FACTORING_TEST_TO_EMAIL\?\.trim\(\)/);
@@ -39,12 +51,8 @@ describe("factoring-loves: FACTORING_TEST_TO_EMAIL redirect gate", () => {
 
   it("test-mode branch sends to the test address — NOT to schedulesLS@loves.com", () => {
     // Find the test-mode if-block by its hallmark log line, then assert
-    // the sendMail INSIDE it uses testToEmail and not the Love's constant.
-    const start = src.indexOf("TEST REDIRECT: loadId=");
-    expect(start).toBeGreaterThan(-1);
-    // The block runs until the matching `}` of the `if (testToEmail) {` —
-    // approximate by slicing the next 4000 chars and checking content.
-    const block = src.slice(start, start + 4000);
+    // the send INSIDE it uses testToEmail and not the Love's constant.
+    const block = testModeBlock();
     expect(block).toMatch(/to:\s*testToEmail/);
     // Must NOT route to Love's from inside the test branch.
     expect(block).not.toMatch(/to:\s*SCHEDULES_LS/);
@@ -52,8 +60,7 @@ describe("factoring-loves: FACTORING_TEST_TO_EMAIL redirect gate", () => {
   });
 
   it("test-mode branch subject is prefixed [TEST so any human reader sees it's not real", () => {
-    const start = src.indexOf("TEST REDIRECT: loadId=");
-    const block = src.slice(start, start + 4000);
+    const block = testModeBlock();
     expect(block).toMatch(/\[TEST/);
   });
 
@@ -61,8 +68,7 @@ describe("factoring-loves: FACTORING_TEST_TO_EMAIL redirect gate", () => {
     // The real path inserts a row into factoringSubmissions BEFORE sending.
     // Test mode must NOT touch that table — otherwise the dedup constraint
     // would block the next retest of the same load.
-    const start = src.indexOf("TEST REDIRECT: loadId=");
-    const block = src.slice(start, start + 4000);
+    const block = testModeBlock();
     expect(block).not.toMatch(/\.insert\(factoringSubmissions\)/);
   });
 });
