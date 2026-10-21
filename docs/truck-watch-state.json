@@ -1431,6 +1431,28 @@
       "date": "2026-10-20",
       "verdict": "unverified",
       "notes": "Ran 10 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, and general expediter/sleeper-box-truck sweeps. WebFetch egress test on dtitrucks.com listing 18242743 failed (DNS ENOTFOUND, same effective block as prior days' EGRESS_BLOCKED). All results mapped to previously tracked units (DTI 18242743, DTI 17760W/T270-T280, Comvoy Wheat Ridge T280 19659299, RitchieBros Chicago 34in sleeper auction, Kansas City 2016 M2-106, MHC 0630270/0630680, Velocity/new-inventory M2 106 Plus units) with no material change, or were new day-cab/no-sleeper secondary units (Fort Worth T280, new Boise/Leawood T280 units) that fail the sleeper requirement outright. No unit cleared verification gate (a) or (b). No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-21",
+      "verdict": "unverified",
+      "notes": "Re-checked. One WebFetch test via agent on the direct listing URL failed with getaddrinfo ENOTFOUND www.dtitrucks.com - same DNS/egress block as every prior run since 2026-08-30. WebSearch snippets unchanged (2025 M2-106 Extended Cab With Sleeper/bunk, stock 17951W, 31,422 mi, 26ft/102in/103in box, Dhollandia liftgate, 26,000 GVWR non-CDL; $94,500 figure resurfaces but remains unconfirmed/possibly stale per prior flags). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "HinoL7D-Bentley-52000-25950GVW",
+      "source": "Bentley Truck Services (via search snippet, multiple mirrored URLs)",
+      "date": "2026-10-21",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (Hino L7D). Used 2021 Hino L7D, 26ft Morgan body, Maxon 5,000lb liftgate, Hino J08E-VB 260HP, Allison 2500RDS, 271in WB, air ride, 25,950 GVW, $52,000. Rejected: no sleeper or extended-cab mention in any snippet - reads as a standard day cab."
+    },
+    {
+      "id": "sweep-2026-10-21-no-new-verified",
+      "source": "WebSearch sweep (12 queries) + 1 WebFetch egress test (via agent)",
+      "date": "2026-10-21",
+      "verdict": "unverified",
+      "notes": "Ran 12 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Kenworth T280/Hino L6-L7) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and a TN/GA/AL/KY regional sweep. One WebFetch test (via web-fetch agent, dtitrucks.com listing 18242743) returned getaddrinfo ENOTFOUND - egress to direct sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units (DTI 18242743, RitchieBros Chicago 34in sleeper auctions 88676591/88777720 - still closed, Comvoy Wheat Ridge T280 19659299, MHC 0630270/0630680, Velocity/new-inventory M2 106 Plus units) with no material change, or were new day-cab/no-sleeper units (Hino L7D Bentley, Fort Worth/Boise/Leawood T280 units) or auction category pages with no unit-specific pricing/mileage/sleeper detail attributable to a distinct new truck. No unit cleared verification gate (a) or (b). No push sent."
     }
   ]
 }
