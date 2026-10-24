@@ -9,19 +9,23 @@
 //   dispatch-unack:<loadNumber>
 //   gmail-stalled
 //   parser-degraded
+//   openai-credits
 //   driver-silent:<driverId>:<loadNumber>
 
 import cron from 'node-cron';
 import { db } from './db';
 import { loads } from '@shared/schema';
-import { and, gte, isNotNull, isNull } from 'drizzle-orm';
+import { and, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { smsLoadService } from './sms-service';
+import { isOpenAiCreditError } from './openai-errors';
 
 interface OpsMonitorState {
   lastGmailScanAt: Date | null;
   lastParserSuccessAt: Date | null;
   recentParserRuns: Array<{ at: Date; success: boolean }>;
   recentEventLoopLagMs: number[]; // samples from setInterval drift (last hour)
+  openaiCreditErrors24h: number;
+  lastOpenAiCreditErrorAt: Date | null;
 }
 
 class OpsMonitorService {
@@ -34,6 +38,8 @@ class OpsMonitorService {
     lastParserSuccessAt: null,
     recentParserRuns: [],
     recentEventLoopLagMs: [],
+    openaiCreditErrors24h: 0,
+    lastOpenAiCreditErrorAt: null,
   };
   private lagSamplerInterval: NodeJS.Timeout | null = null;
 
@@ -70,6 +76,8 @@ class OpsMonitorService {
       eventLoopLagAvgMs: avg,
       eventLoopLagP95Ms: p95,
       eventLoopSamples: lag.length,
+      openaiCreditErrors24h: this.state.openaiCreditErrors24h,
+      lastOpenAiCreditErrorAt: this.state.lastOpenAiCreditErrorAt,
       alertPhone: this.alertPhone,
       activeCooldowns: Array.from(this.alertCooldowns.keys()),
     };
@@ -126,6 +134,7 @@ class OpsMonitorService {
       this.checkParserHealth(),
       this.checkSilentDrivers(),
       this.checkEventLoopLag(),
+      this.checkOpenAiCredits(),
     ]);
   }
 
@@ -205,6 +214,33 @@ class OpsMonitorService {
     );
   }
 
+  // 6) OpenAI out of credits. Reads ratecon_intake instead of in-memory counters,
+  // so a deploy can't reset it. checkParserHealth above only hears from the old
+  // parser; the live intake path never reported to it, and the 2026-07-06 outage
+  // ran 3.5 months unseen. One SMS per 24h per process; OPS_OPENAI_CREDIT_ALERT=off
+  // silences it.
+  async checkOpenAiCredits(): Promise<void> {
+    if (process.env.OPS_OPENAI_CREDIT_ALERT === 'off') return;
+    const r = await db.execute(sql`
+      SELECT parse_error, created_at FROM ratecon_intake
+      WHERE created_at > NOW() - INTERVAL '24 hours' AND parse_error LIKE '429%'
+      ORDER BY created_at DESC LIMIT 50
+    `);
+    const rows = ((r as any).rows ?? r).filter((x: any) => isOpenAiCreditError(x.parse_error));
+    this.state.openaiCreditErrors24h = rows.length;
+    this.state.lastOpenAiCreditErrorAt = rows[0] ? new Date(rows[0].created_at) : null;
+    if (rows.length === 0) return;
+    // A good parse after the last failure means credits are back.
+    const ok = await db.execute(sql`SELECT MAX(parsed_at) AS last_ok FROM ratecon_intake WHERE parser_model IS DISTINCT FROM 'manual'`);
+    const lastOk = ((ok as any).rows ?? ok)[0]?.last_ok;
+    if (lastOk && new Date(lastOk) > this.state.lastOpenAiCreditErrorAt!) return;
+    await this.maybeAlert(
+      'openai-credits',
+      `🚨 TRAQ: OpenAI is out of credits. ${rows.length} RateCon parse(s) failed in the last 24h. Add credits at platform.openai.com/settings/organization/billing (key: LoadMailer OPENAI_API_KEY).`,
+      24 * 60 * 60 * 1000,
+    );
+  }
+
   // 4) Silent-driver check: requires a lastDriverContactAt signal that isn't on the
   // schema yet. Stub for v2 — wire this up once lifecycle Phase 3 records check-in times.
   private async checkSilentDrivers(): Promise<void> {
@@ -212,9 +248,9 @@ class OpsMonitorService {
     return;
   }
 
-  private async maybeAlert(key: string, body: string): Promise<void> {
+  private async maybeAlert(key: string, body: string, cooldownMs: number = this.COOLDOWN_MS): Promise<void> {
     const lastSent = this.alertCooldowns.get(key) || 0;
-    if (Date.now() - lastSent < this.COOLDOWN_MS) return;
+    if (Date.now() - lastSent < cooldownMs) return;
 
     try {
       const r = await smsLoadService.sendSMS(this.alertPhone, body);
