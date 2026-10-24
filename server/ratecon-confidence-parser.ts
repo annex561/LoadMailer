@@ -52,7 +52,7 @@ function safeDecodeURI(str: string): string {
  * Extract text content from a PDF using pdf2json. Returns "" if extraction fails
  * (e.g. scanned-image PDFs with no text layer — OCR would be needed for those).
  */
-async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
+export async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
   return new Promise((resolve) => {
     const pdfParser = new PDFParser();
     pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
