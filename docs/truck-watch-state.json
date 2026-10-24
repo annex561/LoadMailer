@@ -1431,6 +1431,85 @@
       "date": "2026-10-20",
       "verdict": "unverified",
       "notes": "Ran 10 WebSearch queries covering primary (M2-106) and secondary (MV607/Kenworth T280) specs, plus site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, and general expediter/sleeper-box-truck sweeps. WebFetch egress test on dtitrucks.com listing 18242743 failed (DNS ENOTFOUND, same effective block as prior days' EGRESS_BLOCKED). All results mapped to previously tracked units (DTI 18242743, DTI 17760W/T270-T280, Comvoy Wheat Ridge T280 19659299, RitchieBros Chicago 34in sleeper auction, Kansas City 2016 M2-106, MHC 0630270/0630680, Velocity/new-inventory M2 106 Plus units) with no material change, or were new day-cab/no-sleeper secondary units (Fort Worth T280, new Boise/Leawood T280 units) that fail the sleeper requirement outright. No unit cleared verification gate (a) or (b). No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-21",
+      "verdict": "unverified",
+      "notes": "Re-checked. One WebFetch test via agent on the direct listing URL failed with getaddrinfo ENOTFOUND www.dtitrucks.com - same DNS/egress block as every prior run since 2026-08-30. WebSearch snippets unchanged (2025 M2-106 Extended Cab With Sleeper/bunk, stock 17951W, 31,422 mi, 26ft/102in/103in box, Dhollandia liftgate, 26,000 GVWR non-CDL; $94,500 figure resurfaces but remains unconfirmed/possibly stale per prior flags). Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "HinoL7D-Bentley-52000-25950GVW",
+      "source": "Bentley Truck Services (via search snippet, multiple mirrored URLs)",
+      "date": "2026-10-21",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (Hino L7D). Used 2021 Hino L7D, 26ft Morgan body, Maxon 5,000lb liftgate, Hino J08E-VB 260HP, Allison 2500RDS, 271in WB, air ride, 25,950 GVW, $52,000. Rejected: no sleeper or extended-cab mention in any snippet - reads as a standard day cab."
+    },
+    {
+      "id": "sweep-2026-10-21-no-new-verified",
+      "source": "WebSearch sweep (12 queries) + 1 WebFetch egress test (via agent)",
+      "date": "2026-10-21",
+      "verdict": "unverified",
+      "notes": "Ran 12 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Kenworth T280/Hino L6-L7) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and a TN/GA/AL/KY regional sweep. One WebFetch test (via web-fetch agent, dtitrucks.com listing 18242743) returned getaddrinfo ENOTFOUND - egress to direct sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units (DTI 18242743, RitchieBros Chicago 34in sleeper auctions 88676591/88777720 - still closed, Comvoy Wheat Ridge T280 19659299, MHC 0630270/0630680, Velocity/new-inventory M2 106 Plus units) with no material change, or were new day-cab/no-sleeper units (Hino L7D Bentley, Fort Worth/Boise/Leawood T280 units) or auction category pages with no unit-specific pricing/mileage/sleeper detail attributable to a distinct new truck. No unit cleared verification gate (a) or (b). No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks (comvoy.com mirror, listed as Wheat Ridge CO this run)",
+      "date": "2026-10-22",
+      "verdict": "unverified",
+      "notes": "Re-surfaced via site:comvoy.com search as 'Used 2025 Freightliner M2 106 Conventional Cab Box Truck', stock/listing 20808696, https://www.comvoy.com/work-truck/wheat-ridge-co/used-2025-freightliner-m2-106-conventional-cab-box-truck-20808696 - same unit as tracked 18242743/17951W (31,422 mi, 26x102x103 box, Dhollandia liftgate, 26,000 GVWR non-CDL, $94,500 call-for-pricing figure unchanged). Also mirrored on MyLittleSalesman listing #14356488 with identical 31,422 mi spec. WebFetch test on dtitrucks.com direct listing URL failed (getaddrinfo ENOTFOUND www.dtitrucks.com) - same egress block as every run since 2026-08-30. No material change vs prior entries - not re-reported, not pushed."
+    },
+    {
+      "id": "DaveSyverson-Rochester-MN-2026-M2106-127900-1163mi",
+      "source": "Dave Syverson Truck Centers, Rochester MN (via Construction Equipment Guide snippet)",
+      "date": "2026-10-22",
+      "verdict": "wrong_spec",
+      "notes": "2026 Freightliner M2-106, 26ft box, Maxon 3,000lb liftgate, Cummins B6.7, 1,163 mi, $127,900. Rejected: no sleeper/extended-cab mentioned in any snippet (reads as day cab), and price exceeds ~$110,000 budget. GVWR and CDL status not stated."
+    },
+    {
+      "id": "sweep-2026-10-22-no-new-verified",
+      "source": "WebSearch sweep (12 queries) + 1 WebFetch egress test",
+      "date": "2026-10-22",
+      "verdict": "unverified",
+      "notes": "Ran 12 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and a TN/GA/AL/KY/Chattanooga-Knoxville-Nashville-Atlanta regional sweep. One WebFetch test on the dtitrucks.com direct listing URL failed (getaddrinfo ENOTFOUND) - egress to direct sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units (DTI 18242743/17951W re-surfaced via comvoy.com Wheat Ridge mirror and MyLittleSalesman #14356488, RitchieBros Chicago 34in sleeper auctions - still closed/passed, MHC 0630270/0630680, Velocity/new-inventory M2 106 Plus units), or were new day-cab/no-sleeper/over-budget units (Dave Syverson Rochester MN 2026 M2-106 $127,900, Illinois 2015 M2 expeditor w/ aftermarket sleeper, Hino 268 Miami, International MV607 Newnan GA auction) that fail spec outright, or auction category pages with closed/passed bidding and no unit-specific sleeper detail. No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-23",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - failed with getaddrinfo ENOTFOUND www.dtitrucks.com, same egress block as every run since 2026-08-30. WebSearch snippets unchanged (2025 M2-106 Extended Cab With Sleeper/bunk, stock 17951W, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). No fresh price surfaced this run. Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "TriCountyTruck-2023-HinoL6-DayCab-114875mi-79900",
+      "source": "Tri-County Truck (worktrucksolutions.com, via search snippet)",
+      "date": "2026-10-23",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (Hino L6). 2023 Hino L6, 26ft dry freight van body, $79,900, 114,875 mi. Listing title explicitly says 'Day Cab' but search summary also mentions a 'built-in sleeper' - internally contradictory. Rejected: no liftgate, GVWR, or non-CDL status surfaced, and 'Day Cab' in the title weighs against a genuine sleeper/extended-cab berth. Not reported - fails to clear spec confidently either way."
+    },
+    {
+      "id": "TruckAndVanOutlet-Miami-2023-M2106-136956mi-56995",
+      "source": "Truck and Van Outlet, Miami FL (via search snippet)",
+      "date": "2026-10-23",
+      "verdict": "unverified",
+      "notes": "2023 Freightliner Business Class M2 106, 136,956 mi, $56,995, 26ft box, liftgate, non-CDL, Cummins diesel. Year/price/mileage fit the spec but no sleeper or extended-cab mention in the snippet (distinct unit from the same dealer's previously-tracked 2025 M2-106 Plus VZ8439). Cannot clear gate (a) or (b) - no direct URL or phone surfaced this run; worth a follow-up call to Truck and Van Outlet, (305) 315-0667, to ask about this unit specifically if it resurfaces with more detail."
+    },
+    {
+      "id": "sweep-2026-10-23-no-new-verified",
+      "source": "WebSearch sweep (9 queries) + 1 WebFetch egress test",
+      "date": "2026-10-23",
+      "verdict": "unverified",
+      "notes": "Ran 9 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Kenworth T280/Hino L6-L7) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and a TN/GA/AL regional sweep. One WebFetch test on the dtitrucks.com direct listing URL failed (getaddrinfo ENOTFOUND) - egress to direct sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units (DTI 18242743 price/specs unchanged, Comvoy Wheat Ridge Kenworth T280 19659299, MHC 0630270/0630680/281405, RitchieBros Chicago/Orlando 34in sleeper auctions - still closed/passed) or were new leads rejected as wrong_spec/unverified (Tri-County Truck 2023 Hino L6 contradictory day-cab/sleeper listing, Truck and Van Outlet Miami 2023 M2-106 $56,995/136,956mi with no sleeper confirmed, various no-sleeper Kenworth T280/International MV607/Hino L6 units). No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
+    },
+    {
+      "id": "sweep-2026-10-24-no-new-verified",
+      "source": "WebSearch sweep (13 queries) + 1 WebFetch egress test",
+      "date": "2026-10-24",
+      "verdict": "unverified",
+      "notes": "Ran 13 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, plus Facebook Marketplace, eBay Motors, and a TN/GA/AL/Chattanooga regional sweep. WebFetch test on the dtitrucks.com direct listing URL (stock 18242743) failed with getaddrinfo ENOTFOUND - egress to direct dealer sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units with no material change (DTI 18242743 - no fresh price this run; MHC 0630270/0630680/281405 non-sleeper inventory; Comvoy Wheat Ridge Kenworth T280; RitchieBros Chicago 34in flat-top sleeper lots 88676591/88777720/88840608/88777704 - auctions already closed/passed, previously logged sold) or were generic category/aggregator pages with no unit-specific detail. No new individual unit surfaced with enough detail (price+mileage+dealer or direct URL) to log as a distinct new candidate. No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
     }
   ]
 }

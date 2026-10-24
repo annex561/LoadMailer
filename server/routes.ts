@@ -1869,7 +1869,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Update a driver's pay rule
-  app.patch('/api/drivers/:id/pay', async (req, res) => {
+  app.patch('/api/drivers/:id/pay', isAuthenticated, async (req, res) => {
     try {
       const { db } = await import('./db');
       const { drivers } = await import('@shared/schema');
@@ -1905,7 +1905,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // PATCH /api/drivers/:id/pay-rules — update driver pay config
-  app.patch("/api/drivers/:id/pay-rules", async (req, res) => {
+  app.patch("/api/drivers/:id/pay-rules", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const updates = req.body;
@@ -3156,7 +3156,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Get single driver by ID
-  app.get('/api/drivers/:id', async (req, res) => {
+  app.get('/api/drivers/:id', isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const driver = await storage.getDriver(id);
@@ -3263,7 +3263,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Generate tracking token for driver GPS authentication
-  app.post('/api/drivers/:driverId/generate-tracking-token', async (req, res) => {
+  app.post('/api/drivers/:driverId/generate-tracking-token', isAuthenticated, async (req, res) => {
     const { driverId } = req.params;
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
     
@@ -3297,7 +3297,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Get driver earnings breakdown
-  app.get('/api/drivers/:driverId/earnings', async (req, res) => {
+  app.get('/api/drivers/:driverId/earnings', isAuthenticated, async (req, res) => {
     try {
       const { driverId } = req.params;
       
@@ -3358,7 +3358,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Get driver load history
-  app.get('/api/drivers/:driverId/load-history', async (req, res) => {
+  app.get('/api/drivers/:driverId/load-history', isAuthenticated, async (req, res) => {
     try {
       const { driverId } = req.params;
       
@@ -3380,7 +3380,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Get driver's current GPS location
-  app.get('/api/drivers/:driverId/current-location', async (req, res) => {
+  app.get('/api/drivers/:driverId/current-location', isAuthenticated, async (req, res) => {
     try {
       const { driverId } = req.params;
       
@@ -4118,7 +4118,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Send dashboard link SMS to a single driver
-  app.post("/api/drivers/:id/send-dashboard-link", async (req, res) => {
+  app.post("/api/drivers/:id/send-dashboard-link", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       
@@ -4353,7 +4353,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Update driver
-  app.put("/api/drivers/:id", async (req, res) => {
+  app.put("/api/drivers/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const validatedData = insertDriverSchema.partial().parse(req.body);
@@ -4393,7 +4393,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Delete driver
-  app.delete("/api/drivers/:id", async (req, res) => {
+  app.delete("/api/drivers/:id", isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       const deleted = await storage.deleteDriver(id);
