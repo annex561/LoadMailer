@@ -1503,6 +1503,13 @@
       "date": "2026-10-23",
       "verdict": "unverified",
       "notes": "Ran 9 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Kenworth T280/Hino L6-L7) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, and a TN/GA/AL regional sweep. One WebFetch test on the dtitrucks.com direct listing URL failed (getaddrinfo ENOTFOUND) - egress to direct sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units (DTI 18242743 price/specs unchanged, Comvoy Wheat Ridge Kenworth T280 19659299, MHC 0630270/0630680/281405, RitchieBros Chicago/Orlando 34in sleeper auctions - still closed/passed) or were new leads rejected as wrong_spec/unverified (Tri-County Truck 2023 Hino L6 contradictory day-cab/sleeper listing, Truck and Van Outlet Miami 2023 M2-106 $56,995/136,956mi with no sleeper confirmed, various no-sleeper Kenworth T280/International MV607/Hino L6 units). No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
+    },
+    {
+      "id": "sweep-2026-10-24-no-new-verified",
+      "source": "WebSearch sweep (13 queries) + 1 WebFetch egress test",
+      "date": "2026-10-24",
+      "verdict": "unverified",
+      "notes": "Ran 13 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, plus Facebook Marketplace, eBay Motors, and a TN/GA/AL/Chattanooga regional sweep. WebFetch test on the dtitrucks.com direct listing URL (stock 18242743) failed with getaddrinfo ENOTFOUND - egress to direct dealer sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units with no material change (DTI 18242743 - no fresh price this run; MHC 0630270/0630680/281405 non-sleeper inventory; Comvoy Wheat Ridge Kenworth T280; RitchieBros Chicago 34in flat-top sleeper lots 88676591/88777720/88840608/88777704 - auctions already closed/passed, previously logged sold) or were generic category/aggregator pages with no unit-specific detail. No new individual unit surfaced with enough detail (price+mileage+dealer or direct URL) to log as a distinct new candidate. No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
     }
   ]
 }
