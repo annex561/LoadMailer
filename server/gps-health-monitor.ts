@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { storage } from "./storage";
 import { smsService } from "./sms-service";
 import { ensureTrackingToken } from "./driver-portal-link";
+import { reserveGpsReminder } from "./gps-reminder-ledger";
 import type { LoadWithRelations, Driver, DriverLocation } from "@shared/schema";
 
 export class GPSHealthMonitorService {
@@ -117,17 +118,6 @@ export class GPSHealthMonitorService {
         return false;
       }
       
-      const lastReminder = this.lastReminderSent.get(load.driverId);
-      
-      if (lastReminder) {
-        const minutesSinceLastReminder = (Date.now() - lastReminder.getTime()) / (1000 * 60);
-        
-        if (minutesSinceLastReminder < this.REMINDER_COOLDOWN_MINUTES) {
-          console.log(`⏸️ Reminder cooldown: Driver ${load.driver.name} was reminded ${Math.round(minutesSinceLastReminder)} minutes ago (waiting ${this.REMINDER_COOLDOWN_MINUTES} min)`);
-          return false;
-        }
-      }
-      
       // Reuse the driver's token. Minting a new one 401s the tracker tab they already
       // have open (its GPS goes stale, so this reminder fires again) and kills every
       // /driver/<token> portal link.
@@ -164,8 +154,16 @@ export class GPSHealthMonitorService {
       
       const smsMessage = `🚛 TRAQ IQ\n\n🚨 GPS Tracking Stopped\n\nLoad ${load.loadNumber}${loadContext}\n\nReopen tracking link:\n${link}\n\nHelps dispatch monitor delivery.`;
       
+      // Cooldown + daily cap live in gps_reminder_log, not memory, so a deploy can't reset them.
+      // The attempt is recorded before sending; a failed send still counts.
+      const verdict = await reserveGpsReminder(load.driverId, load.id ?? null, this.REMINDER_COOLDOWN_MINUTES);
+      if (!verdict.ok) {
+        console.log(`⏸️ GPS reminder skipped for ${load.driver.name} (load ${load.loadNumber}): ${verdict.reason}`);
+        return false;
+      }
+
       console.log(`📱 Sending GPS reminder to ${load.driver.name} (${normalizedPhone}) for load ${load.loadNumber}`);
-      
+
       const result = await smsService.sendSMS({
         to: normalizedPhone,
         body: smsMessage

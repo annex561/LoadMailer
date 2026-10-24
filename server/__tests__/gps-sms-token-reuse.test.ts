@@ -25,6 +25,8 @@ const { storage, smsService, shortenUrl } = vi.hoisted(() => ({
 vi.mock("../storage", () => ({ storage }));
 vi.mock("../sms-service", () => ({ smsService }));
 vi.mock("../url-shortener-service", () => ({ urlShortener: { shortenUrl } }));
+// Cap/cooldown are covered by gps-reminder-daily-cap.test.ts; here every reminder is allowed.
+vi.mock("../gps-reminder-ledger", () => ({ reserveGpsReminder: vi.fn(async () => ({ ok: true })) }));
 
 import { GPSHealthMonitorService } from "../gps-health-monitor";
 
