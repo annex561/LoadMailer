@@ -77,6 +77,22 @@ export async function enqueueRatecon(input: IntakeInput) {
 }
 
 /**
+ * True when this Gmail attachment already has an intake row. The Gmail scan
+ * query includes read mail (newer_than:2d) and its only other dedup is an
+ * in-memory 24h map that every deploy wipes, so without this check each PDF
+ * was enqueued, uploaded and sent to OpenAI 2-10 times (1,513 rows for 402
+ * attachments by 2026-10-24).
+ */
+export async function hasIntakeForEmailAttachment(messageId: string, filename: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: rateconIntake.id })
+    .from(rateconIntake)
+    .where(and(eq(rateconIntake.sourceEmailMessageId, messageId), eq(rateconIntake.sourceFilename, filename)))
+    .limit(1);
+  return !!row;
+}
+
+/**
  * Recursively merge two parsed-ratecon JSON blobs. Used when a broker
  * sends multiple PDFs for the same load (e.g. TQL: Rate Confirmation +
  * Driver Information Sheet) — we want to fill in fields the other PDF
@@ -153,7 +169,11 @@ async function findExistingIntakeForLoad(
   return { id: r.id, parsedJson: r.parsed_json, sourceFilename: r.source_filename };
 }
 
-export async function parseIntake(intakeId: string, pdfBuffer: Buffer) {
+// autoDispatch=false stops a clean parse at in_review instead of creating the
+// load and texting the driver. The credit-outage backfill uses it: those
+// RateCons are weeks old and the freight has already moved.
+export async function parseIntake(intakeId: string, pdfBuffer: Buffer, opts: { autoDispatch?: boolean } = {}) {
+  const autoDispatch = opts.autoDispatch !== false;
   try {
     const parsed = await parseRatecon(pdfBuffer);
 
@@ -236,6 +256,9 @@ export async function parseIntake(intakeId: string, pdfBuffer: Buffer) {
       if (hasWarnings) parts.push(summarizeFailures(validation.failures));
       if (needsDriverAssignment) parts.push("Driver needs manual assignment");
       reviewReason = parts.join(" | ");
+    } else if (!autoDispatch) {
+      status = "in_review";
+      reviewReason = "Backfill re-parse: auto-dispatch off, review before dispatching";
     } else {
       status = "parsed";
     }
@@ -250,6 +273,7 @@ export async function parseIntake(intakeId: string, pdfBuffer: Buffer) {
       .set({
         parsedJson: mergedParsed as unknown as Record<string, unknown>,
         parsedAt: new Date(),
+        parseError: null,
         parserModel: parsed.model,
         validatorFailures: validation.failures as unknown as Record<string, unknown>[],
         validatorsPassedAt: validation.passed ? new Date() : null,
