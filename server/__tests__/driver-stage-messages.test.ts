@@ -32,8 +32,8 @@ describe("buildDriverStageMessages", () => {
         "Load #LD29505831 CONFIRMED
         ==================
         AT PICKUP
-        Upload a clear photo of the signed BOL:
-        https://traqiq.app/u/load-uuid-abc123
+        Upload the BOL + tie-down photos (both required):
+        https://traqiq.app/u/load-uuid-abc123?stages=pickup_bol,pickup_securement
 
         Or reply PICKED UP when loaded.
         ==================
@@ -53,8 +53,8 @@ describe("buildDriverStageMessages", () => {
         "Load #LD29505831 CONFIRMED
         ==================
         AT PICKUP
-        Upload a clear photo of the signed BOL:
-        https://traqiq.app/u/load-uuid-abc123
+        Upload the BOL + tie-down photos (both required):
+        https://traqiq.app/u/load-uuid-abc123?stages=pickup_bol,pickup_securement
 
         Or reply PICKED UP when loaded.
         ==================
@@ -79,8 +79,8 @@ describe("buildDriverStageMessages", () => {
         Mon 5/4  8:00 AM
         ==================
         AT DELIVERY
-        Upload the signed BOL:
-        https://traqiq.app/u/load-uuid-abc123
+        Upload the signed BOL + POD:
+        https://traqiq.app/u/load-uuid-abc123?stages=delivery_pod,delivery_signed_bol
 
         Or text the BOL photo to this number.
         Reply DELIVERED when offloaded."
@@ -138,7 +138,7 @@ describe("buildDriverStageMessages", () => {
       expect(out).toHaveLength(1);
       // Link must NOT appear — the web upload page is the wrong-load risk too.
       expect(out[0]).not.toContain("https://traqiq.app/u/");
-      expect(out[0]).not.toContain("Upload a clear photo");
+      expect(out[0]).not.toContain("Upload the BOL + tie-down photos");
       // Phase 1 regression guard: the SMS at acceptance must NOT instruct
       // the driver to reply with a photo immediately. No pending_uploads
       // row exists yet — a photo sent now would bind to the wrong load if
@@ -184,7 +184,7 @@ describe("buildDriverStageMessages", () => {
       // the env var keep working.
       const out = buildDriverStageMessages(baseInputs, "accepted");
       expect(out[0]).toContain("https://traqiq.app/u/load-uuid-abc123");
-      expect(out[0]).toContain("Upload a clear photo of the signed BOL:");
+      expect(out[0]).toContain("Upload the BOL + tie-down photos (both required):");
       expect(out[0]).not.toContain(
         "Reply to this text with a photo of the signed BOL",
       );
