@@ -28,7 +28,8 @@
  *   - Telnyx SMS (server/telnyx-service.ts sendTelnyxSms)
  *   - OpenAI vision address extraction (factoring-bol-address-verify)
  *   - OpenAI vision BOL signature check (factoring-bol-verify)
- *   - Love's factoring email submission (factoring-loves)
+ *   - Love's factoring email submission (factoring-loves), including the
+ *     FACTORING_TEST_TO_EMAIL test-inbox send
  *
  * What's NOT gated:
  *   - Twilio media DOWNLOAD (inbound, not billed per-call)
