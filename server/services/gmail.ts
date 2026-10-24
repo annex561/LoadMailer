@@ -216,7 +216,7 @@ export const gmailIngest = {
       const attachments = this.findAttachmentsRecursively(email.data.payload);
       result.attachmentsFound = attachments.length;
 
-      const { enqueueRatecon, parseIntake } = await import("../ratecon-intake-service");
+      const { enqueueRatecon, parseIntake, hasIntakeForEmailAttachment } = await import("../ratecon-intake-service");
 
       // ---- LINK-ONLY EMAILS (e.g. TQL Driver/Carrier Information Sheet) ----
       // These have no PDF attached — just a tokenized link. Follow the link
@@ -232,6 +232,11 @@ export const gmailIngest = {
         if (!looksLikeDriverSheet) {
           console.log("      ⚠️ No PDF attachments and not a driver-sheet email. Marking read.");
           await gmail.users.messages.batchModify({ userId: 'me', ids: [msgId], removeLabelIds: ['UNREAD'] });
+          return result;
+        }
+
+        if (await hasIntakeForEmailAttachment(msgId, "TQL-Driver-Sheet.pdf")) {
+          console.log("      ⏭️  Driver sheet already in intake. Skipping.");
           return result;
         }
 
@@ -282,6 +287,12 @@ export const gmailIngest = {
 
       for (const att of attachments) {
         try {
+          // ponytail: keyed on (message, filename); two different PDFs with one name in one email keep only the first.
+          if (await hasIntakeForEmailAttachment(msgId, att.filename || "unknown.pdf")) {
+            console.log(`      ⏭️  ${att.filename} already in intake. Skipping.`);
+            continue;
+          }
+
           // B. DOWNLOAD
           const attachmentData = await gmail.users.messages.attachments.get({
             userId: 'me', messageId: msgId, id: att.body.attachmentId
