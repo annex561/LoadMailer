@@ -487,6 +487,24 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ hos_check_log table: ${e.message}`);
     }
 
+    // gps_reminder_log — one row per GPS "Tracking Stopped" reminder attempt
+    // (server/gps-reminder-ledger.ts). Holds the per-driver daily cap and the
+    // 15-minute cooldown so a deploy can't reset them. If this table is missing,
+    // the monitor sends nothing (fails closed).
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS gps_reminder_log (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+          driver_id VARCHAR NOT NULL,
+          load_id VARCHAR,
+          sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_gps_reminder_log_driver_sent ON gps_reminder_log (driver_id, sent_at)`);
+    } catch (e: any) {
+      log(`⚠️ gps_reminder_log table: ${e.message}`);
+    }
+
     // fmcsa_carrier_snapshots — last-seen FMCSA SAFER status per DOT, used by the
     // FMCSA monitor cron (server/fmcsa-monitor-cron.ts) to detect changes and
     // dedup alerts. One row per dot_number (PRIMARY KEY) → ON CONFLICT upsert.
