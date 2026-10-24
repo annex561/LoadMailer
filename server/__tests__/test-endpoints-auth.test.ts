@@ -26,6 +26,10 @@ const GATED_ENDPOINTS: Array<{ method: string; path: string }> = [
   { method: "post", path: "/api/test-sms" },
   { method: "post", path: "/api/test/ratecon-pipeline" },
   { method: "post", path: "/api/sms/test/:driverId" },
+  // Ops Monitor: test-alert texts the ops alert phone on every call; snapshot
+  // returns that phone number. Both shipped open (FIX-LEDGER 2026-10-24).
+  { method: "post", path: "/api/ops/test-alert" },
+  { method: "get", path: "/api/ops/snapshot" },
 ];
 
 describe("SMS/test endpoints require authentication", () => {

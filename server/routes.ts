@@ -966,7 +966,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   // one. Change the handler in server/index.ts, and the payload in server/version.ts.
 
   // Ops Monitor — snapshot of state
-  app.get('/api/ops/snapshot', async (_req, res) => {
+  app.get('/api/ops/snapshot', isAuthenticated, async (_req, res) => {
     try {
       const { opsMonitor } = await import('./ops-monitor-service');
       res.json({ ok: true, ...opsMonitor.getSnapshot() });
@@ -976,7 +976,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Ops Monitor — fire a test SMS to the configured alert phone
-  app.post('/api/ops/test-alert', async (_req, res) => {
+  app.post('/api/ops/test-alert', isAuthenticated, async (_req, res) => {
     try {
       const { opsMonitor } = await import('./ops-monitor-service');
       const phone = opsMonitor.getSnapshot().alertPhone;
