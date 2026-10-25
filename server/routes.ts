@@ -264,6 +264,24 @@ const gpsTrackingLinkRateLimiter = rateLimit({
   }
 });
 
+// Ceiling for the Ops Monitor "Send Test Alert" button - max 3 SMS per hour, all callers share one key.
+// ponytail: in-memory store, resets on deploy and is per-instance; fine as a ceiling.
+const opsTestAlertRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  keyGenerator: () => 'ops-test-alert',
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    console.log('SECURITY: Ops test alert rate limit exceeded:', { userId: (req.user as any)?.id });
+    res.status(429).json({
+      ok: false,
+      error: "Test alert already sent 3 times this hour. Try again later.",
+      retryAfter: 3600
+    });
+  }
+});
+
 // Helper function to normalize and validate phone numbers for Twilio E.164 format
 // Supports US numbers (10 or 11 digits) and already-formatted E.164 international numbers
 function normalizePhoneToE164(phoneNumber: string | undefined | null): string | null {
@@ -976,7 +994,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Ops Monitor — fire a test SMS to the configured alert phone
-  app.post('/api/ops/test-alert', isAuthenticated, async (_req, res) => {
+  app.post('/api/ops/test-alert', isAuthenticated, opsTestAlertRateLimiter, async (_req, res) => {
     try {
       const { opsMonitor } = await import('./ops-monitor-service');
       const phone = opsMonitor.getSnapshot().alertPhone;
