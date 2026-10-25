@@ -1510,6 +1510,35 @@
       "date": "2026-10-24",
       "verdict": "unverified",
       "notes": "Ran 13 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, plus Facebook Marketplace, eBay Motors, and a TN/GA/AL/Chattanooga regional sweep. WebFetch test on the dtitrucks.com direct listing URL (stock 18242743) failed with getaddrinfo ENOTFOUND - egress to direct dealer sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units with no material change (DTI 18242743 - no fresh price this run; MHC 0630270/0630680/281405 non-sleeper inventory; Comvoy Wheat Ridge Kenworth T280; RitchieBros Chicago 34in flat-top sleeper lots 88676591/88777720/88840608/88777704 - auctions already closed/passed, previously logged sold) or were generic category/aggregator pages with no unit-specific detail. No new individual unit surfaced with enough detail (price+mileage+dealer or direct URL) to log as a distinct new candidate. No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-25",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the listing URL this run - failed with getaddrinfo ENOTFOUND www.dtitrucks.com, same egress block as every run since 2026-08-30. WebSearch snippets unchanged (2025 M2-106 Extended Cab With Sleeper/bunk, stock 17951W, 31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL). No fresh price surfaced this run. Held for gate (a) live-URL confirmation only, per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "MHC-0630270",
+      "source": "MHC (mhc.com)",
+      "date": "2026-10-25",
+      "verdict": "too_many_miles",
+      "notes": "2024 Freightliner M2-106, 163,376 mi, $54,950. Listing explicitly marked 'Non-Sleeper'. Rejected: over mileage cap and no sleeper/extended-cab berth. https://www.mhc.com/trucks/used/2024/freightliner/m2-106/0630270"
+    },
+    {
+      "id": "RitchieBros-Chicago-2023-M2106-34inSleeper-9358and0302",
+      "source": "Ritchie Bros auction, Chicago IL (re-surfaced via search)",
+      "date": "2026-10-25",
+      "verdict": "wrong_spec",
+      "notes": "Two 2023 M2-106 lots with genuine 34in flat-top sleeper cab, 26,000 GVWR, Detroit DD8 7.7L, 26ft Mickey box w/ liftgate (VIN endings 9358 and 0302, ~9,356-10,682 engine hours, no odometer mileage given). Rejected: auction closing dates (Aug 6 2026) already passed per prior sweeps, so these are stale/sold auction lots, not live retail listings; also an auction format doesn't fit a $10k-down retail purchase. No material change - same lots logged in prior sweeps under different CEG/truckandtrailerguide IDs."
+    },
+    {
+      "id": "sweep-2026-10-25-no-new-verified",
+      "source": "WebSearch sweep (12 queries) + 1 WebFetch egress test",
+      "date": "2026-10-25",
+      "verdict": "unverified",
+      "notes": "Ran 12 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, plus Facebook Marketplace, eBay Motors, and a TN/GA/AL/Chattanooga-Knoxville-Nashville-Atlanta regional sweep. WebFetch test on the dtitrucks.com direct listing URL (stock 18242743) failed with getaddrinfo ENOTFOUND - egress to direct dealer sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units with no material change (DTI 18242743, Comvoy VZ8439 Miami, Truck and Van Outlet 136,956mi unit, Black Rock WD0626, Dave Syverson 2026 new unit) or were new leads rejected as wrong_spec/too_many_miles (MHC 0630270 non-sleeper 163,376mi; RitchieBros Chicago 34in sleeper auction lots - closed auctions, re-surfaced). No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
     }
   ]
 }
