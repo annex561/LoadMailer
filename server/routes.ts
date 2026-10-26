@@ -5841,7 +5841,7 @@ TRAQ IQ Dispatch Team
   });
 
   // POST /api/lifecycle/submit-factoring/:loadId — manually trigger Einstein email
-  app.post('/api/lifecycle/submit-factoring/:loadId', async (req, res) => {
+  app.post('/api/lifecycle/submit-factoring/:loadId', isAuthenticated, requireRole('admin'), async (req, res) => {
     try {
       const load = await storage.getLoad(req.params.loadId);
       if (!load) return res.status(404).json({ error: 'Load not found' });
@@ -5878,7 +5878,7 @@ TRAQ IQ Dispatch Team
   });
 
   // POST /api/lifecycle/release-driver/:loadId — send "you are good to go" to driver
-  app.post('/api/lifecycle/release-driver/:loadId', async (req, res) => {
+  app.post('/api/lifecycle/release-driver/:loadId', isAuthenticated, requireRole('admin'), async (req, res) => {
     try {
       const load = await storage.getLoad(req.params.loadId);
       if (!load) return res.status(404).json({ error: 'Load not found' });

@@ -297,3 +297,12 @@ Format:
 - **Guard** — `server/__tests__/loads-drivers-auth.test.ts` → "GET /api/driver-locations/active is registered with an auth middleware", plus "keeps POST /api/driver-location/update public (driver GPS feed)".
 - **Do NOT** — do not confuse this route with `POST /api/driver-location/update` (singular `driver-location`). That is the driver GPS write path used by the tokenized portal `/driver/:token`, `/mobile-driver-dashboard` and `/driver-tracker`, and it must stay session-free. Do not gate it while "finishing the job" on driver-location routes. Also note `client/src/pages/driver-management.tsx` and `gps-tracking.tsx` call a plain `/api/driver-locations` (GET and POST) that no live server route registers; it only exists in `server/routes.ts.backup` and `.final_backup`. Those calls were already dead before this fix.
 - `2026-10-20 · (this commit)`
+
+### `POST /api/lifecycle/release-driver/:loadId` and `submit-factoring/:loadId` ran for anonymous callers; Phase 5A/5B emails fired without flags
+
+- **Symptom** — `curl -s -o /dev/null -w "%{http_code}" -X POST https://traqiq.app/api/lifecycle/release-driver/<id>` returns `200` with no session. The "Good to Go" SMS fires. `submit-factoring/<id>` triggered a factoring email to FACTORING_EMAIL/EINSTEIN_EMAIL with no auth. Phase 5A ran on every delivered load with no flag guard and no DRY_RUN_OUTBOUND check. Phase 5B auto-sent broker thank-you emails.
+- **Root cause** — both routes registered with no middleware. Lifecycle cron Phase 5A and 5B had no env-flag gates.
+- **Fix** — `isAuthenticated, requireRole('admin')` on both routes (per route). `LIFECYCLE_FACTORING_EMAIL_ENABLED === 'true'` gates Phase 5A; `DRY_RUN_OUTBOUND === 'true'` suppresses the `mailer.sendMail` call. `LIFECYCLE_THANKYOU_EMAIL_ENABLED === 'true'` gates Phase 5B; the `mailer.sendMail` in Phase 5B is removed — the cron logs a DRAFT line for manual review.
+- **Guard** — `server/__tests__/lifecycle-flags-auth.test.ts`: pins `isAuthenticated` first on both routes, flags default OFF, Phase 5B block has no `mailer.sendMail`, Phase 5B logs "DRAFT".
+- **Do NOT** — do not re-add `mailer.sendMail` to Phase 5B — every delivered load in queue would fire. Do not set `LIFECYCLE_FACTORING_EMAIL_ENABLED=true` until `FACTORING_EMAIL` is updated (Einstein has left). Do not use `app.use('/api/lifecycle', ...)` prefix guard without auditing all `/api/lifecycle/*` routes.
+- `2026-10-25 · (this commit)`
