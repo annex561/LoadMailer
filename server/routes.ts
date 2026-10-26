@@ -5901,6 +5901,59 @@ TRAQ IQ Dispatch Team
     }
   });
 
+  // POST /api/loads/:id/go — dispatcher sends explicit GO to driver (pickup or delivery)
+  // This is the ONLY path that may text the driver a "good to go" at pickup.
+  // Delivery GO mirrors release-driver: updates status + driverReleased.
+  // Idempotent: if the phase was already GO'd, returns 200 with alreadySent:true.
+  app.post('/api/loads/:id/go', isAuthenticated, requireRole('admin'), async (req, res) => {
+    try {
+      const { phase } = req.body as { phase?: string };
+      if (phase !== 'pickup' && phase !== 'delivery') {
+        return res.status(400).json({ error: "phase must be 'pickup' or 'delivery'" });
+      }
+
+      const load = await storage.getLoad(req.params.id);
+      if (!load) return res.status(404).json({ error: 'Load not found' });
+      const driver = load.driverId ? await storage.getDriver(load.driverId) : null;
+      if (!driver?.phone) return res.status(400).json({ error: 'No driver phone' });
+
+      const sopProgress: any = (load as any).sopProgress || {};
+      const goAtField = phase === 'pickup' ? 'pickupGoAt' : 'deliveryGoAt';
+
+      // Idempotent — return early if this phase was already GO'd
+      if (sopProgress[goAtField]) {
+        return res.json({ success: true, alreadySent: true, phase, goAt: sopProgress[goAtField] });
+      }
+
+      const userId = (req.user as any)?.id ?? null;
+      const goMsg = phase === 'pickup'
+        ? `✅ You are GOOD TO GO on pickup!\n\nLoad #${load.loadNumber} — you are cleared to pick up the freight. Drive safe. 🚛`
+        : `✅ You are GOOD TO GO!\n\nLoad #${load.loadNumber} is complete. Thank you for the great work!\n\nYour documents have been received. Stay safe out there. We'll be in touch for your next load. 🚛`;
+
+      const { smsLoadService } = await import('./sms-service');
+      await (smsLoadService as any).sendSMS(driver.phone, goMsg);
+
+      const now = new Date().toISOString();
+      const progressUpdate: any = {
+        ...sopProgress,
+        [goAtField]: now,
+        goByUserId: userId,
+      };
+
+      const loadUpdate: any = { sopProgress: progressUpdate };
+      if (phase === 'delivery') {
+        loadUpdate.status = 'delivered';
+        loadUpdate.sopProgress.driverReleased = true;
+        loadUpdate.sopProgress.deliveredAt = now;
+      }
+
+      await storage.updateLoad(load.id, loadUpdate);
+      res.json({ success: true, alreadySent: false, phase, goAt: now });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // GET /api/hot-loads/stats — matcher stats
   app.get('/api/hot-loads/stats', async (_req, res) => {
     try {

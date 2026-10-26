@@ -266,24 +266,21 @@ async function runLifecycleCheck(): Promise<void> {
         }
       }
 
-      // ── PHASE 4B: Release driver once delivery docs received ──
+      // ── PHASE 4B: Delivery docs received — notify dispatch, hold for manual GO ──
+      // Auto-release removed. Driver gets GO only when dispatch explicitly calls
+      // POST /api/lifecycle/release-driver/:loadId or POST /api/loads/:id/go.
       if (
         load.status === "at_delivery" &&
-        !sopProgress.driverReleased
+        !sopProgress.deliveryDocsReceived
       ) {
         const docs = await storage.getDocumentsByLoad?.(load.id) || [];
         const hasPOD = docs.some((d: any) => d.documentType === "pod" || d.documentType === "delivery_bol");
 
         if (hasPOD) {
-          await sendSMS(driver.phone,
-            `✅ You are GOOD TO GO!\n\nLoad #${load.loadNumber} is complete. Thank you for the great work!\n\nYour documents have been received. Stay safe out there. We'll be in touch for your next load. 🚛`
-          );
-
           await storage.updateLoad(load.id, {
-            status: "delivered",
-            sopProgress: { ...sopProgress, driverReleased: true, deliveredAt: new Date().toISOString() },
+            sopProgress: { ...sopProgress, deliveryDocsReceived: true, deliveryDocsReceivedAt: new Date().toISOString() },
           });
-          console.log(`[Lifecycle] ✅ Driver ${driver.name} released — load #${load.loadNumber} delivered`);
+          console.log(`[Lifecycle] 📋 Delivery docs received for ${driver.name} — load #${load.loadNumber}. Waiting for manual GO from dispatch.`);
         }
       }
 

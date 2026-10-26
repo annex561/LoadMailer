@@ -428,7 +428,7 @@ export function buildDriverStageMessages(
     [
       `Load #${inputs.loadNumber} DELIVERED`,
       DRIVER_SMS_DIVIDER,
-      `Good to go. Paperwork is being processed and your factoring submission is queued.`,
+      `Delivery photos received. Wait for dispatch to send your GO — you'll get a text when you're cleared.`,
       ``,
       `Full pay breakdown is on your dashboard.`,
       ``,
