@@ -342,6 +342,7 @@ async function runLifecycleCheck(): Promise<void> {
 
             if (process.env.DRY_RUN_OUTBOUND === "true") {
               console.log(`[Lifecycle] [DRY_RUN] Would send factoring email to ${FACTORING_EMAIL} for load #${load.loadNumber} (${attachments.length} attachments, ${docs.length} docs)`);
+              // ponytail: dry-run must not mark submitted — the email never went out
             } else {
               await mailer.sendMail({
                 from: process.env.SMTP_USER || "dispatch@traqiq.app",
@@ -363,17 +364,17 @@ async function runLifecycleCheck(): Promise<void> {
                   <p style="font-family:sans-serif;color:#9ca3af;font-size:12px;margin-top:16px;">Submitted automatically by TRAQ-IQ · LAMP Logistics</p>
                 `,
               });
-            }
 
-            sentEinsteinPkg.add(load.id);
-            await storage.updateLoad(load.id, {
-              sopProgress: {
-                ...sopProgress,
-                factoringSubmitted: true,
-                factoringSubmittedAt: new Date().toISOString(),
-              },
-            });
-            console.log(`[Lifecycle] 📧 Factoring submission sent directly for load #${load.loadNumber}`);
+              sentEinsteinPkg.add(load.id);
+              await storage.updateLoad(load.id, {
+                sopProgress: {
+                  ...sopProgress,
+                  factoringSubmitted: true,
+                  factoringSubmittedAt: new Date().toISOString(),
+                },
+              });
+              console.log(`[Lifecycle] 📧 Factoring submission sent directly for load #${load.loadNumber}`);
+            }
           } catch (e: any) {
             console.error(`[Lifecycle] Factoring email error:`, e.message);
           }
@@ -389,7 +390,7 @@ async function runLifecycleCheck(): Promise<void> {
         lifecycleThankYouEnabled &&
         load.status === "delivered" &&
         !sentThankYou.has(load.id) &&
-        !sopProgress.thankYouSent
+        !sopProgress.thankYouDrafted  // draft marker — distinct from thankYouSent (real send)
       ) {
         const brokerEmail = (load as any).brokerEmail || (load as any).broker_email || (load as any).customerEmail;
         const brokerName  = (load as any).brokerName  || (load as any).broker_name  || (load as any).customerName || "Team";
@@ -397,9 +398,11 @@ async function runLifecycleCheck(): Promise<void> {
         if (brokerEmail) {
           try {
             // Draft only — never auto-send. Log draft content for manual review.
+            // Use thankYouDrafted (not thankYouSent) so future code knows the
+            // email was NOT sent; thankYouSent is reserved for when Annex sends manually.
             sentThankYou.add(load.id);
             await storage.updateLoad(load.id, {
-              sopProgress: { ...sopProgress, thankYouSent: true, thankYouSentAt: new Date().toISOString() },
+              sopProgress: { ...sopProgress, thankYouDrafted: true, thankYouDraftedAt: new Date().toISOString() },
             });
             console.log(
               `[Lifecycle] 📝 DRAFT thank-you (not sent) for load #${load.loadNumber} → broker ${brokerEmail}. ` +
@@ -492,6 +495,22 @@ async function runLifecycleCheck(): Promise<void> {
     console.error("[Lifecycle] Run error:", err.message);
   }
 }
+
+// ─── Exported predicates (used by tests) ─────────────────────────────────────
+
+/**
+ * Returns true when Phase 5A should mark the load as submitted to factoring.
+ * Dry-run NEVER marks submitted — the email did not go out.
+ */
+export function shouldMarkFactoringSubmitted(dryRun: boolean): boolean {
+  return !dryRun;
+}
+
+/**
+ * Returns the sopProgress field name for the thank-you draft marker.
+ * "drafted" is distinct from "sent" — Annex sends manually after reviewing.
+ */
+export const THANK_YOU_DRAFT_FLAG = "thankYouDrafted" as const;
 
 // ─── Service export ───────────────────────────────────────────────────────────
 
