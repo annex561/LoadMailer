@@ -25,6 +25,8 @@ export interface DispatchOutcome {
   loadNumber?: string;
   confirmationToken?: string;
   error?: string;
+  /** Present when ok=false because a load with the same number already exists. */
+  existingLoadId?: string;
 }
 
 export async function dispatchFromIntake(
@@ -116,14 +118,33 @@ export async function dispatchFromIntake(
   }
 
   // Create the load
-  const loadNumber = parsed.loadNumber?.value ?? `RC-${Date.now()}`;
   const pickupDate = new Date(`${parsed.pickup.date}T${parsed.pickup.time}:00`);
   const deliveryDate = new Date(`${parsed.drop.date}T${parsed.drop.time}:00`);
 
-  // Idempotent insert: if a load with this loadNumber already exists (e.g. the
-  // legacy email scanner created it before the universal intake pipeline took
-  // over), UPDATE it with the new dispatch metadata instead of failing on the
-  // unique constraint.
+  // Duplicate guard: if a load with the same loadNumber already exists for this
+  // company, refuse and surface the existing load id. The caller (approve-and-dispatch
+  // route) returns 400 to the UI with the conflict info. Use "link intake to existing
+  // load" instead (POST /api/ratecon-intake/:id/link-to-load).
+  // Regression-pinned: server/__tests__/ratecon-dispatch-duplicate.test.ts
+  const loadNumber = parsed.loadNumber?.value ?? `RC-${Date.now()}`;
+  const [dupCheck] = await db
+    .select({ id: loads.id, loadNumber: loads.loadNumber })
+    .from(loads)
+    .where(
+      and(
+        eq(loads.loadNumber, loadNumber),
+        sql`${loads.companyId} IS NOT DISTINCT FROM ${loadCompanyId}`,
+      ),
+    )
+    .limit(1);
+  if (dupCheck) {
+    return {
+      ok: false,
+      error: `Load ${loadNumber} already exists: ${dupCheck.id}`,
+      existingLoadId: dupCheck.id,
+    };
+  }
+
   // Build address string without duplicating city/state if the parsed street
   // address already contains them (e.g. "8040 N. Virginia St Ste 102, Reno, NV
   // 89506" should not become "...Reno, NV 89506, Reno, NV").
@@ -140,6 +161,7 @@ export async function dispatchFromIntake(
     return cityState ? `${street}, ${cityState}` : street;
   };
 
+  // loadNumber already computed above (before the dupCheck)
   const loadValues = {
     // Same company the customer was resolved/created under — guarantees both
     // the loads→drivers and loads→customers composite FKs are satisfied.
@@ -177,28 +199,8 @@ export async function dispatchFromIntake(
     rateconPath: intake.pdfPath ?? null,
   };
 
-  const [existing] = await db
-    .select()
-    .from(loads)
-    .where(eq(loads.loadNumber, loadNumber))
-    .limit(1);
-
-  let load: typeof loads.$inferSelect;
-  if (existing) {
-    // Update the legacy/duplicate load with the new dispatch info
-    const [updated] = await db
-      .update(loads)
-      .set({
-        ...loadValues,
-        updatedAt: new Date(),
-      })
-      .where(eq(loads.id, existing.id))
-      .returning();
-    load = updated;
-  } else {
-    const [inserted] = await db.insert(loads).values(loadValues).returning();
-    load = inserted;
-  }
+  const [inserted] = await db.insert(loads).values(loadValues).returning();
+  const load = inserted;
 
   // Update intake
   await db
