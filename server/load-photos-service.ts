@@ -411,6 +411,49 @@ export function stagesForPhase(phase: UploadPhase): PhotoStage[] {
 }
 
 /**
+ * Returns true if `stages` mixes pickup and delivery docs — i.e. contains at
+ * least one pickup stage AND at least one delivery stage.  A link or request
+ * with a mixed list would show the driver documents from two different points
+ * in the trip at once, which is exactly the "all 4 slots at pickup" bug
+ * Annex reported on 10/26.  The server rejects any stages= list that fails
+ * this check.
+ */
+export function isMixedPhaseStages(stages: string[]): boolean {
+  const hasPickup = stages.some((s) => (PICKUP_STAGES as string[]).includes(s));
+  const hasDelivery = stages.some((s) => (DELIVERY_STAGES as string[]).includes(s));
+  return hasPickup && hasDelivery;
+}
+
+/**
+ * Send the driver one confirmation SMS after their phase is confirmed.
+ * Gated by DRIVER_UPLOAD_CONFIRM_SMS_ENABLED (default OFF).
+ * Respects SMS_DISABLED and DRY_RUN_OUTBOUND.
+ * Never throws — upload success must never depend on this.
+ */
+export async function sendDriverConfirmSms(
+  loadId: string,
+  phase: UploadPhase,
+): Promise<void> {
+  if (process.env.DRIVER_UPLOAD_CONFIRM_SMS_ENABLED !== 'true') return;
+
+  try {
+    const load = await db.query.loads.findFirst({ where: eq(loads.id, loadId) });
+    if (!load?.driverId) return;
+
+    const driver = await db.query.drivers.findFirst({
+      where: eq(drivers.id, load.driverId),
+    });
+    if (!driver?.phone) return;
+
+    const phaseLabel = phase === 'delivery' ? 'delivery' : 'pickup';
+    const msg = `Got it, thanks — you're all set for ${phaseLabel} on Load ${load.loadNumber}. Dispatch has your docs.`;
+    await smsLoadService.sendSMS(driver.phone, msg);
+  } catch (err: any) {
+    console.warn('[load-photos] sendDriverConfirmSms error (non-fatal):', err?.message || err);
+  }
+}
+
+/**
  * Which required photos for a phase are present vs missing on a load.
  * A stage counts as present if ANY load_documents row exists for it (pending
  * or approved — the driver has done their part; dispatcher approval is a
