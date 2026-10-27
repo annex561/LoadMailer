@@ -282,6 +282,25 @@ const opsTestAlertRateLimiter = rateLimit({
   }
 });
 
+// Per-load rate limit for POST /api/loads/:id/photos/request.
+// Caps authenticated dispatch staff at 3 SMS sends per hour per load to
+// prevent runaway Twilio spend from scripts or mis-clicks.
+// ponytail: per-load key, upgrade to per-user-per-load if multi-dispatcher contention arises
+const photoRequestRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  keyGenerator: (req) => `photo-request-${(req.params as any).id}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      ok: false,
+      error: "Too many upload link requests for this load this hour. Try again later.",
+      retryAfter: 3600,
+    });
+  },
+});
+
 // Helper function to normalize and validate phone numbers for Twilio E.164 format
 // Supports US numbers (10 or 11 digits) and already-formatted E.164 international numbers
 function normalizePhoneToE164(phoneNumber: string | undefined | null): string | null {
@@ -1749,8 +1768,20 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // List photos for a load
+  // GET /api/loads/:id/photos — staff session OR valid upload token for the same load.
+  // Driver upload page uses ?token= so it can list its own docs without a staff session.
   app.get('/api/loads/:id/photos', async (req, res) => {
     try {
+      const token = (req.query.token || '').toString();
+      if (token.length > 0) {
+        const { verifyUploadToken } = await import('./upload-token');
+        const v = verifyUploadToken(token);
+        if (v.kind === 'expired') return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+        if (v.kind === 'invalid') return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+        if (v.loadId !== req.params.id) return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+      } else if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ ok: false, error: 'Authentication required.' });
+      }
       const { listLoadPhotos } = await import('./load-photos-service');
       const result = await listLoadPhotos(req.params.id);
       res.json({ ok: true, ...result });
@@ -1759,8 +1790,8 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // Approve / reject a single photo
-  app.patch('/api/loads/:id/photos/:photoId', async (req, res) => {
+  // Approve / reject a single photo — staff only (approved docs go into factoring packet)
+  app.patch('/api/loads/:id/photos/:photoId', isAuthenticated, async (req, res) => {
     try {
       const { db } = await import('./db');
       const { loadDocuments } = await import('@shared/schema');
@@ -1841,8 +1872,10 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // Dispatcher action: SMS the driver an upload link for pickup or delivery photos
-  app.post('/api/loads/:id/photos/request', async (req, res) => {
+  // Dispatcher action: SMS the driver an upload link for pickup or delivery photos.
+  // Auth + rate limit: anonymous callers must not trigger Twilio spend; even authed
+  // staff are capped at 3 sends per load per hour to prevent mis-click floods.
+  app.post('/api/loads/:id/photos/request', isAuthenticated, photoRequestRateLimiter, async (req, res) => {
     try {
       const { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
       const phase = (req.body.phase || '').toString();
