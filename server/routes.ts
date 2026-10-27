@@ -1339,7 +1339,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const { db } = await import('./db');
       const { loads } = await import('@shared/schema');
       const { eq } = await import('drizzle-orm');
-      const { renderUploadPage, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
+      const { renderUploadPage } = await import('./load-photos-service');
       const { verifyUploadToken, looksLikeSignedToken, signUploadToken, isTokenRequired } = await import('./upload-token');
 
       const raw = req.params.param;
@@ -1372,23 +1372,43 @@ export async function registerRoutes(app: Express): Promise<void> {
       const load = await db.query.loads.findFirst({ where: eq(loads.id, loadId!) });
       if (!load) return res.status(404).type('html').send('<h1>Load not found</h1>');
 
+      const { ALL_STAGES, stagesForLoadStatus } = await import('./load-photos-service');
       const qsStages = (req.query.stages as string | undefined) || '';
       let stages: any[] = qsStages
         .split(',')
         .filter(Boolean)
-        .filter((s) =>
-          ['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(s),
-        );
+        .filter((s) => (ALL_STAGES as string[]).includes(s));
       if (stages.length === 0) {
         // No explicit phase in the link → derive from where the load actually
         // is. Pre-delivery shows ONLY the pickup slots (BOL + tie-down);
         // delivery slots never appear until the load reaches the delivery
         // phase. Prevents the "all 4 slots showing at pickup" confusion that
         // led to driver error. (Was: always showed all 4.)
-        const { stagesForLoadStatus } = await import('./load-photos-service');
         stages = stagesForLoadStatus(load.status as string | null);
       }
-      res.type('html').send(renderUploadPage(load.id, stages as any, load.loadNumber, tokenForClient));
+
+      // Build load context for the page header (item 10). Never include rate/pay.
+      const pickup = (load as any).originCity && (load as any).originState
+        ? `${(load as any).originCity}, ${(load as any).originState}`
+        : (load as any).pickupAddress || null;
+      const delivery = (load as any).destCity && (load as any).destState
+        ? `${(load as any).destCity}, ${(load as any).destState}`
+        : (load as any).deliveryAddress || null;
+      // rateconPath may be a full path like "ratecons/TQL-38896802.pdf" — use
+      // the filename portion only so drivers see a short human reference.
+      let rateconRef: string | null = null;
+      if ((load as any).rateconPath) {
+        const parts = String((load as any).rateconPath).split(/[/\\]/);
+        rateconRef = parts[parts.length - 1] || null;
+      }
+      const pageCtx = {
+        broker: (load as any).brokerName || null,
+        pickup,
+        delivery,
+        rateconRef,
+      };
+
+      res.type('html').send(renderUploadPage(load.id, stages as any, load.loadNumber, tokenForClient, pageCtx));
     } catch (err: any) {
       console.error('Upload page error:', err);
       res.status(500).type('html').send('<h1>Error loading page</h1>');
@@ -1436,7 +1456,8 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       const stage = (req.query.stage || '').toString();
-      if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+      const { ALL_STAGES: ALL_SIG_STAGES } = await import('./load-photos-service');
+      if (!(ALL_SIG_STAGES as string[]).includes(stage)) {
         return res.status(400).json({ ok: false, error: 'Invalid stage' });
       }
 
@@ -1512,7 +1533,8 @@ export async function registerRoutes(app: Express): Promise<void> {
           return res.status(401).json({ ok: false, error: 'Upload token required.' });
         }
         const stage = (req.body.stage || '').toString();
-        if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+        const { ALL_STAGES: ALL_EXT_STAGES } = await import('./load-photos-service');
+        if (!(ALL_EXT_STAGES as string[]).includes(stage)) {
           return res.status(400).json({ ok: false, error: 'Invalid stage' });
         }
         const url: string = String(req.body.cloudinaryUrl || '');
@@ -1577,9 +1599,9 @@ export async function registerRoutes(app: Express): Promise<void> {
 
         const file = (req as any).file;
         if (!file) return res.status(400).json({ ok: false, error: 'No file received — please pick a photo and try again.' });
-        const { uploadLoadPhoto } = await import('./load-photos-service');
+        const { uploadLoadPhoto, ALL_STAGES: ALL_MULTER_STAGES } = await import('./load-photos-service');
         const stage = (req.body.stage || '').toString();
-        if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+        if (!(ALL_MULTER_STAGES as string[]).includes(stage)) {
           return res.status(400).json({ ok: false, error: 'Invalid stage' });
         }
         const result = await uploadLoadPhoto({
@@ -1630,7 +1652,8 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       const stage = (req.query.stage || '').toString();
-      if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+      const { ALL_STAGES: ALL_PHOTO_STAGES } = await import('./load-photos-service');
+      if (!(ALL_PHOTO_STAGES as string[]).includes(stage)) {
         return res.status(400).json({ ok: false, error: 'Invalid stage' });
       }
 
@@ -1667,7 +1690,8 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       const stage = (req.body.stage || '').toString();
-      if (!['pickup_bol', 'pickup_securement', 'delivery_pod', 'delivery_signed_bol'].includes(stage)) {
+      const { ALL_STAGES: ALL_REC_STAGES } = await import('./load-photos-service');
+      if (!(ALL_REC_STAGES as string[]).includes(stage)) {
         return res.status(400).json({ ok: false, error: 'Invalid stage' });
       }
       if (!req.body.fileUrl) return res.status(400).json({ ok: false, error: 'fileUrl required' });
