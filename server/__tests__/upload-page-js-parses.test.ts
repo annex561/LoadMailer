@@ -120,8 +120,10 @@ describe("upload page — client script integrity", () => {
 
   it("shows a full-screen success confirmation after submit", () => {
     // The driver must get unmistakable feedback the photos reached the system.
+    // Message changed to phase-specific "you're all set for pickup/delivery"
+    // per Annex 10/26 feedback (TQL 38896802 live test).
     expect(clientJs).toContain("showDoneOverlay");
-    expect(clientJs).toMatch(/All saved/i);
+    expect(clientJs).toMatch(/all set for/i);
   });
 
   it("derives the confirm phase from the visible stages", () => {

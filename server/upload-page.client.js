@@ -218,16 +218,32 @@
   }
 
   function showDoneOverlay() {
+    var phaseMsg = PHASE === 'delivery'
+      ? "Got it, thanks — you're all set for delivery!"
+      : "Got it, thanks — you're all set for pickup!";
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;background:#0f172a;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px;z-index:10000';
     ov.innerHTML =
       '<div style="font-size:64px;line-height:1">✅</div>' +
-      '<h1 style="color:#4ade80;font-size:24px;margin:16px 0 8px">All saved!</h1>' +
-      '<p style="color:#e2e8f0;font-size:16px;max-width:320px;margin:0 0 4px">Your ' +
-      (PHASE === 'delivery' ? 'delivery' : 'pickup') +
-      ' photos were sent to dispatch and recorded on this load.</p>' +
-      '<p style="color:#94a3b8;font-size:14px;margin-top:16px">You can close this page now.</p>';
+      '<h1 style="color:#4ade80;font-size:24px;margin:16px 0 8px">' + phaseMsg + '</h1>' +
+      '<p style="color:#e2e8f0;font-size:16px;max-width:320px;margin:0 0 4px">Your photos were sent to dispatch and recorded on this load.</p>' +
+      '<p style="color:#94a3b8;font-size:14px;margin-top:16px">Returning you home in a moment…</p>';
     document.body.appendChild(ov);
+    // Auto-return the driver to the app home screen ~3 s after success.
+    // Try history.back() first (works when the driver came from the app);
+    // fall back to window.close() (SMS link opened in a new tab);
+    // last resort: navigate to / (driver portal root).
+    setTimeout(function () {
+      try {
+        if (window.history.length > 1) {
+          window.history.back();
+        } else {
+          window.close();
+        }
+      } catch (_) {
+        window.location.href = '/';
+      }
+    }, 3000);
   }
 
   updateReqCount();

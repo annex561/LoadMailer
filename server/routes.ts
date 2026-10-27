@@ -1359,7 +1359,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const { db } = await import('./db');
       const { loads } = await import('@shared/schema');
       const { eq } = await import('drizzle-orm');
-      const { renderUploadPage, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
+      const { renderUploadPage, PICKUP_STAGES, DELIVERY_STAGES, isMixedPhaseStages } = await import('./load-photos-service');
       const { verifyUploadToken, looksLikeSignedToken, signUploadToken, isTokenRequired } = await import('./upload-token');
 
       const raw = req.params.param;
@@ -1407,6 +1407,10 @@ export async function registerRoutes(app: Express): Promise<void> {
         // led to driver error. (Was: always showed all 4.)
         const { stagesForLoadStatus } = await import('./load-photos-service');
         stages = stagesForLoadStatus(load.status as string | null);
+      } else if (isMixedPhaseStages(stages as string[])) {
+        // Reject any link that combines pickup + delivery slots. A driver
+        // should never see documents from two different trip phases at once.
+        return res.status(400).type('html').send('<h1>Invalid link</h1><p>This link combines pickup and delivery documents. Contact dispatch for a phase-specific link.</p>');
       }
       res.type('html').send(renderUploadPage(load.id, stages as any, load.loadNumber, tokenForClient));
     } catch (err: any) {
@@ -1735,7 +1739,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       const { db } = await import('./db');
       const { loads } = await import('@shared/schema');
       const { eq } = await import('drizzle-orm');
-      const { getRequiredPhotoStatus, STAGE_LABELS } = await import('./load-photos-service');
+      const { getRequiredPhotoStatus, STAGE_LABELS, sendDriverConfirmSms } = await import('./load-photos-service');
 
       const status = await getRequiredPhotoStatus(req.params.id, phase as any);
       if (!status.complete) {
@@ -1755,6 +1759,10 @@ export async function registerRoutes(app: Express): Promise<void> {
       const sop: any = (l.sopProgress as any) || {};
       sop[phase === 'pickup' ? 'pickupPhotosConfirmedAt' : 'deliveryPhotosConfirmedAt'] = new Date().toISOString();
       await db.update(loads).set({ sopProgress: sop } as any).where(eq(loads.id, req.params.id));
+
+      // Optional confirmation SMS to driver. Behind DRIVER_UPLOAD_CONFIRM_SMS_ENABLED
+      // (default OFF). Never blocks the response — fire-and-forget.
+      sendDriverConfirmSms(req.params.id, phase as any).catch(() => {});
 
       // Confirm alert: bypass debounce so Annex always gets one on Done
       if (status.present.length > 0) {
@@ -1883,6 +1891,44 @@ export async function registerRoutes(app: Express): Promise<void> {
         } catch {}
       }
       res.json({ ok: true, stage, timestamp: sop[field], sopProgress: sop });
+
+      // Timing: send the phase-correct upload link when the driver checks in at
+      // pickup (at_pickup or loaded) or delivery (at_delivery). Behind
+      // DRIVER_UPLOAD_LINK_SMS_ENABLED (default OFF). Deduped by
+      // pickupPhotoRequestedAt / deliveryPhotoRequestedAt so the geofence cron
+      // and manual dispatches don't re-send if the link already went out.
+      // Fire-and-forget — never blocks or errors the check-in response.
+      if (process.env.DRIVER_UPLOAD_LINK_SMS_ENABLED === 'true') {
+        const isPickupStage = stage === 'at_pickup' || stage === 'loaded';
+        const isDeliveryStage = stage === 'at_delivery';
+        if (isPickupStage || isDeliveryStage) {
+          (async () => {
+            try {
+              const { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
+              const { db: db2 } = await import('./db');
+              const { loads: loads2 } = await import('@shared/schema');
+              const { eq: eq2 } = await import('drizzle-orm');
+              const fresh = await db2.select({ id: loads2.id, sopProgress: loads2.sopProgress }).from(loads2).where(eq2(loads2.id, req.params.id));
+              const freshSop: any = (fresh[0]?.sopProgress as any) || {};
+              if (isPickupStage && !freshSop.pickupPhotoRequestedAt) {
+                const r = await sendUploadLink(req.params.id, PICKUP_STAGES);
+                if (r.ok) {
+                  freshSop.pickupPhotoRequestedAt = new Date().toISOString();
+                  await db2.update(loads2).set({ sopProgress: freshSop } as any).where(eq2(loads2.id, req.params.id));
+                }
+              } else if (isDeliveryStage && !freshSop.deliveryPhotoRequestedAt) {
+                const r = await sendUploadLink(req.params.id, DELIVERY_STAGES);
+                if (r.ok) {
+                  freshSop.deliveryPhotoRequestedAt = new Date().toISOString();
+                  await db2.update(loads2).set({ sopProgress: freshSop } as any).where(eq2(loads2.id, req.params.id));
+                }
+              }
+            } catch (e: any) {
+              console.warn('[checkin] upload-link auto-send error (non-fatal):', e?.message || e);
+            }
+          })();
+        }
+      }
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
     }
@@ -1893,13 +1939,20 @@ export async function registerRoutes(app: Express): Promise<void> {
   // staff are capped at 3 sends per load per hour to prevent mis-click floods.
   app.post('/api/loads/:id/photos/request', isAuthenticated, photoRequestRateLimiter, async (req, res) => {
     try {
-      const { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
+      const { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES, isMixedPhaseStages } = await import('./load-photos-service');
       const phase = (req.body.phase || '').toString();
       let stages: any[] = [];
       if (phase === 'pickup') stages = PICKUP_STAGES;
       else if (phase === 'delivery') stages = DELIVERY_STAGES;
-      else if (Array.isArray(req.body.stages)) stages = req.body.stages;
-      else return res.status(400).json({ ok: false, error: 'phase must be pickup or delivery' });
+      else if (Array.isArray(req.body.stages)) {
+        // Raw stages array: validate it is not mixed-phase before using.
+        if (isMixedPhaseStages(req.body.stages as string[])) {
+          return res.status(400).json({ ok: false, error: 'stages must all be pickup or all be delivery, not mixed' });
+        }
+        stages = req.body.stages;
+      } else {
+        return res.status(400).json({ ok: false, error: 'phase must be pickup or delivery' });
+      }
 
       const result = await sendUploadLink(req.params.id, stages, req.body.message);
       res.json(result);
