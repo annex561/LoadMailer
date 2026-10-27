@@ -100,6 +100,24 @@ export interface CloudinaryDirectUploadParams {
   signature: string;
 }
 
+/**
+ * Normalize a Cloudinary image URL so it is always served as JPEG.
+ * Injects `f_jpg/` after `/upload/` so any uploaded format (HEIC, WebP, etc.)
+ * is transcoded by Cloudinary on delivery. Required for PDF embedding:
+ * mergePacketPdfs only handles JPG and PNG bytes.
+ *
+ * Input:  https://res.cloudinary.com/cloud/image/upload/v123/path.heic
+ * Output: https://res.cloudinary.com/cloud/image/upload/f_jpg/v123/path.heic
+ */
+export function normalizeCloudinaryJpgUrl(url: string): string {
+  // Skip if f_jpg is already present (idempotent — safe to call on stored URLs).
+  if (url.includes('/f_jpg/') || url.includes('/f_jpg,')) return url;
+  return url.replace(
+    /^(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)/,
+    '$1f_jpg/',
+  );
+}
+
 export function buildCloudinaryDirectUploadParams(
   loadNumber: string,
   stage: PhotoStage,
@@ -182,6 +200,10 @@ export async function recordDirectUploadedPhoto(p: {
     return { ok: false, error: "Invalid file URL" };
   }
 
+  // Normalize to JPEG delivery so HEIC/WebP uploads are embeddable in the
+  // factoring PDF packet (mergePacketPdfs only handles JPG and PNG bytes).
+  const storedUrl = normalizeCloudinaryJpgUrl(p.fileUrl);
+
   try {
     const [doc] = await db
       .insert(loadDocuments)
@@ -190,7 +212,7 @@ export async function recordDirectUploadedPhoto(p: {
         driverId,
         documentType: p.stage,
         fileName: p.fileName,
-        fileUrl: p.fileUrl,
+        fileUrl: storedUrl,
         fileSize: p.fileSize,
         mimeType: p.mimeType,
         notes: p.notes || null,
@@ -365,6 +387,9 @@ export async function recordExternalPhotoUpload(p: {
     };
   }
 
+  // Same HEIC normalization as recordDirectUploadedPhoto — ensures JPG delivery.
+  const storedUrl = normalizeCloudinaryJpgUrl(p.cloudinaryUrl);
+
   try {
     const [doc] = await db
       .insert(loadDocuments)
@@ -373,7 +398,7 @@ export async function recordExternalPhotoUpload(p: {
         driverId,
         documentType: p.stage,
         fileName: p.originalName || `${p.stage}.jpg`,
-        fileUrl: p.cloudinaryUrl,
+        fileUrl: storedUrl,
         fileSize: p.fileSize || 0,
         mimeType: p.mimeType || 'image/jpeg',
         notes: p.notes || null,
@@ -397,7 +422,7 @@ export async function recordExternalPhotoUpload(p: {
       }
     }
 
-    return { ok: true, url: p.cloudinaryUrl, docId: doc?.id || '' };
+    return { ok: true, url: storedUrl, docId: doc?.id || '' };
   } catch (err: any) {
     console.error('[load-photos] recordExternalPhotoUpload error:', err?.message || err);
     return { ok: false, error: String(err?.message || err) };
