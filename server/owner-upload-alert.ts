@@ -9,6 +9,11 @@
  * Debounce: one SMS per upload burst (2-min window per load+phase).
  *           confirm=true bypasses the window (always fires on Done).
  * Daily cap: 10 alerts per load per calendar day.
+ * Hourly ceiling: 20 alerts per rolling hour across all loads
+ *                 (OWNER_ALERT_HOURLY_MAX overrides).
+ *
+ * Callers: the browser upload routes in routes.ts and the MMS-reply path
+ * (processMMSReply in mms-upload-service.ts).
  *
  * Alert failures NEVER propagate — callers fire-and-forget via .catch().
  */
@@ -21,12 +26,15 @@ import { STAGE_LABELS, PICKUP_STAGES, PhotoStage } from './load-photos-service';
 
 const BURST_MS = 2 * 60 * 1000; // 2 minutes
 const DAILY_MAX = 10;
+const HOUR_MS = 60 * 60 * 1000;
+const DEFAULT_HOURLY_MAX = 20; // across ALL loads; override with OWNER_ALERT_HOURLY_MAX
 
 // ponytail: in-process Maps; resets on restart — acceptable for a single-dyno
 // alert channel where missing one burst is not a data-loss event.
 // Upgrade to Redis/DB if multi-dyno or durability matters.
 const _burst = new Map<string, number>(); // loadId:phase => lastFireMs
 const _daily = new Map<string, number>(); // loadId:YYYY-MM-DD => count
+const _sentAt: number[] = []; // fire times in the last hour, oldest first
 
 function phaseOf(stage: PhotoStage): 'pickup' | 'delivery' {
   return PICKUP_STAGES.includes(stage) ? 'pickup' : 'delivery';
@@ -40,6 +48,7 @@ function todaySuffix(): string {
 export function _resetAlertState(): void {
   _burst.clear();
   _daily.clear();
+  _sentAt.length = 0;
 }
 
 export async function notifyOwnerOfUpload(p: {
@@ -73,8 +82,20 @@ export async function notifyOwnerOfUpload(p: {
     const last = _burst.get(burstKey) ?? 0;
     if (now - last < BURST_MS) return; // already fired in this burst window
   }
+
+  // ── Global hourly ceiling (all loads, confirm included) ─────────────────
+  // Per-load caps alone scale with the number of loads; this bounds the
+  // total spend if uploads spike across many loads at once.
+  const hourlyMax = Number(process.env.OWNER_ALERT_HOURLY_MAX) || DEFAULT_HOURLY_MAX;
+  while (_sentAt.length && now - _sentAt[0] >= HOUR_MS) _sentAt.shift();
+  if (_sentAt.length >= hourlyMax) {
+    console.log(`[owner-alert] hourly ceiling (${hourlyMax}) hit — suppressing alert for load ${p.loadId}`);
+    return;
+  }
+
   _burst.set(burstKey, now);
   _daily.set(dk, dayCount + 1);
+  _sentAt.push(now);
 
   try {
     const load = await db.query.loads.findFirst({ where: eq(loads.id, p.loadId) });

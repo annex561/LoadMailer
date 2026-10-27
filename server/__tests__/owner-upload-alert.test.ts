@@ -192,4 +192,41 @@ describe('notifyOwnerOfUpload', () => {
     await notifyOwnerOfUpload({ loadId: 'load-001', stage: 'pickup_bol', confirm: true });
     expect(sendSMS).toHaveBeenCalledTimes(10); // still 10
   });
+
+  // Per-load caps scale with the number of loads; this ceiling bounds the total.
+  describe('global hourly ceiling', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      delete process.env.OWNER_ALERT_HOURLY_MAX;
+    });
+
+    it('stops at 20 alerts per hour across different loads, then reopens after an hour', async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-10-27T12:00:00Z'));
+      for (let i = 0; i < 25; i++) {
+        await notifyOwnerOfUpload({ loadId: `load-${i}`, stage: 'pickup_bol' });
+      }
+      expect(sendSMS).toHaveBeenCalledTimes(20);
+
+      vi.setSystemTime(new Date('2026-10-27T13:00:01Z'));
+      await notifyOwnerOfUpload({ loadId: 'load-99', stage: 'pickup_bol' });
+      expect(sendSMS).toHaveBeenCalledTimes(21);
+    });
+
+    it('applies to confirm alerts too', async () => {
+      process.env.OWNER_ALERT_HOURLY_MAX = '2';
+      for (let i = 0; i < 4; i++) {
+        await notifyOwnerOfUpload({ loadId: `load-${i}`, stage: 'pickup_bol', confirm: true });
+      }
+      expect(sendSMS).toHaveBeenCalledTimes(2);
+    });
+
+    it('debounced uploads do not use up the ceiling', async () => {
+      process.env.OWNER_ALERT_HOURLY_MAX = '2';
+      await notifyOwnerOfUpload({ loadId: 'load-001', stage: 'pickup_bol' });
+      await notifyOwnerOfUpload({ loadId: 'load-001', stage: 'pickup_securement' }); // same burst
+      await notifyOwnerOfUpload({ loadId: 'load-002', stage: 'pickup_bol' });
+      expect(sendSMS).toHaveBeenCalledTimes(2);
+    });
+  });
 });
