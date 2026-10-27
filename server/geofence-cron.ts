@@ -11,6 +11,7 @@ import { and, isNotNull, isNull, eq, desc } from 'drizzle-orm';
 import { haversineDistance } from './auto-load-matcher';
 import { geocode } from './geocoder';
 import { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES } from './load-photos-service';
+import { signUploadToken } from './upload-token';
 
 // Within MILES_THRESHOLD of the pickup or delivery → fire upload-link SMS.
 // 5mi gives drivers enough lead time to receive the SMS before they pull
@@ -97,8 +98,8 @@ class GeofenceCron {
         const baseUrl =
           process.env.PUBLIC_URL || process.env.APP_URL || 'https://traqiq.app';
         // Phase-scoped links — driver sees only the slots for where they are.
-        const pickupUploadLink = `${baseUrl}/u/${load.id}?stages=pickup_bol,pickup_securement`;
-        const deliveryUploadLink = `${baseUrl}/u/${load.id}?stages=delivery_pod,delivery_signed_bol`;
+        const pickupUploadLink = `${baseUrl}/u/${signUploadToken(load.id)}?stages=pickup_bol,pickup_securement`;
+        const deliveryUploadLink = `${baseUrl}/u/${signUploadToken(load.id)}?stages=delivery_pod,delivery_signed_bol`;
 
         // MMS-reply mode swaps the link-bearing custom message for `undefined`
         // so sendUploadLink builds its default "reply with photo of load #X"
