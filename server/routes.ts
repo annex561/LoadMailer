@@ -1859,6 +1859,94 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // ── doc-packet: GET /api/loads/:id/doc-packet ─────────────────────────────
+  // Staff auth (session) OR a service token (DOC_PACKET_SERVICE_TOKEN env var,
+  // default unset = disabled). Used by LAMP's BOL↔rate-con docmatch as its
+  // primary source so Gmail becomes a fallback only (packet item 13).
+  //
+  // Returns: loadNumber/PO, ratecon_intake fields, load_documents grouped by type.
+  // NEVER returns rate/pay columns (rate, offeredRate, rpm, etc.) — this is a
+  // document-matching endpoint, not a financial one.
+  function docPacketGuard(req: any, res: any, next: any) {
+    const svcToken = process.env.DOC_PACKET_SERVICE_TOKEN;
+    if (svcToken) {
+      const auth = (req.headers.authorization || '') as string;
+      if (auth === `Bearer ${svcToken}`) return next();
+    }
+    return isAuthenticated(req, res, next);
+  }
+
+  app.get('/api/loads/:id/doc-packet', docPacketGuard, async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { loads: loadsTable, rateconIntake, loadDocuments } = await import('@shared/schema');
+      const { eq, asc, desc } = await import('drizzle-orm');
+
+      const [load] = await db
+        .select({
+          id: loadsTable.id,
+          loadNumber: loadsTable.loadNumber,
+          brokerName: loadsTable.brokerName,
+          pickupAddress: loadsTable.pickupAddress,
+          deliveryAddress: loadsTable.deliveryAddress,
+          rateconPath: loadsTable.rateconPath,
+        })
+        .from(loadsTable)
+        .where(eq(loadsTable.id, req.params.id))
+        .limit(1);
+
+      if (!load) return res.status(404).json({ ok: false, error: 'Load not found' });
+
+      // Linked ratecon_intake — newest one tied to this load
+      const [ratecon] = await db
+        .select({
+          id: rateconIntake.id,
+          pdfPath: rateconIntake.pdfPath,
+          sourceFilename: rateconIntake.sourceFilename,
+          parsedJson: rateconIntake.parsedJson,
+          status: rateconIntake.status,
+        })
+        .from(rateconIntake)
+        .where(eq(rateconIntake.loadId, req.params.id))
+        .orderBy(desc(rateconIntake.createdAt))
+        .limit(1);
+
+      // All documents for this load, oldest-first within each type
+      const docs = await db
+        .select({
+          id: loadDocuments.id,
+          documentType: loadDocuments.documentType,
+          fileUrl: loadDocuments.fileUrl,
+          approvalStatus: loadDocuments.approvalStatus,
+          uploadedAt: loadDocuments.uploadedAt,
+          notes: loadDocuments.notes,
+        })
+        .from(loadDocuments)
+        .where(eq(loadDocuments.loadId, req.params.id))
+        .orderBy(asc(loadDocuments.uploadedAt));
+
+      // Group by documentType for the docmatch consumer
+      const documents: Record<string, typeof docs> = {};
+      for (const doc of docs) {
+        if (!documents[doc.documentType]) documents[doc.documentType] = [];
+        documents[doc.documentType].push(doc);
+      }
+
+      res.json({
+        loadId: load.id,
+        loadNumber: load.loadNumber,
+        brokerName: load.brokerName ?? null,
+        pickupAddress: load.pickupAddress,
+        deliveryAddress: load.deliveryAddress,
+        rateconPath: load.rateconPath ?? null,
+        ratecon: ratecon ?? null,
+        documents,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // Backfill missing tracking tokens for drivers (required for statement SMS links)
   app.post('/api/drivers/backfill-tokens', requireRole('admin'), async (_req, res) => {
     try {
