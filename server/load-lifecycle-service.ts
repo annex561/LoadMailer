@@ -288,8 +288,13 @@ async function runLifecycleCheck(): Promise<void> {
       }
 
       // ── PHASE 5A: Submit directly to factoring company ──
+      // Gated: LIFECYCLE_FACTORING_EMAIL_ENABLED must be exactly "true" to send.
+      // Default OFF — Einstein has left; set the flag and FACTORING_EMAIL before enabling.
+      // DRY_RUN_OUTBOUND=true logs without sending.
       const FACTORING_EMAIL = process.env.FACTORING_EMAIL || process.env.EINSTEIN_EMAIL || "";
+      const lifecycleFactoringEnabled = process.env.LIFECYCLE_FACTORING_EMAIL_ENABLED === "true";
       if (
+        lifecycleFactoringEnabled &&
         load.status === "delivered" &&
         !sentEinsteinPkg.has(load.id) &&
         !sopProgress.factoringSubmitted &&
@@ -338,36 +343,41 @@ async function runLifecycleCheck(): Promise<void> {
               }
             }
 
-            await mailer.sendMail({
-              from: process.env.SMTP_USER || "dispatch@traqiq.app",
-              to: FACTORING_EMAIL,
-              subject: `📦 Factoring Submission — Load #${load.loadNumber} | ${origin} → ${dest}`,
-              attachments,
-              html: `
-                <h2 style="font-family:sans-serif;">Factoring Submission</h2>
-                <table style="border-collapse:collapse;width:100%;font-family:sans-serif;font-size:14px;">
-                  <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Load #</td><td style="padding:8px 12px;">${load.loadNumber}</td></tr>
-                  <tr><td style="padding:8px 12px;font-weight:bold;">Driver</td><td style="padding:8px 12px;">${driver.name} · ${driver.phone || ""}</td></tr>
-                  <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Route</td><td style="padding:8px 12px;">${origin} → ${dest}</td></tr>
-                  <tr><td style="padding:8px 12px;font-weight:bold;">Rate</td><td style="padding:8px 12px;color:#16a34a;font-weight:bold;">$${Number(rate).toLocaleString()}</td></tr>
-                  <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Delivered</td><td style="padding:8px 12px;">${sopProgress.deliveredAt ? new Date(sopProgress.deliveredAt).toLocaleString() : new Date().toLocaleString()}</td></tr>
-                  <tr><td style="padding:8px 12px;font-weight:bold;">Documents</td><td style="padding:8px 12px;">${attachments.length} attached · ${docs.length} total</td></tr>
-                </table>
-                <h3 style="font-family:sans-serif;margin-top:16px;">Document Links</h3>
-                <table style="border-collapse:collapse;font-family:sans-serif;font-size:13px;">${docRows}</table>
-                <p style="font-family:sans-serif;color:#9ca3af;font-size:12px;margin-top:16px;">Submitted automatically by TRAQ-IQ · LAMP Logistics</p>
-              `,
-            });
+            if (process.env.DRY_RUN_OUTBOUND === "true") {
+              console.log(`[Lifecycle] [DRY_RUN] Would send factoring email to ${FACTORING_EMAIL} for load #${load.loadNumber} (${attachments.length} attachments, ${docs.length} docs)`);
+              // ponytail: dry-run must not mark submitted — the email never went out
+            } else {
+              await mailer.sendMail({
+                from: process.env.SMTP_USER || "dispatch@traqiq.app",
+                to: FACTORING_EMAIL,
+                subject: `📦 Factoring Submission — Load #${load.loadNumber} | ${origin} → ${dest}`,
+                attachments,
+                html: `
+                  <h2 style="font-family:sans-serif;">Factoring Submission</h2>
+                  <table style="border-collapse:collapse;width:100%;font-family:sans-serif;font-size:14px;">
+                    <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Load #</td><td style="padding:8px 12px;">${load.loadNumber}</td></tr>
+                    <tr><td style="padding:8px 12px;font-weight:bold;">Driver</td><td style="padding:8px 12px;">${driver.name} · ${driver.phone || ""}</td></tr>
+                    <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Route</td><td style="padding:8px 12px;">${origin} → ${dest}</td></tr>
+                    <tr><td style="padding:8px 12px;font-weight:bold;">Rate</td><td style="padding:8px 12px;color:#16a34a;font-weight:bold;">$${Number(rate).toLocaleString()}</td></tr>
+                    <tr style="background:#f3f4f6;"><td style="padding:8px 12px;font-weight:bold;">Delivered</td><td style="padding:8px 12px;">${sopProgress.deliveredAt ? new Date(sopProgress.deliveredAt).toLocaleString() : new Date().toLocaleString()}</td></tr>
+                    <tr><td style="padding:8px 12px;font-weight:bold;">Documents</td><td style="padding:8px 12px;">${attachments.length} attached · ${docs.length} total</td></tr>
+                  </table>
+                  <h3 style="font-family:sans-serif;margin-top:16px;">Document Links</h3>
+                  <table style="border-collapse:collapse;font-family:sans-serif;font-size:13px;">${docRows}</table>
+                  <p style="font-family:sans-serif;color:#9ca3af;font-size:12px;margin-top:16px;">Submitted automatically by TRAQ-IQ · LAMP Logistics</p>
+                `,
+              });
 
-            sentEinsteinPkg.add(load.id);
-            await storage.updateLoad(load.id, {
-              sopProgress: {
-                ...sopProgress,
-                factoringSubmitted: true,
-                factoringSubmittedAt: new Date().toISOString(),
-              },
-            });
-            console.log(`[Lifecycle] 📧 Factoring submission sent directly for load #${load.loadNumber}`);
+              sentEinsteinPkg.add(load.id);
+              await storage.updateLoad(load.id, {
+                sopProgress: {
+                  ...sopProgress,
+                  factoringSubmitted: true,
+                  factoringSubmittedAt: new Date().toISOString(),
+                },
+              });
+              console.log(`[Lifecycle] 📧 Factoring submission sent directly for load #${load.loadNumber}`);
+            }
           } catch (e: any) {
             console.error(`[Lifecycle] Factoring email error:`, e.message);
           }
@@ -375,37 +385,35 @@ async function runLifecycleCheck(): Promise<void> {
       }
 
       // ── PHASE 5B: Thank-you email to broker ──
+      // Gated: LIFECYCLE_THANKYOU_EMAIL_ENABLED must be exactly "true".
+      // Default OFF. When ON, emails are stored as DRAFTS only — never sent automatically.
+      // Annex reviews and sends manually. DRY_RUN_OUTBOUND=true also suppresses sending.
+      const lifecycleThankYouEnabled = process.env.LIFECYCLE_THANKYOU_EMAIL_ENABLED === "true";
       if (
+        lifecycleThankYouEnabled &&
         load.status === "delivered" &&
         !sentThankYou.has(load.id) &&
-        !sopProgress.thankYouSent
+        !sopProgress.thankYouDrafted  // draft marker — distinct from thankYouSent (real send)
       ) {
         const brokerEmail = (load as any).brokerEmail || (load as any).broker_email || (load as any).customerEmail;
         const brokerName  = (load as any).brokerName  || (load as any).broker_name  || (load as any).customerName || "Team";
 
         if (brokerEmail) {
           try {
-            await mailer.sendMail({
-              from: process.env.SMTP_USER || "dispatch@traqiq.app",
-              to: brokerEmail,
-              subject: `POD — Load #${load.loadNumber} | ${(load as any).originCity || ""} → ${(load as any).destCity || ""}`,
-              html: `
-                <p>Hi ${brokerName.split(" ")[0]},</p>
-                <p>Thank you for the opportunity to haul Load #${load.loadNumber}. Please find the Proof of Delivery attached.</p>
-                <p>It was a pleasure working with your team. We look forward to working with you again soon.</p>
-                <br/>
-                <p>Best,<br/>LAMP Logistics Dispatch<br/>dispatch@traqiq.app</p>
-                <p style="color:#999;font-size:12px;">Sent automatically by TRAQ-IQ · LAMP Logistics</p>
-              `,
-            });
-
+            // Draft only — never auto-send. Log draft content for manual review.
+            // Use thankYouDrafted (not thankYouSent) so future code knows the
+            // email was NOT sent; thankYouSent is reserved for when Annex sends manually.
             sentThankYou.add(load.id);
             await storage.updateLoad(load.id, {
-              sopProgress: { ...sopProgress, thankYouSent: true, thankYouSentAt: new Date().toISOString() },
+              sopProgress: { ...sopProgress, thankYouDrafted: true, thankYouDraftedAt: new Date().toISOString() },
             });
-            console.log(`[Lifecycle] 📧 Thank-you email sent to broker for load #${load.loadNumber}`);
+            console.log(
+              `[Lifecycle] 📝 DRAFT thank-you (not sent) for load #${load.loadNumber} → broker ${brokerEmail}. ` +
+              `Subject: POD — Load #${load.loadNumber} | ${(load as any).originCity || ""} → ${(load as any).destCity || ""}. ` +
+              `Review and send manually.`
+            );
           } catch (e: any) {
-            console.error(`[Lifecycle] Thank-you email error:`, e.message);
+            console.error(`[Lifecycle] Thank-you draft error:`, e.message);
           }
         }
       }
@@ -490,6 +498,22 @@ async function runLifecycleCheck(): Promise<void> {
     console.error("[Lifecycle] Run error:", err.message);
   }
 }
+
+// ─── Exported predicates (used by tests) ─────────────────────────────────────
+
+/**
+ * Returns true when Phase 5A should mark the load as submitted to factoring.
+ * Dry-run NEVER marks submitted — the email did not go out.
+ */
+export function shouldMarkFactoringSubmitted(dryRun: boolean): boolean {
+  return !dryRun;
+}
+
+/**
+ * Returns the sopProgress field name for the thank-you draft marker.
+ * "drafted" is distinct from "sent" — Annex sends manually after reviewing.
+ */
+export const THANK_YOU_DRAFT_FLAG = "thankYouDrafted" as const;
 
 // ─── Service export ───────────────────────────────────────────────────────────
 
