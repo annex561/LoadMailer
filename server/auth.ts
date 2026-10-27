@@ -3,7 +3,7 @@ import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy, type Profile } from "passport-google-oauth20";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import type { Express, RequestHandler } from "express";
+import type { Express, Request, Response, NextFunction, RequestHandler } from "express";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
@@ -257,8 +257,8 @@ export async function setupAuth(app: Express) {
     })(req, res, next);
   });
 
-  // POST /api/register — create a new dispatcher account
-  app.post("/api/register", async (req, res, next) => {
+  // POST /api/register — create a new dispatcher account (admin-only)
+  app.post("/api/register", requireAdminOrApiKey, async (req, res, next) => {
     try {
       const { username, email, password, firstName, lastName } = req.body as {
         username?: string;
@@ -429,3 +429,14 @@ export function requireRole(...allowed: string[]): RequestHandler {
     return next();
   };
 }
+
+// Middleware: require admin session OR a valid ADMIN_API_KEY header.
+// Fail-closed: if ADMIN_API_KEY is unset (or still the placeholder), rejects
+// unless the caller holds a live admin session. Used on account-creation routes
+// (/api/register, /api/users) so random internet callers cannot mint accounts.
+export const requireAdminOrApiKey: RequestHandler = (req, res, next) => {
+  if ((req as any).isAuthenticated?.() && (req.user as any)?.role === "admin") return next();
+  const key = process.env.ADMIN_API_KEY;
+  if (key && key !== "replace-with-random-string" && req.headers["x-admin-api-key"] === key) return next();
+  res.status(401).json({ message: "Unauthorized" });
+};

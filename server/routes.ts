@@ -32,6 +32,7 @@ import { googleSheetsService } from './google-sheets-service';
 import { smsLoadService } from './sms-service';
 import { smsCommunicationService } from './sms-communication-service';
 import { setupAuth, isAuthenticated, requireRole } from "./auth";
+import { sendDriverWelcomeSms } from "./driver-welcome-sms";
 import { registerUserRoutes } from "./routes/users";
 import { registerTestDispatchRoutes } from "./routes/test-dispatch";
 import { registerAdminHealthRoutes } from "./routes/admin-health";
@@ -4077,39 +4078,27 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       const driver = await storage.createDriver(validatedData);
 
-      // Fire-and-forget SMS send - don't await, don't block response
+      // Fire-and-forget welcome SMS — gated by DRIVER_WELCOME_SMS_ENABLED=true
       const driverPhone = driver.phoneNumber || driver.phone;
       const normalizedPhone = normalizePhoneToE164(driverPhone);
 
-      if (normalizedPhone) {
-        // Send SMS asynchronously without blocking
-        setImmediate(async () => {
-          try {
-            // Not shortened: the token is the driver's credential and is.gd links are public.
-            const link = await driverPortalUrl(getBaseUrl(), driver, storage);
-
-            const smsMessage = `🚛 TRAQ IQ\n\n` +
-              `Welcome, ${driver.name}!\n\n` +
-              `Your driver portal is ready. Tap to access:\n` +
-              `${link}\n\n` +
-              `💡 Add to home screen for quick access\n\n` +
-              `Questions? Reply to this message.`;
-
-            const smsResult = await smsLoadService.sendSMS({
-              to: normalizedPhone,
-              body: smsMessage
-            });
-            
-            if (smsResult.success) {
-              console.log(`✅ Dashboard link sent to new driver ${driver.name} (${normalizedPhone})`);
-            } else {
-              console.error(`⚠️ Failed to send dashboard link to new driver: ${smsResult.error}`);
-            }
-          } catch (smsError) {
-            console.error('⚠️ Error sending dashboard link SMS:', smsError);
+      setImmediate(async () => {
+        try {
+          // Not shortened: the token is the driver's credential and is.gd links are public.
+          const link = await driverPortalUrl(getBaseUrl(), driver, storage);
+          const sent = await sendDriverWelcomeSms(
+            driver.name,
+            normalizedPhone,
+            link,
+            (opts) => smsLoadService.sendSMS(opts),
+          );
+          if (sent) {
+            console.log(`✅ Welcome SMS sent to new driver ${driver.name} (${normalizedPhone})`);
           }
-        });
-      }
+        } catch (smsError) {
+          console.error('⚠️ Error sending welcome SMS:', smsError);
+        }
+      });
 
       // Return immediately without waiting for SMS
       res.status(201).json(driver);
