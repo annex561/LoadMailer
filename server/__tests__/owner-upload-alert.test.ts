@@ -139,19 +139,36 @@ describe('notifyOwnerOfUpload', () => {
 
   it('SMS body contains loadNumber, broker, driver name, stage label, and staff URL', async () => {
     await notifyOwnerOfUpload({ loadId: 'load-001', stage: 'pickup_bol' });
-    const body = sendSMS.mock.calls[0][1] as string;
+    const body = sendSMS.mock.calls[0][0].body as string;
     expect(body).toContain('LAMP TQL-123');
     expect(body).toContain('TQL Logistics');
     expect(body).toContain('Mike Doe');
-    expect(body).toContain('Pickup BOL');
-    expect(body).toContain('/loads/load-001/documents');
+    expect(body).toContain('uploaded Pickup BOL');
+    // /loads/:id is the real staff page; /loads/:id/documents rendered NotFound.
+    expect(body).toMatch(/\/loads\/load-001$/);
+    expect(body).not.toContain('/documents');
     // Never a raw Cloudinary URL
     expect(body).not.toContain('cloudinary.com');
   });
 
   it('SMS sent to OWNER_ALERT_PHONE', async () => {
     await notifyOwnerOfUpload({ loadId: 'load-001', stage: 'pickup_bol' });
-    expect(sendSMS.mock.calls[0][0]).toBe('+12345556789');
+    expect(sendSMS.mock.calls[0][0].to).toBe('+12345556789');
+  });
+
+  // 2026-10-27 live test: the owner's number is also a driver record, so the
+  // default footer appended his own /driver/<token> portal link and the alert
+  // cost 2 segments. Admin alerts must skip the footer.
+  it('skips the driver-dashboard footer', async () => {
+    await notifyOwnerOfUpload({ loadId: 'load-001', stage: 'pickup_bol' });
+    expect(sendSMS.mock.calls[0][0].skipFooter).toBe(true);
+  });
+
+  it('confirm (Done) says the phase was submitted, not a single stage uploaded', async () => {
+    await notifyOwnerOfUpload({ loadId: 'load-001', stage: 'pickup_bol', confirm: true });
+    const body = sendSMS.mock.calls[0][0].body as string;
+    expect(body).toContain('submitted pickup photos [2 of 2]');
+    expect(body).not.toContain('uploaded');
   });
 
   it('SMS_DISABLED — sendSMS still called (service handles the kill-switch, not us)', async () => {

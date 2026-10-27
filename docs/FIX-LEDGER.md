@@ -306,3 +306,11 @@ Format:
 - **Guard** — `server/__tests__/lifecycle-flags-auth.test.ts`: pins `isAuthenticated` first on both routes, flags default OFF, Phase 5B block has no `mailer.sendMail`, Phase 5B logs "DRAFT".
 - **Do NOT** — do not re-add `mailer.sendMail` to Phase 5B — every delivered load in queue would fire. Do not set `LIFECYCLE_FACTORING_EMAIL_ENABLED=true` until `FACTORING_EMAIL` is updated (Einstein has left). Do not use `app.use('/api/lifecycle', ...)` prefix guard without auditing all `/api/lifecycle/*` routes.
 - `2026-10-25 · (this commit)`
+
+### Owner upload alert carried the owner's own portal link and a dead "View" link
+- **Symptom** — the first live alert (2026-10-27, Twilio SID `SMe7ccf74a1f400423ab007b448a1b0668`) was 2 segments and ended with `My Dashboard: https://traqiq.app/driver/<token>`. Its "View" link `https://traqiq.app/loads/<id>/documents` opens the client's NotFound page.
+- **Root cause** — `smsLoadService.sendSMS(to, body)` appends the driver-dashboard footer whenever the recipient phone matches a driver record, and the owner's number (`DISPATCHER_PHONE_NUMBER`, …4115) is also a driver. The client only routes `/loads/:id`; `/loads/:id/documents` was never a route.
+- **Fix** — `server/owner-upload-alert.ts` sends `{ to, body, skipFooter: true }` (same as the FMCSA/COI/FreightGuard admin crons) and links `/loads/:id`. A "Done" confirm now reads "submitted pickup photos [n of m]" instead of naming one stage.
+- **Guard** — `server/__tests__/owner-upload-alert.test.ts` → "skips the driver-dashboard footer", "confirm (Done) says the phase was submitted…", and the body test pinning `/loads/<id>` with no `/documents`.
+- **Do NOT** — do not test this alert with `DRY_RUN_OUTBOUND=true` on production: that flag is global and fakes every driver SMS, OCR call and Love's factoring submission (recorded as sent) while it is on. Test with `OWNER_ALERT_HOURLY_MAX=3` and one `POST /api/loads/<old load>/photos/confirm` instead. Do not test on a live load.
+- `2026-10-27 · (this commit)`
