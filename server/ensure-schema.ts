@@ -824,7 +824,37 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ recruiting funnel tables: ${e.message}`);
     }
 
-    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log + pending_uploads + recruiting_* created)`);
+    // doc_checks — AI securement + BOL-vs-rate-con verdict per load/phase.
+    // One row per (load_id, phase). Created here so Railway auto-creates on
+    // first deploy without requiring a manual migration.
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS doc_checks (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          load_id VARCHAR NOT NULL REFERENCES loads(id) ON DELETE CASCADE,
+          phase TEXT NOT NULL,
+          verdict TEXT NOT NULL DEFAULT 'pending',
+          score REAL,
+          securement_verdict TEXT,
+          securement_reason TEXT,
+          fields JSONB,
+          must_fields_missing TEXT[],
+          reasons TEXT[],
+          model TEXT,
+          cost_cents INTEGER,
+          error TEXT,
+          alert_sent_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_doc_checks_load_phase ON doc_checks (load_id, phase)`);
+      log(`✅ doc_checks table ready`);
+    } catch (e: any) {
+      log(`⚠️ doc_checks table: ${e.message}`);
+    }
+
+    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log + pending_uploads + recruiting_* + doc_checks created)`);
   } catch (err: any) {
     log(`⚠️ ensureSchema error: ${err.message}`);
   }

@@ -1680,6 +1680,15 @@ export async function registerRoutes(app: Express): Promise<void> {
         lng: req.body.lng != null ? Number(req.body.lng) : undefined,
       });
       if (!result.ok) return res.status(500).json(result);
+
+      // Fire-and-forget AI doc check (AI_DOC_CHECK_ENABLED, default OFF).
+      // Runs after the driver's response so it never blocks the upload.
+      try {
+        const { scheduleDocCheck } = await import('./ai-doc-check-service');
+        const checkPhase: 'pickup' | 'delivery' = stage.startsWith('pickup') ? 'pickup' : 'delivery';
+        scheduleDocCheck(req.params.id, checkPhase);
+      } catch { /* non-fatal */ }
+
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
@@ -1731,6 +1740,13 @@ export async function registerRoutes(app: Express): Promise<void> {
       const sop: any = (l.sopProgress as any) || {};
       sop[phase === 'pickup' ? 'pickupPhotosConfirmedAt' : 'deliveryPhotosConfirmedAt'] = new Date().toISOString();
       await db.update(loads).set({ sopProgress: sop } as any).where(eq(loads.id, req.params.id));
+
+      // Fire-and-forget AI doc check on confirm (stronger trigger than per-photo).
+      // AI_DOC_CHECK_ENABLED defaults OFF — safe to call unconditionally.
+      try {
+        const { scheduleDocCheck } = await import('./ai-doc-check-service');
+        scheduleDocCheck(req.params.id, phase as 'pickup' | 'delivery');
+      } catch { /* non-fatal */ }
 
       res.json({ ok: true, phase, confirmed: status.present });
     } catch (err: any) {
