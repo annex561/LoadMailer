@@ -32,6 +32,7 @@ import { googleSheetsService } from './google-sheets-service';
 import { smsLoadService } from './sms-service';
 import { smsCommunicationService } from './sms-communication-service';
 import { setupAuth, isAuthenticated, requireRole } from "./auth";
+import { sendDriverWelcomeSms } from "./driver-welcome-sms";
 import { registerUserRoutes } from "./routes/users";
 import { registerTestDispatchRoutes } from "./routes/test-dispatch";
 import { registerAdminHealthRoutes } from "./routes/admin-health";
@@ -280,6 +281,25 @@ const opsTestAlertRateLimiter = rateLimit({
       retryAfter: 3600
     });
   }
+});
+
+// Per-load rate limit for POST /api/loads/:id/photos/request.
+// Caps authenticated dispatch staff at 3 SMS sends per hour per load to
+// prevent runaway Twilio spend from scripts or mis-clicks.
+// ponytail: per-load key, upgrade to per-user-per-load if multi-dispatcher contention arises
+const photoRequestRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,
+  keyGenerator: (req) => `photo-request-${(req.params as any).id}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({
+      ok: false,
+      error: "Too many upload link requests for this load this hour. Try again later.",
+      retryAfter: 3600,
+    });
+  },
 });
 
 // Helper function to normalize and validate phone numbers for Twilio E.164 format
@@ -1532,6 +1552,8 @@ export async function registerRoutes(app: Express): Promise<void> {
           lng: req.body.lng ? Number(req.body.lng) : undefined,
         });
         if (!result.ok) return res.status(500).json(result);
+        // Fire-and-forget: alert failure must never block the driver's upload
+        import('./owner-upload-alert').then(m => m.notifyOwnerOfUpload({ loadId: req.params.id, stage: stage as any })).catch(() => {});
         return res.json(result);
       }
 
@@ -1590,6 +1612,7 @@ export async function registerRoutes(app: Express): Promise<void> {
           lng: req.body.lng ? Number(req.body.lng) : undefined,
         });
         if (!result.ok) return res.status(500).json(result);
+        import('./owner-upload-alert').then(m => m.notifyOwnerOfUpload({ loadId: req.params.id, stage: stage as any })).catch(() => {});
         res.json(result);
       });
     } catch (err: any) {
@@ -1689,6 +1712,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         scheduleDocCheck(req.params.id, checkPhase);
       } catch { /* non-fatal */ }
 
+      import('./owner-upload-alert').then(m => m.notifyOwnerOfUpload({ loadId: req.params.id, stage: stage as any })).catch(() => {});
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
@@ -1748,6 +1772,12 @@ export async function registerRoutes(app: Express): Promise<void> {
         scheduleDocCheck(req.params.id, phase as 'pickup' | 'delivery');
       } catch { /* non-fatal */ }
 
+      // Confirm alert: bypass debounce so Annex always gets one on Done
+      if (status.present.length > 0) {
+        const confirmStage = status.present[0];
+        import('./owner-upload-alert').then(m => m.notifyOwnerOfUpload({ loadId: req.params.id, stage: confirmStage as any, confirm: true })).catch(() => {});
+      }
+
       res.json({ ok: true, phase, confirmed: status.present });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
@@ -1771,8 +1801,20 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // List photos for a load
+  // GET /api/loads/:id/photos — staff session OR valid upload token for the same load.
+  // Driver upload page uses ?token= so it can list its own docs without a staff session.
   app.get('/api/loads/:id/photos', async (req, res) => {
     try {
+      const token = (req.query.token || '').toString();
+      if (token.length > 0) {
+        const { verifyUploadToken } = await import('./upload-token');
+        const v = verifyUploadToken(token);
+        if (v.kind === 'expired') return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+        if (v.kind === 'invalid') return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+        if (v.loadId !== req.params.id) return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+      } else if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({ ok: false, error: 'Authentication required.' });
+      }
       const { listLoadPhotos } = await import('./load-photos-service');
       const result = await listLoadPhotos(req.params.id);
       res.json({ ok: true, ...result });
@@ -1781,8 +1823,8 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // Approve / reject a single photo
-  app.patch('/api/loads/:id/photos/:photoId', async (req, res) => {
+  // Approve / reject a single photo — staff only (approved docs go into factoring packet)
+  app.patch('/api/loads/:id/photos/:photoId', isAuthenticated, async (req, res) => {
     try {
       const { db } = await import('./db');
       const { loadDocuments } = await import('@shared/schema');
@@ -1804,6 +1846,21 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Driver check-in stages (at_pickup, loaded, at_delivery, unloaded) — timestamped into sopProgress
   app.post('/api/loads/:id/checkin', async (req, res) => {
     try {
+      // Auth gate (Section 2 item 6): driver must present a valid signed upload
+      // token that matches this load, OR the caller must be an authenticated
+      // staff session. Raw-UUID links carry no token, so once UPLOAD_TOKEN_REQUIRED
+      // rolls out, this naturally rejects unlinked callers too.
+      const { verifyUploadToken } = await import('./upload-token');
+      const rawToken = req.headers['x-upload-token'];
+      if (typeof rawToken === 'string' && rawToken.length > 0) {
+        const v = verifyUploadToken(rawToken);
+        if (v.kind === 'expired') return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+        if (v.kind === 'invalid') return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+        if (v.loadId !== req.params.id) return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+      } else if (!(req.isAuthenticated && req.isAuthenticated())) {
+        return res.status(401).json({ ok: false, error: 'Upload token or staff session required.' });
+      }
+
       const { db } = await import('./db');
       const { loads } = await import('@shared/schema');
       const { eq } = await import('drizzle-orm');
@@ -1863,8 +1920,10 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
-  // Dispatcher action: SMS the driver an upload link for pickup or delivery photos
-  app.post('/api/loads/:id/photos/request', async (req, res) => {
+  // Dispatcher action: SMS the driver an upload link for pickup or delivery photos.
+  // Auth + rate limit: anonymous callers must not trigger Twilio spend; even authed
+  // staff are capped at 3 sends per load per hour to prevent mis-click floods.
+  app.post('/api/loads/:id/photos/request', isAuthenticated, photoRequestRateLimiter, async (req, res) => {
     try {
       const { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
       const phase = (req.body.phase || '').toString();
@@ -3223,7 +3282,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
   
   // Get active driver locations for real-time map tracking
-  app.get('/api/driver-locations/active', async (req, res) => {
+  app.get('/api/driver-locations/active', isAuthenticated, async (req, res) => {
     try {
       console.log('📋 Fetching driver locations from database...');
       
@@ -4051,39 +4110,27 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       const driver = await storage.createDriver(validatedData);
 
-      // Fire-and-forget SMS send - don't await, don't block response
+      // Fire-and-forget welcome SMS — gated by DRIVER_WELCOME_SMS_ENABLED=true
       const driverPhone = driver.phoneNumber || driver.phone;
       const normalizedPhone = normalizePhoneToE164(driverPhone);
 
-      if (normalizedPhone) {
-        // Send SMS asynchronously without blocking
-        setImmediate(async () => {
-          try {
-            // Not shortened: the token is the driver's credential and is.gd links are public.
-            const link = await driverPortalUrl(getBaseUrl(), driver, storage);
-
-            const smsMessage = `🚛 TRAQ IQ\n\n` +
-              `Welcome, ${driver.name}!\n\n` +
-              `Your driver portal is ready. Tap to access:\n` +
-              `${link}\n\n` +
-              `💡 Add to home screen for quick access\n\n` +
-              `Questions? Reply to this message.`;
-
-            const smsResult = await smsLoadService.sendSMS({
-              to: normalizedPhone,
-              body: smsMessage
-            });
-            
-            if (smsResult.success) {
-              console.log(`✅ Dashboard link sent to new driver ${driver.name} (${normalizedPhone})`);
-            } else {
-              console.error(`⚠️ Failed to send dashboard link to new driver: ${smsResult.error}`);
-            }
-          } catch (smsError) {
-            console.error('⚠️ Error sending dashboard link SMS:', smsError);
+      setImmediate(async () => {
+        try {
+          // Not shortened: the token is the driver's credential and is.gd links are public.
+          const link = await driverPortalUrl(getBaseUrl(), driver, storage);
+          const sent = await sendDriverWelcomeSms(
+            driver.name,
+            normalizedPhone,
+            link,
+            (opts) => smsLoadService.sendSMS(opts),
+          );
+          if (sent) {
+            console.log(`✅ Welcome SMS sent to new driver ${driver.name} (${normalizedPhone})`);
           }
-        });
-      }
+        } catch (smsError) {
+          console.error('⚠️ Error sending welcome SMS:', smsError);
+        }
+      });
 
       // Return immediately without waiting for SMS
       res.status(201).json(driver);
@@ -5873,7 +5920,7 @@ TRAQ IQ Dispatch Team
   });
 
   // POST /api/lifecycle/submit-factoring/:loadId — manually trigger Einstein email
-  app.post('/api/lifecycle/submit-factoring/:loadId', async (req, res) => {
+  app.post('/api/lifecycle/submit-factoring/:loadId', isAuthenticated, requireRole('admin'), async (req, res) => {
     try {
       const load = await storage.getLoad(req.params.loadId);
       if (!load) return res.status(404).json({ error: 'Load not found' });
@@ -5910,7 +5957,7 @@ TRAQ IQ Dispatch Team
   });
 
   // POST /api/lifecycle/release-driver/:loadId — send "you are good to go" to driver
-  app.post('/api/lifecycle/release-driver/:loadId', async (req, res) => {
+  app.post('/api/lifecycle/release-driver/:loadId', isAuthenticated, requireRole('admin'), async (req, res) => {
     try {
       const load = await storage.getLoad(req.params.loadId);
       if (!load) return res.status(404).json({ error: 'Load not found' });
@@ -5928,6 +5975,59 @@ TRAQ IQ Dispatch Team
       });
 
       res.json({ success: true, message: 'Driver released' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/loads/:id/go — dispatcher sends explicit GO to driver (pickup or delivery)
+  // This is the ONLY path that may text the driver a "good to go" at pickup.
+  // Delivery GO mirrors release-driver: updates status + driverReleased.
+  // Idempotent: if the phase was already GO'd, returns 200 with alreadySent:true.
+  app.post('/api/loads/:id/go', isAuthenticated, requireRole('admin'), async (req, res) => {
+    try {
+      const { phase } = req.body as { phase?: string };
+      if (phase !== 'pickup' && phase !== 'delivery') {
+        return res.status(400).json({ error: "phase must be 'pickup' or 'delivery'" });
+      }
+
+      const load = await storage.getLoad(req.params.id);
+      if (!load) return res.status(404).json({ error: 'Load not found' });
+      const driver = load.driverId ? await storage.getDriver(load.driverId) : null;
+      if (!driver?.phone) return res.status(400).json({ error: 'No driver phone' });
+
+      const sopProgress: any = (load as any).sopProgress || {};
+      const goAtField = phase === 'pickup' ? 'pickupGoAt' : 'deliveryGoAt';
+
+      // Idempotent — return early if this phase was already GO'd
+      if (sopProgress[goAtField]) {
+        return res.json({ success: true, alreadySent: true, phase, goAt: sopProgress[goAtField] });
+      }
+
+      const userId = (req.user as any)?.id ?? null;
+      const goMsg = phase === 'pickup'
+        ? `✅ You are GOOD TO GO on pickup!\n\nLoad #${load.loadNumber} — you are cleared to pick up the freight. Drive safe. 🚛`
+        : `✅ You are GOOD TO GO!\n\nLoad #${load.loadNumber} is complete. Thank you for the great work!\n\nYour documents have been received. Stay safe out there. We'll be in touch for your next load. 🚛`;
+
+      const { smsLoadService } = await import('./sms-service');
+      await (smsLoadService as any).sendSMS(driver.phone, goMsg);
+
+      const now = new Date().toISOString();
+      const progressUpdate: any = {
+        ...sopProgress,
+        [goAtField]: now,
+        goByUserId: userId,
+      };
+
+      const loadUpdate: any = { sopProgress: progressUpdate };
+      if (phase === 'delivery') {
+        loadUpdate.status = 'delivered';
+        loadUpdate.sopProgress.driverReleased = true;
+        loadUpdate.sopProgress.deliveredAt = now;
+      }
+
+      await storage.updateLoad(load.id, loadUpdate);
+      res.json({ success: true, alreadySent: false, phase, goAt: now });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
