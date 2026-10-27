@@ -333,6 +333,17 @@ export async function processMMSReply(p: {
   }
   await markFulfilled(pending.id, p.messageSid);
 
+  // Owner alert, fire-and-forget (flag-gated inside). Sits after
+  // markFulfilled so a Twilio retry of this MessageSid hits the dedup
+  // early-return above and never alerts twice. MMS has no "Done" tap, so
+  // the last photo of a phase counts as the confirm (bypasses the burst
+  // debounce, like /photos/confirm in the browser flow).
+  const after = nextStage(pending.stage);
+  const phaseDone = after === null || after.startsWith('delivery') !== pending.stage.startsWith('delivery');
+  import('./owner-upload-alert')
+    .then(m => m.notifyOwnerOfUpload({ loadId: pending.loadId, stage: pending.stage, confirm: phaseDone }))
+    .catch(() => {});
+
   // Phase 2: OCR address verification. Gated behind ADDRESS_VERIFY_ENABLED
   // (default OFF) so flipping MMS_UPLOAD_ENABLED on doesn't accidentally
   // trigger OpenAI bills. When ON, every saved BOL photo is OCR'd against
