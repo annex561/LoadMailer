@@ -257,9 +257,13 @@ export class SMSLoadService {
       if (this.twilioMessagingServiceSid) {
         messageParams.messagingServiceSid = this.twilioMessagingServiceSid;
         messageParams.statusCallback = `${baseUrl}/api/sms/status-callback`;
-      } else {
-        // Fallback to direct phone number
+      } else if (this.twilioPhoneNumber) {
+        // Fallback to direct phone number — fail closed if TWILIO_PHONE_NUMBER unset
         messageParams.from = this.twilioPhoneNumber;
+      } else {
+        // Sending without a From would yield Twilio error 21212; reject here instead.
+        console.error('[SMS] TWILIO_PHONE_NUMBER is not set and no Messaging Service SID configured — cannot send SMS');
+        return { success: false, error: 'TWILIO_PHONE_NUMBER not configured' };
       }
 
       const message = await this.twilioClient.messages.create(messageParams);

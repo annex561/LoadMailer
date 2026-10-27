@@ -15,7 +15,7 @@
 
 import { db } from "./db";
 import { loads, factoringSubmissions, rateconIntake, loadDocuments } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { generateBillOfSale, generateInvoice, mergePacketPdfs, LAMP } from "./factoring-pdf-templates";
 
 /**
@@ -282,8 +282,28 @@ export async function buildFactoringPacket(loadId: string): Promise<PacketResult
   // Fallback 3: load.rateconPath IF it's an image (legacy bug data) AND
   //   an approved doc exists. We do NOT bypass the approval gate even for
   //   legacy paths — money safety wins.
+  // Priority order for doc type selection (higher = preferred for the packet).
+  // delivery_pod is the gold standard: signed by receiver, dates confirmed.
+  // delivery_signed_bol is second: signed by both parties, full journey.
+  // pod/bol are legacy type names treated as delivery and pickup respectively.
+  // pickup_bol is last resort — acceptable only when no delivery doc exists.
+  const DOC_PRIORITY: Record<string, number> = {
+    pickup_bol: 0,
+    bol: 1,
+    pod: 2,
+    delivery_signed_bol: 3,
+    delivery_pod: 4,
+  };
+  // Delivery doc types — when one of these is primary, also attach pickup_bol.
+  const DELIVERY_DOC_TYPES = new Set(["delivery_pod", "delivery_signed_bol", "pod"]);
+
   const approvedBolDocs = await db
-    .select({ id: loadDocuments.id, fileUrl: loadDocuments.fileUrl, documentType: loadDocuments.documentType })
+    .select({
+      id: loadDocuments.id,
+      fileUrl: loadDocuments.fileUrl,
+      documentType: loadDocuments.documentType,
+      createdAt: loadDocuments.createdAt,
+    })
     .from(loadDocuments)
     .where(
       and(
@@ -298,14 +318,32 @@ export async function buildFactoringPacket(loadId: string): Promise<PacketResult
         ]),
       ),
     )
-    .limit(1);
-  const hasApprovedBolDoc = approvedBolDocs.length > 0;
+    .orderBy(desc(loadDocuments.createdAt));
+
+  // Sort by priority descending, then newest first within the same type.
+  const sortedDocs = [...approvedBolDocs].sort((a, b) => {
+    const pa = DOC_PRIORITY[a.documentType] ?? -1;
+    const pb = DOC_PRIORITY[b.documentType] ?? -1;
+    if (pb !== pa) return pb - pa;
+    const ta = a.createdAt ? a.createdAt.getTime() : 0;
+    const tb = b.createdAt ? b.createdAt.getTime() : 0;
+    return tb - ta;
+  });
+
+  const primaryDoc = sortedDocs[0] ?? null;
+  const hasApprovedBolDoc = !!primaryDoc;
+
+  // When the primary is a delivery doc, also include the pickup BOL as an
+  // extra packet page. Love's expects to see the full chain of custody.
+  const pickupBolDoc = primaryDoc && DELIVERY_DOC_TYPES.has(primaryDoc.documentType)
+    ? approvedBolDocs.find((d: { documentType: string | null }) => d.documentType === "pickup_bol")
+    : null;
 
   let bolPathToUse: string | null = null;
   let bolSource = "";
   if (hasApprovedBolDoc) {
-    bolPathToUse = approvedBolDocs[0].fileUrl;
-    bolSource = `load_documents.${approvedBolDocs[0].documentType} (approved by dispatcher)`;
+    bolPathToUse = primaryDoc!.fileUrl;
+    bolSource = `load_documents.${primaryDoc!.documentType} (approved by dispatcher)`;
   } else if (load.bolPath) {
     // bolPath populated but no approved load_documents row — refuse.
     // Dispatcher review is the guardrail; honor it here.
@@ -334,6 +372,23 @@ export async function buildFactoringPacket(loadId: string): Promise<PacketResult
       console.log(`[factoring] BOL loaded from ${bolSource} (${isPdf ? "PDF" : "image"}, ${buf.length} bytes)`);
     } catch (err: any) {
       warnings.push(`Could not load BOL/POD from ${bolSource}: ${err.message}`);
+    }
+
+    // Attach pickup BOL as an extra page when primary is a delivery doc.
+    // Love's auditors need to see the full chain: pickup BOL then POD.
+    if (pickupBolDoc) {
+      try {
+        const pbuf = await loadFromObjectStorage(pickupBolDoc.fileUrl);
+        const pIsPdf = pbuf.length >= 4 && pbuf.subarray(0, 4).toString() === "%PDF";
+        parts.push({
+          label: "Pickup BOL (supplemental)",
+          bytes: pbuf,
+          kind: pIsPdf ? "pdf" : "image",
+        });
+        console.log(`[factoring] pickup BOL attached from load_documents.pickup_bol (${pIsPdf ? "PDF" : "image"}, ${pbuf.length} bytes)`);
+      } catch (err: any) {
+        warnings.push(`Could not load pickup BOL (supplemental): ${err.message}`);
+      }
     }
   } else {
     warnings.push("No signed BOL on file — driver hasn't sent it via SMS yet");
