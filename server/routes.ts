@@ -1754,6 +1754,22 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  // AI doc check verdicts for a load (dispatcher/admin only — display only)
+  app.get('/api/loads/:id/doc-checks', isAuthenticated, async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { docChecks } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const checks = await db
+        .select()
+        .from(docChecks)
+        .where(eq(docChecks.loadId, req.params.id));
+      res.json({ ok: true, checks });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
   // List photos for a load
   app.get('/api/loads/:id/photos', async (req, res) => {
     try {
