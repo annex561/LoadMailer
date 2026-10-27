@@ -407,6 +407,11 @@ describe('MMS BOL upload — financial safety guards', () => {
       expect(svc.STAGE_REPLY_LABEL.pickup_securement).toBeTruthy();
       expect(svc.STAGE_REPLY_LABEL.delivery_pod).toBeTruthy();
       expect(svc.STAGE_REPLY_LABEL.delivery_signed_bol).toBeTruthy();
+      // PR #150 added optional stages; without labels the MMS reply read
+      // "Reply with a photo of the undefined."
+      expect(svc.STAGE_REPLY_LABEL.lumper_receipt).toBeTruthy();
+      expect(svc.STAGE_REPLY_LABEL.scale_ticket).toBeTruthy();
+      expect(svc.STAGE_REPLY_LABEL.other).toBeTruthy();
     });
   });
 });
