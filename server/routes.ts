@@ -1532,6 +1532,8 @@ export async function registerRoutes(app: Express): Promise<void> {
           lng: req.body.lng ? Number(req.body.lng) : undefined,
         });
         if (!result.ok) return res.status(500).json(result);
+        // Fire-and-forget: alert failure must never block the driver's upload
+        import('./owner-upload-alert').then(m => m.notifyOwnerOfUpload({ loadId: req.params.id, stage: stage as any })).catch(() => {});
         return res.json(result);
       }
 
@@ -1590,6 +1592,7 @@ export async function registerRoutes(app: Express): Promise<void> {
           lng: req.body.lng ? Number(req.body.lng) : undefined,
         });
         if (!result.ok) return res.status(500).json(result);
+        import('./owner-upload-alert').then(m => m.notifyOwnerOfUpload({ loadId: req.params.id, stage: stage as any })).catch(() => {});
         res.json(result);
       });
     } catch (err: any) {
@@ -1680,6 +1683,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         lng: req.body.lng != null ? Number(req.body.lng) : undefined,
       });
       if (!result.ok) return res.status(500).json(result);
+      import('./owner-upload-alert').then(m => m.notifyOwnerOfUpload({ loadId: req.params.id, stage: stage as any })).catch(() => {});
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
@@ -1731,6 +1735,12 @@ export async function registerRoutes(app: Express): Promise<void> {
       const sop: any = (l.sopProgress as any) || {};
       sop[phase === 'pickup' ? 'pickupPhotosConfirmedAt' : 'deliveryPhotosConfirmedAt'] = new Date().toISOString();
       await db.update(loads).set({ sopProgress: sop } as any).where(eq(loads.id, req.params.id));
+
+      // Confirm alert: bypass debounce so Annex always gets one on Done
+      if (status.present.length > 0) {
+        const confirmStage = status.present[0];
+        import('./owner-upload-alert').then(m => m.notifyOwnerOfUpload({ loadId: req.params.id, stage: confirmStage as any, confirm: true })).catch(() => {});
+      }
 
       res.json({ ok: true, phase, confirmed: status.present });
     } catch (err: any) {
