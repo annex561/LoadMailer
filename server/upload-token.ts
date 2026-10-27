@@ -30,10 +30,17 @@ import crypto from "crypto";
 const DEFAULT_TTL_DAYS = 14;
 
 function getSecret(): string {
-  // Falls back to a dev secret if not configured. We log loudly if the
-  // env var is missing — production absolutely must set this.
   const s = process.env.UPLOAD_TOKEN_SECRET;
-  if (!s || s.length < 16) {
+  if (!s || s.length < 32) {
+    if (process.env.NODE_ENV === "production") {
+      // Fail closed: a missing or short secret in prod means every token
+      // would be signed with the public dev key — trivially forgeable.
+      const msg =
+        "[upload-token] UPLOAD_TOKEN_SECRET is missing or < 32 chars in production. " +
+        "Set a 32+ char secret in Railway env vars. Refusing to sign/verify tokens.";
+      console.error(msg);
+      throw new Error(msg);
+    }
     if (!getSecret._warned) {
       console.warn(
         "[upload-token] UPLOAD_TOKEN_SECRET is missing or too short; " +

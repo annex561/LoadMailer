@@ -1813,6 +1813,21 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Driver check-in stages (at_pickup, loaded, at_delivery, unloaded) — timestamped into sopProgress
   app.post('/api/loads/:id/checkin', async (req, res) => {
     try {
+      // Auth gate (Section 2 item 6): driver must present a valid signed upload
+      // token that matches this load, OR the caller must be an authenticated
+      // staff session. Raw-UUID links carry no token, so once UPLOAD_TOKEN_REQUIRED
+      // rolls out, this naturally rejects unlinked callers too.
+      const { verifyUploadToken } = await import('./upload-token');
+      const rawToken = req.headers['x-upload-token'];
+      if (typeof rawToken === 'string' && rawToken.length > 0) {
+        const v = verifyUploadToken(rawToken);
+        if (v.kind === 'expired') return res.status(410).json({ ok: false, error: 'Link expired. Contact dispatch.' });
+        if (v.kind === 'invalid') return res.status(401).json({ ok: false, error: 'Invalid upload token.' });
+        if (v.loadId !== req.params.id) return res.status(403).json({ ok: false, error: 'Token does not match this load.' });
+      } else if (!(req.isAuthenticated && req.isAuthenticated())) {
+        return res.status(401).json({ ok: false, error: 'Upload token or staff session required.' });
+      }
+
       const { db } = await import('./db');
       const { loads } = await import('@shared/schema');
       const { eq } = await import('drizzle-orm');
