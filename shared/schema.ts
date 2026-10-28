@@ -396,11 +396,29 @@ export const loads = pgTable("loads", {
   factoringScheduleId: text("factoring_schedule_id"),  // Schedule# from Love's
   factoringAmountAdvanced: real("factoring_amount_advanced"),
   overrideReason: text("override_reason"),
-  
+
   // EV SOP Checklist Fields
   sopProgress: jsonb("sop_progress").default({}),
   fuelCost: real("fuel_cost"),
-  
+
+  // S13 — Driver load text sequence (Text 1 offer + Text 2 full addresses)
+  pickupApptType: text("pickup_appt_type"),         // "FCFS" or "Appt"
+  pickupWindowStart: text("pickup_window_start"),   // "08:00"
+  pickupWindowEnd: text("pickup_window_end"),       // "12:00"
+  pickupIsAsap: boolean("pickup_is_asap").default(false),
+  dropApptType: text("drop_appt_type"),             // "FCFS" or "Appt"
+  dropWindowStart: text("drop_window_start"),       // "08:00"
+  dropWindowEnd: text("drop_window_end"),           // "10:00"
+  driverRate: real("driver_rate"),                  // driver pay (may differ from broker rate)
+  text1SentAt: timestamp("text1_sent_at"),          // when Text 1 was sent to driver
+  text2SentAt: timestamp("text2_sent_at"),          // when Text 2 was sent after confirm
+  driverTextConfirmedAt: timestamp("driver_text_confirmed_at"), // when driver confirmed
+  driverTextConfirmReply: text("driver_text_confirm_reply"),    // raw reply text
+  driverTextConfirmEta: text("driver_text_confirm_eta"),        // parsed ETA string
+  // S14b — signed BOL gate: when FALSE the factoring gate skips the BOL check
+  // (load must still be complete + 90% verified). Default TRUE (fail-closed).
+  signedBolRequired: boolean("signed_bol_required").default(true),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [

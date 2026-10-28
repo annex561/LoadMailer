@@ -828,6 +828,19 @@ export class SMSCommunicationService {
       return true;
     }
 
+    // ---- Text 1 confirm: check BEFORE load-offer YES routing (spec S13) ----
+    // An affirmative or ETA reply from a driver who has a pending Text 1
+    // confirmation is handled here and NEVER treated as a load-offer accept.
+    if (process.env.DRIVER_LOAD_TEXTS_ENABLED === "true") {
+      try {
+        const { handleText1ConfirmIfPending } = await import("./driver-load-texts");
+        const routed = await handleText1ConfirmIfPending(drv.id, body, fromPhone);
+        if (routed) return true;
+      } catch (t1Err: any) {
+        console.error("[sms-comm] Text 1 confirm routing error (falling through):", t1Err?.message || t1Err);
+      }
+    }
+
     // ---- YES / NO: accept or decline a pending dispatch ----
     if (["YES", "Y", "NO", "N"].includes(body)) {
       const [pending] = await db

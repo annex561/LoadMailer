@@ -336,7 +336,13 @@ export function registerRateconIntakeRoutes(app: Express) {
           const { dispatchFromIntake, sendDispatchSms } = await import("./ratecon-dispatch-service");
           const outcome = await dispatchFromIntake(id);
           if (outcome.ok && outcome.loadId) {
-            const smsResult = await sendDispatchSms(outcome.loadId);
+            let smsResult: { ok: boolean; error?: string; messageSid?: string };
+            if (process.env.DRIVER_LOAD_TEXTS_ENABLED === "true") {
+              const { sendDriverLoadText1 } = await import("./driver-load-texts");
+              smsResult = await sendDriverLoadText1(outcome.loadId);
+            } else {
+              smsResult = await sendDispatchSms(outcome.loadId);
+            }
             await db
               .update(rateconIntake)
               .set({ status: "auto_dispatched", updatedAt: new Date() })
@@ -663,7 +669,13 @@ export function registerRateconIntakeRoutes(app: Express) {
       if (addendum.blocked) {
         return res.status(400).json({ ...outcome, tripAddendum: addendum, error: addendum.reason });
       }
-      const smsResult = await sendDispatchSms(outcome.loadId!);
+      let smsResult: { ok: boolean; error?: string; messageSid?: string };
+      if (process.env.DRIVER_LOAD_TEXTS_ENABLED === "true") {
+        const { sendDriverLoadText1 } = await import("./driver-load-texts");
+        smsResult = await sendDriverLoadText1(outcome.loadId!);
+      } else {
+        smsResult = await sendDispatchSms(outcome.loadId!);
+      }
       res.json({ ...outcome, sms: smsResult, ...(addendum.applies ? { tripAddendum: addendum } : {}) });
     } catch (err: any) {
       // Surface the Postgres detail (the underlying root cause that Drizzle
