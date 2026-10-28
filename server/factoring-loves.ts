@@ -183,6 +183,84 @@ export async function buildFactoringPacket(loadId: string): Promise<PacketResult
     return { ok: false, error: "Load has no rate — cannot factor", loadId, warnings };
   }
 
+  // Delivery doc types — when one of these is primary, also attach pickup_bol.
+  const DELIVERY_DOC_TYPES = new Set(["delivery_pod", "delivery_signed_bol", "pod"]);
+
+  const approvedBolDocs = await db
+    .select({
+      id: loadDocuments.id,
+      fileUrl: loadDocuments.fileUrl,
+      documentType: loadDocuments.documentType,
+      createdAt: loadDocuments.createdAt,
+    })
+    .from(loadDocuments)
+    .where(
+      and(
+        eq(loadDocuments.loadId, loadId),
+        eq(loadDocuments.approvalStatus, "approved"),
+        inArray(loadDocuments.documentType, [
+          "pickup_bol",
+          "delivery_signed_bol",
+          "delivery_pod",
+          "bol",
+          "pod",
+        ]),
+      ),
+    )
+    .orderBy(desc(loadDocuments.createdAt));
+
+  // A dispatcher-approved delivery POD / signed BOL proves delivery, POD and a
+  // signed BOL. The live upload paths (/u/<loadId>, MMS) only write
+  // load_documents, never loads.podPath/bolPath/bolVerifiedAt, so the gates
+  // must read it. Pinned by server/__tests__/factoring-gate-approved-docs.test.ts
+  const hasApprovedDeliveryDoc = approvedBolDocs.some(
+    (d: { documentType: string | null }) => DELIVERY_DOC_TYPES.has(d.documentType ?? ""),
+  );
+
+  // S14 — 14a-2: Love's submission only AFTER delivery is complete with POD in.
+  // NEVER before pickup or mid-trip. (14a overrides original section 14 Lane 4.)
+  if (!hasApprovedDeliveryDoc && (!load.deliveredAt || !load.podPath)) {
+    return {
+      ok: false,
+      error: "Factoring blocked (14a-2): load must be fully delivered with POD on file before sending to Love's",
+      loadId,
+      warnings,
+    };
+  }
+
+  // S14 — 14a-3 / 14b: signed BOL gate. Fail-closed unless signedBolRequired is
+  // explicitly FALSE (staff override with audit log, or broker terms showing no
+  // signed BOL required). FALSE skips ONLY this gate; 14a-2 above still applies.
+  if (load.signedBolRequired !== false) {
+    if (!hasApprovedDeliveryDoc && (!load.bolPath || !load.bolVerifiedAt)) {
+      // Fail closed: mark needs manual review, alert Annex.
+      try {
+        await db
+          .update(loads)
+          .set({ factoringStatus: "manual_review", updatedAt: new Date() } as any)
+          .where(eq(loads.id, loadId));
+        const alertPhone = process.env.OWNER_ALERT_PHONE?.trim();
+        // Dedup: text Annex once per load. Already manual_review = already alerted.
+        if (alertPhone && (load as any).factoringStatus !== "manual_review") {
+          const { smsLoadService } = await import("./sms-service");
+          await (smsLoadService as any).sendSMS(
+            alertPhone,
+            `[LAMP] Load #${load.loadNumber}: Factoring BLOCKED — signed BOL required but missing or unverified. Upload+verify BOL, or set signedBolRequired=false via staff override at /dispatch/board.`,
+          );
+        }
+      } catch (alertErr: any) {
+        // Non-fatal — load is already blocked; alert failure just means no SMS
+        console.error(`[factoring] BOL gate alert failed (non-fatal): ${alertErr.message}`);
+      }
+      return {
+        ok: false,
+        error: "Factoring blocked (14a-3): signed BOL required but missing or unverified. Load marked manual_review. Annex alerted.",
+        loadId,
+        warnings,
+      };
+    }
+  }
+
   // Generate Bill of Sale + Invoice
   const loadInputs = {
     loadNumber: load.loadNumber,
@@ -294,31 +372,6 @@ export async function buildFactoringPacket(loadId: string): Promise<PacketResult
     delivery_signed_bol: 3,
     delivery_pod: 4,
   };
-  // Delivery doc types — when one of these is primary, also attach pickup_bol.
-  const DELIVERY_DOC_TYPES = new Set(["delivery_pod", "delivery_signed_bol", "pod"]);
-
-  const approvedBolDocs = await db
-    .select({
-      id: loadDocuments.id,
-      fileUrl: loadDocuments.fileUrl,
-      documentType: loadDocuments.documentType,
-      createdAt: loadDocuments.createdAt,
-    })
-    .from(loadDocuments)
-    .where(
-      and(
-        eq(loadDocuments.loadId, loadId),
-        eq(loadDocuments.approvalStatus, "approved"),
-        inArray(loadDocuments.documentType, [
-          "pickup_bol",
-          "delivery_signed_bol",
-          "delivery_pod",
-          "bol",
-          "pod",
-        ]),
-      ),
-    )
-    .orderBy(desc(loadDocuments.createdAt));
 
   // Sort by priority descending, then newest first within the same type.
   const sortedDocs = [...approvedBolDocs].sort((a, b) => {

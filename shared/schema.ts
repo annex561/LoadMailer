@@ -419,6 +419,18 @@ export const loads = pgTable("loads", {
   // (load must still be complete + 90% verified). Default TRUE (fail-closed).
   signedBolRequired: boolean("signed_bol_required").default(true),
 
+  // S14 — Dispatch tracker lane checklist (staff-only; NEVER driver-facing — 14a-1)
+  lane2BrokerVerified: text("lane2_broker_verified").default("not_yet"),
+    // 'Y' | 'N' | 'not_yet'
+  lane2BrokerVerifiedAt: timestamp("lane2_broker_verified_at"),
+  lane2BrokerVerifiedBy: text("lane2_broker_verified_by"),
+  lane3AppointmentStatus: text("lane3_appointment_status").default("not_yet"),
+    // 'Y' | 'N' | 'not_yet' — appointment set or confirmed (FCFS vs Appt)
+  lane5ArUpdated: text("lane5_ar_updated").default("not_yet"),
+    // 'Y' | 'N' | 'not_yet' — A/R tracker updated daily
+  relayTasks: text("relay_tasks"),     // free text: extra driver or broker instructions
+  dispatchNotes: text("dispatch_notes"), // free text
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -436,6 +448,20 @@ export const loads = pgTable("loads", {
     name: "loads_driver_company_fk"
   }),
 ]);
+
+// ============================================================================
+// S14b — BOL override audit log
+// Every time a staff user flips signedBolRequired to FALSE (or back), a row is
+// written here for compliance. load_id is VARCHAR matching loads.id (UUID).
+// ============================================================================
+export const bolOverrideAudit = pgTable("bol_override_audit", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").notNull(),
+  overriddenBy: text("overridden_by").notNull(), // user email / session identity
+  overriddenAt: timestamp("overridden_at").defaultNow().notNull(),
+  newValue: boolean("new_value").notNull(),       // what signedBolRequired was set to
+  reason: text("reason").notNull(),
+});
 
 // ============================================================================
 // RATECON INTAKE - universal queue for all incoming ratecons

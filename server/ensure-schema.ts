@@ -190,6 +190,14 @@ export async function ensureSchema(): Promise<void> {
     ['driver_text_confirm_eta', 'TEXT'],
     // S14b — signed BOL gate
     ['signed_bol_required', 'BOOLEAN DEFAULT true'],
+    // S14 — Dispatch tracker lane checklist (staff-only)
+    ['lane2_broker_verified', "TEXT DEFAULT 'not_yet'"],
+    ['lane2_broker_verified_at', 'TIMESTAMP'],
+    ['lane2_broker_verified_by', 'TEXT'],
+    ['lane3_appointment_status', "TEXT DEFAULT 'not_yet'"],
+    ['lane5_ar_updated', "TEXT DEFAULT 'not_yet'"],
+    ['relay_tasks', 'TEXT'],
+    ['dispatch_notes', 'TEXT'],
   ];
 
   try {
@@ -859,7 +867,27 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ sms_delivery_log: ${e.message}`);
     }
 
-    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log + pending_uploads + recruiting_* + sms_delivery_log created)`);
+    // S14b — BOL override audit log. One row per staff override of signedBolRequired.
+    // load_id is VARCHAR matching loads.id (UUID). No FK constraint (keep migration simple).
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS bol_override_audit (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid()::varchar,
+          load_id VARCHAR NOT NULL,
+          overridden_by TEXT NOT NULL,
+          overridden_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          new_value BOOLEAN NOT NULL,
+          reason TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_bol_override_load ON bol_override_audit(load_id)`);
+      log('✅ bol_override_audit table ready');
+    } catch (e: any) {
+      log(`⚠️ bol_override_audit: ${e.message}`);
+    }
+
+    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log + pending_uploads + recruiting_* + sms_delivery_log + bol_override_audit created)`);
   } catch (err: any) {
     log(`⚠️ ensureSchema error: ${err.message}`);
   }

@@ -60,6 +60,7 @@ import { registerDriverLineRoutes } from "./driver-line-routes";
 import { registerPortalDialerRoutes } from "./portal-dialer-routes";
 import { registerDriverConfirmationRoutes } from "./driver-confirmation-routes";
 import { registerRecruitingRoutes } from "./recruiting/routes";
+import { registerDispatchTrackerRoutes } from "./routes/dispatch-tracker-routes";
 import twilio from "twilio";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
@@ -976,6 +977,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   registerFactoringRoutes(app);
   registerDetentionRoutes(app);
   registerBrokerScoreRoutes(app);
+  registerDispatchTrackerRoutes(app); // S14 — dispatch board + lane checklist + BOL override
   registerDirectDATLoads(app);
 
   // Admin: bulk-archive bad loads. Two-step audit → archive flow with a

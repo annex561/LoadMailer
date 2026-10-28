@@ -22,6 +22,13 @@ vi.mock("../db", async () => {
         rate: 1500,
         rateconPath: "https://files.test/ratecon.pdf",
         brokerName: "Test Broker",
+        // S14 — 14a-2 / 14a-3 gate fields: test packet must look like a delivered load
+        // with POD and a verified signed BOL so the gates pass through to the redirect logic.
+        deliveredAt: new Date("2026-01-01T10:00:00Z"),
+        podPath: "https://files.test/pod.pdf",
+        bolPath: "https://files.test/bol-signed.pdf",
+        bolVerifiedAt: new Date("2026-01-01T11:00:00Z"),
+        signedBolRequired: true,
       },
     ],
     load_documents: [
