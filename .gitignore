@@ -9,3 +9,8 @@ vite.config.ts.*
 .env
 .env.local
 .env.production
+# SQLite runtime files hold broker and load data. Never commit them (repo was public).
+# See docs/FIX-LEDGER.md, "Committed SQLite DB exposed broker data on a public repo".
+*.db
+*.db-wal
+*.db-shm
