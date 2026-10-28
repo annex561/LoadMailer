@@ -283,9 +283,11 @@ export async function handleText1ConfirmIfPending(
 
   const { db } = await import("./db");
   const { loads } = await import("@shared/schema");
-  const { eq, and, isNotNull, isNull } = await import("drizzle-orm");
+  const { eq, and, isNotNull, isNull, desc } = await import("drizzle-orm");
 
   // Find the most-recent Text 1 sent to this driver that has not been confirmed yet.
+  // Newest first and never a delivered load, so a stale unanswered Text 1 can't
+  // swallow a YES meant for the current load. Pinned by driver-load-texts.test.ts.
   const [pending] = await db
     .select()
     .from(loads)
@@ -294,9 +296,10 @@ export async function handleText1ConfirmIfPending(
         eq(loads.driverId, driverId),
         isNotNull((loads as any).text1SentAt),
         isNull((loads as any).driverTextConfirmedAt),
+        isNull(loads.deliveredAt),
       ),
     )
-    .orderBy((loads as any).text1SentAt)
+    .orderBy(desc((loads as any).text1SentAt))
     .limit(1);
 
   if (!pending) return false;
