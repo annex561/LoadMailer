@@ -32,6 +32,11 @@ const routesSrc = readFileSync(resolve(__dirname, "../routes.ts"), "utf8");
 const GATED_ENDPOINTS: Array<{ method: string; path: string }> = [
   { method: "get", path: "/api/loads" },
   { method: "get", path: "/api/drivers" },
+  // 2026-10-19: returned every active driver's id, name and live GPS to anonymous
+  // callers, and those ids unlocked the /api/drivers/:id routes. Callers are all
+  // logged-in admin pages (gps-tracking, dispatcher-dashboard, loadops-dashboard,
+  // manual-dispatch, dashboard via DriverLocationMap).
+  { method: "get", path: "/api/driver-locations/active" },
 ];
 
 describe("load + driver list endpoints require authentication", () => {
@@ -101,6 +106,19 @@ describe("load + driver list endpoints require authentication", () => {
         ).toBe(true);
       });
     }
+  });
+
+  it("keeps POST /api/driver-location/update public (driver GPS feed)", () => {
+    // Singular "driver-location". The tokenized portal /driver/:token, the legacy
+    // /mobile-driver-dashboard and /driver-tracker all post GPS here with no session.
+    const updateGuarded =
+      /app\.post\(\s*['"`]\/api\/driver-location\/update['"`]\s*,\s*(requireRole\(|isAuthenticated\b)/.test(
+        routesSrc,
+      );
+    expect(
+      updateGuarded,
+      "POST /api/driver-location/update must stay session-free — drivers have no login and the portal pushes GPS here.",
+    ).toBe(false);
   });
 
   // 2026-10-19: /api/coverage was mounted bare. GET /drivers returned every driver's
