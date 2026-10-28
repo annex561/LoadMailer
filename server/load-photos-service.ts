@@ -15,17 +15,33 @@ export type PhotoStage =
   | 'pickup_bol'
   | 'pickup_securement'
   | 'delivery_pod'
-  | 'delivery_signed_bol';
+  | 'delivery_signed_bol'
+  | 'lumper_receipt'
+  | 'scale_ticket'
+  | 'other';
 
 export const STAGE_LABELS: Record<PhotoStage, string> = {
   pickup_bol: 'Pickup BOL',
   pickup_securement: 'Securement / Tie-Down',
   delivery_pod: 'Delivery POD',
   delivery_signed_bol: 'Signed BOL',
+  lumper_receipt: 'Lumper Receipt',
+  scale_ticket: 'Scale Ticket',
+  other: 'Other Document',
 };
 
 export const PICKUP_STAGES: PhotoStage[] = ['pickup_bol', 'pickup_securement'];
 export const DELIVERY_STAGES: PhotoStage[] = ['delivery_pod', 'delivery_signed_bol'];
+
+/** Optional extra doc types — never required, never count toward the gate. */
+export const OPTIONAL_STAGES: PhotoStage[] = ['lumper_receipt', 'scale_ticket', 'other'];
+
+/** All known stage values (for input validation). */
+export const ALL_STAGES: PhotoStage[] = [
+  ...PICKUP_STAGES,
+  ...DELIVERY_STAGES,
+  ...OPTIONAL_STAGES,
+];
 
 // All four stages are required documents, but the driver should only ever see
 // the slots for the phase the load is currently in — pickup slots before
@@ -194,8 +210,9 @@ export async function recordDirectUploadedPhoto(p: {
     };
   }
 
-  // Sanity-check the URL came from our Cloudinary account. Without this,
-  // a malicious client could POST any arbitrary URL and we'd record it.
+  // Sanity-check the URL came from Cloudinary. We pin to the res.cloudinary.com
+  // domain; any cloud name is acceptable because the signed upload params from
+  // /api/loads/:id/photos/sign already constrain which cloud signs the request.
   if (!/^https:\/\/res\.cloudinary\.com\//.test(p.fileUrl)) {
     return { ok: false, error: "Invalid file URL" };
   }
@@ -451,7 +468,7 @@ export async function getRequiredPhotoStatus(
     .select({ documentType: loadDocuments.documentType })
     .from(loadDocuments)
     .where(eq(loadDocuments.loadId, loadId));
-  const have = new Set(docs.map((d) => d.documentType));
+  const have = new Set<string | null | undefined>(docs.map((d: any) => d.documentType));
   const present = required.filter((s) => have.has(s));
   const missing = required.filter((s) => !have.has(s));
   return { complete: missing.length === 0, present, missing };
@@ -549,11 +566,20 @@ export async function sendUploadLink(
 // any aggressive iOS Safari / CDN cache for the previous version.
 const UPLOAD_JS_HASH = createHash('sha256').update(UPLOAD_PAGE_CLIENT_JS).digest('hex').slice(0, 12);
 
+/** Load context shown in the upload page header (item 10). Never include rate/pay. */
+export interface UploadPageLoadContext {
+  broker?: string | null;
+  pickup?: string | null;      // "City, ST" or full address
+  delivery?: string | null;
+  rateconRef?: string | null;  // ratecon_intake id or rateconPath filename
+}
+
 export function renderUploadPage(
   loadId: string,
   stages: PhotoStage[],
   loadNumber: string,
   uploadToken?: string | null,
+  ctx?: UploadPageLoadContext | null,
 ): string {
   // Per code review: inline <script> inside a template literal had its
   // backslash escapes consumed by the template literal parser, which
@@ -563,11 +589,27 @@ export function renderUploadPage(
   const configJson = JSON.stringify({
     loadId,
     stages: stages.map((s) => ({ stage: s, label: STAGE_LABELS[s] })),
+    optionalStages: OPTIONAL_STAGES.map((s) => ({ stage: s, label: STAGE_LABELS[s] })),
     token: uploadToken || null,
   })
     // Escape </script> in user-controlled fields just in case; loadNumber
     // is server-controlled but defensive doesn't hurt.
     .replace(/</g, "\\u003c");
+
+  // Build context lines. Each defined field is escaped and shown; missing
+  // fields are omitted so the header stays compact. Rate and pay are never
+  // shown — this is a driver-facing token page.
+  const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const ctxLines: string[] = [];
+  if (ctx?.broker) ctxLines.push(`<span class="ctx-item">🏢 ${esc(ctx.broker)}</span>`);
+  if (ctx?.pickup && ctx?.delivery)
+    ctxLines.push(`<span class="ctx-item">📍 ${esc(ctx.pickup)} → ${esc(ctx.delivery)}</span>`);
+  else if (ctx?.pickup)
+    ctxLines.push(`<span class="ctx-item">📍 Pickup: ${esc(ctx.pickup)}</span>`);
+  if (ctx?.rateconRef) ctxLines.push(`<span class="ctx-item">📄 RC: ${esc(ctx.rateconRef)}</span>`);
+  const ctxHtml = ctxLines.length
+    ? `<div class="ctx">${ctxLines.join('')}</div>`
+    : '';
 
   return `<!doctype html>
 <html lang="en"><head>
@@ -578,7 +620,9 @@ export function renderUploadPage(
   *{box-sizing:border-box}
   body{font-family:-apple-system,system-ui,sans-serif;max-width:500px;margin:0 auto;padding:16px;background:#0f172a;color:#f1f5f9;min-height:100vh}
   h1{font-size:20px;color:#22d3ee;margin:8px 0 2px}
-  .meta{color:#94a3b8;font-size:13px;margin-bottom:20px}
+  .meta{color:#94a3b8;font-size:13px;margin-bottom:4px}
+  .ctx{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+  .ctx-item{background:#1e293b;border:1px solid #334155;border-radius:6px;padding:3px 8px;font-size:12px;color:#cbd5e1}
   .slot{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:14px}
   .slot h2{font-size:15px;margin:0 0 10px;color:#e2e8f0}
   .slot.done{border-color:#22c55e;background:#14532d33}
@@ -588,6 +632,8 @@ export function renderUploadPage(
   input[type=file]{display:none}
   label.btn{display:block;background:#0ea5e9;color:white;padding:14px;border-radius:8px;text-align:center;font-weight:600;cursor:pointer;font-size:15px}
   label.btn:active{background:#0369a1}
+  label.btn.lib{background:#334155;font-size:13px;padding:10px;margin-top:6px}
+  label.btn.lib:active{background:#1e293b}
   .status{font-size:13px;margin-top:8px;color:#94a3b8}
   .status.error{color:#f87171}
   .status.ok{color:#4ade80}
@@ -595,10 +641,15 @@ export function renderUploadPage(
   .progress{height:4px;background:#334155;border-radius:2px;margin-top:8px;overflow:hidden}
   .progress > div{height:100%;background:#22d3ee;transition:width .3s}
   footer{text-align:center;color:#64748b;font-size:12px;margin-top:20px}
+  details.more-docs{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px 14px;margin-bottom:14px}
+  details.more-docs > summary{cursor:pointer;color:#94a3b8;font-size:14px;font-weight:600;list-style:none}
+  .opt-badge{display:inline-block;background:#1e3a5f;color:#93c5fd;border:1px solid #2563eb;font-size:10px;font-weight:700;letter-spacing:.5px;padding:1px 6px;border-radius:4px;vertical-align:middle;margin-left:6px}
+  .notes-input{width:100%;background:#0f172a;border:1px solid #475569;border-radius:6px;color:#f1f5f9;padding:8px;font-size:13px;margin-top:8px;resize:vertical}
 </style>
 </head><body>
   <h1>📸 Upload Photos</h1>
   <div class="meta">Load <b>${loadNumber}</b> · LAMP Logistics</div>
+  ${ctxHtml}
 
   <div id="slots"></div>
 
