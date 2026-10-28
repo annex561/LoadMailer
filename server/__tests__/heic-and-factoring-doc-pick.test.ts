@@ -235,10 +235,14 @@ describe("factoring-loves.ts — doc selection query fix (source pins)", () => {
   it("query uses orderBy(desc(createdAt)) — not bare limit(1)", () => {
     expect(_factoringLovesSrc).toMatch(/orderBy\(desc\(loadDocuments\.createdAt\)\)/);
     // The old bare .limit(1) directly on the BOL query must be gone.
+    // Slice just the approvedBolDocs statement. It sits above the S14 gate now,
+    // so the window must not run on into the RateCon lookup's own limit(1).
+    const approvedStart = _factoringLovesSrc.indexOf("const approvedBolDocs");
     const approvedSection = _factoringLovesSrc.slice(
-      _factoringLovesSrc.indexOf("approvedBolDocs"),
-      _factoringLovesSrc.indexOf("sortedDocs"),
+      approvedStart,
+      _factoringLovesSrc.indexOf("orderBy(desc(loadDocuments.createdAt))", approvedStart),
     );
+    expect(approvedSection).toMatch(/eq\(loadDocuments\.approvalStatus, "approved"\)/);
     expect(approvedSection).not.toMatch(/\.limit\(1\)/);
   });
 
