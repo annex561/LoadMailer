@@ -519,6 +519,28 @@ export async function submitToLoves(loadId: string, submittedBy: string | null =
       `  4. BOL / POD\n\n` +
       `Thanks,\n${LAMP.dba} Dispatch\n${LAMP.phone}\n${LAMP.email}\n`;
 
+    // DRY-RUN MODE: the test inbox gets nothing either. Without this the
+    // redirect sends a real Resend email even with DRY_RUN_OUTBOUND=true,
+    // because this branch returns before the production dry-run gate below.
+    // No DB writes, same as the live test path. Pinned by
+    // server/__tests__/factoring-dry-run-test-redirect.test.ts
+    const dryRunT = await import("./dry-run");
+    if (dryRunT.isDryRunOutbound()) {
+      dryRunT.logDryRun({
+        vendor: "loves-factoring",
+        action: "sendTestPacket",
+        payload: {
+          loadId,
+          loadNumber: loadT.loadNumber,
+          to: testToEmail,
+          subject: subjectT,
+          attachmentBytes: packetT.pdfBytes.length,
+        },
+      });
+      submissionTimestamps.push(Date.now());
+      return { ok: true, emailMessageId: dryRunT.dryRunFakeId("loves-test") };
+    }
+
     try {
       const infoT = await sendViaResend({
         from: `${LAMP.dba} [TEST] <${fromAddrT}>`,
