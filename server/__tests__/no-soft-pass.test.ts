@@ -81,3 +81,21 @@ describe("no-soft-pass: factoring-bol-verify catch returns ok:false", () => {
     expect(catchBody).not.toContain("ok: true");
   });
 });
+
+describe("no-soft-pass: factoring-bol-verify dry-run path is fail-closed", () => {
+  it("dry-run branch returns ok:false, never ok:true (§9.3)", () => {
+    // Pin the isDryRunOutbound() branch: it must return ok:false so the
+    // caller's isInfraError check routes to needsReview, not verified=true.
+    const dryRunIdx = bolSrc.indexOf("isDryRunOutbound()");
+    expect(dryRunIdx).toBeGreaterThan(-1);
+    // Scan up to 350 chars past the gate — covers the full return statement.
+    const dryRunRegion = bolSrc.slice(dryRunIdx, dryRunIdx + 350);
+    expect(dryRunRegion).toContain("ok: false");
+    expect(dryRunRegion).not.toContain("ok: true");
+  });
+
+  it("'assuming pass' string has been removed from verifyBolPhoto source", () => {
+    // The old soft-pass message; absence confirms the fix is in place.
+    expect(bolSrc).not.toContain("assuming pass");
+  });
+});
