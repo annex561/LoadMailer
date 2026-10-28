@@ -237,6 +237,12 @@ export default function LoadDetailsPage({ id: idProp }: LoadDetailsPageProps = {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <FileText className="w-4 h-4" /> Documents
+              <a
+                href={`/loads/${load.id}/documents`}
+                className="ml-auto text-xs font-normal text-blue-600 hover:underline"
+              >
+                View all documents →
+              </a>
             </CardTitle>
           </CardHeader>
           <CardContent>
