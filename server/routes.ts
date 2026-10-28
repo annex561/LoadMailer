@@ -2218,7 +2218,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // Send a direct SMS to any phone number (admin use)
-  app.post('/api/sms/send-direct', async (req, res) => {
+  app.post('/api/sms/send-direct', isAuthenticated, async (req, res) => {
     try {
       const { to, message } = req.body;
       if (!to || !message) {
@@ -2317,7 +2317,7 @@ export async function registerRoutes(app: Express): Promise<void> {
   });
 
   // EV SOP Checklist - Send template SMS
-  app.post('/api/sms/send-template', async (req, res) => {
+  app.post('/api/sms/send-template', isAuthenticated, async (req, res) => {
     try {
       const { loadId, type } = req.body;
       
