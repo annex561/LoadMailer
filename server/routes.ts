@@ -8034,9 +8034,9 @@ TRAQ IQ Dispatch Team
       }
       
       const { MessageSid, MessageStatus, ErrorCode, ErrorMessage, To } = req.body;
-      
+
       console.log(`📱 SMS Status Update - SID: ${MessageSid}, Status: ${MessageStatus}, To: ${To}`);
-      
+
       if (MessageStatus === 'delivered') {
         console.log(`✅ SMS ${MessageSid} delivered successfully to ${To}`);
       } else if (MessageStatus === 'failed' || MessageStatus === 'undelivered') {
@@ -8055,8 +8055,26 @@ TRAQ IQ Dispatch Team
       } else if (MessageStatus === 'sent' || MessageStatus === 'queued') {
         console.log(`📤 SMS ${MessageSid} ${MessageStatus} to ${To}`);
       }
-      
-      // Just acknowledge receipt
+
+      // Persist delivery status — upsert so retries from Twilio don't duplicate.
+      if (MessageSid && MessageStatus) {
+        try {
+          const { pool } = await import('./db');
+          await pool.query(
+            `INSERT INTO sms_delivery_log (sid, to_phone, status, error_code, error_message)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (sid) DO UPDATE SET
+               status = EXCLUDED.status,
+               error_code = EXCLUDED.error_code,
+               error_message = EXCLUDED.error_message,
+               updated_at = NOW()`,
+            [MessageSid, To || null, MessageStatus, ErrorCode || null, ErrorMessage || null]
+          );
+        } catch (dbErr: any) {
+          console.error('⚠️ sms_delivery_log upsert failed:', dbErr.message);
+        }
+      }
+
       res.status(200).send('OK');
     } catch (error) {
       console.error('❌ Error handling SMS status webhook:', error);
@@ -8066,6 +8084,49 @@ TRAQ IQ Dispatch Team
 
   app.post('/api/sms/status', handleSmsStatus);
   app.post('/api/sms/status-callback', handleSmsStatus);
+
+  // Staff/owner-only: fetch live delivery status for a message SID.
+  // Checks local DB first, then falls back to Twilio Messages API.
+  app.get('/api/sms/status/:sid', isAuthenticated, async (req: any, res) => {
+    try {
+      const { sid } = req.params;
+
+      // Try local DB first (fast path)
+      let local: any = null;
+      if (process.env.DATABASE_URL) {
+        try {
+          const { pool } = await import('./db');
+          const result = await pool.query(
+            'SELECT sid, to_phone, status, error_code, error_message, updated_at FROM sms_delivery_log WHERE sid = $1',
+            [sid]
+          );
+          if (result.rows.length > 0) local = result.rows[0];
+        } catch (_) {}
+      }
+
+      // Also fetch live from Twilio
+      let live: any = null;
+      try {
+        const msg = await twilioClient.messages(sid).fetch();
+        live = {
+          sid: msg.sid,
+          status: msg.status,
+          errorCode: msg.errorCode,
+          errorMessage: msg.errorMessage,
+          to: msg.to,
+          from: msg.from,
+          dateSent: msg.dateSent,
+        };
+      } catch (twilioErr: any) {
+        // Non-fatal — return local data if Twilio unreachable
+        console.warn(`⚠️ Twilio fetch for ${sid} failed:`, twilioErr.message);
+      }
+
+      res.json({ sid, local, live });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // ==================== Webhook: New Load SMS Broadcast ====================
   app.post('/api/webhook/new-load', async (req, res) => {
