@@ -1,5 +1,13 @@
 // Email Ingestion Service - Gmail Integration for Rate Confirmation Auto-Booking
-// Uses Replit's Gmail connector for OAuth management
+//
+// ⚠️  DEAD PATH IN RAILWAY PRODUCTION ⚠️
+// This file depends on `getGmailClient` and `isGmailConfigured` from `./gmail-client`,
+// which rely on Replit-specific env vars (REPLIT_GMAIL_CLIENT_ID, etc.) that do not
+// exist in Railway. The active Gmail scanner is `server/services/gmail.ts`, which uses
+// per-account OAuth tokens stored in the `gmail_accounts` table.
+// Do NOT call `pollForRateCons()` or `checkConfiguration()` from Railway routes.
+// Do NOT remove this file — it contains `createLoadFromParsedData` still referenced
+// by the manual-import path during the migration period.
 
 import { db } from "./db";
 import { loads, activityLog } from "@shared/schema";

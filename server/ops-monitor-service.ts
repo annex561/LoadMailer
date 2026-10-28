@@ -188,18 +188,27 @@ class OpsMonitorService {
     }
   }
 
-  // 2) Gmail scanner hasn't ticked in 15 min
+  // 2) Gmail scanner hasn't updated last_synced_at in 15 min. Uses DB instead of
+  // noteGmailScan() so a dead token (which still fires noteGmailScan) triggers the alert.
   private async checkGmailStalled(): Promise<void> {
-    const last = this.state.lastGmailScanAt;
-    // First 15 min of boot — don't alert before we have a baseline
-    if (!last) return;
-    const ageMs = Date.now() - last.getTime();
-    if (ageMs < 15 * 60 * 1000) return;
-
-    await this.maybeAlert(
-      'gmail-stalled',
-      `🚨 TRAQ: Gmail scanner silent for ${Math.round(ageMs / 60000)} min. Check Railway logs.`
-    );
+    try {
+      const { gmailAccounts } = await import('@shared/schema');
+      const { max } = await import('drizzle-orm');
+      const [row] = await db
+        .select({ latest: max(gmailAccounts.lastSyncedAt) })
+        .from(gmailAccounts)
+        .where((await import('drizzle-orm')).eq(gmailAccounts.isActive, true));
+      const last = row?.latest ? new Date(row.latest) : null;
+      if (!last) return; // no active accounts yet
+      const ageMs = Date.now() - last.getTime();
+      if (ageMs < 15 * 60 * 1000) return;
+      await this.maybeAlert(
+        'gmail-stalled',
+        `🚨 TRAQ: Gmail last successful scan ${Math.round(ageMs / 60000)} min ago. Check token + Railway logs.`
+      );
+    } catch {
+      // DB unavailable — skip, don't spam the alert
+    }
   }
 
   // 3) Parser failing > 50% in the last hour (with at least 4 runs so we don't alert on noise)

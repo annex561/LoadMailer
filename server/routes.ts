@@ -6321,8 +6321,9 @@ TRAQ IQ Dispatch Team
       // Create a system message about the load offer
       await storage.createLoadMessage({
         threadId,
-        content: `Load offered: ${load.loadNumber} - ${load.origin} → ${load.destination} - Rate: $${load.rate || 'TBD'}`,
-        sender: 'dispatch',
+        textContent: `Load offered: ${load.loadNumber} - Rate: $${load.rate || 'TBD'}`,
+        senderRole: 'dispatch',
+        senderName: 'Dispatcher',
         isRead: false
       });
       
@@ -6372,8 +6373,9 @@ TRAQ IQ Dispatch Team
       // Create a system message about the acceptance
       await storage.createLoadMessage({
         threadId,
-        content: `Driver accepted the load offer! Load ${thread.loadNumber} is now assigned.`,
-        sender: 'driver',
+        textContent: `Driver accepted the load offer! Load ${thread.loadNumber} is now assigned.`,
+        senderRole: 'driver',
+        senderName: 'Driver',
         isRead: false
       });
       
@@ -6418,8 +6420,9 @@ TRAQ IQ Dispatch Team
       // Create a system message about the decline
       await storage.createLoadMessage({
         threadId,
-        content: `Driver declined the load offer.`,
-        sender: 'driver',
+        textContent: `Driver declined the load offer.`,
+        senderRole: 'driver',
+        senderName: 'Driver',
         isRead: false
       });
       
@@ -6508,11 +6511,10 @@ TRAQ IQ Dispatch Team
         // Create message record in the thread
         await storage.createLoadMessage({
           threadId: thread.id,
-          content: message,
-          sender: 'dispatch',
+          textContent: message,
+          senderRole: 'dispatch',
+          senderName: 'Dispatcher',
           isRead: true,
-          deliveryStatus: 'delivered',
-          deliveryMethod: 'sms',
           smsMessageId: result.sid || null
         });
         
@@ -6889,8 +6891,7 @@ TRAQ IQ Dispatch Team
         mediaUrl: mediaUrl || null,
         isRead: false,
         isSuggested: false,
-        isSent: true,
-        communicationMethod: deliveryMethod
+        isSent: true
       });
 
       // Update thread stats
