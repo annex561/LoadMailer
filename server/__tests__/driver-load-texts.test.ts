@@ -299,3 +299,23 @@ describe("ratecon-intake-routes — Text 1 dispatch hook (source-text)", () => {
     expect(ROUTES_SRC).toMatch(/DRIVER_LOAD_TEXTS_ENABLED/);
   });
 });
+
+// ── Regression: YES must confirm the NEWEST pending Text 1, never an old load ─
+// Old code ordered ascending, so a driver with an unanswered Text 1 from an
+// earlier load had the OLD load confirmed and got Text 2 with the old addresses.
+
+describe("handleText1ConfirmIfPending — picks newest pending load (source-text)", () => {
+  const SRC = readFileSync(resolve(__dirname, "../driver-load-texts.ts"), "utf8");
+  const fn = SRC.slice(
+    SRC.indexOf("export async function handleText1ConfirmIfPending"),
+    SRC.indexOf("export async function sendDriverLoadText2"),
+  );
+
+  it("orders pending Text 1 rows newest first", () => {
+    expect(fn).toMatch(/orderBy\(desc\(\(loads as any\)\.text1SentAt\)\)/);
+  });
+
+  it("never confirms a load that is already delivered", () => {
+    expect(fn).toMatch(/isNull\(loads\.deliveredAt\)/);
+  });
+});
