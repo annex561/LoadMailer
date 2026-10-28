@@ -19,9 +19,16 @@ function DocumentCount({ loadId }: { loadId: string }) {
     enabled: !!loadId,
   });
 
-  const bolCount = documents.filter(doc => doc.documentType === "bol").length;
-  const photoCount = documents.filter(doc => 
-    doc.documentType === "freight_photo" || doc.documentType === "delivery_photo"
+  const bolCount = documents.filter(doc =>
+    doc.documentType === "bol" ||
+    doc.documentType === "pickup_bol" ||
+    doc.documentType === "delivery_signed_bol"
+  ).length;
+  const photoCount = documents.filter(doc =>
+    doc.documentType === "freight_photo" ||
+    doc.documentType === "delivery_photo" ||
+    doc.documentType === "pickup_securement" ||
+    doc.documentType === "delivery_pod"
   ).length;
 
   return (
