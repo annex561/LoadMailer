@@ -25,7 +25,7 @@ vi.mock("../db", async () => {
       },
     ],
     load_documents: [
-      { id: "doc-1", fileUrl: "https://files.test/bol.pdf", documentType: "pickup_bol" },
+      { id: "doc-1", fileUrl: "https://files.test/bol.pdf", documentType: "pickup_bol", createdAt: new Date() },
     ],
   };
   const select = () => ({
@@ -34,6 +34,7 @@ vi.mock("../db", async () => {
       const q: any = {
         where: () => q,
         limit: () => q,
+        orderBy: () => q,
         then: (res: any, rej: any) => Promise.resolve(result).then(res, rej),
       };
       return q;
