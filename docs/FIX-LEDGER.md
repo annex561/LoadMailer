@@ -354,3 +354,11 @@ Format:
 - **Guard** — `server/__tests__/factoring-dry-run-test-redirect.test.ts` runs `submitToLoves` with the DB, PDF templates and `fetch` mocked, and asserts zero calls to `api.resend.com` under dry-run. A control case asserts exactly one send, to the test inbox, when dry-run is off. `dry-run-mode.test.ts` adds a source pin for the gate's position. It also re-checks that the gate nearest the Love's send sits after the dedup check, so the new test-branch gate cannot stand in for the production one.
 - **Do NOT** — do not move the production dry-run gate up to the top of `submitToLoves` to cover both paths. The production gate mirrors the live DB writes (`factoring_submissions` → `submitted`, `loads.factoringStatus`), and the test path must never write. They need separate gates. Do not anchor a dry-run pin on the first `isDryRunOutbound()` in the file: there are two now.
 - `2026-10-20 · (this commit)`
+
+### Driver "YES" confirmed an old load and sent Text 2 with the old addresses (caught pre-merge, #157)
+- **Symptom** — with `DRIVER_LOAD_TEXTS_ENABLED=true`, a driver who left a Text 1 unanswered on an earlier load replies YES to today's Text 1. The old load gets `driver_text_confirmed_at`, the driver gets Text 2 with the old pickup/drop addresses, and today's load stays unconfirmed until the 60-min no-confirm alert fires.
+- **Root cause** — `handleText1ConfirmIfPending` in `server/driver-load-texts.ts` ordered pending rows with `.orderBy(text1SentAt)`, which is ascending (oldest first), although its comment said "most-recent". It also had no delivered filter, so a delivered load with an unanswered Text 1 could swallow any later "ok".
+- **Fix** — `.orderBy(desc(text1SentAt))` plus `isNull(loads.deliveredAt)`.
+- **Guard** — `server/__tests__/driver-load-texts.test.ts`, block "picks newest pending load".
+- **Do NOT** — do not trust a comment over the query. Drizzle `orderBy(col)` is ascending. Do not drop the delivered filter to "catch late confirms": a confirm on a delivered load sends the driver a stale Text 2.
+- `2026-10-28 · 8474813`
