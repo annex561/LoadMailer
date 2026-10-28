@@ -55,6 +55,7 @@ const LoadsInbox = lazy(() => import("@/pages/loads-inbox"));
 const ActiveLoads = lazy(() => import("@/pages/active-loads"));
 const ItemsPage = lazy(() => import("@/pages/items"));
 const LoadDetailsPage = lazy(() => import("@/pages/load-details"));
+const LoadDocumentsPage = lazy(() => import("@/pages/load-documents"));
 const GmailSettings = lazy(() => import("@/pages/gmail-settings"));
 const DriverLoadView = lazy(() => import("@/pages/driver-load-view"));
 const TrueRPMCalculator = lazy(() => import("@/pages/true-rpm-calculator"));
@@ -152,6 +153,7 @@ function Router() {
       <Route path="/review-queue" component={ReviewQueuePage} />
       <Route path="/calls" component={CallsPage} />
       <Route path="/factoring" component={FactoringPage} />
+      <Route path="/loads/:id/documents" component={LoadDocumentsPage} />
       <Route path="/loads/:id" component={LoadDetailsPage} />
       <Route component={NotFound} />
     </Switch>
