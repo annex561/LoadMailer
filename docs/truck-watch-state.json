@@ -1539,6 +1539,63 @@
       "date": "2026-10-25",
       "verdict": "unverified",
       "notes": "Ran 12 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, plus Facebook Marketplace, eBay Motors, and a TN/GA/AL/Chattanooga-Knoxville-Nashville-Atlanta regional sweep. WebFetch test on the dtitrucks.com direct listing URL (stock 18242743) failed with getaddrinfo ENOTFOUND - egress to direct dealer sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units with no material change (DTI 18242743, Comvoy VZ8439 Miami, Truck and Van Outlet 136,956mi unit, Black Rock WD0626, Dave Syverson 2026 new unit) or were new leads rejected as wrong_spec/too_many_miles (MHC 0630270 non-sleeper 163,376mi; RitchieBros Chicago 34in sleeper auction lots - closed auctions, re-surfaced). No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver/Wheat Ridge CO (comvoy.com mirror, stock 17951W)",
+      "date": "2026-10-26",
+      "verdict": "unverified",
+      "notes": "Re-checked. WebFetch tested directly on the dtitrucks.com listing URL - failed with getaddrinfo ENOTFOUND, same egress block as every run since 2026-08-30. WebSearch snippet (comvoy.com mirror) again confirms 2025 M2-106 Extended Cab With Sleeper/bunk, 31,422 mi, List Price $94,500, 'available NOW' with the usual 'subject to prior sale' disclaimer - but also repeats the Denver Steele St vs Wheat Ridge CO address discrepancy seen before. No sale confirmed, no fresh info to clear gate (a). Held per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "TruckNTrailer-OKC-2022-M2106-NonCDL-173000mi-20694703",
+      "source": "Truck-n-Trailer, Oklahoma City OK (via search snippet)",
+      "date": "2026-10-26",
+      "verdict": "wrong_spec",
+      "notes": "2022 Freightliner M2 106, non-CDL, 6.7L Cummins/Allison automatic, ~173,000 mi, 26ft Smyrna box, 2,500lb Maxon liftgate, 25,500 GVWR, former lease unit. Rejected: no sleeper/extended-cab mention in any snippet - reads as standard cab. URL: https://truck-n-trailer.com/work-truck/2022-freightliner-m2-106-non-cdl-26-box-truck-with-liftgate-20694703"
+    },
+    {
+      "id": "LongIsland-2019-InternationalMV607-72kmi-38500-CarFather",
+      "source": "Car Father, Long Island NY (via search snippet)",
+      "date": "2026-10-26",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY candidate (International MV607). 2019 International MV607, 26ft Morgan dry box, 2,500lb Waltco liftgate, ~72,000 mi, $38,500, ad claims 'No CDL Necessary' (seller claim, GVWR not independently confirmed). Rejected: no sleeper or extended-cab mention in any snippet - reads as standard day cab."
+    },
+    {
+      "id": "sweep-2026-10-26-no-new-verified",
+      "source": "WebSearch sweep (12 queries) + 1 WebFetch egress test",
+      "date": "2026-10-26",
+      "verdict": "unverified",
+      "notes": "Ran 12 WebSearch queries covering primary (M2-106) spec variations, secondary (MV607/Hino L6-L7/Kenworth T280) specs, site-specific searches on commercialtrucktrader.com, truckpaper.com, mhc.com, comvoy.com, plus Facebook Marketplace, eBay Motors, and a TN/GA/AL/Chattanooga regional sweep. WebFetch test on the dtitrucks.com direct listing URL (stock 18242743) failed with getaddrinfo ENOTFOUND - egress to direct dealer sites confirmed still blocked, rest of sweep WebSearch-only per instructions. All results mapped to previously tracked units with no material change (DTI 18242743/17951W - comvoy mirror still shows 'available now' but address discrepancy and no live-URL confirmation persist; MHC 0630270/0630680/281405 non-sleeper inventory; RitchieBros Chicago 34in sleeper auctions - still closed/passed; Velocity new-inventory M2 106 Plus units) or were new leads rejected as wrong_spec (Truck-n-Trailer OKC 2022 M2-106 non-CDL 173k mi no sleeper; Car Father Long Island 2019 International MV607 72k mi no sleeper). No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver/Wheat Ridge CO (comvoy.com mirror, stock 17951W)",
+      "date": "2026-10-27",
+      "verdict": "unverified",
+      "notes": "2025 M2-106 ext cab w/ sleeper/bunk, 26ft box, 26000 GVWR non-CDL, ~31,422 mi, $94,500. Recurring candidate; dtitrucks.com still unreachable (WebFetch ENOTFOUND). This is the ideal spec on paper - still needs a live direct-site open or phone verification before it can be reported/pushed."
+    },
+    {
+      "id": "CTT-5041726314-2023-M2106-Pittsburgh-Ryder-333218mi-42032",
+      "source": "Commercial Truck Trader / Ryder, Pittsburgh PA",
+      "date": "2026-10-27",
+      "verdict": "too_many_miles",
+      "notes": "Used 2023 Business Class M2 106 straight/dry van box truck, $42,032, 333,218 mi. No sleeper mentioned. Reject: mileage."
+    },
+    {
+      "id": "EquipLinc-Auction-2025-M2-ExtCab-39000mi-DavieFL-RoanokeAL",
+      "source": "EquipLinc Auctions LLC (Davie FL unit, Roanoke AL auction house)",
+      "date": "2026-10-27",
+      "verdict": "unverified",
+      "notes": "Re-surfaced: 2025 Freightliner M2 non-CDL box truck, extended cab, 26ft box, liftgate, ~39,000 mi. No sleeper/bunk explicitly mentioned. $1,000 min bid auction format. Still unverified from prior sweeps."
+    },
+    {
+      "id": "sweep-2026-10-27-no-new-verified",
+      "source": "WebSearch sweep (11 queries) + 1 WebFetch egress test",
+      "date": "2026-10-27",
+      "verdict": "unverified",
+      "notes": "WebFetch to dtitrucks.com failed (getaddrinfo ENOTFOUND - egress blocked/DNS). Sweep covered M2-106 primary spec queries plus MV607/Hino/T280 secondary queries. No candidate cleared the verification gate (no live URL opened, no dealer+phone obtained). All hits were either already in seen[] or wrong_spec (no sleeper, too many miles, wrong model year)."
     }
   ]
 }

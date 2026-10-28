@@ -81,6 +81,11 @@ vi.mock('../load-photos-service', () => ({
   }),
 }));
 
+// Owner upload alert (PR #148): captured, never sends.
+vi.mock('../owner-upload-alert', () => ({
+  notifyOwnerOfUpload: vi.fn(async () => {}),
+}));
+
 global.fetch = vi.fn(async () => ({
   ok: true,
   headers: { get: () => 'image/jpeg' },
@@ -198,6 +203,47 @@ describe('MMS BOL upload — financial safety guards', () => {
       const { uploadLoadPhoto } = await import('../load-photos-service');
       expect((uploadLoadPhoto as any).mock.calls.length).toBe(0);
       expect(dbState.updates.length).toBe(0);
+    });
+  });
+
+  // The MMS reply is the main BOL channel, so the owner alert must fire here
+  // too, not only on the browser routes. Last photo of a phase = confirm.
+  describe('owner upload alert hook', () => {
+    async function mmsSuccess(stage: string, sid: string) {
+      process.env.MMS_UPLOAD_ENABLED = 'true';
+      selectQueue.push([]); // dedup miss
+      selectQueue.push([{ id: 'p1', loadId: 'load-1', stage }]);
+      selectQueue.push([{ c: 0 }]);
+      selectQueue.push([{ loadNumber: 'LD-1' }]);
+      const r = await svc.processMMSReply({
+        from: '+15551110000', messageSid: sid, mediaUrl: 'https://api.twilio.test/m/1', numMedia: 1,
+      });
+      await vi.dynamicImportSettled();
+      return r;
+    }
+
+    it.each([
+      ['pickup_bol', false],
+      ['pickup_securement', true],
+      ['delivery_pod', false],
+      ['delivery_signed_bol', true],
+    ])('saved %s photo alerts the owner (confirm=%s)', async (stage, confirm) => {
+      const r = await mmsSuccess(stage, 'SM-' + stage);
+      expect(r.handled).toBe(true);
+      const { notifyOwnerOfUpload } = await import('../owner-upload-alert');
+      expect(notifyOwnerOfUpload).toHaveBeenCalledOnce();
+      expect(notifyOwnerOfUpload).toHaveBeenCalledWith({ loadId: 'load-1', stage, confirm });
+    });
+
+    it('a replayed MessageSid does not alert again', async () => {
+      process.env.MMS_UPLOAD_ENABLED = 'true';
+      selectQueue.push([{ id: 'already-fulfilled-row' }]);
+      await svc.processMMSReply({
+        from: '+15551110000', messageSid: 'SM-dup', mediaUrl: 'https://api.twilio.test/m/1', numMedia: 1,
+      });
+      await vi.dynamicImportSettled();
+      const { notifyOwnerOfUpload } = await import('../owner-upload-alert');
+      expect(notifyOwnerOfUpload).not.toHaveBeenCalled();
     });
   });
 

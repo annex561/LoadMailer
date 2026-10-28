@@ -1230,29 +1230,12 @@ export class SMSCommunicationService {
         verifyMessage = "Max verification attempts reached. Sending to manual review.";
       }
 
-      // If verified: send Good to Go (only once per load, idempotent).
-      // If NOT verified: tell driver to retake; do NOT mark Good to Go.
+      // Photo received — dispatch reviews and sends GO manually via the admin
+      // panel. Never auto-set goodToGoSentAt or text Good to Go from here.
       if (verified) {
-        const alreadySent = !!active.goodToGoSentAt;
-        if (!alreadySent) {
-          await db
-            .update(loads)
-            .set({
-              goodToGoSentAt: new Date(),
-              factoringStatus: "ready", // appears in factoring queue
-            })
-            .where(eq(loads.id, active.id));
-          await sendReply(
-            `Good to Go — load ${active.loadNumber} closed.\n` +
-              `Paperwork received. You're cleared to head to your next load.\n` +
-              `Drive safe.`,
-          );
-        } else {
-          // Already sent Good to Go for this load; just acknowledge.
-          await sendReply(
-            `Updated photo received for load ${active.loadNumber}. Already cleared.`,
-          );
-        }
+        await sendReply(
+          `Photo received for load ${active.loadNumber}. Dispatch is reviewing — we'll text you when you're cleared to go.`,
+        );
       } else {
         await sendReply(
           `We couldn't verify a clear signed BOL on that photo${verifyMessage ? ` (${verifyMessage})` : ""}.\n` +

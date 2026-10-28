@@ -192,18 +192,20 @@ describe("buildDriverStageMessages", () => {
   });
 
   describe('step = "delivered"', () => {
-    it("returns a Good-to-Go acknowledgement with no pay numbers", () => {
+    // Updated 2026-10-25: auto good-to-go removed (PR #2 / fix/no-auto-good-to-go).
+    // The DELIVERED reply no longer says "Good to go" — driver waits for dispatch GO.
+    it("returns a delivery-photos-received acknowledgement with no pay numbers and no 'Good to go'", () => {
       const out = buildDriverStageMessages(baseInputs, "delivered");
       expect(out).toHaveLength(1);
-      expect(out[0]).toMatchInlineSnapshot(`
-        "Load #LD29505831 DELIVERED
-        ==================
-        Good to go. Paperwork is being processed and your factoring submission is queued.
+      expect(out[0]).toContain("Delivery photos received");
+      expect(out[0]).toContain("dispatch to send your GO");
+      expect(out[0]).toContain("Full pay breakdown is on your dashboard.");
+      expect(out[0]).not.toMatch(/good to go/i);
+    });
 
-        Full pay breakdown is on your dashboard.
-
-        Thank you — drive safe."
-      `);
+    it("does NOT contain 'Good to go', 'Good to Go', or 'GOOD TO GO' in DELIVERED reply", () => {
+      const out = buildDriverStageMessages(baseInputs, "delivered");
+      expect(out[0]).not.toMatch(/good to go/i);
     });
 
     it("intentionally does NOT inline dollar amounts even when payLines is passed", () => {
