@@ -70,6 +70,20 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+const twilioMessagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+
+/** Build Twilio message params: prefer messagingServiceSid (A2P), fall back to twilioPhoneNumber. */
+function twilioMsgParams(to: string, body: string): { to: string; body: string; messagingServiceSid?: string; from?: string; statusCallback?: string } {
+  const customDomain = process.env.CUSTOM_DOMAIN || 'traqiq.app';
+  const baseUrl = process.env.REPLIT_DEV_DOMAIN
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : `https://${customDomain}`;
+  const statusCallback = `${baseUrl}/api/sms/status-callback`;
+  const base = { to, body, statusCallback };
+  if (twilioMessagingServiceSid) return { ...base, messagingServiceSid: twilioMessagingServiceSid };
+  if (twilioPhoneNumber) return { ...base, from: twilioPhoneNumber };
+  throw new Error('No Twilio sender configured (TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER required)');
+}
 
 // GPS Location Update Validation Schema
 const gpsLocationUpdateSchema = z.object({
@@ -647,13 +661,9 @@ TRAQ IQ Dispatch Team
     const dispatcherPhone = process.env.DISPATCHER_PHONE_NUMBER;
     const normalizedDispatcherPhone = normalizePhoneToE164(dispatcherPhone);
     
-    if (normalizedDispatcherPhone && twilioPhoneNumber) {
+    if (normalizedDispatcherPhone && (twilioMessagingServiceSid || twilioPhoneNumber)) {
       try {
-        await twilioClient.messages.create({
-          to: normalizedDispatcherPhone,
-          from: twilioPhoneNumber,
-          body: emailNotificationMessage
-        });
+        await twilioClient.messages.create(twilioMsgParams(normalizedDispatcherPhone, emailNotificationMessage));
         console.log(`✅ Sent email booking notification to dispatcher via SMS (${normalizedDispatcherPhone})`);
       } catch (error) {
         console.error(`❌ Failed to send SMS notification:`, error);
@@ -2224,18 +2234,14 @@ export async function registerRoutes(app: Express): Promise<void> {
       if (!to || !message) {
         return res.status(400).json({ error: 'to and message are required' });
       }
-      if (!twilioPhoneNumber) {
+      if (!twilioMessagingServiceSid && !twilioPhoneNumber) {
         return res.status(503).json({ error: 'Twilio not configured' });
       }
       const normalizedTo = normalizePhoneToE164(to);
       if (!normalizedTo) {
         return res.status(400).json({ error: 'Invalid phone number' });
       }
-      const result = await twilioClient.messages.create({
-        to: normalizedTo,
-        from: twilioPhoneNumber,
-        body: message,
-      });
+      const result = await twilioClient.messages.create(twilioMsgParams(normalizedTo, message));
       res.json({ success: true, sid: result.sid, to: normalizedTo });
     } catch (err: any) {
       console.error('send-direct SMS error:', err);
@@ -2251,7 +2257,7 @@ export async function registerRoutes(app: Express): Promise<void> {
     try {
       const { driverId } = req.params;
       
-      if (!twilioPhoneNumber) {
+      if (!twilioMessagingServiceSid && !twilioPhoneNumber) {
         return res.status(503).json({
           success: false,
           error: 'Twilio SMS is not configured',
@@ -2291,11 +2297,7 @@ export async function registerRoutes(app: Express): Promise<void> {
         `Phone: ${normalizedPhone}\n` +
         `Time: ${new Date().toLocaleString()}`;
 
-      const smsResult = await twilioClient.messages.create({
-        to: normalizedPhone,
-        from: twilioPhoneNumber,
-        body: testMessage
-      });
+      const smsResult = await twilioClient.messages.create(twilioMsgParams(normalizedPhone, testMessage));
 
       res.json({
         success: true,
@@ -2378,14 +2380,10 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(400).json({ error: 'Invalid template type' });
       }
       
-      if (twilioClient && twilioPhoneNumber) {
-        await twilioClient.messages.create({
-          to: normalizedPhone,
-          from: twilioPhoneNumber,
-          body: message
-        });
+      if (twilioClient && (twilioMessagingServiceSid || twilioPhoneNumber)) {
+        await twilioClient.messages.create(twilioMsgParams(normalizedPhone, message));
       }
-      
+
       res.json({ success: true, message: 'SMS sent successfully' });
     } catch (error) {
       console.error('Error sending template SMS:', error);
@@ -3918,24 +3916,20 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       // Send welcome SMS if Twilio is configured
       const normalizedPhone = normalizePhoneToE164(driver.phone);
-      if (normalizedPhone && twilioPhoneNumber) {
+      if (normalizedPhone && (twilioMessagingServiceSid || twilioPhoneNumber)) {
         try {
           const welcomeMessage = `Welcome to TRAQ IQ, ${driver.name}!\n\n` +
             `Your driver account has been created successfully.\n` +
             `You'll receive load notifications via SMS.\n\n` +
             `Questions? Contact dispatch.`;
-          
-          await twilioClient.messages.create({
-            to: normalizedPhone,
-            from: twilioPhoneNumber,
-            body: welcomeMessage
-          });
+
+          await twilioClient.messages.create(twilioMsgParams(normalizedPhone, welcomeMessage));
           console.log(`📱 Sent welcome SMS to driver (${normalizedPhone})`);
         } catch (smsError) {
           console.error('⚠️ Failed to send welcome SMS:', smsError);
         }
       }
-      
+
       res.status(201).json({
         ...driver,
         message: 'Driver registered successfully!'
@@ -4077,18 +4071,14 @@ export async function registerRoutes(app: Express): Promise<void> {
 
       // Send welcome SMS
       const normalizedPhone = normalizePhoneToE164(driver.phone);
-      if (normalizedPhone && twilioPhoneNumber) {
+      if (normalizedPhone && (twilioMessagingServiceSid || twilioPhoneNumber)) {
         try {
           const welcomeMessage = `Welcome to TRAQ IQ, ${driver.name}!\n\n` +
             `Your driver account has been created successfully.\n` +
             `You'll receive load notifications via SMS.\n\n` +
             `Questions? Contact dispatch.`;
-          
-          await twilioClient.messages.create({
-            to: normalizedPhone,
-            from: twilioPhoneNumber,
-            body: welcomeMessage
-          });
+
+          await twilioClient.messages.create(twilioMsgParams(normalizedPhone, welcomeMessage));
           console.log(`📱 Sent welcome SMS to driver (${normalizedPhone})`);
         } catch (smsError) {
           console.error('⚠️ Failed to send welcome SMS:', smsError);
@@ -4953,7 +4943,7 @@ export async function registerRoutes(app: Express): Promise<void> {
       
       // Send SMS to driver with load assignment details and link
       let smsSent = false;
-      if (updatedLoad.driverId && twilioClient && twilioPhoneNumber) {
+      if (updatedLoad.driverId && twilioClient && (twilioMessagingServiceSid || twilioPhoneNumber)) {
         try {
           const driver = await storage.getDriver(updatedLoad.driverId);
           if (driver?.phone) {
@@ -4971,11 +4961,7 @@ export async function registerRoutes(app: Express): Promise<void> {
               `Reply YES to confirm.`;
             
             const normalizedPhone = driver.phone.startsWith('+') ? driver.phone : '+1' + driver.phone.replace(/\D/g, '');
-            await twilioClient.messages.create({
-              to: normalizedPhone,
-              from: twilioPhoneNumber,
-              body: message
-            });
+            await twilioClient.messages.create(twilioMsgParams(normalizedPhone, message));
             smsSent = true;
             console.log(`📱 SMS sent to driver ${driver.name} for load ${updatedLoad.id}`);
           }
@@ -7525,12 +7511,8 @@ TRAQ IQ Dispatch Team
               `Reply CONFIRM to start tracking.`;
 
             try {
-              if (twilioClient && twilioPhoneNumber) {
-                await twilioClient.messages.create({
-                  to: driver.phoneNumber,
-                  from: twilioPhoneNumber,
-                  body: smsMessage
-                });
+              if (twilioClient && (twilioMessagingServiceSid || twilioPhoneNumber)) {
+                await twilioClient.messages.create(twilioMsgParams(driver.phoneNumber, smsMessage));
                 console.log(`📱 SMS sent to driver ${driver.name} at ${driver.phoneNumber}`);
               } else {
                 console.warn('⚠️ Twilio not configured - SMS not sent');

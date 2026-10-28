@@ -485,18 +485,19 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
             `View & Accept:\n${loadViewUrl}\n\n` +
             `Reply YES to confirm or call dispatch with questions.`;
           
-          const twilioClient = (await import("twilio")).default(
+          const twilioClientGa = (await import("twilio")).default(
             process.env.TWILIO_ACCOUNT_SID,
             process.env.TWILIO_AUTH_TOKEN
           );
-          const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
-          
-          if (twilioClient && twilioPhone) {
-            await twilioClient.messages.create({
-              to: driver.phone.startsWith('+') ? driver.phone : '+1' + driver.phone.replace(/\D/g, ''),
-              from: twilioPhone,
-              body: message
-            });
+          const gaMsgSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+          const gaTwilioPhone = process.env.TWILIO_PHONE_NUMBER;
+          const normalizedGaPhone = driver.phone.startsWith('+') ? driver.phone : '+1' + driver.phone.replace(/\D/g, '');
+
+          if (twilioClientGa && (gaMsgSid || gaTwilioPhone)) {
+            const gaParams: any = { to: normalizedGaPhone, body: message };
+            if (gaMsgSid) gaParams.messagingServiceSid = gaMsgSid;
+            else gaParams.from = gaTwilioPhone;
+            await twilioClientGa.messages.create(gaParams);
             smsSent = true;
             console.log(`📱 SMS sent to driver ${driver.name} for load ${id}`);
           }
