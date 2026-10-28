@@ -1727,6 +1727,15 @@ export async function registerRoutes(app: Express): Promise<void> {
         lng: req.body.lng != null ? Number(req.body.lng) : undefined,
       });
       if (!result.ok) return res.status(500).json(result);
+
+      // Fire-and-forget AI doc check (AI_DOC_CHECK_ENABLED, default OFF).
+      // Runs after the driver's response so it never blocks the upload.
+      try {
+        const { scheduleDocCheck } = await import('./ai-doc-check-service');
+        const checkPhase: 'pickup' | 'delivery' = stage.startsWith('pickup') ? 'pickup' : 'delivery';
+        scheduleDocCheck(req.params.id, checkPhase);
+      } catch { /* non-fatal */ }
+
       import('./owner-upload-alert').then(m => m.notifyOwnerOfUpload({ loadId: req.params.id, stage: stage as any })).catch(() => {});
       res.json(result);
     } catch (err: any) {
@@ -1780,6 +1789,13 @@ export async function registerRoutes(app: Express): Promise<void> {
       sop[phase === 'pickup' ? 'pickupPhotosConfirmedAt' : 'deliveryPhotosConfirmedAt'] = new Date().toISOString();
       await db.update(loads).set({ sopProgress: sop } as any).where(eq(loads.id, req.params.id));
 
+      // Fire-and-forget AI doc check on confirm (stronger trigger than per-photo).
+      // AI_DOC_CHECK_ENABLED defaults OFF — safe to call unconditionally.
+      try {
+        const { scheduleDocCheck } = await import('./ai-doc-check-service');
+        scheduleDocCheck(req.params.id, phase as 'pickup' | 'delivery');
+      } catch { /* non-fatal */ }
+
       // Confirm alert: bypass debounce so Annex always gets one on Done
       if (status.present.length > 0) {
         const confirmStage = status.present[0];
@@ -1787,6 +1803,22 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
 
       res.json({ ok: true, phase, confirmed: status.present });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: String(err?.message || err) });
+    }
+  });
+
+  // AI doc check verdicts for a load (dispatcher/admin only — display only)
+  app.get('/api/loads/:id/doc-checks', isAuthenticated, async (req, res) => {
+    try {
+      const { db } = await import('./db');
+      const { docChecks } = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const checks = await db
+        .select()
+        .from(docChecks)
+        .where(eq(docChecks.loadId, req.params.id));
+      res.json({ ok: true, checks });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
     }

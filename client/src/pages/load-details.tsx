@@ -14,6 +14,9 @@ import {
   Phone,
   Building,
   Send,
+  ShieldCheck,
+  AlertTriangle,
+  HelpCircle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -265,6 +268,8 @@ export default function LoadDetailsPage({ id: idProp }: LoadDetailsPageProps = {
           </CardContent>
         </Card>
 
+        <AiPickupCheckCard loadId={load.id} />
+
         {load.specialInstructions && (
           <Card>
             <CardHeader className="pb-2">
@@ -285,6 +290,154 @@ export default function LoadDetailsPage({ id: idProp }: LoadDetailsPageProps = {
     </div>
   );
 }
+
+// ── AI Pickup Check Card ─────────────────────────────────────────────────────
+
+interface DocCheckRow {
+  id: string;
+  phase: string;
+  verdict: string;          // 'pending' | 'pass' | 'needs_review'
+  score: number | null;
+  securementVerdict: string | null;
+  securementReason: string | null;
+  fields: Array<{ field: string; rcValue: unknown; bolValue: unknown; score: number; reason: string }> | null;
+  mustFieldsMissing: string[] | null;
+  reasons: string[] | null;
+  updatedAt: string | null;
+}
+
+/**
+ * Display-only verdict card: no GO button, no driver message, no action.
+ * PASS (green)  = verdict='pass' AND score >= 0.90 AND all MUST fields present
+ *                 AND (pickup: securementVerdict='secured'; delivery: not required)
+ * NEEDS REVIEW  = anything else when a row exists and is not 'pending'
+ * Not checked   = no rows, flag off, or verdict='pending'
+ */
+function isRowPassing(row: DocCheckRow): boolean {
+  if (row.verdict !== 'pass') return false;
+  if ((row.score ?? 0) < 0.90) return false;
+  if ((row.mustFieldsMissing ?? []).length > 0) return false;
+  if (row.phase === 'pickup' && row.securementVerdict !== 'secured') return false;
+  return true;
+}
+
+function AiPickupCheckCard({ loadId }: { loadId: string }) {
+  const { data, isLoading } = useQuery<{ ok: boolean; checks: DocCheckRow[] }>({
+    queryKey: [`/api/loads/${loadId}/doc-checks`],
+    enabled: !!loadId,
+    refetchInterval: 30_000,   // poll every 30s — the job is async
+  });
+
+  if (isLoading) return null;
+
+  const checks: DocCheckRow[] = data?.checks ?? [];
+
+  // One card per phase that has data; also show a combined header
+  const pickup = checks.find(c => c.phase === 'pickup');
+  const delivery = checks.find(c => c.phase === 'delivery');
+
+  // Nothing to show
+  if (!pickup && !delivery) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <HelpCircle className="w-4 h-4 text-slate-400" /> AI Pickup Check
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-slate-400">Not checked — enable AI_DOC_CHECK_ENABLED to run.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">AI Pickup Check</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {[pickup, delivery].filter(Boolean).map((row) => (
+          <PhaseVerdict key={row!.phase} row={row!} />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PhaseVerdict({ row }: { row: DocCheckRow }) {
+  const passing = isRowPassing(row);
+  const pending = row.verdict === 'pending';
+  const label = row.phase === 'pickup' ? 'Pickup' : 'Delivery';
+  const checkedAt = row.updatedAt ? new Date(row.updatedAt).toLocaleString() : null;
+
+  if (pending) {
+    return (
+      <div className="flex items-start gap-2">
+        <HelpCircle className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
+        <div>
+          <p className="text-sm font-medium text-slate-500">{label}: Checking…</p>
+          <p className="text-xs text-slate-400">AI check in progress</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (passing) {
+    return (
+      <div className="flex items-start gap-2">
+        <ShieldCheck className="w-4 h-4 mt-0.5 text-green-600 shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-green-700">
+            {label}: PASS
+            {row.score != null && (
+              <span className="ml-1 font-normal text-green-600">({(row.score * 100).toFixed(0)}%)</span>
+            )}
+          </p>
+          {row.securementVerdict === 'secured' && (
+            <p className="text-xs text-green-600">Securement ✓ · BOL matches rate-con</p>
+          )}
+          {checkedAt && <p className="text-[10px] text-slate-400 mt-0.5">Checked {checkedAt}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // NEEDS REVIEW
+  const reasons = (row.reasons ?? []).slice(0, 3);
+  const missing = row.mustFieldsMissing ?? [];
+  const secNote = row.securementVerdict === 'not_secured'
+    ? `Securement: ${row.securementReason || 'not secured'}`
+    : row.securementVerdict === 'unreadable'
+    ? 'Securement photo unreadable'
+    : null;
+
+  return (
+    <div className="flex items-start gap-2">
+      <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-500 shrink-0" />
+      <div>
+        <p className="text-sm font-semibold text-amber-700">
+          {label}: NEEDS REVIEW
+          {row.score != null && (
+            <span className="ml-1 font-normal text-amber-600">({(row.score * 100).toFixed(0)}%)</span>
+          )}
+        </p>
+        {missing.length > 0 && (
+          <p className="text-xs text-red-600 mt-0.5">Missing: {missing.join(', ')}</p>
+        )}
+        {secNote && <p className="text-xs text-amber-600">{secNote}</p>}
+        {reasons.length > 0 && (
+          <ul className="text-xs text-slate-500 mt-1 list-disc list-inside space-y-0.5">
+            {reasons.map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+        )}
+        {checkedAt && <p className="text-[10px] text-slate-400 mt-0.5">Checked {checkedAt}</p>}
+      </div>
+    </div>
+  );
+}
+
 
 function DocumentCard({
   title,

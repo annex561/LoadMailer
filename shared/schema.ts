@@ -3640,3 +3640,46 @@ export const notificationQueue = pgTable("notification_queue", {
 }));
 
 export type NotificationQueueItem = typeof notificationQueue.$inferSelect;
+
+// ============================================================================
+// DOC CHECKS — AI securement + BOL-vs-rate-con verdict per load/phase
+// ============================================================================
+// One row per (loadId, phase). Upserted after photos/record and photos/confirm
+// when AI_DOC_CHECK_ENABLED=true. All AI errors fail to verdict='needs_review'.
+// Never auto-approves a doc, never sends driver good-to-go.
+export const docChecks = pgTable("doc_checks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  loadId: varchar("load_id").references(() => loads.id, { onDelete: "cascade" }).notNull(),
+  phase: text("phase").notNull(), // 'pickup' | 'delivery'
+
+  // Overall BOL-vs-ratecon match
+  verdict: text("verdict").notNull().default("pending"),
+  // 'pending' | 'pass' | 'needs_review'
+  score: real("score"), // 0..1; present once run
+
+  // Securement photo sub-check (pickup only)
+  securementVerdict: text("securement_verdict"),
+  // 'secured' | 'not_secured' | 'unreadable'
+  securementReason: text("securement_reason"),
+
+  // Per-field comparison (array of {field, rcValue, bolValue, score, reason})
+  fields: jsonb("fields"),
+  mustFieldsMissing: text("must_fields_missing").array(),
+  reasons: text("reasons").array(),
+
+  // AI metadata
+  model: text("model"),
+  costCents: integer("cost_cents"),
+  error: text("error"), // last error if verdict=needs_review
+
+  // Alert dedup — stamp when owner SMS sent so we don't double-send
+  alertSentAt: timestamp("alert_sent_at"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_doc_checks_load_phase").on(table.loadId, table.phase),
+]);
+
+export type DocCheck = typeof docChecks.$inferSelect;
+export type InsertDocCheck = typeof docChecks.$inferInsert;
