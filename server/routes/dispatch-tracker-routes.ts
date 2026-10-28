@@ -19,7 +19,7 @@
 import type { Express } from "express";
 import { db } from "../db";
 import { loads, bolOverrideAudit } from "@shared/schema";
-import { and, desc, gte, isNull, lt, or } from "drizzle-orm";
+import { and, desc, gte, isNull, lt, or, sql } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { isAuthenticated } from "../auth";
 import { z } from "zod";
@@ -44,6 +44,18 @@ async function alertOwner(body: string): Promise<void> {
   } catch (err: any) {
     console.error(`[dispatch-tracker] alert SMS failed: ${err.message}`);
   }
+}
+
+// run-alerts sends ONE digest SMS per run, at most once per hour, and only looks
+// at deliveries from the last 7 days, so a cron or a flag flip can never blast
+// the historical backlog (the PR #62 pattern). Pinned by
+// server/__tests__/dispatch-run-alerts-digest.test.ts
+const ALERT_DIGEST_INTERVAL_MS = 60 * 60 * 1000;
+const ALERT_LOOKBACK_MS = 7 * 86_400_000;
+let lastAlertDigestAt = 0; // ponytail: process-scoped throttle, fine on one instance
+
+export function _resetAlertDigestThrottle(): void {
+  lastAlertDigestAt = 0;
 }
 
 export function registerDispatchTrackerRoutes(app: Express) {
@@ -194,6 +206,7 @@ export function registerDispatchTrackerRoutes(app: Express) {
   app.post("/api/dispatch/run-alerts", isAuthenticated, async (_req, res) => {
     const alerts: string[] = [];
     const now = new Date();
+    const lookback = new Date(now.getTime() - ALERT_LOOKBACK_MS);
 
     // Lane 3 — no confirm before pickup
     if (process.env.DISPATCH_ALERT_NO_CONFIRM === "true") {
@@ -214,7 +227,6 @@ export function registerDispatchTrackerRoutes(app: Express) {
         // Alert if pickup is within 4 hours and driver hasn't confirmed
         if (pickup.getTime() - now.getTime() < 4 * 3_600_000 && pickup > now) {
           const msg = `[LAMP Alert] Load #${load.loadNumber}: driver NOT confirmed and pickup is in <4h (${pickup.toISOString()})`;
-          await alertOwner(msg);
           alerts.push(msg);
         }
       }
@@ -230,13 +242,15 @@ export function registerDispatchTrackerRoutes(app: Express) {
           and(
             isNull(loads.podPath),
             lt(loads.deliveredAt, oneHourAgo),
+            gte(loads.deliveredAt, lookback),
+            // /u/ and MMS uploads land in load_documents and never set podPath.
+            sql`NOT EXISTS (SELECT 1 FROM load_documents d WHERE d.load_id = ${loads.id} AND d.document_type IN ('delivery_pod', 'delivery_signed_bol', 'pod'))`,
           ),
         )
         .limit(50);
 
       for (const load of noPod) {
         const msg = `[LAMP Alert] Load #${load.loadNumber}: no POD uploaded >1h after delivery`;
-        await alertOwner(msg);
         alerts.push(msg);
       }
     }
@@ -251,17 +265,27 @@ export function registerDispatchTrackerRoutes(app: Express) {
           and(
             isNull(loads.factoringSubmittedAt),
             lt(loads.deliveredAt, twentyFourHoursAgo),
+            gte(loads.deliveredAt, lookback),
           ),
         )
         .limit(50);
 
       for (const load of noInvoice) {
         const msg = `[LAMP Alert] Load #${load.loadNumber}: no invoice submitted >24h after delivery`;
-        await alertOwner(msg);
         alerts.push(msg);
       }
     }
 
-    return res.json({ ok: true, alertsFired: alerts.length, alerts });
+    let digestSent = false;
+    if (alerts.length > 0 && now.getTime() - lastAlertDigestAt >= ALERT_DIGEST_INTERVAL_MS) {
+      lastAlertDigestAt = now.getTime();
+      const top = alerts.slice(0, 3).map((a) => a.replace("[LAMP Alert] ", "")).join("\n");
+      const more = alerts.length > 3 ? `\n+${alerts.length - 3} more at /dispatch/board` : "";
+      await alertOwner(`[LAMP Alert] ${alerts.length} dispatch deadline(s):\n${top}${more}`);
+      digestSent = true;
+    }
+    console.log(`[dispatch-tracker] run-alerts: ${alerts.length} overdue, digestSent=${digestSent}`);
+
+    return res.json({ ok: true, alertsFired: alerts.length, digestSent, alerts });
   });
 }
