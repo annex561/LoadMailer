@@ -51,8 +51,9 @@ export const TaskMagicLoadSchema = z.object({
 
 export type TaskMagicLoad = z.infer<typeof TaskMagicLoadSchema>;
 
-// Webhook authentication
-const TASKMAGIC_WEBHOOK_SECRET = process.env.TASKMAGIC_WEBHOOK_SECRET || 'taskmagic-webhook-secret-2025';
+// Webhook authentication — fail closed when TASKMAGIC_WEBHOOK_SECRET is unset.
+// A missing secret means every request is rejected (no open-door fallback).
+const TASKMAGIC_WEBHOOK_SECRET = process.env.TASKMAGIC_WEBHOOK_SECRET ?? "";
 
 export class TaskMagicIntegration {
   
@@ -242,8 +243,8 @@ export class TaskMagicIntegration {
         integration: 'TaskMagic',
         status: 'active',
         webhookEndpoints: {
-          singleLoad: '/api/taskmagic/webhook/single-load',
-          batchLoads: '/api/taskmagic/webhook/batch-loads'
+          singleLoad: '/api/taskmagic/webhook/single',
+          batchLoads: '/api/taskmagic/webhook/batch'
         },
         ...stats
       });

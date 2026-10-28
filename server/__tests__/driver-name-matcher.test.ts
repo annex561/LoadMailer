@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchDriverByName } from "../driver-name-matcher";
+import { matchDriverByName, suggestDriverByFirstName } from "../driver-name-matcher";
 
 const drivers = [
   { id: "1", name: "John Smith" },
@@ -41,5 +41,52 @@ describe("matchDriverByName", () => {
   it("returns null for empty input", () => {
     expect(matchDriverByName("", drivers)).toBeNull();
     expect(matchDriverByName(null, drivers)).toBeNull();
+  });
+});
+
+// ── suggestDriverByFirstName — review-UI pre-select hint ──────────────────────
+// Regression-pinned: step 6 of fix/ratecon-intake-to-loads.
+// Never auto-dispatches; confidence is always 0.7 (below the 0.85 bar).
+describe("suggestDriverByFirstName", () => {
+  const fleet = [
+    { id: "1", name: "John Smith" },
+    { id: "2", name: "Juan Rodriguez" },
+    { id: "3", name: "María García" },
+    { id: "4", name: "Mike O'Brien" },
+  ];
+
+  it("returns the unique first-name match with confidence 0.7", () => {
+    const r = suggestDriverByFirstName("Juan Lopez", fleet);
+    expect(r).not.toBeNull();
+    expect(r?.driverId).toBe("2");
+    expect(r?.confidence).toBe(0.7);
+  });
+
+  it("returns null when two drivers share the first name (ambiguous)", () => {
+    const ambiguous = [
+      { id: "1", name: "John Smith" },
+      { id: "5", name: "John Davis" },
+    ];
+    expect(suggestDriverByFirstName("John Somebody", ambiguous)).toBeNull();
+  });
+
+  it("returns null when no driver matches the first name", () => {
+    expect(suggestDriverByFirstName("Carlos Whoever", fleet)).toBeNull();
+  });
+
+  it("strips diacritics before matching", () => {
+    // María → maria; raw "Maria Hernandez" should match driver 3
+    const r = suggestDriverByFirstName("Maria Hernandez", fleet);
+    expect(r?.driverId).toBe("3");
+  });
+
+  it("returns null for empty or null input", () => {
+    expect(suggestDriverByFirstName("", fleet)).toBeNull();
+    expect(suggestDriverByFirstName(null, fleet)).toBeNull();
+    expect(suggestDriverByFirstName(undefined, fleet)).toBeNull();
+  });
+
+  it("returns null for a single-character first name", () => {
+    expect(suggestDriverByFirstName("J Smith", fleet)).toBeNull();
   });
 });
