@@ -23,11 +23,10 @@ interface VerifyResult {
 }
 
 export async function verifyBolPhoto(imageUrl: string): Promise<VerifyResult> {
-  // DRY-RUN MODE — skip OpenAI. Returns ok:true with a synthetic
-  // "passed verification" message so the downstream chain proceeds
-  // as it would when a real BOL passed. See server/dry-run.ts.
-  // (ok:true here mirrors the most-common production path so the
-  // wired flow behaves like a happy-path test.)
+  // DRY-RUN MODE — skip OpenAI. Returns ok:false so the caller's
+  // isInfraError check routes this to needs_review (staff manually
+  // confirms the BOL). Never ok:true — dry-run must not soft-pass
+  // a BOL into the factoring chain. See server/dry-run.ts.
   const { isDryRunOutbound, logDryRun } = await import("./dry-run");
   if (isDryRunOutbound()) {
     logDryRun({
@@ -35,7 +34,10 @@ export async function verifyBolPhoto(imageUrl: string): Promise<VerifyResult> {
       action: "verifyBolPhoto",
       payload: { imageUrl },
     });
-    return { ok: true, message: "[dry-run] verification skipped — assuming pass" };
+    return {
+      ok: false,
+      message: "Verifier error: dry-run mode — BOL verification skipped, routed to staff review",
+    };
   }
 
   if (!process.env.OPENAI_API_KEY) {
