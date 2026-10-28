@@ -103,15 +103,30 @@ describe("dry-run gates (source pins on each vendor wrapper)", () => {
     expect(gateIdx).toBeLessThan(openaiIdx);
   });
 
-  it("factoring-loves.ts submitToLoves gates BEFORE the SMTP sendMail call", () => {
+  it("factoring-loves.ts submitToLoves gates BEFORE the Resend send to Love's", () => {
+    // #111 swapped nodemailer (factoringMailer.sendMail) for sendViaResend().
+    // Anchor on the send whose recipient is Love's, not the first send in the
+    // file: the FACTORING_TEST_TO_EMAIL branch sends earlier (see todo below).
     const src = read("factoring-loves.ts");
     expect(src).toContain("isDryRunOutbound()");
     const gateIdx = src.indexOf("if (isDryRunOutbound())");
-    const sendMailIdx = src.indexOf("factoringMailer.sendMail");
+    // Each sendViaResend({ ... }) call site, with its argument object.
+    const sends = [...src.matchAll(/sendViaResend\(\{/g)].map((m) => ({
+      idx: m.index!,
+      args: src.slice(m.index!, src.indexOf("});", m.index!)),
+    }));
+    const lovesSends = sends.filter((c) => /to:\s*SCHEDULES_LS/.test(c.args));
+    // Exactly one send path reaches Love's, and it sits behind the gate.
+    expect(lovesSends).toHaveLength(1);
     expect(gateIdx).toBeGreaterThan(0);
-    expect(sendMailIdx).toBeGreaterThan(0);
-    expect(gateIdx).toBeLessThan(sendMailIdx);
+    expect(gateIdx).toBeLessThan(lovesSends[0].idx);
   });
+
+  // KNOWN GAP since #109 (d9227de): the FACTORING_TEST_TO_EMAIL branch sends a
+  // real Resend email to the test inbox BEFORE this gate, so DRY_RUN_OUTBOUND
+  // does not suppress it. Love's is never contacted. Changing send behaviour
+  // is approval-gated; see docs/FIX-LEDGER.md "DRY_RUN_OUTBOUND does not stop the FACTORING_TEST_TO_EMAIL send".
+  it.todo("factoring-loves.ts DRY_RUN_OUTBOUND also suppresses the FACTORING_TEST_TO_EMAIL send");
 
   it("dry-run gates return success-shaped responses (so chain continues, doesn't halt)", () => {
     // SMS gates return success:true messageSid:dry-...
