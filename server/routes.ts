@@ -1891,9 +1891,16 @@ export async function registerRoutes(app: Express): Promise<void> {
   // Dispatcher action: SMS the driver an upload link for pickup or delivery photos.
   // Auth + rate limit: anonymous callers must not trigger Twilio spend; even authed
   // staff are capped at 3 sends per load per hour to prevent mis-click floods.
+  //
+  // DRIVER_UPLOAD_LINK_SMS_ENABLED (default OFF):
+  //   OFF → build and return the signed link without sending any SMS (staff-only).
+  //   ON  → send one SMS to the driver via smsLoadService; SMS_DISABLED and
+  //         DRY_RUN_OUTBOUND are respected inside sendUploadLink.
+  // ponytail: flag OFF is the safe default; flip to ON once A2P is confirmed healthy.
   app.post('/api/loads/:id/photos/request', isAuthenticated, photoRequestRateLimiter, async (req, res) => {
     try {
       const { sendUploadLink, PICKUP_STAGES, DELIVERY_STAGES } = await import('./load-photos-service');
+      const { signUploadToken } = await import('./upload-token');
       const phase = (req.body.phase || '').toString();
       let stages: any[] = [];
       if (phase === 'pickup') stages = PICKUP_STAGES;
@@ -1901,8 +1908,19 @@ export async function registerRoutes(app: Express): Promise<void> {
       else if (Array.isArray(req.body.stages)) stages = req.body.stages;
       else return res.status(400).json({ ok: false, error: 'phase must be pickup or delivery' });
 
+      const baseUrl = process.env.PUBLIC_URL || process.env.APP_URL || 'https://traqiq.app';
+      const token = signUploadToken(req.params.id);
+      const link = `${baseUrl}/u/${token}?stages=${stages.join(',')}`;
+
+      if (process.env.DRIVER_UPLOAD_LINK_SMS_ENABLED !== 'true') {
+        // Flag OFF: return the signed link to staff without sending any SMS.
+        return res.json({ ok: true, sent: 0, link });
+      }
+
+      // Flag ON: send SMS to the driver; SMS_DISABLED / DRY_RUN_OUTBOUND / STOP
+      // opt-out are all handled inside sendUploadLink → smsLoadService.sendSMS.
       const result = await sendUploadLink(req.params.id, stages, req.body.message);
-      res.json(result);
+      res.json({ ...result, link });
     } catch (err: any) {
       res.status(500).json({ ok: false, error: String(err?.message || err) });
     }
