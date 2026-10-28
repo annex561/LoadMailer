@@ -183,6 +183,49 @@ export async function buildFactoringPacket(loadId: string): Promise<PacketResult
     return { ok: false, error: "Load has no rate — cannot factor", loadId, warnings };
   }
 
+  // S14 — 14a-2: Love's submission only AFTER delivery is complete with POD in.
+  // NEVER before pickup or mid-trip. (14a overrides original section 14 Lane 4.)
+  if (!load.deliveredAt || !load.podPath) {
+    return {
+      ok: false,
+      error: "Factoring blocked (14a-2): load must be fully delivered with POD on file before sending to Love's",
+      loadId,
+      warnings,
+    };
+  }
+
+  // S14 — 14a-3 / 14b: signed BOL gate. Fail-closed unless signedBolRequired is
+  // explicitly FALSE (staff override with audit log, or broker terms showing no
+  // signed BOL required). FALSE skips ONLY this gate; 14a-2 above still applies.
+  if (load.signedBolRequired !== false) {
+    if (!load.bolPath || !load.bolVerifiedAt) {
+      // Fail closed: mark needs manual review, alert Annex.
+      try {
+        await db
+          .update(loads)
+          .set({ factoringStatus: "manual_review", updatedAt: new Date() } as any)
+          .where(eq(loads.id, loadId));
+        const alertPhone = process.env.OWNER_ALERT_PHONE?.trim();
+        if (alertPhone) {
+          const { smsLoadService } = await import("./sms-service");
+          await (smsLoadService as any).sendSMS(
+            alertPhone,
+            `[LAMP] Load #${load.loadNumber}: Factoring BLOCKED — signed BOL required but missing or unverified. Upload+verify BOL, or set signedBolRequired=false via staff override at /dispatch/board.`,
+          );
+        }
+      } catch (alertErr: any) {
+        // Non-fatal — load is already blocked; alert failure just means no SMS
+        console.error(`[factoring] BOL gate alert failed (non-fatal): ${alertErr.message}`);
+      }
+      return {
+        ok: false,
+        error: "Factoring blocked (14a-3): signed BOL required but missing or unverified. Load marked manual_review. Annex alerted.",
+        loadId,
+        warnings,
+      };
+    }
+  }
+
   // Generate Bill of Sale + Invoice
   const loadInputs = {
     loadNumber: load.loadNumber,
