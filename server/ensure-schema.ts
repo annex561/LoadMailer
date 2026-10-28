@@ -174,6 +174,22 @@ export async function ensureSchema(): Promise<void> {
     ['override_reason', 'TEXT'],
     ['sop_progress', "JSONB DEFAULT '{}'::jsonb"],
     ['fuel_cost', 'REAL'],
+    // S13 — Driver load text sequence
+    ['pickup_appt_type', 'TEXT'],
+    ['pickup_window_start', 'TEXT'],
+    ['pickup_window_end', 'TEXT'],
+    ['pickup_is_asap', 'BOOLEAN DEFAULT false'],
+    ['drop_appt_type', 'TEXT'],
+    ['drop_window_start', 'TEXT'],
+    ['drop_window_end', 'TEXT'],
+    ['driver_rate', 'REAL'],
+    ['text1_sent_at', 'TIMESTAMP'],
+    ['text2_sent_at', 'TIMESTAMP'],
+    ['driver_text_confirmed_at', 'TIMESTAMP'],
+    ['driver_text_confirm_reply', 'TEXT'],
+    ['driver_text_confirm_eta', 'TEXT'],
+    // S14b — signed BOL gate
+    ['signed_bol_required', 'BOOLEAN DEFAULT true'],
   ];
 
   try {
