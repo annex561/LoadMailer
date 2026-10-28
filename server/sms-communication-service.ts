@@ -1177,29 +1177,28 @@ export class SMSCommunicationService {
       const MAX_ATTEMPTS = 3;
       let verified = false;
       let verifyMessage = "";
+      let needsReview = false; // fail-closed: infra errors route to staff, never soft-pass
 
       if (verifyEnabled && attempts < MAX_ATTEMPTS) {
         try {
           const { verifyBolPhoto } = await import("./factoring-bol-verify");
           const result = await verifyBolPhoto(imageUrl);
-          // Soft-pass on infrastructure errors. verifyBolPhoto returns
+          // Route infrastructure errors to needs_review. verifyBolPhoto returns
           // `{ ok: false, message: "Verifier error: ..." }` when the OpenAI
           // call itself fails — including the common case where OpenAI
           // can't download a Twilio media URL because the URL requires
           // basic auth and OpenAI has no way to supply it. That is NOT a
-          // signal that the driver's photo is bad; rejecting them for it
-          // causes them to retake a perfectly fine BOL repeatedly. Treat
-          // any "Verifier error:" message the same as the catch block:
-          // accept the photo, mark verification skipped, move on.
+          // signal that the driver's photo is bad, but we must NOT soft-pass
+          // (fail open). Instead set needsReview so staff confirms manually.
           const isInfraError =
             !result.ok && /^Verifier error:/i.test(result.message || "");
           if (isInfraError) {
             console.warn(
-              "[bol-verify] infra error — soft-passing:",
+              "[bol-verify] infra error — routing to needs_review:",
               result.message,
             );
-            verified = true;
-            verifyMessage = "Verification skipped (service unavailable).";
+            needsReview = true;
+            verifyMessage = "Verification unavailable — routed to staff review.";
           } else {
             verified = result.ok;
             verifyMessage = result.message;
@@ -1213,9 +1212,9 @@ export class SMSCommunicationService {
             .where(eq(loads.id, active.id));
         } catch (err: any) {
           console.error("[bol-verify] failed:", err.message);
-          // Verify failed (not the photo, the OpenAI call) — let it through
-          verified = true;
-          verifyMessage = "Verification skipped (service unavailable).";
+          // Verify call failed (infra, not the photo) — route to staff review; do not soft-pass.
+          needsReview = true;
+          verifyMessage = "Verification call failed — routed to staff review.";
         }
       } else if (!verifyEnabled) {
         // Verification disabled — accept the photo as-is.
@@ -1232,7 +1231,20 @@ export class SMSCommunicationService {
 
       // Photo received — dispatch reviews and sends GO manually via the admin
       // panel. Never auto-set goodToGoSentAt or text Good to Go from here.
-      if (verified) {
+      if (needsReview) {
+        // Infra error or catch: photo received but AI verification unavailable.
+        // Route to staff for manual review; do NOT ask the driver to retake.
+        const { notifyAdminReviewNeeded } = await import("./ratecon-admin-alerts");
+        notifyAdminReviewNeeded({
+          companyId: null,
+          intakeId: active.id,
+          broker: active.brokerName ?? "Unknown",
+          reason: `BOL photo needs manual review for load ${active.loadNumber}: ${verifyMessage}`,
+        }).catch(() => {});
+        await sendReply(
+          `Photo received for load ${active.loadNumber}. Dispatch will review it manually — we'll text you when you're cleared to go.`,
+        );
+      } else if (verified) {
         await sendReply(
           `Photo received for load ${active.loadNumber}. Dispatch is reviewing — we'll text you when you're cleared to go.`,
         );
