@@ -245,7 +245,7 @@ export class SMSLoadService {
       };
 
       // Get the base URL for status callbacks
-      const customDomain = process.env.CUSTOM_DOMAIN || 'traqiqs.io';
+      const customDomain = process.env.CUSTOM_DOMAIN || 'traqiq.app';
       const replitDomain = process.env.REPL_SLUG
         ? `${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
         : process.env.REPLIT_DEV_DOMAIN;

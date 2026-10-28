@@ -2,8 +2,9 @@ import type { Express } from "express";
 import multer from "multer";
 import { enqueueRatecon, parseIntake } from "./ratecon-intake-service";
 import { db } from "./db";
-import { rateconIntake, rateconCorrections } from "@shared/schema";
-import { desc, eq } from "drizzle-orm";
+import { rateconIntake, rateconCorrections, gmailAccounts, drivers } from "@shared/schema";
+import { desc, eq, sql } from "drizzle-orm";
+import { suggestDriverByFirstName } from "./driver-name-matcher";
 
 /**
  * Decides whether the `driverId` value sent in the approve-and-dispatch
@@ -60,6 +61,93 @@ const upload = multer({
 });
 
 export function registerRateconIntakeRoutes(app: Express) {
+  // GET /api/ratecon-intake/health — dispatcher-auth pipeline health summary
+  // Returns status counts, oldest in_review age, last parse time, credit-429 count,
+  // and per gmail_account: masked email + last_synced_at + last scan error.
+  // Regression-pinned: server/__tests__/ratecon-intake-health.test.ts
+  app.get("/api/ratecon-intake/health", async (_req, res) => {
+    try {
+      const [counts24h, counts7d, creditErrors, oldestReview, lastParse, accounts] = await Promise.all([
+        db.execute(sql`
+          SELECT status, COUNT(*)::int AS cnt
+          FROM ratecon_intake
+          WHERE created_at > NOW() - INTERVAL '24 hours'
+          GROUP BY status
+        `),
+        db.execute(sql`
+          SELECT status, COUNT(*)::int AS cnt
+          FROM ratecon_intake
+          WHERE created_at > NOW() - INTERVAL '7 days'
+          GROUP BY status
+        `),
+        db.execute(sql`
+          SELECT COUNT(*)::int AS cnt
+          FROM ratecon_intake
+          WHERE created_at > NOW() - INTERVAL '24 hours'
+            AND parse_error LIKE '429%'
+            AND parse_error NOT LIKE '429 Rate limit%'
+        `),
+        db.execute(sql`
+          SELECT created_at FROM ratecon_intake WHERE status = 'in_review' ORDER BY created_at ASC LIMIT 1
+        `),
+        db.execute(sql`
+          SELECT MAX(parsed_at) AS last_ok FROM ratecon_intake WHERE parser_model IS DISTINCT FROM 'manual'
+        `),
+        db.select({
+          id: gmailAccounts.id,
+          email: gmailAccounts.email,
+          lastSyncedAt: gmailAccounts.lastSyncedAt,
+          isActive: gmailAccounts.isActive,
+        }).from(gmailAccounts),
+      ]);
+
+      const toMap = (rows: any[]) =>
+        Object.fromEntries(rows.map((r: any) => [r.status, r.cnt]));
+      const rows24 = (counts24h as any).rows ?? counts24h;
+      const rows7 = (counts7d as any).rows ?? counts7d;
+      const creditRows = (creditErrors as any).rows ?? creditErrors;
+      const oldestRow = ((oldestReview as any).rows ?? oldestReview)[0];
+      const lastParseRow = ((lastParse as any).rows ?? lastParse)[0];
+
+      // last scan error: imported from gmail service (in-memory per account)
+      let lastErrors: Map<string, string> = new Map();
+      try {
+        const { getGmailAccountLastErrors } = await import("./services/gmail");
+        lastErrors = getGmailAccountLastErrors();
+      } catch {}
+
+      const maskEmail = (e: string) => {
+        const [local, domain] = e.split("@");
+        return local.length > 2
+          ? `${local[0]}***@${domain}`
+          : `***@${domain}`;
+      };
+
+      const gmailInfo = accounts.map((a: any) => ({
+        email: maskEmail(a.email),
+        lastSyncedAt: a.lastSyncedAt,
+        isActive: a.isActive,
+        lastError: lastErrors.get(a.id) ?? null,
+      }));
+
+      const oldestInReviewAge = oldestRow?.created_at
+        ? Math.round((Date.now() - new Date(oldestRow.created_at).getTime()) / 60000)
+        : null;
+
+      res.json({
+        ok: true,
+        statusCounts24h: toMap(Array.isArray(rows24) ? rows24 : []),
+        statusCounts7d: toMap(Array.isArray(rows7) ? rows7 : []),
+        credit429_24h: parseInt(String(creditRows[0]?.cnt ?? "0"), 10),
+        oldestInReviewAgeMinutes: oldestInReviewAge,
+        lastSuccessfulParseAt: lastParseRow?.last_ok ?? null,
+        gmailAccounts: gmailInfo,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // POST /api/ratecon-intake/upload — PDF drag-and-drop
   app.post("/api/ratecon-intake/upload", upload.single("pdf"), async (req, res) => {
     try {
@@ -128,14 +216,33 @@ export function registerRateconIntakeRoutes(app: Express) {
   });
 
   // GET /api/ratecon-intake/review-queue
+  // Includes suggestedDriverId: a first-name pre-selection hint for the review UI.
+  // Never auto-dispatches — review-UI display only.
+  // Regression-pinned: server/__tests__/driver-name-matcher.test.ts (suggestDriverByFirstName)
   app.get("/api/ratecon-intake/review-queue", async (_req, res) => {
-    const rows = await db
-      .select()
-      .from(rateconIntake)
-      .where(eq(rateconIntake.status, "in_review"))
-      .orderBy(desc(rateconIntake.createdAt))
-      .limit(100);
-    res.json(rows);
+    const [rows, allDrivers] = await Promise.all([
+      db
+        .select()
+        .from(rateconIntake)
+        .where(eq(rateconIntake.status, "in_review"))
+        .orderBy(desc(rateconIntake.createdAt))
+        .limit(100),
+      db.select({ id: drivers.id, name: drivers.name }).from(drivers),
+    ]);
+    const enriched = rows.map((row: any) => {
+      const parsedJson = row.parsedJson as any;
+      const rawName = parsedJson?.driverName?.value ?? null;
+      const conf = row.matchedDriverConfidence !== null && row.matchedDriverConfidence !== undefined
+        ? Number(row.matchedDriverConfidence)
+        : null;
+      let suggestedDriverId: string | null = null;
+      if (!row.matchedDriverId || conf === null || conf < 0.85) {
+        const suggestion = suggestDriverByFirstName(rawName, allDrivers);
+        suggestedDriverId = suggestion?.driverId ?? null;
+      }
+      return { ...row, suggestedDriverId };
+    });
+    res.json(enriched);
   });
 
   // GET /api/ratecon-intake/:id
@@ -424,6 +531,93 @@ export function registerRateconIntakeRoutes(app: Express) {
     }
   });
 
+  // POST /api/ratecon-intake/:id/link-to-load — link an intake to an already-existing load.
+  // Used when approve-and-dispatch returns 409 duplicate: instead of creating a second load,
+  // the dispatcher links the intake to the existing one. Sets status=dispatched, NO SMS.
+  // Regression-pinned: server/__tests__/ratecon-dispatch-duplicate.test.ts
+  app.post("/api/ratecon-intake/:id/link-to-load", async (req, res) => {
+    try {
+      const { loadId } = req.body;
+      if (!loadId || typeof loadId !== "string") {
+        return res.status(400).json({ error: "loadId is required" });
+      }
+      const userId = (req as any).user?.id ?? null;
+      const [updated] = await db
+        .update(rateconIntake)
+        .set({
+          loadId,
+          status: "dispatched",
+          reviewedBy: userId,
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(rateconIntake.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: "Intake not found" });
+      // NO SMS — this is an admin link action, not a new dispatch
+      res.json({ ok: true, intakeId: updated.id, linkedLoadId: loadId });
+    } catch (err: any) {
+      console.error("[link-to-load]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/ratecon-intake/reject-stale
+  // Dry-run by default: returns what would be rejected without touching the DB.
+  // Pass { apply: true } in the body to actually reject.
+  // A "stale" intake has a parsed pickup date >14 calendar days before today.
+  // Never sends SMS or calls OpenAI.
+  // Regression-pinned: server/__tests__/ratecon-reject-stale.test.ts
+  app.post("/api/ratecon-intake/reject-stale", async (req, res) => {
+    try {
+      const apply = req.body?.apply === true;
+      const userId = (req as any).user?.id ?? null;
+      // Build the cutoff date string (YYYY-MM-DD, 14 days ago).
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 14);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+      const candidatesResult = await db.execute(sql`
+        SELECT id,
+               parsed_json->'pickup'->>'date' AS pickup_date,
+               parsed_json->'broker'->>'value' AS broker,
+               parsed_json->'loadNumber'->>'value' AS load_number
+        FROM ratecon_intake
+        WHERE status = 'in_review'
+          AND parsed_json->'pickup'->>'date' IS NOT NULL
+          AND parsed_json->'pickup'->>'date' < ${cutoffStr}
+      `);
+      const candidates = (candidatesResult as any).rows ?? candidatesResult;
+      const list = Array.isArray(candidates) ? candidates : [];
+
+      if (!apply) {
+        return res.json({ ok: true, dryRun: true, wouldRejectCount: list.length, wouldReject: list });
+      }
+
+      if (list.length === 0) {
+        return res.json({ ok: true, dryRun: false, rejectedCount: 0 });
+      }
+
+      const ids = list.map((r: any) => r.id);
+      const rejectResult = await db.execute(sql`
+        UPDATE ratecon_intake
+        SET status = 'rejected',
+            review_reason = COALESCE(review_reason, '') || ' | Auto-rejected: stale pickup date (>14 days)',
+            reviewed_by = ${userId},
+            reviewed_at = NOW(),
+            updated_at = NOW()
+        WHERE id = ANY(${ids}::varchar[])
+          AND status = 'in_review'
+        RETURNING id
+      `);
+      const rejected = (rejectResult as any).rows ?? rejectResult;
+      res.json({ ok: true, dryRun: false, rejectedCount: Array.isArray(rejected) ? rejected.length : 0 });
+    } catch (err: any) {
+      console.error("[reject-stale]", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post("/api/ratecon-intake/:id/approve-and-dispatch", async (req, res) => {
     try {
       const userId = (req as any).user?.id ?? null;
@@ -449,7 +643,13 @@ export function registerRateconIntakeRoutes(app: Express) {
       }
       const { dispatchFromIntake, sendDispatchSms } = await import("./ratecon-dispatch-service");
       const outcome = await dispatchFromIntake(req.params.id);
-      if (!outcome.ok) return res.status(400).json({ error: outcome.error });
+      if (!outcome.ok) {
+        const status = outcome.existingLoadId ? 409 : 400;
+        return res.status(status).json({
+          error: outcome.error,
+          ...(outcome.existingLoadId ? { existingLoadId: outcome.existingLoadId, action: "link-to-load" } : {}),
+        });
+      }
       await db
         .update(rateconIntake)
         .set({ reviewedBy: userId, reviewedAt: new Date() })

@@ -119,11 +119,17 @@ export async function notifyOwnerOfUpload(p: {
     const brokerPart = broker ? ` (${broker})` : '';
     const stageLabel = STAGE_LABELS[p.stage] || p.stage;
     const baseUrl = process.env.PUBLIC_URL || process.env.APP_URL || 'https://traqiq.app';
-    const viewUrl = `${baseUrl}/loads/${p.loadId}/documents`;
+    // /loads/:id is the staff load-details page (Documents section). There is
+    // no /loads/:id/documents route in the client; that path renders NotFound.
+    const viewUrl = `${baseUrl}/loads/${p.loadId}`;
 
-    const msg = `LAMP ${load.loadNumber}${brokerPart}: driver ${driverName} uploaded ${stageLabel} [${n} of ${m}]. View: ${viewUrl}`;
+    const what = p.confirm ? `submitted ${phase} photos` : `uploaded ${stageLabel}`;
+    const msg = `LAMP ${load.loadNumber}${brokerPart}: driver ${driverName} ${what} [${n} of ${m}]. View: ${viewUrl}`;
 
-    await smsLoadService.sendSMS(phone, msg);
+    // skipFooter: the owner's number is also a driver record, so the default
+    // footer would append his own /driver/<token> portal link to every alert
+    // and double the segment count. Same as the other admin alert crons.
+    await smsLoadService.sendSMS({ to: phone, body: msg, skipFooter: true });
   } catch (err: any) {
     // Non-blocking: log only; upload result is already returned to driver
     console.error('[owner-alert] alert failed (non-blocking):', err?.message || err);

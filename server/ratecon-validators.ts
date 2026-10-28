@@ -13,6 +13,14 @@ export interface ValidatorResult {
 
 interface Opts {
   today?: Date;
+  /**
+   * When re-validating a backfilled or merged intake, pass the intake's
+   * `createdAt` (email arrival time) here. A pickup that was valid at email-arrival
+   * but is now in the past relative to the wall clock is demoted from "error" to
+   * "warning" — the freight already moved, but it is not a parsing failure.
+   * Regression-pinned: server/__tests__/ratecon-validators-stale.test.ts
+   */
+  intakeCreatedAt?: Date;
   rateMin?: number;
   rateMax?: number;
   ratePerMileMin?: number;
@@ -53,11 +61,38 @@ export function runValidators(p: ParsedRateconV2, opts: Opts = {}): ValidatorRes
     );
     const daysDiff = Math.round((pickupUtcMidnight - todayUtcMidnight) / (24 * 60 * 60 * 1000));
     if (daysDiff < 0) {
-      failures.push({
-        field: "pickup",
-        reason: `Pickup date ${p.pickup.date} is in the past`,
-        severity: "error",
-      });
+      // If the pickup was still valid when the email arrived (intakeCreatedAt provided
+      // and pickup >= that day), downgrade to a warning — the load is stale, not wrong.
+      const intakeCreatedAt = opts.intakeCreatedAt;
+      if (intakeCreatedAt) {
+        const intakeMidnight = Date.UTC(
+          intakeCreatedAt.getFullYear(),
+          intakeCreatedAt.getMonth(),
+          intakeCreatedAt.getDate(),
+        );
+        const daysDiffFromIntake = Math.round(
+          (pickupUtcMidnight - intakeMidnight) / (24 * 60 * 60 * 1000),
+        );
+        if (daysDiffFromIntake >= 0) {
+          failures.push({
+            field: "pickup",
+            reason: `Stale: pickup date ${p.pickup.date} already happened (was valid at intake)`,
+            severity: "warning",
+          });
+        } else {
+          failures.push({
+            field: "pickup",
+            reason: `Pickup date ${p.pickup.date} is in the past`,
+            severity: "error",
+          });
+        }
+      } else {
+        failures.push({
+          field: "pickup",
+          reason: `Pickup date ${p.pickup.date} is in the past`,
+          severity: "error",
+        });
+      }
     } else if (daysDiff > daysMax) {
       failures.push({
         field: "pickup",

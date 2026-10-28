@@ -15,6 +15,13 @@ interface ScanResult {
   messagesSeen?: Array<{ id: string; subject?: string; attachmentsFound?: number; filesProcessed: number; loadsCreated: number; skipped?: boolean; error?: string }>;
 }
 
+// Per-account last scan error. Keyed by account id. Cleared on a successful scan,
+// set on any exception in scanSingleAccount. Read by GET /api/ratecon-intake/health.
+const accountLastScanError = new Map<string, string>();
+export function getGmailAccountLastErrors(): Map<string, string> {
+  return accountLastScanError;
+}
+
 // In-memory dedup: skip a Gmail message if we've already attempted to parse it.
 // Bumped to 24h because the scanner now includes READ emails (newer_than:2d), so
 // without a longer TTL we'd re-parse the same messages every scan cycle (26×/hr).
@@ -177,14 +184,20 @@ export const gmailIngest = {
         }
       }
 
-      // Update Timestamp
+      // Update Timestamp — only on successful scan so last_synced_at is a
+      // reliable signal for the gmail-stalled alert (a token error leaves it
+      // stale, which is exactly what the alert detects).
       await db.update(gmailAccounts)
         .set({ lastSyncedAt: new Date() })
         .where(eq(gmailAccounts.id, account.id));
+      accountLastScanError.delete(account.id); // clear stale error on success
 
     } catch (error: any) {
+      const msg: string = error.message || 'Unknown error';
       console.error(`❌ [GMAIL] Error scanning ${account.email}:`, error);
-      result.errors.push(error.message || 'Unknown error');
+      result.errors.push(msg);
+      // ponytail: in-memory only — survives until next deploy or successful scan
+      accountLastScanError.set(account.id, msg);
     }
 
     return result;
