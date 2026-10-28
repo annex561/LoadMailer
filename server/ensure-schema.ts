@@ -824,7 +824,26 @@ export async function ensureSchema(): Promise<void> {
       log(`⚠️ recruiting funnel tables: ${e.message}`);
     }
 
-    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log + pending_uploads + recruiting_* created)`);
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS sms_delivery_log (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          sid TEXT NOT NULL UNIQUE,
+          to_phone TEXT,
+          status TEXT,
+          error_code TEXT,
+          error_message TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_sms_delivery_log_sid ON sms_delivery_log(sid)`);
+      log('✅ sms_delivery_log table ready');
+    } catch (e: any) {
+      log(`⚠️ sms_delivery_log: ${e.message}`);
+    }
+
+    log(`✅ Schema migration done (drivers ${ok}/${columns.length} cols, loads ${loadsOk}/${loadsColumns.length} cols, ratecon_intake + ratecon_corrections + hos_check_log + pending_uploads + recruiting_* + sms_delivery_log created)`);
   } catch (err: any) {
     log(`⚠️ ensureSchema error: ${err.message}`);
   }

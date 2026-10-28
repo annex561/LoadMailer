@@ -30,6 +30,8 @@ const GATED_ENDPOINTS: Array<{ method: string; path: string }> = [
   // returns that phone number. Both shipped open (FIX-LEDGER 2026-10-24).
   { method: "post", path: "/api/ops/test-alert" },
   { method: "get", path: "/api/ops/snapshot" },
+  { method: "post", path: "/api/sms/send-direct" },
+  { method: "post", path: "/api/sms/send-template" },
 ];
 
 describe("SMS/test endpoints require authentication", () => {
