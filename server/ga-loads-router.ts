@@ -485,20 +485,29 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
             `View & Accept:\n${loadViewUrl}\n\n` +
             `Reply YES to confirm or call dispatch with questions.`;
           
-          const twilioClient = (await import("twilio")).default(
+          const twilioClientGa = (await import("twilio")).default(
             process.env.TWILIO_ACCOUNT_SID,
             process.env.TWILIO_AUTH_TOKEN
           );
-          const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
-          
-          if (twilioClient && twilioPhone) {
-            await twilioClient.messages.create({
-              to: driver.phone.startsWith('+') ? driver.phone : '+1' + driver.phone.replace(/\D/g, ''),
-              from: twilioPhone,
-              body: message
-            });
+          const gaMsgSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+          const normalizedGaPhone = driver.phone.startsWith('+') ? driver.phone : '+1' + driver.phone.replace(/\D/g, '');
+
+          if (twilioClientGa && gaMsgSid) {
+            const gaCustomDomain = process.env.CUSTOM_DOMAIN || 'traqiq.app';
+            const gaBaseUrl = process.env.REPLIT_DEV_DOMAIN
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+              : `https://${gaCustomDomain}`;
+            const gaParams: any = {
+              to: normalizedGaPhone,
+              body: message,
+              messagingServiceSid: gaMsgSid,
+              statusCallback: `${gaBaseUrl}/api/sms/status-callback`,
+            };
+            await twilioClientGa.messages.create(gaParams);
             smsSent = true;
             console.log(`📱 SMS sent to driver ${driver.name} for load ${id}`);
+          } else if (!gaMsgSid) {
+            console.warn('GA book SMS skipped: TWILIO_MESSAGING_SERVICE_SID not set');
           }
         }
       } catch (smsErr) {

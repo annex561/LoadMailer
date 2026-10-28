@@ -58,18 +58,24 @@ describe("BOL verifier soft-pass predicate", () => {
   });
 });
 
-describe("BOL verifier soft-pass — wiring", () => {
-  it("the source predicate exists in sms-communication-service.ts", async () => {
-    // Pin the wiring: if a refactor renames the predicate or strips the
-    // soft-pass branch, the source no longer contains it and this fails.
+describe("BOL verifier — wiring (needs_review, no soft-pass)", () => {
+  it("infra errors route to needs_review instead of soft-passing", async () => {
+    // Pin the wiring: fix/no-soft-pass replaced verified=true (fail-open) with
+    // needsReview=true (fail-closed, routes to staff review). If a refactor
+    // reintroduces a soft-pass, this test fails.
     const fs = await import("fs");
     const path = await import("path");
     const source = fs.readFileSync(
       path.join(__dirname, "..", "sms-communication-service.ts"),
       "utf8",
     );
+    // Detection predicate must still exist
     expect(source).toMatch(/Verifier error:/);
-    expect(source).toMatch(/soft-?pass/i);
-    expect(source).toMatch(/Verification skipped \(service unavailable\)/);
+    // Must not soft-pass (fail open) on infra error
+    expect(source).not.toMatch(/soft-passing/i);
+    // Must set needsReview=true instead of verified=true for infra errors
+    expect(source).toMatch(/needsReview\s*=\s*true/);
+    // The needsReview output branch must exist
+    expect(source).toMatch(/if\s*\(needsReview\)/);
   });
 });

@@ -354,3 +354,27 @@ Format:
 - **Guard** — `server/__tests__/factoring-dry-run-test-redirect.test.ts` runs `submitToLoves` with the DB, PDF templates and `fetch` mocked, and asserts zero calls to `api.resend.com` under dry-run. A control case asserts exactly one send, to the test inbox, when dry-run is off. `dry-run-mode.test.ts` adds a source pin for the gate's position. It also re-checks that the gate nearest the Love's send sits after the dedup check, so the new test-branch gate cannot stand in for the production one.
 - **Do NOT** — do not move the production dry-run gate up to the top of `submitToLoves` to cover both paths. The production gate mirrors the live DB writes (`factoring_submissions` → `submitted`, `loads.factoringStatus`), and the test path must never write. They need separate gates. Do not anchor a dry-run pin on the first `isDryRunOutbound()` in the file: there are two now.
 - `2026-10-20 · (this commit)`
+
+### Driver "YES" confirmed an old load and sent Text 2 with the old addresses (caught pre-merge, #157)
+- **Symptom** — with `DRIVER_LOAD_TEXTS_ENABLED=true`, a driver who left a Text 1 unanswered on an earlier load replies YES to today's Text 1. The old load gets `driver_text_confirmed_at`, the driver gets Text 2 with the old pickup/drop addresses, and today's load stays unconfirmed until the 60-min no-confirm alert fires.
+- **Root cause** — `handleText1ConfirmIfPending` in `server/driver-load-texts.ts` ordered pending rows with `.orderBy(text1SentAt)`, which is ascending (oldest first), although its comment said "most-recent". It also had no delivered filter, so a delivered load with an unanswered Text 1 could swallow any later "ok".
+- **Fix** — `.orderBy(desc(text1SentAt))` plus `isNull(loads.deliveredAt)`.
+- **Guard** — `server/__tests__/driver-load-texts.test.ts`, block "picks newest pending load".
+- **Do NOT** — do not trust a comment over the query. Drizzle `orderBy(col)` is ascending. Do not drop the delivered filter to "catch late confirms": a confirm on a delivered load sends the driver a stale Text 2.
+- `2026-10-28 · 8474813`
+
+### Love's factoring blocked forever for loads whose POD came in by upload (caught pre-merge, #158)
+- **Symptom** — `/factoring` Submit or Preview on a delivered load with a dispatcher-approved POD returns `Factoring blocked (14a-2): load must be fully delivered with POD on file` or `Factoring blocked (14a-3): signed BOL required but missing or unverified`, the load flips to `factoring_status = manual_review`, and Annex gets a "Factoring BLOCKED" text on every click.
+- **Root cause** — the S14 gate in `buildFactoringPacket` read only `loads.pod_path`, `bol_path` and `bol_verified_at`. The live upload paths (`server/load-photos-service.ts`: `/u/<loadId>`, direct Cloudinary, MMS) write `load_documents` rows and never set those columns. `load-lifecycle-service.ts` says so: "POD upload doesn't set this column". The PR's dry-run test passed only because its mock row had all four columns filled in.
+- **Fix** — the packet builder's existing approved-doc query moved above the gate. An approved `delivery_pod`, `delivery_signed_bol` or `pod` row satisfies 14a-2 and 14a-3. The column check still works as the fallback. The Annex alert is skipped when the load is already `manual_review`.
+- **Guard** — `server/__tests__/factoring-gate-approved-docs.test.ts` (behavioural: approved POD with null columns passes; pickup-BOL-only and undelivered stay blocked; second block sends no text).
+- **Do NOT** — do not "fix" this by writing `pod_path` from the upload service: the packet builder refuses unapproved docs, and the gate must agree with it. Do not fill gate columns into a test mock to make a gated test pass without checking that production writes them.
+- `2026-10-28 · fb560cb`
+
+### run-alerts would have texted Annex once per overdue load, for every load ever delivered (caught pre-merge, #158)
+- **Symptom** — with `DISPATCH_ALERT_NO_POD=true` or `DISPATCH_ALERT_NO_INVOICE=true`, one `POST /api/dispatch/run-alerts` sends up to 50 `[LAMP Alert] Load #… no POD uploaded >1h after delivery` texts per lane to `OWNER_ALERT_PHONE`, and the same batch again on the next call.
+- **Root cause** — one `alertOwner()` call per matching load, `LIMIT 50` per lane, no lookback window, no dedup. `pod_path` is never set by uploads, so NO_POD matched the whole delivery history. Under a cron that is the PR #62 runaway pattern.
+- **Fix** — `server/routes/dispatch-tracker-routes.ts`: lanes only collect lines; one digest SMS per run (count + top 3), at most one per hour (process-scoped throttle), 7-day lookback on NO_POD and NO_INVOICE, and NO_POD skips loads that have a delivery doc in `load_documents`. Flags still default OFF.
+- **Guard** — `server/__tests__/dispatch-run-alerts-digest.test.ts` (40 overdue loads → exactly 1 SMS; second run inside the hour → 0).
+- **Do NOT** — do not wire run-alerts to a cron without keeping the digest and throttle. Do not use `pod_path IS NULL` alone as "no POD".
+- `2026-10-28 · fb560cb`

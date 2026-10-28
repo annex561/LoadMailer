@@ -64,6 +64,7 @@ const ReviewQueuePage = lazy(() => import("@/pages/review-queue"));
 const CallsPage = lazy(() => import("@/pages/calls"));
 const FactoringPage = lazy(() => import("@/pages/factoring"));
 const DriverConfirmPage = lazy(() => import("@/pages/driver-confirm"));
+const DispatchBoard = lazy(() => import("@/pages/DispatchBoard")); // S14 — staff dispatch board
 // Public legal pages — required for A2P 10DLC TCR campaign approval.
 const PrivacyPolicy = lazy(() => import("@/pages/privacy"));
 const TermsOfService = lazy(() => import("@/pages/terms"));
@@ -154,6 +155,7 @@ function Router() {
       <Route path="/calls" component={CallsPage} />
       <Route path="/factoring" component={FactoringPage} />
       <Route path="/loads/:id/documents" component={LoadDocumentsPage} />
+      <Route path="/dispatch/board" component={DispatchBoard} />
       <Route path="/loads/:id" component={LoadDetailsPage} />
       <Route component={NotFound} />
     </Switch>

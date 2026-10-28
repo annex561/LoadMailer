@@ -1596,6 +1596,35 @@
       "date": "2026-10-27",
       "verdict": "unverified",
       "notes": "WebFetch to dtitrucks.com failed (getaddrinfo ENOTFOUND - egress blocked/DNS). Sweep covered M2-106 primary spec queries plus MV607/Hino/T280 secondary queries. No candidate cleared the verification gate (no live URL opened, no dealer+phone obtained). All hits were either already in seen[] or wrong_spec (no sleeper, too many miles, wrong model year)."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver/Wheat Ridge CO (comvoy.com mirror, stock 17951W)",
+      "date": "2026-10-28",
+      "verdict": "unverified",
+      "notes": "Re-checked. 2025 M2-106 Extended Cab With Sleeper/bunk, 31,422 mi, 26ft box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL, list price $94,500. WebFetch tried on both dtitrucks.com (direct listing URL) and comvoy.com (mirror) this run - both failed with getaddrinfo ENOTFOUND, confirming egress to both domains is still blocked. No live URL opened, no fresh phone confirmation this run. Held per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-18122W-2023-M2106-26plus5AtticMovingTruck-47381mi-92500",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-28",
+      "verdict": "wrong_spec",
+      "notes": "New unit surfaced this run: 2023 Freightliner M2-106 Moving Truck, 26' Long + 5' Attic x 102in wide x 108in tall, stock 18122W, 47,381 mi, $92,500. Listing does not describe an extended cab or a sleeper/bunk - the '5' Attic' is overhead storage, not a berth. Rejected: no sleeper/ext-cab-with-bunk. Different unit from the known 17951W/18242743 2025 extended-cab sleeper candidate at the same dealer."
+    },
+    {
+      "id": "RushTruckCenters-2022-M2106-SleeperCab-22ftMorgan-83496mi-79900",
+      "source": "Rush Truck Centers (via equipmentexperts.com/commercialtrucktrader.com)",
+      "date": "2026-10-28",
+      "verdict": "wrong_spec",
+      "notes": "2022 Freightliner Business Class M2 106, factory Sleeper cab, 22-foot Morgan Corp. van body (not 26ft), $79,900, 83,496 mi. Mileage, price and sleeper all fit, but box length is 22ft vs required 26ft - rejected on box dimension."
+    },
+    {
+      "id": "sweep-2026-10-28-no-new-verified",
+      "source": "WebSearch sweep (14 queries) + 2 WebFetch egress tests",
+      "date": "2026-10-28",
+      "verdict": "unverified",
+      "notes": "Ran 14 WebSearch queries covering primary M2-106 spec variations, secondary MV607/Hino L6-L7/Kenworth T280 specs, site-specific searches on commercialtrucktrader.com/truckpaper.com/mhc.com, Facebook Marketplace, eBay Motors, and a Chattanooga/Knoxville/Nashville/Atlanta regional sweep. 2 WebFetch tests (dtitrucks.com direct listing, comvoy.com mirror) both failed with getaddrinfo ENOTFOUND - egress to direct dealer/aggregator sites still fully blocked, rest of sweep WebSearch-only per instructions. All hits mapped to previously tracked units with no material change (DTI 18242743/17951W - no fresh price/status; MHC 0630270/0630680/281405 non-sleeper inventory; RitchieBros Chicago/Atlanta 34in/48in sleeper auction lots - still closed/passed; Velocity new 2027 M2 106 Plus units) or were new leads rejected as wrong_spec (DTI 18122W 2023 M2-106 26'+5'Attic moving truck - no sleeper/ext-cab; Rush Truck Centers 2022 M2-106 sleeper cab but 22ft box, not 26ft; 2024 M2-106 64279318 - new cab/chassis dump truck, not a box truck). No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
     }
   ]
 }
