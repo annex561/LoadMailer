@@ -490,16 +490,24 @@ router.post("/loads/:id/book", async (req: Request, res: Response) => {
             process.env.TWILIO_AUTH_TOKEN
           );
           const gaMsgSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
-          const gaTwilioPhone = process.env.TWILIO_PHONE_NUMBER;
           const normalizedGaPhone = driver.phone.startsWith('+') ? driver.phone : '+1' + driver.phone.replace(/\D/g, '');
 
-          if (twilioClientGa && (gaMsgSid || gaTwilioPhone)) {
-            const gaParams: any = { to: normalizedGaPhone, body: message };
-            if (gaMsgSid) gaParams.messagingServiceSid = gaMsgSid;
-            else gaParams.from = gaTwilioPhone;
+          if (twilioClientGa && gaMsgSid) {
+            const gaCustomDomain = process.env.CUSTOM_DOMAIN || 'traqiq.app';
+            const gaBaseUrl = process.env.REPLIT_DEV_DOMAIN
+              ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+              : `https://${gaCustomDomain}`;
+            const gaParams: any = {
+              to: normalizedGaPhone,
+              body: message,
+              messagingServiceSid: gaMsgSid,
+              statusCallback: `${gaBaseUrl}/api/sms/status-callback`,
+            };
             await twilioClientGa.messages.create(gaParams);
             smsSent = true;
             console.log(`📱 SMS sent to driver ${driver.name} for load ${id}`);
+          } else if (!gaMsgSid) {
+            console.warn('GA book SMS skipped: TWILIO_MESSAGING_SERVICE_SID not set');
           }
         }
       } catch (smsErr) {
