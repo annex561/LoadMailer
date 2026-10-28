@@ -7,7 +7,7 @@
 // PR #87 SyntaxError class of bugs.
 //
 // Configuration is injected by the page via a JSON island:
-//   <script id="upload-config" type="application/json">{"loadId":"...","stages":[...],"token":"..."}</script>
+//   <script id="upload-config" type="application/json">{"loadId":"...","stages":[...],"optionalStages":[...],"token":"..."}</script>
 // Read it here, then bootstrap.
 //
 // Upload architecture (PR #93 — Cloudinary direct upload):
@@ -17,8 +17,15 @@
 // New approach: file goes DIRECTLY from browser to Cloudinary. No file bytes
 // touch our server. Steps:
 //   1. GET /api/loads/:id/photos/sign?stage=...&token=... (token in query string, no custom header)
-//   2. XHR POST directly to https://api.cloudinary.com/v1_1/<cloud>/image/upload
+//   2. XHR POST directly to https://api.cloudinary.com/v1_1/<cloud>/auto/upload  (resource_type auto — handles images AND PDFs)
 //   3. POST /api/loads/:id/photos/record (JSON body, same-origin, no custom header)
+//
+// Item 9: each slot now accepts MULTIPLE files (camera capture + library chooser).
+// Each file loops independently through steps 1-3 and creates its own load_documents row.
+// PDFs are handled by using resource_type=auto on the Cloudinary endpoint.
+//
+// Item 8: optional doc types (lumper_receipt, scale_ticket, other) are shown under
+// a collapsed "More documents" section. They are NOT required and do NOT gate Done.
 
 (function () {
   'use strict';
@@ -56,7 +63,8 @@
   var cfg = readConfig();
   var LOAD_ID = cfg.loadId;
   var STAGES = cfg.stages || [];
-  dbg('config OK — load=' + LOAD_ID + ' stages=' + STAGES.length);
+  var OPTIONAL_STAGES = cfg.optionalStages || [];
+  dbg('config OK — load=' + LOAD_ID + ' stages=' + STAGES.length + ' optional=' + OPTIONAL_STAGES.length);
   // Optional signed token. Passed in query string / JSON body (NOT as a
   // custom header) so no CORS preflight fires on iOS Safari.
   var TOKEN = cfg.token || null;
@@ -82,7 +90,7 @@
       ciStatus.textContent = 'Sending ' + c.label + '...';
       try {
         // Hard-cap GPS so the check-in proceeds even if the permission
-        // prompt hangs (see comment in handleUpload — same gotcha).
+        // prompt hangs (see comment in handleUpload — same gotcha)
         var coords = await Promise.race([
           new Promise(function (resolve) {
             if (!navigator.geolocation) return resolve(null);
@@ -130,12 +138,13 @@
   var PHASE = (STAGES[0] && STAGES[0].stage && STAGES[0].stage.indexOf('delivery') === 0)
     ? 'delivery' : 'pickup';
 
+  // Required-slot count (optional slots never count).
   function allDone() {
-    return document.querySelectorAll('.slot.done').length >= STAGES.length && STAGES.length > 0;
+    return document.querySelectorAll('.slot.done[data-required="1"]').length >= STAGES.length && STAGES.length > 0;
   }
 
   function updateReqCount() {
-    var done = document.querySelectorAll('.slot.done').length;
+    var done = document.querySelectorAll('.slot.done[data-required="1"]').length;
     var el = document.getElementById('req-count');
     if (el) {
       if (done >= STAGES.length) {
@@ -163,32 +172,78 @@
     }
   }
 
-  // ---------- Photo slots ----------
-  STAGES.forEach(function (s) {
+  // ---------- Build a photo slot element ----------
+  // required=true → counts toward the gate and shows REQUIRED badge.
+  // required=false → optional slot (lumper receipt, scale ticket, other).
+  var _slotCounter = 0;
+  function buildSlot(stageObj, required) {
+    var stage = stageObj.stage;
+    var label = stageObj.label;
+    var uid = 'slot-' + stage;
+    var camId = 'cam-' + stage + '-' + (++_slotCounter);
+    var libId = 'lib-' + stage + '-' + _slotCounter;
+
     var el = document.createElement('div');
     el.className = 'slot';
-    el.id = 'slot-' + s.stage;
+    el.id = uid;
+    el.dataset.required = required ? '1' : '0';
+
+    var badge = required
+      ? '<span class="req-badge">REQUIRED</span>'
+      : '<span class="opt-badge">OPTIONAL</span>';
+
+    // Notes field for 'other' type only.
+    var notesHtml = (stage === 'other')
+      ? '<textarea class="notes-input" id="notes-' + stage + '" placeholder="Brief description of document (optional)" rows="2"></textarea>'
+      : '';
+
+    // Two inputs: camera (capture) and library (no capture attribute).
+    // Both accept images and PDFs. The library input allows multiple files.
     el.innerHTML =
-      '<h2>' + s.label + ' <span class="req-badge">REQUIRED</span></h2>' +
-      '<label class="btn" for="file-' + s.stage + '">📷 Take / Choose Photo</label>' +
-      '<input type="file" id="file-' + s.stage + '" accept="image/*">' +
+      '<h2>' + label + ' ' + badge + '</h2>' +
+      '<label class="btn" for="' + camId + '">📷 Take Photo</label>' +
+      '<input type="file" id="' + camId + '" accept="image/*,application/pdf" capture="environment">' +
+      '<label class="btn lib" for="' + libId + '">🖼 Choose from Library</label>' +
+      '<input type="file" id="' + libId + '" accept="image/*,application/pdf" multiple>' +
+      notesHtml +
       '<div class="progress" style="display:none"><div style="width:0%"></div></div>' +
       '<div class="status"></div>' +
-      '<img class="preview" style="display:none" />';
-    root.appendChild(el);
-    var input = el.querySelector('input');
-    input.addEventListener('change', function () { handleUpload(s.stage, input.files[0]); });
-  });
+      '<div class="previews"></div>';
+
+    var camInput = el.querySelector('#' + camId);
+    var libInput = el.querySelector('#' + libId);
+    camInput.addEventListener('change', function () { handleFiles(stage, camInput.files, el, required); });
+    libInput.addEventListener('change', function () { handleFiles(stage, libInput.files, el, required); });
+
+    return el;
+  }
+
+  // ---------- Required photo slots ----------
+  STAGES.forEach(function (s) { root.appendChild(buildSlot(s, true)); });
+
+  // ---------- Optional "More documents" section ----------
+  if (OPTIONAL_STAGES.length) {
+    var moreDetails = document.createElement('details');
+    moreDetails.className = 'more-docs';
+    moreDetails.id = 'more-docs';
+    moreDetails.innerHTML = '<summary>📎 More documents (optional)</summary>';
+    var moreInner = document.createElement('div');
+    moreInner.style.cssText = 'margin-top:12px';
+    OPTIONAL_STAGES.forEach(function (s) { moreInner.appendChild(buildSlot(s, false)); });
+    moreDetails.appendChild(moreInner);
+    root.parentNode.insertBefore(moreDetails, root.nextSibling);
+  }
 
   // ---------- Done / Submit button ----------
-  // Gives the driver one clear action + confirmation that everything reached
-  // the system. Disabled until every required photo is uploaded.
   var doneBtn = document.createElement('button');
   doneBtn.id = 'done-btn';
   doneBtn.type = 'button';
   doneBtn.style.cssText = 'display:block;width:100%;background:#16a34a;color:#fff;border:none;padding:16px;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px';
   doneBtn.onclick = submitConfirm;
-  root.parentNode.insertBefore(doneBtn, root.nextSibling);
+  // Insert after the optional section (or after #slots if no optional).
+  var moreEl = document.getElementById('more-docs');
+  var insertAfter = moreEl || root;
+  insertAfter.parentNode.insertBefore(doneBtn, insertAfter.nextSibling);
 
   function submitConfirm() {
     if (!allDone()) return;
@@ -238,57 +293,77 @@
       : (n / 1024 / 1024).toFixed(1) + ' MB';
   }
 
-  // In-flight guard. Keyed by stage so re-tapping the same slot mid-upload
-  // is a no-op while the previous attempt is still running.
+  // In-flight guard keyed by "stage:fileIndex" so multiple files from the
+  // same slot can run in parallel without trampling each other.
   var _inflight = {};
 
-  async function handleUpload(stage, rawFile) {
-    if (!rawFile) return;
-    if (_inflight[stage]) return;
-    _inflight[stage] = true;
+  // Upload a FileList (may have multiple files) for a given stage.
+  // Each file becomes its own load_documents row.
+  async function handleFiles(stage, files, slotEl, required) {
+    if (!files || !files.length) return;
+    var notes = null;
+    if (stage === 'other') {
+      var notesEl = slotEl.querySelector('.notes-input');
+      if (notesEl) notes = notesEl.value.trim() || null;
+    }
+    // Upload all files; when ALL succeed, mark the slot done.
+    var results = [];
+    for (var i = 0; i < files.length; i++) {
+      var key = stage + ':' + i;
+      if (_inflight[key]) continue;
+      _inflight[key] = true;
+      try {
+        var ok = await handleOneFile(stage, files[i], slotEl, i, files.length, notes);
+        results.push(ok);
+      } finally {
+        delete _inflight[key];
+      }
+    }
+    // If ALL files in this batch uploaded successfully, mark the slot done.
+    if (results.length && results.every(Boolean)) {
+      slotEl.classList.add('done');
+      if (required) updateReqCount();
+    }
+  }
 
-    var slot = document.getElementById('slot-' + stage);
+  // Upload one file, report progress in the slot UI.
+  // Returns true on success, false on error.
+  async function handleOneFile(stage, rawFile, slot, fileIdx, totalFiles, notes) {
     var status = slot.querySelector('.status');
     var bar = slot.querySelector('.progress');
     var barFill = bar.querySelector('div');
-    var preview = slot.querySelector('img.preview');
-    var label = slot.querySelector('label.btn');
+    var previews = slot.querySelector('.previews');
 
-    label.style.pointerEvents = 'none';
-    label.style.opacity = '0.6';
-    slot.classList.remove('done');
     bar.style.display = 'block';
     barFill.style.width = '2%';
+    var prefix = totalFiles > 1 ? ('File ' + (fileIdx + 1) + '/' + totalFiles + ': ') : '';
     status.className = 'status';
-    status.textContent = 'Starting upload (' + fmtKB(rawFile.size) + ')…';
-    dbg('handleUpload start — stage=' + stage + ' size=' + rawFile.size + ' type=' + rawFile.type);
+    status.textContent = prefix + 'Starting upload (' + fmtKB(rawFile.size) + ')…';
+    dbg('handleOneFile start — stage=' + stage + ' idx=' + fileIdx + ' size=' + rawFile.size + ' type=' + rawFile.type);
 
-    // Show thumbnail preview — skip if FileReader is unavailable (iOS
-    // in-app browser opened from Messages does not expose it).
-    if (typeof FileReader !== 'undefined') {
+    // Thumbnail preview (images only; skip PDFs and environments without FileReader).
+    if (typeof FileReader !== 'undefined' && rawFile.type && rawFile.type.indexOf('image') === 0) {
       var reader = new FileReader();
-      reader.onload = function () { preview.src = reader.result; preview.style.display = 'block'; };
+      reader.onload = function () {
+        var img = document.createElement('img');
+        img.className = 'preview';
+        img.src = reader.result;
+        img.style.display = 'block';
+        previews.appendChild(img);
+      };
       reader.readAsDataURL(rawFile);
     }
 
     // GPS removed from the upload path entirely. iOS Safari freezes the
     // entire JS event loop — including setTimeout — while a native system
-    // permission dialog is on screen. Promise.race with a 2s cap does NOT
-    // help because the timer never fires. Result: upload hangs at
-    // "Starting upload…" until the driver dismisses the dialog (which
-    // they never do because they don't know it's there). GPS is a
-    // nice-to-have for driver_locations; it is not worth blocking the BOL.
-    // Check-in buttons (which the driver taps intentionally) may still
-    // request location because the prompt is expected in that context.
+    // permission dialog is on screen. GPS is not worth blocking the BOL.
     var coords = null;
 
     try {
       // ── Step 1: get Cloudinary signing params from our server ────────
-      // Token goes in query string (not as a custom header) so iOS Safari
-      // WebKit does NOT issue a CORS preflight before the upload.
-      status.textContent = 'Preparing upload…';
+      status.textContent = prefix + 'Preparing upload…';
       barFill.style.width = '5%';
-      dbg('fetching sign...');
+      dbg('fetching sign... stage=' + stage);
 
       var signUrl = '/api/loads/' + LOAD_ID + '/photos/sign?stage=' + encodeURIComponent(stage);
       if (TOKEN) signUrl += '&token=' + encodeURIComponent(TOKEN);
@@ -300,33 +375,31 @@
         throw new Error((signPayload && signPayload.error) || 'HTTP ' + signRes.status);
       }
       var p = await signRes.json();
-      // p = { cloudName, apiKey, timestamp, folder, publicId, signature }
       dbg('sign OK — cloud=' + p.cloudName);
 
       barFill.style.width = '10%';
-      status.textContent = 'Uploading photo…';
+      status.textContent = prefix + 'Uploading…';
 
       // ── Step 2: POST file directly to Cloudinary ─────────────────────
-      // Standard multipart with no custom headers → no CORS preflight.
-      // Cloudinary's endpoint handles mobile/weak-signal uploads natively.
-      var cloudUrl = 'https://api.cloudinary.com/v1_1/' + p.cloudName + '/image/upload';
+      // Use resource_type=auto so both images and PDFs are accepted.
+      var cloudUrl = 'https://api.cloudinary.com/v1_1/' + p.cloudName + '/auto/upload';
       var fd = new FormData();
       fd.append('file', rawFile);
       fd.append('api_key', p.apiKey);
       fd.append('timestamp', String(p.timestamp));
       fd.append('folder', p.folder);
-      fd.append('public_id', p.publicId);
+      fd.append('public_id', p.publicId + (fileIdx > 0 ? '_' + fileIdx : ''));
       fd.append('signature', p.signature);
+      if (p.tags) fd.append('tags', p.tags);
 
       var cloudResult = await new Promise(function (resolve, reject) {
         var xhr = new XMLHttpRequest();
         xhr.open('POST', cloudUrl);
         xhr.upload.onprogress = function (e) {
           if (e.lengthComputable) {
-            // Map 0–100% of the raw upload to 10–90% of the progress bar.
             var pct = 10 + Math.min(80, Math.round((e.loaded / e.total) * 80));
             barFill.style.width = pct + '%';
-            status.textContent = 'Uploading ' + pct + '%';
+            status.textContent = prefix + 'Uploading ' + pct + '%';
           }
         };
         dbg('xhr to cloudinary open — sending...');
@@ -343,23 +416,23 @@
         };
         xhr.onerror   = function () { dbg('xhr onerror'); reject(new Error('Network error')); };
         xhr.ontimeout = function () { reject(new Error('Upload timed out — tap to retry')); };
-        // 180s — rural-LTE upload of 15 MB at 1 Mbps is ~120s; add slack.
         xhr.timeout = 180000;
         xhr.send(fd);
       });
 
       barFill.style.width = '95%';
-      status.textContent = 'Saving to dispatch…';
+      status.textContent = prefix + 'Saving to dispatch…';
 
       // ── Step 3: record the completed upload in our DB ─────────────────
-      // JSON body to our server. No custom headers — Content-Type:
-      // application/json is a standard header, no preflight on same-origin.
       var recordBody = {
         stage: stage,
         fileUrl: cloudResult.secure_url,
-        fileName: rawFile.name || (stage + '.jpg'),
+        fileName: rawFile.name || (stage + (fileIdx > 0 ? '_' + fileIdx : '') + '.jpg'),
         fileSize: cloudResult.bytes || rawFile.size,
-        mimeType: cloudResult.format ? ('image/' + cloudResult.format) : (rawFile.type || 'image/jpeg'),
+        mimeType: cloudResult.format
+          ? (rawFile.type && rawFile.type.indexOf('pdf') >= 0 ? 'application/pdf' : 'image/' + cloudResult.format)
+          : (rawFile.type || 'image/jpeg'),
+        notes: notes || undefined,
       };
       if (TOKEN) recordBody.token = TOKEN;
       if (coords) { recordBody.lat = coords.lat; recordBody.lng = coords.lng; }
@@ -376,23 +449,24 @@
       }
 
       barFill.style.width = '100%';
-      slot.classList.add('done');
       status.className = 'status ok';
-      status.textContent = '✅ Uploaded — saved to dispatch.';
-      label.textContent = '📷 Replace Photo';
-      label.style.background = '#14532d';
-      label.style.pointerEvents = '';
-      label.style.opacity = '';
+      status.textContent = totalFiles > 1
+        ? (totalFiles + ' files uploaded — saved to dispatch.')
+        : '✅ Uploaded — saved to dispatch.';
+
+      // Update the camera label to show "add more" for multi-file slots.
+      var camLabel = slot.querySelector('label.btn:not(.lib)');
+      if (camLabel) { camLabel.textContent = '📷 Take Another Photo'; }
+      var libLabel = slot.querySelector('label.btn.lib');
+      if (libLabel) { libLabel.textContent = '🖼 Add More from Library'; }
+
       if (navigator.vibrate) navigator.vibrate(80);
-      updateReqCount();
+      return true;
     } catch (err) {
       status.className = 'status error';
-      status.textContent = '❌ Upload failed: ' + err.message + ' — tap the button to retry';
+      status.textContent = prefix + '❌ Failed: ' + err.message + ' — tap to retry';
       bar.style.display = 'none';
-      label.style.pointerEvents = '';
-      label.style.opacity = '';
-    } finally {
-      delete _inflight[stage];
+      return false;
     }
   }
 })();

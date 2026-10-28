@@ -27,6 +27,27 @@ function jaccard(a: Set<string>, b: Set<string>): number {
   return union === 0 ? 0 : inter / union;
 }
 
+/**
+ * When matchDriverByName returns no result above the 0.85 auto-dispatch bar,
+ * look for a UNIQUE first-name match as a review-UI pre-selection hint.
+ * Returns a suggested MatchResult if exactly one driver shares the parsed first name.
+ * No auto-dispatch — this is review-UI only.
+ * Regression-pinned: server/__tests__/driver-name-matcher.test.ts (extended in PR).
+ */
+export function suggestDriverByFirstName(
+  raw: string | null | undefined,
+  candidates: DriverCandidate[],
+): MatchResult | null {
+  if (!raw || raw.trim().length === 0) return null;
+  const firstName = normalize(raw).split(/\s+/)[0];
+  if (!firstName || firstName.length < 2) return null;
+  const matched = candidates.filter(
+    (d) => normalize(d.name).split(/\s+/)[0] === firstName,
+  );
+  if (matched.length !== 1) return null; // ambiguous or no match
+  return { driverId: matched[0].id, confidence: 0.7, driverName: matched[0].name };
+}
+
 export function matchDriverByName(
   raw: string | null | undefined,
   drivers: DriverCandidate[],

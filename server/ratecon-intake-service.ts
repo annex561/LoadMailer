@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { rateconIntake, type InsertRateconIntake } from "@shared/schema";
-import { parseRatecon, type ParsedRateconV2 } from "./ratecon-confidence-parser";
+import { parseRatecon, type ParsedRateconV2, extractPdfText } from "./ratecon-confidence-parser";
 import { eq, and, sql } from "drizzle-orm";
 import { runValidators, summarizeFailures } from "./ratecon-validators";
 import { matchDriverByName } from "./driver-name-matcher";
@@ -39,6 +39,51 @@ async function uploadRateconPdf(
     console.warn(`[ratecon-intake] PDF upload to Cloudinary failed (intake will have no pdfPath): ${err?.message}`);
     return null;
   }
+}
+
+/**
+ * Map the legacy regex-extractor output (ParsedRateConData) to ParsedRateconV2.
+ * All confidences are capped at 0.5 so the row always goes to in_review and
+ * never auto-dispatches. Tagged parserModel: "regex-fallback".
+ * Behind RATECON_REGEX_FALLBACK_ENABLED (default OFF).
+ */
+function mapRegexToV2(data: import("./services/ratecon-parser").ParsedRateConData): ParsedRateconV2 {
+  const LOW = 0.3 as const;
+  // "Atlanta, GA" → ["Atlanta", "GA"]
+  const splitCityState = (s: string): [string, string] => {
+    const parts = s.split(",").map((p) => p.trim());
+    return [parts[0] ?? "", parts[1] ?? ""];
+  };
+  const [originCity, originState] = splitCityState(data.origin ?? "");
+  const [destCity, destState] = splitCityState(data.destination ?? "");
+  return {
+    broker: { value: data.brokerName ?? "", confidence: LOW },
+    loadNumber: { value: data.loadNumber ?? "", confidence: LOW },
+    rate: { value: data.rate ?? 0, confidence: LOW },
+    equipmentType: { value: "dry_van", confidence: LOW },
+    weightLbs: { value: data.weight || null, confidence: LOW },
+    miles: { value: data.miles ?? null, confidence: LOW },
+    pickup: {
+      city: originCity,
+      state: originState,
+      date: data.pickupDate ?? "",
+      time: data.pickupTime ?? "00:00",
+      confidence: LOW,
+    },
+    drop: {
+      city: destCity,
+      state: destState,
+      date: data.deliveryDate ?? "",
+      time: data.deliveryTime ?? "00:00",
+      confidence: LOW,
+    },
+    driverName: { value: null, confidence: LOW },
+    commodity: { value: null, confidence: LOW },
+    specialInstructions: { value: data.notes ?? null, confidence: LOW },
+    detentionFreeMinutes: { value: null, confidence: LOW },
+    detentionRatePerHour: { value: null, confidence: LOW },
+    model: "regex-fallback",
+  };
 }
 
 export interface IntakeInput {
@@ -175,7 +220,20 @@ async function findExistingIntakeForLoad(
 export async function parseIntake(intakeId: string, pdfBuffer: Buffer, opts: { autoDispatch?: boolean } = {}) {
   const autoDispatch = opts.autoDispatch !== false;
   try {
-    const parsed = await parseRatecon(pdfBuffer);
+    let parsed: ParsedRateconV2;
+    try {
+      parsed = await parseRatecon(pdfBuffer);
+    } catch (openAiErr: any) {
+      // RATECON_REGEX_FALLBACK_ENABLED=true: use the local regex extractor when
+      // OpenAI is unavailable (credit outage, network error). All confidences ≤0.5,
+      // always in_review, never auto-dispatches. Default OFF.
+      if (process.env.RATECON_REGEX_FALLBACK_ENABLED !== "true") throw openAiErr;
+      console.warn(`[parseIntake] OpenAI failed (${openAiErr.message}), trying regex fallback`);
+      const pdfText = await extractPdfText(pdfBuffer);
+      const { rateconParser } = await import("./services/ratecon-parser");
+      const regexData = rateconParser.regexExtract(pdfText);
+      parsed = mapRegexToV2(regexData);
+    }
 
     // Strip rawText — has binary garbage from scanned PDFs that breaks JSONB writes.
     const { rawText: _rawText, ...parsedForDb } = parsed;
@@ -225,9 +283,17 @@ export async function parseIntake(intakeId: string, pdfBuffer: Buffer, opts: { a
       }
     }
 
-    // Re-run validators on the (possibly merged) parsed data
+    // Re-run validators on the (possibly merged) parsed data.
+    // Pass the intake's created_at so a backfilled row whose pickup was valid at
+    // email-arrival but is now past the wall clock gets a warning, not an error.
     const mergedAsParsed = mergedParsed as ParsedRateconV2;
-    const validation = runValidators(mergedAsParsed);
+    const [intakeRow] = await db
+      .select({ createdAt: rateconIntake.createdAt })
+      .from(rateconIntake)
+      .where(eq(rateconIntake.id, workingIntakeId));
+    const validation = runValidators(mergedAsParsed, {
+      intakeCreatedAt: intakeRow?.createdAt ?? undefined,
+    });
 
     // Fuzzy-match driver name from the merged data
     let matchedDriverId: string | null = null;
@@ -259,6 +325,10 @@ export async function parseIntake(intakeId: string, pdfBuffer: Buffer, opts: { a
     } else if (!autoDispatch) {
       status = "in_review";
       reviewReason = "Backfill re-parse: auto-dispatch off, review before dispatching";
+    } else if (mergedAsParsed.model === "regex-fallback") {
+      // Regex fallback never auto-dispatches — data quality is too low (all confidence ≤0.5)
+      status = "in_review";
+      reviewReason = "Regex fallback parse — verify all fields before dispatching";
     } else {
       status = "parsed";
     }

@@ -173,6 +173,9 @@ export const STAGE_REPLY_LABEL: Record<PhotoStage, string> = {
   pickup_securement: 'Securement / Tie-Down photo',
   delivery_pod: 'Delivery POD',
   delivery_signed_bol: 'Signed BOL',
+  lumper_receipt: 'Lumper Receipt',
+  scale_ticket: 'Scale Ticket',
+  other: 'Other Document',
 };
 
 // "WRONG" reply rolls back the most recent fulfilled upload for this
