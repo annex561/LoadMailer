@@ -1625,6 +1625,29 @@
       "date": "2026-10-28",
       "verdict": "unverified",
       "notes": "Ran 14 WebSearch queries covering primary M2-106 spec variations, secondary MV607/Hino L6-L7/Kenworth T280 specs, site-specific searches on commercialtrucktrader.com/truckpaper.com/mhc.com, Facebook Marketplace, eBay Motors, and a Chattanooga/Knoxville/Nashville/Atlanta regional sweep. 2 WebFetch tests (dtitrucks.com direct listing, comvoy.com mirror) both failed with getaddrinfo ENOTFOUND - egress to direct dealer/aggregator sites still fully blocked, rest of sweep WebSearch-only per instructions. All hits mapped to previously tracked units with no material change (DTI 18242743/17951W - no fresh price/status; MHC 0630270/0630680/281405 non-sleeper inventory; RitchieBros Chicago/Atlanta 34in/48in sleeper auction lots - still closed/passed; Velocity new 2027 M2 106 Plus units) or were new leads rejected as wrong_spec (DTI 18122W 2023 M2-106 26'+5'Attic moving truck - no sleeper/ext-cab; Rush Truck Centers 2022 M2-106 sleeper cab but 22ft box, not 26ft; 2024 M2-106 64279318 - new cab/chassis dump truck, not a box truck). No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver CO",
+      "date": "2026-10-29",
+      "verdict": "unverified",
+      "notes": "Re-checked. Still the ideal spec on paper: 2025 M2-106 Extended Cab With Sleeper/bunk, 31,422 mi, 26ft box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL, $94,500 per prior snippets. WebFetch to dtitrucks.com direct listing URL failed again this run (getaddrinfo ENOTFOUND - egress still blocked). Also found an apparent mirror of this same unit on mylittlesalesman.com (MLS #14356488: 2025 M2 106 26ft box, 31,422 mi, Cummins B6.7, Allison RDS, roll-up door, liftgate, extended cab - mileage/spec match strongly suggests same truck, not a distinct unit). WebFetch to mylittlesalesman.com also failed with getaddrinfo ENOTFOUND (egress blocked for this domain too). No live URL opened, no fresh phone call made. Held per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "MLS-14356488-mirror-of-DTI-18242743",
+      "source": "mylittlesalesman.com (likely mirror of DTI Trucks listing 18242743)",
+      "date": "2026-10-29",
+      "verdict": "unverified",
+      "notes": "2025 Freightliner M2 106 26ft box truck, 240HP, 6-speed Allison RDS AMT, roll-up door, liftgate, extended cab, 31,422 mi, Cummins B6.7 engine. Mileage and spec profile match DTI-18242743 exactly - almost certainly the same physical truck syndicated to this marketplace, not a separate find. No price, dealer name, or location surfaced in snippet. mylittlesalesman.com egress-blocked (WebFetch tested directly, getaddrinfo ENOTFOUND). Logged for traceability; treat as same unit as DTITrucks-18242743, not a new one.",
+      "listing_url": "https://www.mylittlesalesman.com/2025-freightliner-m2-106-26-ft-box-truck-240hp-6-speed-allison-rds-amt-roll-up-door-liftgate-14356488"
+    },
+    {
+      "id": "sweep-2026-10-29-no-new-verified",
+      "source": "WebSearch sweep (11 queries) + 2 WebFetch egress tests",
+      "date": "2026-10-29",
+      "verdict": "unverified",
+      "notes": "Ran 11 WebSearch queries covering primary M2-106 spec variations, secondary MV607/Hino L6-L7/Kenworth T280 specs, site-specific searches (commercialtrucktrader.com, truckpaper.com, mhc.com), a Chattanooga/Knoxville/Nashville/Atlanta regional sweep, and a direct price lookup for DTI stock 18242743. 2 WebFetch tests (dtitrucks.com direct listing, mylittlesalesman.com mirror listing) both failed with getaddrinfo ENOTFOUND - egress to direct/aggregator sites still fully blocked. No candidate cleared the verification gate. All hits were either already in seen[] (DTI 18242743/its MLS mirror, RitchieBros Chicago 34in-sleeper units - auction closed 2026-08-06, Velocity Greensboro new inventory) or wrong_spec (no sleeper/extended-cab, over mileage, over budget, or wrong box length). No push sent."
     }
   ]
 }
