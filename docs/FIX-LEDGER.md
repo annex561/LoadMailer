@@ -378,3 +378,11 @@ Format:
 - **Guard** — `server/__tests__/dispatch-run-alerts-digest.test.ts` (40 overdue loads → exactly 1 SMS; second run inside the hour → 0).
 - **Do NOT** — do not wire run-alerts to a cron without keeping the digest and throttle. Do not use `pod_path IS NULL` alone as "no POD".
 - `2026-10-28 · fb560cb`
+
+### Recruiting funnel never told the operator a driver was ready (silent pipeline)
+- **Symptom** — applicants reach `PRESCREENED_PASS` or `DOCS_RECEIVED` on `/recruiting` and nobody at LAMP hears about it. 2026-10-30: three drivers had passed pre-screening (Sep 7, Oct 10, Oct 19); one had uploaded every document 11 days earlier and had already been texted "Background check starting".
+- **Root cause** — every template in `server/recruiting/notifications.ts` and `sms-templates.ts` goes to the applicant. No code path notified LAMP on any stage change. The dashboard was the only signal, and it is pull-only.
+- **Fix** — `server/recruiting/ops-alerts.ts` (pure) + `queueOpsAlerts()` in `notifications.ts`, called from `transitionStage()` in `routes.ts`, the single choke point for every stage change. Alerts ride the existing queue (`RECRUITING_NOTIFICATIONS_LIVE` kill switch, 24h watermark, per-(application, template) dedup, 50/hr cap). Default OFF: nothing queues until `RECRUITING_ALERT_PHONE` and/or `RECRUITING_ALERT_EMAIL` is set.
+- **Guard** — `server/__tests__/recruiting-ops-alerts.test.ts` (off by default; only PRESCREENED_PASS and DOCS_RECEIVED alert; applicant templates never reroute to the operator; source-level checks that `transitionStage` calls `queueOpsAlerts` and the processor filter includes `OPS_%`).
+- **Do NOT** — do not point this at `OWNER_ALERT_PHONE`: that var is already set for dispatch alerts, so reusing it would switch recruiting alerts on at deploy without approval. Do not trust the dashboard's "Run screenings" result: `server/recruiting/vendors.ts` is MOCK (Checkr/MVR/Clearinghouse are not wired), so a "CLEAN" MVR there proves nothing.
+- `2026-10-30 · b711b55`
