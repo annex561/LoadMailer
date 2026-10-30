@@ -18,6 +18,7 @@ import { db } from "../db";
 import { smsLoadService } from "../sms-service";
 import { log } from "../vite";
 import { SMS_TEMPLATES, type TemplateRender } from "./sms-templates";
+import { opsAlertsFor, opsRecipient, renderOpsAlert } from "./ops-alerts";
 
 // Lazy import to avoid circular deps at load time
 async function notificationQueueTable() {
@@ -201,6 +202,46 @@ export async function queueRecruitingNotification(opts: {
 }
 
 /**
+ * Queue operator alerts ("a driver is waiting on you") for a stage change.
+ * Default OFF: returns before any DB read unless RECRUITING_ALERT_PHONE or
+ * RECRUITING_ALERT_EMAIL is set. Same queue, so the kill switch, 24h watermark,
+ * per-(application, template) dedup and hourly cap all apply.
+ */
+export async function queueOpsAlerts(applicationId: string, toStage: string) {
+  const alerts = opsAlertsFor(toStage, process.env);
+  if (alerts.length === 0) return;
+  const schema = await import("@shared/schema");
+  const ra = (schema as any).recruitingApplications;
+  const [app] = await db
+    .select({
+      firstName: ra.firstName,
+      lastName: ra.lastName,
+      phone: ra.phone,
+      hasCdl: ra.hasCdl,
+      yearsExperience: ra.yearsExperience,
+      isOwnerOperator: ra.isOwnerOperator,
+    })
+    .from(ra)
+    .where(eq(ra.id, applicationId))
+    .limit(1);
+  if (!app) return;
+  const baseUrl = process.env.PUBLIC_APP_URL || "https://traqiq.app";
+  const payload = {
+    first_name: app.firstName,
+    last_name: app.lastName,
+    phone: app.phone,
+    has_cdl: app.hasCdl,
+    years: app.yearsExperience,
+    owner_operator: app.isOwnerOperator,
+    review_url: `${baseUrl}/recruiting/${applicationId}`,
+  };
+  for (const a of alerts) {
+    await queueRecruitingNotification({ applicationId, channel: a.channel, templateKey: a.templateKey, payload });
+    log(`📟 recruiting ops alert queued: ${a.templateKey} for ${applicationId}`);
+  }
+}
+
+/**
  * Main processor loop. Runs every 60 seconds.
  *
  * Honors all safety guards. Returns counts for instrumentation.
@@ -232,7 +273,7 @@ export async function processRecruitingNotificationQueue(): Promise<{
       and(
         eq(nq.status, "PENDING"),
         gte(nq.createdAt, watermark),
-        sql`(${nq.templateKey} LIKE 'LEAD_%' OR ${nq.templateKey} LIKE 'APP_%' OR ${nq.templateKey} LIKE 'DOCS_%' OR ${nq.templateKey} LIKE 'BACKGROUND_%' OR ${nq.templateKey} LIKE 'MEDICAL_%' OR ${nq.templateKey} LIKE 'AGREEMENT_%' OR ${nq.templateKey} LIKE 'TRUCK_%' OR ${nq.templateKey} LIKE 'ACTIVE_%' OR ${nq.templateKey} LIKE 'DISQUAL%' OR ${nq.templateKey} LIKE 'APPLICATION_%' OR ${nq.templateKey} LIKE 'DOCS%')`
+        sql`(${nq.templateKey} LIKE 'LEAD_%' OR ${nq.templateKey} LIKE 'APP_%' OR ${nq.templateKey} LIKE 'DOCS_%' OR ${nq.templateKey} LIKE 'BACKGROUND_%' OR ${nq.templateKey} LIKE 'MEDICAL_%' OR ${nq.templateKey} LIKE 'AGREEMENT_%' OR ${nq.templateKey} LIKE 'TRUCK_%' OR ${nq.templateKey} LIKE 'ACTIVE_%' OR ${nq.templateKey} LIKE 'DISQUAL%' OR ${nq.templateKey} LIKE 'APPLICATION_%' OR ${nq.templateKey} LIKE 'DOCS%' OR ${nq.templateKey} LIKE 'OPS_%')`
       )
     )
     .limit(100); // chunk
@@ -312,6 +353,12 @@ export async function processRecruitingNotificationQueue(): Promise<{
 }
 
 async function sendRecruitingSMS(payload: Record<string, any>, templateKey: string) {
+  if (templateKey.startsWith("OPS_")) {
+    const to = opsRecipient(templateKey, "SMS", process.env);
+    if (!to) throw new Error("RECRUITING_ALERT_PHONE not set");
+    await smsLoadService.sendSMS(to, renderOpsAlert(templateKey, payload).text);
+    return;
+  }
   const renderer = SMS_TEMPLATES[templateKey];
   if (!renderer) throw new Error(`No SMS template for ${templateKey}`);
   const rendered = renderer(payload);
@@ -335,6 +382,14 @@ async function sendRecruitingSMS(payload: Record<string, any>, templateKey: stri
 }
 
 async function sendRecruitingEmail(payload: Record<string, any>, templateKey: string) {
+  if (templateKey.startsWith("OPS_")) {
+    const to = opsRecipient(templateKey, "EMAIL", process.env);
+    if (!to) throw new Error("RECRUITING_ALERT_EMAIL not set");
+    if (!process.env.SMTP_USER && !process.env.EMAIL_USER) throw new Error("SMTP not configured");
+    const r = renderOpsAlert(templateKey, payload);
+    await emailTransporter().sendMail({ from: FROM_EMAIL, to, subject: r.subject, text: r.text });
+    return;
+  }
   const renderer = EMAIL_TEMPLATES[templateKey];
   if (!renderer) throw new Error(`No email template for ${templateKey}`);
   const rendered = renderer(payload);

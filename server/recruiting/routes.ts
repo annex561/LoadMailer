@@ -11,7 +11,7 @@ import {
   insertRecruitingApplicationSchema,
 } from "@shared/schema";
 import { screenApplication } from "./screening";
-import { queueRecruitingNotification } from "./notifications";
+import { queueRecruitingNotification, queueOpsAlerts } from "./notifications";
 import { pullMvr, queryClearinghouse, pullCriminal, scheduleDrugTest, scheduleDotPhysical, createSignatureRequest } from "./vendors";
 import {
   recruitingDocuments,
@@ -94,6 +94,15 @@ async function transitionStage(applicationId: string, toStage: string, reason?: 
     reason,
     triggeredBy,
   });
+
+  // Tell the operator when an applicant is waiting on LAMP. Default OFF until
+  // RECRUITING_ALERT_PHONE / RECRUITING_ALERT_EMAIL is set; never blocks the stage change.
+  // Regression test: server/__tests__/recruiting-ops-alerts.test.ts
+  try {
+    await queueOpsAlerts(applicationId, toStage);
+  } catch (err) {
+    console.error("[recruiting] ops alert queue err:", err);
+  }
 }
 
 export function registerRecruitingRoutes(app: Express) {
