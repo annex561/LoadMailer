@@ -1648,6 +1648,49 @@
       "date": "2026-10-29",
       "verdict": "unverified",
       "notes": "Ran 11 WebSearch queries covering primary M2-106 spec variations, secondary MV607/Hino L6-L7/Kenworth T280 specs, site-specific searches (commercialtrucktrader.com, truckpaper.com, mhc.com), a Chattanooga/Knoxville/Nashville/Atlanta regional sweep, and a direct price lookup for DTI stock 18242743. 2 WebFetch tests (dtitrucks.com direct listing, mylittlesalesman.com mirror listing) both failed with getaddrinfo ENOTFOUND - egress to direct/aggregator sites still fully blocked. No candidate cleared the verification gate. All hits were either already in seen[] (DTI 18242743/its MLS mirror, RitchieBros Chicago 34in-sleeper units - auction closed 2026-08-06, Velocity Greensboro new inventory) or wrong_spec (no sleeper/extended-cab, over mileage, over budget, or wrong box length). No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver/Wheat Ridge CO",
+      "date": "2026-10-30",
+      "verdict": "unverified",
+      "notes": "Re-checked. Still the same 2025 M2-106 ext cab w/ sleeper/bunk, ~31,400 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL. dtitrucks.com egress-blocked again this run (WebFetch tested: getaddrinfo ENOTFOUND www.dtitrucks.com). No material change - not re-reported. Still needs a phone call to (720)360-4022 to confirm live availability/price."
+    },
+    {
+      "id": "Comvoy-20808696-DTIWheatRidge",
+      "vin": null,
+      "source": "Comvoy.com / DTI Trucks - Wheat Ridge, CO",
+      "date": "2026-10-30",
+      "verdict": "unverified",
+      "notes": "New aggregator listing (different URL/ID than prior DTI Trucks sightings) for what appears to be the SAME physical unit as DTITrucks-18242743: 2025 Freightliner M2-106 extended cab box truck, ~31,400 mi, 26ft box, Cummins 6.7L/240hp, Allison automatic, liftgate, 26,000 lb GVWR (No CDL Required), dealer contact given as 'DTI Trucks - Wheat Ridge'. Lists price $94,500 (also says 'Call For Pricing') - first time a concrete price has surfaced for this unit via search snippet. Could not open comvoy.com live (WebFetch budget for this run already used on dtitrucks.com per rules; not independently opened). Per task instructions this specific truck requires a live-opened URL (gate a) before it can be reported/pushed, not just dealer+phone (gate b) - not cleared, not reported, not pushed. URL: https://www.comvoy.com/work-truck/wheat-ridge-co/used-2025-freightliner-m2-106-conventional-cab-box-truck-20808696"
+    },
+    {
+      "id": "MHC-0630270-2024-M2106-NonSleeper-163376mi-54950",
+      "source": "MHC.com",
+      "date": "2026-10-30",
+      "verdict": "too_many_miles",
+      "notes": "2024 Freightliner M2-106, Ford/Cummins 6.7L 260hp automatic, listed explicitly as 'Non-Sleeper', 163,376 mi, $54,950. Fails sleeper requirement and mileage cap (163k > 150k). URL: https://www.mhc.com/trucks/used/2024/freightliner/m2-106/0630270"
+    },
+    {
+      "id": "TruckingDepot-InternationalUnderCDL-batch-38351-38296-20043-17488-38549",
+      "source": "Truckingdepot.com / classifieds.truckingdepot.com",
+      "date": "2026-10-30",
+      "verdict": "wrong_spec",
+      "notes": "Cluster of 26ft 'under CDL' box truck listings (IDs 38351, 38296, 20043, 17488, 38549, 40903, 18604, 51021) - confirmed via snippet to be International (MF DT466/215 engine) chassis, not Freightliner M2-106. No sleeper/extended-cab bunk mentioned on any. Wrong make and missing sleeper requirement; not pursued further."
+    },
+    {
+      "id": "CTT-2027-M2106Plus-newunits-5041113465-5040862983",
+      "source": "CommercialTruckTrader.com",
+      "date": "2026-10-30",
+      "verdict": "wrong_spec",
+      "notes": "New (not used) 2027 Freightliner M2 106 Plus extended cab with lower sleeper bunk, 26,000 GVWR non-CDL, 26' dry van body, listed ~$115,990-$139,990 across multiple listing IDs. Same configuration/price family as previously-seen Velocity Greensboro new units. New, not used - excluded per spec (buyer wants used)."
+    },
+    {
+      "id": "sweep-2026-10-30-no-new-verified",
+      "source": "WebSearch sweep",
+      "date": "2026-10-30",
+      "verdict": "unverified",
+      "notes": "Ran 11 WebSearch queries (core 7 + variations incl. Chattanooga-region and secondary-make queries) plus 1 WebFetch test (dtitrucks.com - EGRESS_BLOCKED/DNS failure, consistent with prior runs). No truck cleared verification gate (a) live URL or (b) dealer+phone for an otherwise-unseen match. No push sent."
     }
   ]
 }
