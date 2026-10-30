@@ -177,13 +177,14 @@ export class SMSLoadService {
   }
 
   async sendSMS(
-    toOrParams: string | { to: string, body: string, skipFooter?: boolean },
+    toOrParams: string | { to: string, body: string, skipFooter?: boolean, smartEncoded?: boolean },
     bodyParam?: string,
   ): Promise<{ success: boolean, error?: string, messageSid?: string }> {
-    // Handle both calling patterns: sendSMS(to, body) or sendSMS({ to, body, skipFooter? })
+    // Handle both calling patterns: sendSMS(to, body) or sendSMS({ to, body, skipFooter?, smartEncoded? })
     const to = typeof toOrParams === 'string' ? toOrParams : toOrParams.to;
     let body = typeof toOrParams === 'string' ? bodyParam! : toOrParams.body;
     const skipFooter = typeof toOrParams === 'object' && !!toOrParams.skipFooter;
+    const smartEncoded = typeof toOrParams === 'object' && !!toOrParams.smartEncoded;
 
     // KILL SWITCH — set SMS_DISABLED=true on Railway to instantly halt every
     // outbound SMS without removing Twilio credentials. Hits BEFORE any other
@@ -266,6 +267,7 @@ export class SMSLoadService {
         return { success: false, error: 'TWILIO_PHONE_NUMBER not configured' };
       }
 
+      if (smartEncoded) messageParams.smartEncoded = true;
       const message = await this.twilioClient.messages.create(messageParams);
 
       console.log(`✅ SMS sent to ${normalizedPhone} (SID: ${message.sid}): ${body.substring(0, 50)}...`);
