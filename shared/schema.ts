@@ -3448,6 +3448,7 @@ export const recruitingApplications = pgTable("recruiting_applications", {
   driverLicenseState: text("driver_license_state"),
   driverLicenseClass: text("driver_license_class"),
   driverLicenseExpiration: timestamp("driver_license_expiration"),
+  cdlFirstIssued: text("cdl_first_issued"), // "YYYY-MM"; insurers ask how long a CDL has been held
   employmentHistory: jsonb("employment_history"),
   accidents3yr: jsonb("accidents_3yr"),
   violations3yr: jsonb("violations_3yr"),
@@ -3620,6 +3621,8 @@ export const insertRecruitingApplicationSchema = z.object({
   driverLicenseState: z.string().length(2),
   driverLicenseClass: z.string().min(1),
   driverLicenseExpiration: z.string().min(8),
+  // Optional so an older cached form still submits; the form requires it for CDL classes.
+  cdlFirstIssued: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "use YYYY-MM").optional().nullable(),
   employmentHistory: z.array(z.object({
     employer: z.string().min(1),
     position: z.string().min(1),

@@ -325,6 +325,7 @@ export function registerRecruitingRoutes(app: Express) {
           driverLicenseState: app.driverLicenseState,
           driverLicenseClass: app.driverLicenseClass,
           driverLicenseExpiration: new Date(app.driverLicenseExpiration),
+          cdlFirstIssued: app.cdlFirstIssued ?? null,
           employmentHistory: app.employmentHistory as any,
           accidents3yr: app.accidents3yr as any,
           violations3yr: app.violations3yr as any,

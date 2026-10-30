@@ -53,6 +53,7 @@ export default function RecruitingApplication() {
     driverLicenseState: "",
     driverLicenseClass: "",
     driverLicenseExpiration: "",
+    cdlFirstIssued: "",
     licenseSuspensionRevocation: "no",
     licenseDenialEver: "no",
     felonyConviction: "no",
@@ -100,6 +101,11 @@ export default function RecruitingApplication() {
       toast({ title: "All consents required", variant: "destructive" });
       return;
     }
+    if (form.driverLicenseClass.startsWith("CDL") && !/^\d{4}-(0[1-9]|1[0-2])$/.test(form.cdlFirstIssued)) {
+      toast({ title: "Add the month and year your CDL was first issued", variant: "destructive" });
+      setPage(2);
+      return;
+    }
     setSubmitting(true);
     try {
       const payload = {
@@ -113,6 +119,7 @@ export default function RecruitingApplication() {
         driverLicenseState: form.driverLicenseState,
         driverLicenseClass: form.driverLicenseClass,
         driverLicenseExpiration: form.driverLicenseExpiration,
+        cdlFirstIssued: form.cdlFirstIssued || undefined,
         employmentHistory: employment,
         accidents3yr: [],
         violations3yr: [],
@@ -251,6 +258,11 @@ export default function RecruitingApplication() {
                     <Field id="driverLicenseExpiration" label="Expiration" type="date" required
                       value={form.driverLicenseExpiration} onChange={(v) => setForm({ ...form, driverLicenseExpiration: v })} />
                   </Row3>
+                  {form.driverLicenseClass.startsWith("CDL") && (
+                    <Field id="cdlFirstIssued" label="CDL first issued (month and year)" type="month" required
+                      placeholder="2024-03"
+                      value={form.cdlFirstIssued} onChange={(v) => setForm({ ...form, cdlFirstIssued: v })} />
+                  )}
                 </>
               )}
 

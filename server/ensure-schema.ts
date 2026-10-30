@@ -739,6 +739,7 @@ export async function ensureSchema(): Promise<void> {
         ["termination_reason", "TEXT"],
         ["driver_id", "TEXT"],
         ["tracking_token", "VARCHAR(64)"],
+        ["cdl_first_issued", "TEXT"],
       ];
       for (const [col, def] of stageColumns) {
         try {
