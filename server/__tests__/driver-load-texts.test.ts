@@ -15,7 +15,19 @@ import {
   isAffirmative,
   parseEta,
   _cancelNoConfirmAlert,
+  sanitizeGsm7,
+  splitTextIntoSmsParts,
+  applyPartLabels,
 } from "../driver-load-texts";
+
+// ── GSM-7 helper used only in tests ─────────────────────────────────────────
+
+/** Returns true when every character is in the GSM-7 basic + extended-Latin set. */
+function isGsm7Only(text: string): boolean {
+  // Printable ASCII (0x20–0x7E), newline, carriage-return, ESC, and the small
+  // set of GSM-7 extended-Latin code-points that sanitizeGsm7 leaves in place.
+  return /^[\x20-\x7E\n\r\x1B£¥èéùìòÇØøÅåÆæßÉÄÖÑÜäöñüà¤¡§¿ΔΦΓΛΩΠΨΣΘΞ]*$/.test(text);
+}
 
 // ── Fixture / golden file ────────────────────────────────────────────────────
 
@@ -317,5 +329,162 @@ describe("handleText1ConfirmIfPending — picks newest pending load (source-text
 
   it("never confirms a load that is already delivered", () => {
     expect(fn).toMatch(/isNull\(loads\.deliveredAt\)/);
+  });
+});
+
+// ── sanitizeGsm7 ─────────────────────────────────────────────────────────────
+
+describe("sanitizeGsm7", () => {
+  it("leaves plain ASCII text unchanged", () => {
+    const text = "Hello, World!\nRate $ 500\nPU: 6/2 FCFS";
+    expect(sanitizeGsm7(text)).toBe(text);
+  });
+
+  it("converts left/right single smart quotes to straight apostrophe", () => {
+    expect(sanitizeGsm7("\u2018hello\u2019")).toBe("'hello'");
+  });
+
+  it("converts left/right double smart quotes to straight double quote", () => {
+    expect(sanitizeGsm7("\u201Chello\u201D")).toBe('"hello"');
+  });
+
+  it("converts en dash to hyphen", () => {
+    expect(sanitizeGsm7("08:00\u201310:00")).toBe("08:00-10:00");
+  });
+
+  it("converts em dash to hyphen", () => {
+    expect(sanitizeGsm7("A\u2014B")).toBe("A-B");
+  });
+
+  it("converts ellipsis to three dots", () => {
+    expect(sanitizeGsm7("wait\u2026")).toBe("wait...");
+  });
+
+  it("converts non-breaking space to regular space", () => {
+    expect(sanitizeGsm7("a\u00A0b")).toBe("a b");
+  });
+
+  it("replaces unknown non-GSM-7 codepoints with '?'", () => {
+    expect(sanitizeGsm7("👍")).toBe("?");
+  });
+
+  it("result of sanitizing the golden fixture contains only GSM-7 chars", () => {
+    const rendered = renderText1(EXAMPLE_FIELDS);
+    expect(isGsm7Only(sanitizeGsm7(rendered))).toBe(true);
+  });
+});
+
+// ── splitTextIntoSmsParts ────────────────────────────────────────────────────
+
+describe("splitTextIntoSmsParts", () => {
+  it("returns a single part for text that fits within the limit", () => {
+    const text = "Hello\nWorld";
+    const parts = splitTextIntoSmsParts(text, 100);
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toBe(text);
+  });
+
+  it("splits at line boundary, never mid-line, when text exceeds limit", () => {
+    const line1 = "A".repeat(80);
+    const line2 = "B".repeat(80);
+    const text = `${line1}\n${line2}`;
+    const parts = splitTextIntoSmsParts(text, 100);
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toBe(line1);
+    expect(parts[1]).toBe(line2);
+  });
+
+  it("concatenating parts with '\\n' restores the original text exactly — golden fixture", () => {
+    const original = renderText1(EXAMPLE_FIELDS);
+    const parts = splitTextIntoSmsParts(sanitizeGsm7(original));
+    expect(parts.join("\n")).toBe(sanitizeGsm7(original));
+  });
+
+  it("every part of the sanitized golden fixture is GSM-7 only", () => {
+    const body = sanitizeGsm7(renderText1(EXAMPLE_FIELDS));
+    for (const part of splitTextIntoSmsParts(body)) {
+      expect(isGsm7Only(part), `part not GSM-7 only: "${part.slice(0, 40)}"`).toBe(true);
+    }
+  });
+
+  it("every labeled part of the sanitized golden fixture fits in 160 GSM chars", () => {
+    const body = sanitizeGsm7(renderText1(EXAMPLE_FIELDS));
+    const labeled = applyPartLabels(splitTextIntoSmsParts(body));
+    for (const part of labeled) {
+      expect(
+        part.length,
+        `labeled part exceeds 160 chars: "${part.slice(0, 40)}..."`
+      ).toBeLessThanOrEqual(160);
+    }
+  });
+
+  it("same constraints hold for the Text-2 golden fixture (full addresses)", () => {
+    const body = sanitizeGsm7(renderText2({
+      fields: EXAMPLE_FIELDS,
+      pickupFullAddress: "2407 TEXOMA DR., Denison TX 75020",
+      dropFullAddress: "NEWCOLD STORAGE C/O RVALUE INSULATION, McDonough, GA",
+    }));
+    const labeled = applyPartLabels(splitTextIntoSmsParts(body));
+    for (const part of labeled) {
+      expect(isGsm7Only(part.replace(/^\(\d+\/\d+\)\n/, "")), "Text-2 part not GSM-7 only").toBe(true);
+      expect(part.length, `Text-2 labeled part exceeds 160 chars`).toBeLessThanOrEqual(160);
+    }
+  });
+});
+
+// ── applyPartLabels ──────────────────────────────────────────────────────────
+
+describe("applyPartLabels", () => {
+  it("returns the single part unchanged when there is only one", () => {
+    expect(applyPartLabels(["Hello World"])).toEqual(["Hello World"]);
+  });
+
+  it("adds (1/2) and (2/2) labels for two parts", () => {
+    const labeled = applyPartLabels(["Part A", "Part B"]);
+    expect(labeled[0]).toBe("(1/2)\nPart A");
+    expect(labeled[1]).toBe("(2/2)\nPart B");
+  });
+
+  it("adds (1/3)…(3/3) labels for three parts", () => {
+    const labeled = applyPartLabels(["A", "B", "C"]);
+    expect(labeled[0]).toMatch(/^\(1\/3\)\n/);
+    expect(labeled[1]).toMatch(/^\(2\/3\)\n/);
+    expect(labeled[2]).toMatch(/^\(3\/3\)\n/);
+  });
+
+  it("label format is '(N/M)\\n' — exactly 6 chars of overhead", () => {
+    const [part] = applyPartLabels(["X", "Y"]);
+    const label = part.slice(0, part.indexOf("\n") + 1); // up to and including \n
+    expect(label).toBe("(1/2)\n");
+    expect(label.length).toBe(6);
+  });
+});
+
+// ── Source-text guards: multi-part send behaviour ────────────────────────────
+
+describe("sendDriverLoadText1 / sendDriverLoadText2 — multi-part send (source-text)", () => {
+  const SRC = readFileSync(resolve(__dirname, "../driver-load-texts.ts"), "utf8");
+
+  it("sanitizes GSM-7 before splitting", () => {
+    expect(SRC).toMatch(/sanitizeGsm7/);
+  });
+
+  it("splits into parts before sending", () => {
+    expect(SRC).toMatch(/splitTextIntoSmsParts/);
+  });
+
+  it("applies part labels", () => {
+    expect(SRC).toMatch(/applyPartLabels/);
+  });
+
+  it("sends each part with smartEncoded: true", () => {
+    expect(SRC).toMatch(/smartEncoded:\s*true/);
+  });
+
+  it("sends parts sequentially with await inside a for…of loop", () => {
+    // Both send functions must use the sequential loop pattern.
+    const loopCount = (SRC.match(/for \(const part of parts\)/g) ?? []).length;
+    expect(loopCount).toBeGreaterThanOrEqual(2);
+    expect(SRC).toMatch(/await smsService\.sendSMS/);
   });
 });

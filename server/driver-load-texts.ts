@@ -105,6 +105,69 @@ export function renderText2(opts: {
 }
 
 // ---------------------------------------------------------------------------
+// GSM-7 utilities (exported for testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace the most common non-GSM-7 codepoints with plain ASCII equivalents,
+ * then replace any remaining outliers with '?'.
+ * Only characters outside the GSM-7 basic + extended-Latin set are touched —
+ * all printable ASCII (0x20–0x7E), newline, and carriage-return are left as-is.
+ */
+export function sanitizeGsm7(text: string): string {
+  return text
+    .replace(/[\u2018\u2019]/g, "'")   // left/right single quotes → '
+    .replace(/[\u201C\u201D]/g, '"')   // left/right double quotes → "
+    .replace(/\u2013/g, '-')            // en dash → -
+    .replace(/\u2014/g, '-')            // em dash → -
+    .replace(/\u2026/g, '...')          // ellipsis → ...
+    .replace(/\u2022/g, '*')            // bullet → *
+    .replace(/\u00A0/g, ' ')            // non-breaking space → regular space
+    // Keep printable ASCII, \n, \r, ESC, and the GSM-7 extended-Latin chars;
+    // everything else becomes '?'. The surrogate-pair branch handles emoji
+    // (which are two UTF-16 code units) so they produce ONE '?' rather than two.
+    .replace(/(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[^\x20-\x7E\n\r\x1B£¥èéùìòÇØøÅåÆæßÉÄÖÑÜäöñüà¤¡§¿ΔΦΓΛΩΠΨΣΘΞ])/g, '?');
+}
+
+/**
+ * Split a newline-delimited text into parts that each fit within maxCharsPerPart,
+ * splitting only at line boundaries (never mid-line).
+ * Returns content strings without labels — call applyPartLabels() next.
+ *
+ * ponytail: default 154 = 160 (single-segment GSM-7 limit) − 6 ("(N/M)\n").
+ */
+export function splitTextIntoSmsParts(text: string, maxCharsPerPart = 154): string[] {
+  const lines = text.split('\n');
+  const parts: string[] = [];
+  let currentLines: string[] = [];
+  let currentLen = 0;
+
+  for (const line of lines) {
+    const addLen = currentLines.length === 0 ? line.length : 1 + line.length; // +1 for \n
+    if (currentLines.length > 0 && currentLen + addLen > maxCharsPerPart) {
+      parts.push(currentLines.join('\n'));
+      currentLines = [line];
+      currentLen = line.length;
+    } else {
+      currentLines.push(line);
+      currentLen += addLen;
+    }
+  }
+  if (currentLines.length > 0) parts.push(currentLines.join('\n'));
+  return parts;
+}
+
+/**
+ * Prepend "(N/M)\n" to each part when there is more than one.
+ * Returns the array unchanged when it has exactly one entry (no label needed).
+ */
+export function applyPartLabels(parts: string[]): string[] {
+  if (parts.length <= 1) return parts;
+  const m = parts.length;
+  return parts.map((p, i) => `(${i + 1}/${m})\n${p}`);
+}
+
+// ---------------------------------------------------------------------------
 // Reply parsing
 // ---------------------------------------------------------------------------
 
@@ -239,11 +302,15 @@ export async function sendDriverLoadText1(
   if (!phone) return { ok: false, error: "Driver has no phone" };
 
   const fields = buildText1Fields(load);
-  const body = renderText1(fields);
+  const parts = applyPartLabels(splitTextIntoSmsParts(sanitizeGsm7(renderText1(fields))));
 
   const { smsService } = await import("./sms-service");
-  const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
-  if (!result.success) return { ok: false, error: result.error };
+  const sids: string[] = [];
+  for (const part of parts) {
+    const result = await smsService.sendSMS({ to: phone, body: part, skipFooter: true, smartEncoded: true });
+    if (!result.success) return { ok: false, error: result.error };
+    if (result.messageSid) sids.push(result.messageSid);
+  }
 
   // Persist text1SentAt on the load.
   try {
@@ -259,7 +326,7 @@ export async function sendDriverLoadText1(
   }
 
   scheduleNoConfirmAlert(loadId, load.loadNumber, (driver as any).name ?? "driver");
-  return { ok: true, messageSid: result.messageSid };
+  return { ok: true, messageSid: sids[0] };
 }
 
 // ---------------------------------------------------------------------------
@@ -360,15 +427,19 @@ export async function sendDriverLoadText2(
   if (!phone) return { ok: false, error: "Driver has no phone" };
 
   const fields = buildText1Fields(load);
-  const body = renderText2({
+  const parts = applyPartLabels(splitTextIntoSmsParts(sanitizeGsm7(renderText2({
     fields,
     pickupFullAddress: (load.pickupAddress as string | undefined) ?? `${fields.pickupCity}, ${fields.pickupState}`,
     dropFullAddress: (load.deliveryAddress as string | undefined) ?? `${fields.dropCity}, ${fields.dropState}`,
-  });
+  }))));
 
   const { smsService } = await import("./sms-service");
-  const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
-  if (!result.success) return { ok: false, error: result.error };
+  const sids: string[] = [];
+  for (const part of parts) {
+    const result = await smsService.sendSMS({ to: phone, body: part, skipFooter: true, smartEncoded: true });
+    if (!result.success) return { ok: false, error: result.error };
+    if (result.messageSid) sids.push(result.messageSid);
+  }
 
   // Persist text2SentAt.
   try {
@@ -383,5 +454,5 @@ export async function sendDriverLoadText2(
     console.warn("[driver-load-texts] could not persist text2SentAt:", err?.message || err);
   }
 
-  return { ok: true, messageSid: result.messageSid };
+  return { ok: true, messageSid: sids[0] };
 }
