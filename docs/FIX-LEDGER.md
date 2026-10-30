@@ -385,4 +385,4 @@ Format:
 - **Fix** — `server/recruiting/ops-alerts.ts` (pure) + `queueOpsAlerts()` in `notifications.ts`, called from `transitionStage()` in `routes.ts`, the single choke point for every stage change. Alerts ride the existing queue (`RECRUITING_NOTIFICATIONS_LIVE` kill switch, 24h watermark, per-(application, template) dedup, 50/hr cap). Default OFF: nothing queues until `RECRUITING_ALERT_PHONE` and/or `RECRUITING_ALERT_EMAIL` is set.
 - **Guard** — `server/__tests__/recruiting-ops-alerts.test.ts` (off by default; only PRESCREENED_PASS and DOCS_RECEIVED alert; applicant templates never reroute to the operator; source-level checks that `transitionStage` calls `queueOpsAlerts` and the processor filter includes `OPS_%`).
 - **Do NOT** — do not point this at `OWNER_ALERT_PHONE`: that var is already set for dispatch alerts, so reusing it would switch recruiting alerts on at deploy without approval. Do not trust the dashboard's "Run screenings" result: `server/recruiting/vendors.ts` is MOCK (Checkr/MVR/Clearinghouse are not wired), so a "CLEAN" MVR there proves nothing.
-- `2026-10-30 · (this branch)`
+- `2026-10-30 · b711b55`
