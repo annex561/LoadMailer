@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { fmtCdlSince } from "@shared/cdl-tenure";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -278,6 +279,9 @@ export default function RecruiterApplicant() {
                   {app.driverLicenseClass} · {app.driverLicenseNumber} · {app.driverLicenseState}
                 </Field>
                 <Field label="License Expiration">{fmtDate(app.driverLicenseExpiration)}</Field>
+                {(app.cdlFirstIssued || app.driverLicenseClass?.startsWith("CDL")) && (
+                  <Field label="CDL Since">{fmtCdlSince(app.cdlFirstIssued) ?? "Not given"}</Field>
+                )}
                 <Field label="Current Address" wide>
                   {app.currentAddress}, {app.currentCity}, {app.currentState} {app.currentZip}
                 </Field>
