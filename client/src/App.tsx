@@ -183,6 +183,7 @@ function App() {
               <Route path="/owner-operator-jobs" component={RecruitingLanding} />
               <Route path="/box-truck-careers-tennessee" component={RecruitingLanding} />
               <Route path="/lease-on-trucking-jobs" component={RecruitingLanding} />
+              <Route path="/box-truck-driver-jobs" component={RecruitingLanding} />
               <Route path="/lease-to-own-box-truck" component={OwnYourTruckLanding} />
               <Route path="/own-your-truck" component={OwnYourTruckLanding} />
               <Route path="/apply/:id" component={RecruitingApplication} />

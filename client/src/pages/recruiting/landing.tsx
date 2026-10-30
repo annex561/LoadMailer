@@ -26,6 +26,10 @@ type LandingVariant = {
   faqHeading?: string;
   faqSubhead?: string;
   faqs?: { q: string; a: string }[];
+  // Paid-ad pages: show only the hero, form, how-it-works, this variant's own
+  // FAQs and the final CTA. Hides the shared pay grid, $500 bonus, stats, perks
+  // and testimonials, whose numbers don't match a per-mile company-driver offer.
+  offerOnly?: boolean;
 };
 
 const VARIANTS: Record<string, LandingVariant> = {
@@ -117,6 +121,41 @@ const VARIANTS: Record<string, LandingVariant> = {
     ],
     leadSource: "tennessee-landing",
   },
+  // Paid-ad destination for the truck-1 driver seat. Pay matches the job post
+  // (40-45 cents/mile), not the owner-operator weekly figures above.
+  "/box-truck-driver-jobs": {
+    badge: "Now hiring · Box truck drivers · Chattanooga",
+    h1Line1: "Drive our box truck.",
+    h1Line2: "40–45¢ a mile, paid every Friday.",
+    subhead:
+      "LAMP Logistics is hiring drivers for our 26 ft box truck based in Chattanooga, TN. It's under 26,001 GVWR, so a regular driver's license works. We cover the truck, fuel, insurance, and maintenance. You drive.",
+    badges: [
+      "40–45¢ per mile",
+      "No CDL required",
+      "Truck + fuel covered",
+      "Paid every Friday",
+    ],
+    leadSource: "box-truck-driver-ad",
+    offerOnly: true,
+    faqs: [
+      {
+        q: "Do I need a CDL?",
+        a: "No. The truck is under 26,001 GVWR, so a regular driver's license works. You need a current DOT medical card and a clean driving record.",
+      },
+      {
+        q: "How does pay work?",
+        a: "40–45¢ per mile, paid every Friday. We confirm your exact rate on the call.",
+      },
+      {
+        q: "What do I need to apply?",
+        a: "Your driver's license and a copy of your driving record (MVR) from your state DMV website. Our insurance company reviews every driver before the first load.",
+      },
+      {
+        q: "What disqualifies me?",
+        a: "Recent license suspension or revocation, a DUI in the last 5 years, a failed DOT drug or alcohol test, or more than 2 moving violations in the past 3 years.",
+      },
+    ],
+  },
   "/lease-on-trucking-jobs": {
     badge: "Now hiring · Lease-on company drivers",
     h1Line1: "Lease one of our trucks.",
@@ -205,7 +244,9 @@ export default function RecruitingLanding() {
           </a>
           <div className="hidden md:flex items-center gap-7 text-sm font-medium">
             <a href="#how" className="text-slate-700 hover:text-emerald-700 transition-colors">How It Works</a>
-            <a href="#pay" className="text-slate-700 hover:text-emerald-700 transition-colors">Pay</a>
+            {!variant.offerOnly && (
+              <a href="#pay" className="text-slate-700 hover:text-emerald-700 transition-colors">Pay</a>
+            )}
             <a href="#why" className="text-slate-700 hover:text-emerald-700 transition-colors">Why LAMP</a>
             <a href="tel:+18333629813" className="text-slate-700 hover:text-emerald-700 transition-colors">
               📞 (833) 362-9813
@@ -381,6 +422,8 @@ export default function RecruitingLanding() {
         </div>
       </section>
 
+      {!variant.offerOnly && (
+        <>
       {/* PAY (forced dark even on light page — high contrast money section) */}
       <section id="pay" className="px-6 py-20" style={{ backgroundColor: "#0f172a", color: "#ffffff" }}>
         <div className="mx-auto max-w-5xl">
@@ -502,6 +545,8 @@ export default function RecruitingLanding() {
           </div>
         </div>
       </section>
+        </>
+      )}
 
       {/* FAQ */}
       <section className="px-6 py-20 bg-slate-50">
@@ -516,6 +561,8 @@ export default function RecruitingLanding() {
             {variant.faqs?.map((f) => (
               <Faq key={f.q} q={f.q} a={f.a} />
             ))}
+            {!variant.offerOnly && (
+              <>
             <Faq q="Do I need a CDL to drive for LAMP?" a="For most LAMP loads, no. Our box trucks are under 26,001 GVWR which doesn't require a CDL — just a regular driver's license. You still need a current DOT physical and a clean driving record." />
             <Faq q="How fast can I start driving?" a="Most drivers go from application to first load in 10–21 days. The timeline depends on how fast your background check, MVR, drug test, and DOT physical come back." />
             <Faq q="Do I have to own my own truck?" a="No. We offer both options. Owner-operators get an 80/20 split (you keep 80% of gross). Company drivers lease one of our trucks and run as an Independent Contractor — guaranteed $1,200/week minimum plus mileage bonuses, no truck payment, no fuel out of pocket." />
@@ -524,6 +571,8 @@ export default function RecruitingLanding() {
             <Faq q="What lanes do you run?" a="Regional and OTR mix — primarily Southeast (TN, GA, AL, FL, NC, SC, KY) with some Midwest runs. Home time depends on your lane preference. Tell your dispatcher what works." />
             <Faq q="Who's my dispatcher and how do they communicate?" a="LAMP has an exclusive dispatcher dedicated only to our drivers. You'll meet them during orientation. Communication is through TraqIQ messaging — fast, clear, and tracked." />
             <Faq q="Is the $500 sign-on bonus real?" a="Yes. Complete orientation, deliver your first 5 loads on time, and $500 hits your settlement on day 30. No fine print, no clawbacks." />
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -554,7 +603,9 @@ export default function RecruitingLanding() {
             </a>
           </div>
           <p className="mt-6 text-sm" style={{ color: "#a7f3d0" }}>
-            $500 sign-on bonus · Weekly pay · Modern equipment · Real authority
+            {variant.offerOnly
+              ? "40–45¢ a mile · Paid every Friday · No CDL required"
+              : "$500 sign-on bonus · Weekly pay · Modern equipment · Real authority"}
           </p>
         </div>
       </section>
@@ -578,7 +629,7 @@ export default function RecruitingLanding() {
               <div className="text-xs font-bold uppercase tracking-wide text-slate-900">Drive With Us</div>
               <ul className="mt-3 space-y-2 text-sm text-slate-600">
                 <li><a href="#apply" className="hover:text-emerald-700">Apply Now</a></li>
-                <li><a href="#pay" className="hover:text-emerald-700">Pay Details</a></li>
+                {!variant.offerOnly && <li><a href="#pay" className="hover:text-emerald-700">Pay Details</a></li>}
                 <li><a href="#how" className="hover:text-emerald-700">How It Works</a></li>
                 <li><a href="tel:+18333629813" className="hover:text-emerald-700">📞 (833) 362-9813</a></li>
               </ul>
