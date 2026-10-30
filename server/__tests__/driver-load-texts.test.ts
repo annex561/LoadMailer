@@ -319,3 +319,184 @@ describe("handleText1ConfirmIfPending — picks newest pending load (source-text
     expect(fn).toMatch(/isNull\(loads\.deliveredAt\)/);
   });
 });
+
+// ── Guard: broker rate (load.rate) never read in driver-load-texts.ts ────────
+// Regression guard: the fix removed the driverRate ?? load.rate fallback.
+// This source-text check fails if anyone re-introduces it.
+
+describe("source-text guard — broker rate never read in driver-load-texts.ts", () => {
+  const SRC = readFileSync(resolve(__dirname, "../driver-load-texts.ts"), "utf8");
+
+  it("driver-load-texts.ts does not reference load.rate (the broker rate field)", () => {
+    // The only safe reference is in THIS guard comment. The source must not
+    // contain load.rate as a property access.
+    const matches = [...SRC.matchAll(/\bload\.rate\b/g)];
+    expect(
+      matches,
+      "load.rate (broker rate) must not appear in driver-load-texts.ts — use load.driverRate only",
+    ).toHaveLength(0);
+  });
+
+  it("buildText1Fields does not fall back to load.rate for driverRate", () => {
+    const fnStart = SRC.indexOf("function buildText1Fields");
+    const fnEnd = SRC.indexOf("\n}", fnStart);
+    const fnBody = SRC.slice(fnStart, fnEnd);
+    expect(fnBody).not.toMatch(/load\.rate/);
+  });
+});
+
+// ── driverRate present → text contains driverRate, never broker rate ──────────
+
+describe("sendDriverLoadText1 — driverRate present → sends with correct rate", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    process.env.DRIVER_LOAD_TEXTS_ENABLED = "true";
+    process.env.OWNER_ALERT_PHONE = "+15615559999";
+  });
+  afterEach(() => {
+    vi.resetModules();
+    delete process.env.DRIVER_LOAD_TEXTS_ENABLED;
+    delete process.env.OWNER_ALERT_PHONE;
+  });
+
+  it("sends the text with driverRate (750) and never the broker rate (2500)", async () => {
+    const sentBodies: string[] = [];
+    const sendSMSMock = vi.fn().mockImplementation(async (opts: { to: string; body: string }) => {
+      sentBodies.push(opts.body);
+      return { success: true, messageSid: "SM_driver_ok" };
+    });
+    vi.doMock("../sms-service", () => ({ smsService: { sendSMS: sendSMSMock } }));
+
+    let dbCallCount = 0;
+    vi.doMock("../db", () => ({
+      db: {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => {
+                dbCallCount++;
+                if (dbCallCount === 1) {
+                  // loads query
+                  return [{ id: "load-2", loadNumber: "L002", driverId: "d2", driverRate: 750, rate: 2500 }];
+                }
+                // drivers query
+                return [{ id: "d2", phoneNumber: "+15615550002", name: "Good Driver" }];
+              },
+            }),
+          }),
+        }),
+        update: () => ({ set: () => ({ where: async () => {} }) }),
+      },
+    }));
+    vi.doMock("@shared/schema", () => ({ loads: {}, drivers: {} }));
+    vi.doMock("drizzle-orm", () => ({ eq: vi.fn() }));
+
+    const { sendDriverLoadText1 } = await import("../driver-load-texts");
+    const result = await sendDriverLoadText1("load-2");
+
+    expect(result.ok).toBe(true);
+    // Driver SMS body must contain the driver rate, not the broker rate.
+    const driverBody = sentBodies.find((b) => b.includes("Rate $ 750"));
+    expect(driverBody, "driver SMS must contain 'Rate $ 750' (driverRate)").toBeTruthy();
+    expect(
+      sentBodies.some((b) => b.includes("2500")),
+      "broker rate 2500 must never appear in any sent SMS body",
+    ).toBe(false);
+  });
+});
+
+// ── driverRate missing → no driver send + owner alert ────────────────────────
+
+describe("sendDriverLoadText1 — driverRate missing → blocked + owner alert", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    process.env.DRIVER_LOAD_TEXTS_ENABLED = "true";
+    process.env.OWNER_ALERT_PHONE = "+15615559999";
+  });
+  afterEach(() => {
+    vi.resetModules();
+    delete process.env.DRIVER_LOAD_TEXTS_ENABLED;
+    delete process.env.OWNER_ALERT_PHONE;
+  });
+
+  it("returns ok:false and alerts owner when driverRate is null", async () => {
+    const sendSMSMock = vi.fn().mockResolvedValue({ success: true, messageSid: "SM_owner_alert" });
+    vi.doMock("../sms-service", () => ({ smsService: { sendSMS: sendSMSMock } }));
+
+    let dbCallCount2 = 0;
+    vi.doMock("../db", () => ({
+      db: {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => {
+                dbCallCount2++;
+                if (dbCallCount2 === 1) {
+                  // loads query — driverRate is null, rate (broker) is 2500
+                  return [{ id: "load-3", loadNumber: "L003", driverId: "d3", driverRate: null, rate: 2500 }];
+                }
+                // drivers query
+                return [{ id: "d3", phoneNumber: "+15615550003", name: "Missing Rate Driver" }];
+              },
+            }),
+          }),
+        }),
+      },
+    }));
+    vi.doMock("@shared/schema", () => ({ loads: {}, drivers: {} }));
+    vi.doMock("drizzle-orm", () => ({ eq: vi.fn() }));
+
+    const { sendDriverLoadText1 } = await import("../driver-load-texts");
+    const result = await sendDriverLoadText1("load-3");
+
+    // Must be blocked
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/driver rate missing/i);
+
+    // SMS sent exactly once — to the OWNER, not to the driver
+    expect(sendSMSMock).toHaveBeenCalledTimes(1);
+    const alertCall = sendSMSMock.mock.calls[0][0];
+    expect(alertCall.to).toBe("+15615559999");
+    expect(alertCall.body).toMatch(/driver rate is missing/i);
+    expect(alertCall.body).toMatch(/L003/);
+    // Driver phone must NOT have been called
+    expect(
+      sendSMSMock.mock.calls.some((c: any[]) => c[0]?.to === "+15615550003"),
+      "must not send any SMS to driver when driverRate is missing",
+    ).toBe(false);
+  });
+
+  it("returns ok:false when driverRate is 0", async () => {
+    const sendSMSMock = vi.fn().mockResolvedValue({ success: true, messageSid: "SM_owner_zero" });
+    vi.doMock("../sms-service", () => ({ smsService: { sendSMS: sendSMSMock } }));
+
+    let dbCallCount3 = 0;
+    vi.doMock("../db", () => ({
+      db: {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              limit: async () => {
+                dbCallCount3++;
+                if (dbCallCount3 === 1) {
+                  return [{ id: "load-4", loadNumber: "L004", driverId: "d4", driverRate: 0, rate: 1800 }];
+                }
+                return [{ id: "d4", phoneNumber: "+15615550004", name: "Zero Rate Driver" }];
+              },
+            }),
+          }),
+        }),
+      },
+    }));
+    vi.doMock("@shared/schema", () => ({ loads: {}, drivers: {} }));
+    vi.doMock("drizzle-orm", () => ({ eq: vi.fn() }));
+
+    const { sendDriverLoadText1 } = await import("../driver-load-texts");
+    const result = await sendDriverLoadText1("load-4");
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/driver rate missing/i);
+    expect(sendSMSMock).toHaveBeenCalledTimes(1);
+    expect(sendSMSMock.mock.calls[0][0].to).toBe("+15615559999");
+  });
+});

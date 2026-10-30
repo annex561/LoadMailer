@@ -175,7 +175,7 @@ function buildText1Fields(load: Record<string, any>): Text1Fields {
     dropCity: (load.destCity as string | undefined) ?? "TBD",
     dropState: (load.destState as string | undefined) ?? "",
     weightLbs: (load.weight as number | undefined) ?? "TBD",
-    driverRate: (load as any).driverRate ?? (load.rate as number | undefined) ?? 0,
+    driverRate: (load as any).driverRate ?? 0,
   };
 }
 
@@ -223,6 +223,28 @@ function scheduleNoConfirmAlert(loadId: string, loadNumber: string, driverName: 
 }
 
 // ---------------------------------------------------------------------------
+// Owner alert — missing driver rate
+// ---------------------------------------------------------------------------
+
+async function alertOwnerMissingDriverRate(loadNumber: string): Promise<void> {
+  const alertPhone = (process.env.OWNER_ALERT_PHONE || "").trim();
+  if (!alertPhone) {
+    console.warn("[driver-load-texts] OWNER_ALERT_PHONE not set — cannot send missing-driver-rate alert");
+    return;
+  }
+  try {
+    const { smsService } = await import("./sms-service");
+    await smsService.sendSMS({
+      to: alertPhone,
+      body: `LAMP #${loadNumber}: driver rate is missing. Text 1 NOT sent to driver. Set driverRate on the load and re-trigger.`,
+      skipFooter: true,
+    });
+  } catch (err: any) {
+    console.error("[driver-load-texts] missing-driver-rate alert failed:", err?.message || err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Send Text 1
 // ---------------------------------------------------------------------------
 
@@ -237,6 +259,13 @@ export async function sendDriverLoadText1(
   const { load, driver } = pair;
   const phone: string = (driver as any).phoneNumber ?? (driver as any).phone ?? "";
   if (!phone) return { ok: false, error: "Driver has no phone" };
+
+  // Block send if driver rate is missing — never fall back to broker rate.
+  const rawDriverRate = Number((load as any).driverRate ?? 0);
+  if (!rawDriverRate) {
+    await alertOwnerMissingDriverRate(load.loadNumber ?? String(loadId));
+    return { ok: false, error: "Driver rate missing — owner alerted; Text 1 not sent" };
+  }
 
   const fields = buildText1Fields(load);
   const body = renderText1(fields);
@@ -358,6 +387,13 @@ export async function sendDriverLoadText2(
   const { load, driver } = pair;
   const phone: string = (driver as any).phoneNumber ?? (driver as any).phone ?? "";
   if (!phone) return { ok: false, error: "Driver has no phone" };
+
+  // Block send if driver rate is missing — never fall back to broker rate.
+  const rawDriverRate2 = Number((load as any).driverRate ?? 0);
+  if (!rawDriverRate2) {
+    await alertOwnerMissingDriverRate(load.loadNumber ?? String(loadId));
+    return { ok: false, error: "Driver rate missing — owner alerted; Text 2 not sent" };
+  }
 
   const fields = buildText1Fields(load);
   const body = renderText2({
