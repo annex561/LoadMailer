@@ -33,9 +33,13 @@ if (process.env.CLOUDINARY_URL && !cloudinary.config().cloud_name) {
   cloudinary.config({ secure: true });
 }
 
+// MVR is required: insurance prices the driver off it (GEICO quoted +$9,128/yr
+// for one record on 2026-10-30), so LAMP must see it before the call.
+// Regression test: server/__tests__/recruiting-apply-gap.test.ts
 const REQUIRED_DOCS_OWNER_OP = [
   "DRIVER_LICENSE_FRONT",
   "DRIVER_LICENSE_BACK",
+  "MVR",
   "SSN_CARD",
   "VOIDED_CHECK",
   "INSURANCE_CARD",
@@ -44,6 +48,7 @@ const REQUIRED_DOCS_OWNER_OP = [
 const REQUIRED_DOCS_COMPANY = [
   "DRIVER_LICENSE_FRONT",
   "DRIVER_LICENSE_BACK",
+  "MVR",
   "SSN_CARD",
   "VOIDED_CHECK",
 ];
@@ -117,8 +122,10 @@ export function registerRecruitingRoutes(app: Express) {
           error: parsed.error.issues.map((i) => i.message).join("; "),
         });
       }
-      const { firstName, lastName, phone, email, hasCdl, yearsExperience, leadSource, companyId } =
-        parsed.data;
+      const {
+        firstName, lastName, phone, email, hasCdl, yearsExperience, leadSource, companyId,
+        anyViolations3yr, anyDuiEver, okAwayWeeks, experienceVehicle,
+      } = parsed.data;
 
       const targetCompanyId = companyId || LAMP_COMPANY_ID_ENV || null;
 
@@ -154,6 +161,10 @@ export function registerRecruitingRoutes(app: Express) {
           email,
           hasCdl: hasCdl ?? null,
           yearsExperience: yearsExperience ?? null,
+          anyViolations3yr: anyViolations3yr ?? null,
+          anyDuiEver: anyDuiEver ?? null,
+          okAwayWeeks: okAwayWeeks ?? null,
+          experienceVehicle: experienceVehicle ?? null,
           leadSource: leadSource ?? null,
           consentSmsAt: new Date(),
           currentStage: "LEAD",

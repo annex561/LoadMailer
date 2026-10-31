@@ -3449,6 +3449,11 @@ export const recruitingApplications = pgTable("recruiting_applications", {
   driverLicenseClass: text("driver_license_class"),
   driverLicenseExpiration: timestamp("driver_license_expiration"),
   cdlFirstIssued: text("cdl_first_issued"), // "YYYY-MM"; insurers ask how long a CDL has been held
+  // Self-reported on /box-truck-driver-jobs against Annex's requirements (shared/driver-screen.ts)
+  anyViolations3yr: boolean("any_violations_3yr"),
+  anyDuiEver: boolean("any_dui_ever"),
+  okAwayWeeks: boolean("ok_away_weeks"),
+  experienceVehicle: text("experience_vehicle"),
   employmentHistory: jsonb("employment_history"),
   accidents3yr: jsonb("accidents_3yr"),
   violations3yr: jsonb("violations_3yr"),
@@ -3604,6 +3609,10 @@ export const insertRecruitingLeadSchema = z.object({
   email: z.string().email(),
   hasCdl: z.boolean().optional().nullable(),
   yearsExperience: z.number().int().min(0).max(60).optional().nullable(),
+  anyViolations3yr: z.boolean().optional().nullable(),
+  anyDuiEver: z.boolean().optional().nullable(),
+  okAwayWeeks: z.boolean().optional().nullable(),
+  experienceVehicle: z.enum(["box_truck", "semi", "other", "none"]).optional().nullable(),
   consentSms: z.literal(true),
   leadSource: z.string().optional().nullable(),
   companyId: z.string().optional().nullable(),

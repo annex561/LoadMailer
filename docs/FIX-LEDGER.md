@@ -386,3 +386,11 @@ Format:
 - **Guard** — `server/__tests__/recruiting-ops-alerts.test.ts` (off by default; only PRESCREENED_PASS and DOCS_RECEIVED alert; applicant templates never reroute to the operator; source-level checks that `transitionStage` calls `queueOpsAlerts` and the processor filter includes `OPS_%`).
 - **Do NOT** — do not point this at `OWNER_ALERT_PHONE`: that var is already set for dispatch alerts, so reusing it would switch recruiting alerts on at deploy without approval. Do not trust the dashboard's "Run screenings" result: `server/recruiting/vendors.ts` is MOCK (Checkr/MVR/Clearinghouse are not wired), so a "CLEAN" MVR there proves nothing.
 - `2026-10-30 · b711b55`
+
+### Box-truck ad page let through drivers insurance prices out (no MVR, wrong violation rule)
+- **Symptom** — a driver passes pre-screening, uploads every document, and GEICO then quotes a big premium jump to add them. 2026-10-30: Elijah Williams reached `DOCS_RECEIVED`; adding him took the policy from $16,973 to $26,101 a year (+$9,128). Other drivers added $0 and one added about $100, so the cost came from his record.
+- **Root cause** — three gaps. `/box-truck-driver-jobs` told drivers "more than 2 moving violations in the past 3 years" disqualifies, while Annex's rule is zero. `server/recruiting/screening.ts` auto-PASSES up to 2 violations (`maxMovingViolations3yr: 2`). The MVR was not in `REQUIRED_DOCS_*`, so LAMP never saw the record before the insurance call.
+- **Fix** — the page lists Annex's 5 requirements and asks 4 yes/no questions (`shared/driver-screen.ts`, 4 nullable columns, no auto-reject). `MVR` joins both required-doc lists. The operator alert appends `FLAG: ...` when an answer breaks a rule.
+- **Guard** — `server/__tests__/recruiting-apply-gap.test.ts` (MVR in both lists, columns + persist wired, page states the zero-violation rule and asks the questions, alert flags stay ASCII).
+- **Do NOT** — do not tighten `maxMovingViolations3yr` to 0 by itself. A FAIL sends the applicant a disqualification SMS and email, and a MANUAL_REVIEW sends LAMP no alert at all, which brings back the silent pipeline above. Change it only together with an ops alert for manual review, and get approval first. Do not read "PASS" on `/recruiting` as "insurable".
+- `2026-10-30 · b849d87`

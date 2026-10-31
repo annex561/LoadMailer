@@ -124,9 +124,9 @@ const EMAIL_TEMPLATES: Record<string, (p: Record<string, any>) => TemplateRender
     subject: "You passed pre-screening — upload your documents",
     text: `Hi ${p.first_name || "there"},\n\nYou passed pre-screening. Upload your documents:\n${p.docs_url}\n\nQuestions: (833) 362-9813.`,
     html: brandedEmail({
-      preview: "Snap photos of 4-6 documents to keep your application moving",
+      preview: "Snap photos of 5-7 documents to keep your application moving",
       heading: `${p.first_name || "Driver"}, you passed pre-screening 🎉`,
-      bodyHtml: `<p>Great news — you cleared our initial review. The fastest way to start driving is to upload your documents now.</p><p>You'll need: driver's license (front + back), Social Security card, and a voided check (for direct deposit). Owner-operators also upload truck insurance + registration.</p><p>Phone camera works fine.</p>`,
+      bodyHtml: `<p>Great news — you cleared our initial review. The fastest way to start driving is to upload your documents now.</p><p>You'll need: driver's license (front + back), your driving record (MVR) from your state DMV website, Social Security card, and a voided check (for direct deposit). Owner-operators also upload truck insurance + registration.</p><p>Phone camera works fine.</p>`,
       ctaLabel: "Upload Documents →",
       ctaUrl: p.docs_url,
       footer: `Most drivers finish uploading in under 5 minutes.`,
@@ -220,6 +220,10 @@ export async function queueOpsAlerts(applicationId: string, toStage: string) {
       hasCdl: ra.hasCdl,
       yearsExperience: ra.yearsExperience,
       isOwnerOperator: ra.isOwnerOperator,
+      anyViolations3yr: ra.anyViolations3yr,
+      anyDuiEver: ra.anyDuiEver,
+      okAwayWeeks: ra.okAwayWeeks,
+      experienceVehicle: ra.experienceVehicle,
     })
     .from(ra)
     .where(eq(ra.id, applicationId))
@@ -233,6 +237,10 @@ export async function queueOpsAlerts(applicationId: string, toStage: string) {
     has_cdl: app.hasCdl,
     years: app.yearsExperience,
     owner_operator: app.isOwnerOperator,
+    any_violations_3yr: app.anyViolations3yr,
+    any_dui_ever: app.anyDuiEver,
+    ok_away_weeks: app.okAwayWeeks,
+    experience_vehicle: app.experienceVehicle,
     review_url: `${baseUrl}/recruiting/${applicationId}`,
   };
   for (const a of alerts) {
