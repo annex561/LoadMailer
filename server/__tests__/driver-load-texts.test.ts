@@ -15,7 +15,40 @@ import {
   isAffirmative,
   parseEta,
   _cancelNoConfirmAlert,
+  scheduleNoConfirmAlert,
 } from "../driver-load-texts";
+
+// ── Module-level mocks (hoisted; cover dynamic imports inside timer callbacks) ─
+// These mock the same absolute paths that driver-load-texts.ts imports at runtime.
+vi.mock("../sms-service", () => ({
+  smsService: {
+    sendSMS: vi.fn().mockResolvedValue({ success: true, messageSid: "SM_fake" }),
+  },
+}));
+vi.mock("../db", () => ({
+  db: {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          // Timer re-check: load found, not yet confirmed → alert fires.
+          limit: () => [{ id: "load-abc", driverTextConfirmedAt: null }],
+        }),
+      }),
+    }),
+    update: () => ({ set: () => ({ where: () => Promise.resolve() }) }),
+  },
+}));
+vi.mock("@shared/schema", () => ({ loads: {}, drivers: {} }));
+vi.mock("drizzle-orm", () => ({
+  eq: vi.fn(),
+  and: vi.fn(),
+  isNotNull: vi.fn(),
+  isNull: vi.fn(),
+  desc: vi.fn(),
+}));
+
+// Pull the mocked sendSMS so tests can assert on it.
+import { smsService } from "../sms-service";
 
 // ── Fixture / golden file ────────────────────────────────────────────────────
 
@@ -241,41 +274,72 @@ describe("sendDriverLoadText1 — flag off", () => {
 // ── No-confirm timeout alert (fake timers) ───────────────────────────────────
 
 describe("no-confirm timeout alert", () => {
+  // Capture setTimeout callbacks directly so we can await the async callback
+  // to completion before asserting. vi.advanceTimersByTimeAsync fires the
+  // callback but @sinonjs only yields once per timer, so a multi-await
+  // callback (db import → smsService import → sendSMS) would not be done
+  // before the assertion ran. Capturing and manually awaiting the callback
+  // gives deterministic, race-free results.
+  let capturedTimers: Map<unknown, () => void>;
+
   beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-    delete process.env.DRIVER_TEXT1_CONFIRM_TIMEOUT_MS;
-    delete process.env.OWNER_ALERT_PHONE;
-    delete process.env.DRIVER_LOAD_TEXTS_ENABLED;
-  });
-
-  it("fires an alert after the configured timeout when no confirm arrives", async () => {
-    // Minimal mocks — no DB, no real SMS.
-    const sendSMSMock = vi.fn().mockResolvedValue({ success: true, messageSid: "SM_fake" });
-    vi.doMock("../sms-service", () => ({
-      smsService: { sendSMS: sendSMSMock },
-    }));
-    vi.doMock("./db", () => ({ db: { select: () => ({ from: () => ({ where: () => ({ limit: () => [null] }) }) }) } }));
-    vi.doMock("@shared/schema", () => ({ loads: {} }));
-    vi.doMock("drizzle-orm", () => ({ eq: vi.fn(), isNotNull: vi.fn(), isNull: vi.fn() }));
-
-    // Set a short timeout so fake timers can advance through it.
+    capturedTimers = new Map();
+    vi.spyOn(global, "setTimeout").mockImplementation((fn: any, _ms?: any) => {
+      const id = Symbol();
+      capturedTimers.set(id, fn);
+      return id as any;
+    });
+    vi.spyOn(global, "clearTimeout").mockImplementation((id?: any) => {
+      capturedTimers.delete(id);
+    });
     process.env.DRIVER_TEXT1_CONFIRM_TIMEOUT_MS = "5000";
     process.env.OWNER_ALERT_PHONE = "+15615551234";
-    process.env.DRIVER_LOAD_TEXTS_ENABLED = "true";
+    vi.mocked(smsService.sendSMS).mockClear();
+  });
 
-    // Import after mocks are in place.
-    const { _cancelNoConfirmAlert } = await import("../driver-load-texts");
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete process.env.DRIVER_TEXT1_CONFIRM_TIMEOUT_MS;
+    delete process.env.OWNER_ALERT_PHONE;
+  });
 
-    // Schedule the alert by invoking a re-import of the module's internals.
-    // We can't call scheduleNoConfirmAlert directly (it's private), so we test
-    // the observable side effect: the timeout's existence and the alert send.
-    // The simplest reliable test: confirm the timeout cancellation works.
-    _cancelNoConfirmAlert("test-load-id-timeout");
-    // If we reach here without errors, the cancel path is safe.
-    expect(true).toBe(true);
+  it("fires owner alert with load number and driver name when driver does not confirm", async () => {
+    scheduleNoConfirmAlert("load-abc", "LAMP-99", "John Doe");
+
+    // Invoke the captured timer callback — this is what fires after the timeout.
+    expect(capturedTimers.size).toBe(1);
+    await capturedTimers.values().next().value();
+
+    expect(vi.mocked(smsService.sendSMS)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "+15615551234",
+        body: expect.stringMatching(/LAMP-99/),
+      }),
+    );
+    expect(vi.mocked(smsService.sendSMS)).toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringMatching(/John Doe/) }),
+    );
+  });
+
+  it("does NOT fire owner alert when driver confirms (cancels timer) before timeout", async () => {
+    scheduleNoConfirmAlert("load-cancel", "LAMP-99", "John Doe");
+    // Simulate driver confirming — clearTimeout removes it from capturedTimers.
+    _cancelNoConfirmAlert("load-cancel");
+
+    expect(capturedTimers.size, "timer must be cleared after cancel").toBe(0);
+    expect(vi.mocked(smsService.sendSMS)).not.toHaveBeenCalled();
+  });
+
+  it("does NOT schedule any timer when DRIVER_LOAD_TEXTS_ENABLED is off", async () => {
+    delete process.env.DRIVER_LOAD_TEXTS_ENABLED;
+    const { sendDriverLoadText1 } = await import("../driver-load-texts");
+
+    const result = await sendDriverLoadText1("load-flag-off");
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/DRIVER_LOAD_TEXTS_ENABLED/);
+    expect(capturedTimers.size, "no timer must be scheduled when flag is off").toBe(0);
+    expect(vi.mocked(smsService.sendSMS)).not.toHaveBeenCalled();
   });
 
   it("_cancelNoConfirmAlert is a no-op for unknown loadId", () => {

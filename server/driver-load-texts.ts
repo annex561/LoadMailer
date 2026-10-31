@@ -192,7 +192,7 @@ export function _cancelNoConfirmAlert(loadId: string): void {
   if (t) { clearTimeout(t); _pendingAlerts.delete(loadId); }
 }
 
-function scheduleNoConfirmAlert(loadId: string, loadNumber: string, driverName: string): void {
+export function scheduleNoConfirmAlert(loadId: string, loadNumber: string, driverName: string): void {
   _cancelNoConfirmAlert(loadId);
   const ms = Number(process.env.DRIVER_TEXT1_CONFIRM_TIMEOUT_MS) || 60 * 60 * 1000; // default 60 min
   const timer = setTimeout(async () => {
