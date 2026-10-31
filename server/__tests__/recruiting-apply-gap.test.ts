@@ -85,6 +85,8 @@ describe("wiring (source-level)", () => {
     expect(block).toContain("screenQuestions: true");
     expect(block).toContain("No moving violations in the last 3 years");
     expect(block).toContain("2–3 weeks a month");
+    expect(block).toContain("per loaded mile");
+    expect(block).not.toMatch(/40–45¢ (a|per) mile/);
     expect(block).not.toContain("more than 2 moving violations");
   });
 });
