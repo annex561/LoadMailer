@@ -128,15 +128,15 @@ const VARIANTS: Record<string, LandingVariant> = {
     leadSource: "tennessee-landing",
   },
   // Paid-ad destination for the truck-1 driver seat. Pay matches the job post
-  // (40-45 cents/mile), not the owner-operator weekly figures above.
+  // (40-45 cents per loaded mile), not the owner-operator weekly figures above.
   "/box-truck-driver-jobs": {
     badge: "Now hiring · Box truck drivers · Chattanooga",
     h1Line1: "Drive our box truck.",
-    h1Line2: "40–45¢ a mile, paid every Friday.",
+    h1Line2: "40–45¢ a loaded mile, paid every Friday.",
     subhead:
       "LAMP Logistics is hiring a driver for our 26 ft box truck based in Chattanooga, TN. It's under 26,001 GVWR, so a regular driver's license works. Runs are regional and over-the-road, out 2–3 weeks a month. We cover the truck, fuel, insurance, and maintenance.",
     badges: [
-      "40–45¢ per mile",
+      "40–45¢ per loaded mile",
       "No CDL required",
       "Truck + fuel covered",
       "Paid every Friday",
@@ -160,7 +160,7 @@ const VARIANTS: Record<string, LandingVariant> = {
       },
       {
         q: "How does pay work?",
-        a: "40–45¢ per mile, paid every Friday. We confirm your exact rate on the call.",
+        a: "40–45¢ per loaded mile (miles with freight on the truck), paid every Friday. We confirm your exact rate on the call.",
       },
       {
         q: "How long am I out?",
@@ -690,7 +690,7 @@ export default function RecruitingLanding() {
           </div>
           <p className="mt-6 text-sm" style={{ color: "#a7f3d0" }}>
             {variant.offerOnly
-              ? "40–45¢ a mile · Paid every Friday · No CDL required"
+              ? "40–45¢ a loaded mile · Paid every Friday · No CDL required"
               : "$500 sign-on bonus · Weekly pay · Modern equipment · Real authority"}
           </p>
         </div>
