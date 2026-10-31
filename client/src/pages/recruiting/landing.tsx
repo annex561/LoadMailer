@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, Truck, DollarSign, Calendar, Shield, MessageSquare } from "lucide-react";
+import { EXPERIENCE_VEHICLES } from "@shared/driver-screen";
 
 // Variants for SEO-targeted landing pages. Each variant changes the hero
 // copy and badges to match a specific keyword cluster. Same form below,
@@ -30,6 +31,11 @@ type LandingVariant = {
   // FAQs and the final CTA. Hides the shared pay grid, $500 bonus, stats, perks
   // and testimonials, whose numbers don't match a per-mile company-driver offer.
   offerOnly?: boolean;
+  // Hiring requirements listed in the hero so drivers self-select before applying.
+  requirements?: string[];
+  // Ask the yes/no screen questions (shared/driver-screen.ts) on the lead form.
+  // No auto-reject: answers are stored and flagged to LAMP.
+  screenQuestions?: boolean;
 };
 
 const VARIANTS: Record<string, LandingVariant> = {
@@ -128,7 +134,7 @@ const VARIANTS: Record<string, LandingVariant> = {
     h1Line1: "Drive our box truck.",
     h1Line2: "40–45¢ a mile, paid every Friday.",
     subhead:
-      "LAMP Logistics is hiring drivers for our 26 ft box truck based in Chattanooga, TN. It's under 26,001 GVWR, so a regular driver's license works. We cover the truck, fuel, insurance, and maintenance. You drive.",
+      "LAMP Logistics is hiring a driver for our 26 ft box truck based in Chattanooga, TN. It's under 26,001 GVWR, so a regular driver's license works. Runs are regional and over-the-road, out 2–3 weeks a month. We cover the truck, fuel, insurance, and maintenance.",
     badges: [
       "40–45¢ per mile",
       "No CDL required",
@@ -137,6 +143,16 @@ const VARIANTS: Record<string, LandingVariant> = {
     ],
     leadSource: "box-truck-driver-ad",
     offerOnly: true,
+    screenQuestions: true,
+    requirements: [
+      "No moving violations in the last 3 years",
+      "No DUIs",
+      "Clean driving record (MVR)",
+      "Experience in a box truck, semi, or similar",
+      "OK being away from home 2–3 weeks a month",
+      "Valid driver's license and DOT medical card",
+      "Pass a drug test and background check",
+    ],
     faqs: [
       {
         q: "Do I need a CDL?",
@@ -147,12 +163,16 @@ const VARIANTS: Record<string, LandingVariant> = {
         a: "40–45¢ per mile, paid every Friday. We confirm your exact rate on the call.",
       },
       {
+        q: "How long am I out?",
+        a: "Runs are regional and over-the-road. Plan on 2–3 weeks out each month.",
+      },
+      {
         q: "What do I need to apply?",
-        a: "Your driver's license and a copy of your driving record (MVR) from your state DMV website. Our insurance company reviews every driver before the first load.",
+        a: "Your driver's license and a copy of your driving record (MVR) from your state DMV website. You upload both after the application. Our insurance company reviews every driver before the first load.",
       },
       {
         q: "What disqualifies me?",
-        a: "Recent license suspension or revocation, a DUI in the last 5 years, a failed DOT drug or alcohol test, or more than 2 moving violations in the past 3 years.",
+        a: "A moving violation in the last 3 years, any DUI, a license suspension or revocation, or a failed DOT drug or alcohol test. Our insurance company has to approve every driver.",
       },
     ],
   },
@@ -186,11 +206,27 @@ export default function RecruitingLanding() {
     email: "",
     hasCdl: "no",
     yearsExperience: 1,
+    anyViolations3yr: "",
+    anyDuiEver: "",
+    okAwayWeeks: "",
+    experienceVehicle: "",
     consentSms: false,
   });
+  const yn = (v: string) => (v === "" ? undefined : v === "yes");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (
+      variant.screenQuestions &&
+      [form.anyViolations3yr, form.anyDuiEver, form.okAwayWeeks, form.experienceVehicle].includes("")
+    ) {
+      toast({
+        title: "Answer the quick questions",
+        description: "Pick an answer for each question above the consent box",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!form.consentSms) {
       toast({
         title: "SMS consent required",
@@ -211,6 +247,10 @@ export default function RecruitingLanding() {
           email: form.email,
           hasCdl: form.hasCdl === "yes",
           yearsExperience: form.yearsExperience,
+          anyViolations3yr: yn(form.anyViolations3yr),
+          anyDuiEver: yn(form.anyDuiEver),
+          okAwayWeeks: yn(form.okAwayWeeks),
+          experienceVehicle: form.experienceVehicle || undefined,
           consentSms: true,
           leadSource: variant.leadSource,
         }),
@@ -292,6 +332,19 @@ export default function RecruitingLanding() {
                 <Badge key={b}>{b}</Badge>
               ))}
             </div>
+            {variant.requirements && (
+              <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5 max-w-xl">
+                <div className="text-sm font-bold text-slate-900">You need:</div>
+                <ul className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                  {variant.requirements.map((r) => (
+                    <li key={r} className="flex items-start gap-2">
+                      <CheckCircle className="h-4 w-4 mt-0.5 shrink-0 text-emerald-600" />
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* APPLY FORM */}
@@ -372,6 +425,39 @@ export default function RecruitingLanding() {
                     />
                   </div>
                 </div>
+
+                {variant.screenQuestions && (
+                  <div className="space-y-3">
+                    <QuestionSelect
+                      id="anyViolations3yr"
+                      label="Any moving violations (tickets) in the last 3 years?"
+                      value={form.anyViolations3yr}
+                      onChange={(v) => setForm({ ...form, anyViolations3yr: v })}
+                      options={YES_NO}
+                    />
+                    <QuestionSelect
+                      id="anyDuiEver"
+                      label="Any DUI, ever?"
+                      value={form.anyDuiEver}
+                      onChange={(v) => setForm({ ...form, anyDuiEver: v })}
+                      options={YES_NO}
+                    />
+                    <QuestionSelect
+                      id="okAwayWeeks"
+                      label="OK being away from home 2–3 weeks a month?"
+                      value={form.okAwayWeeks}
+                      onChange={(v) => setForm({ ...form, okAwayWeeks: v })}
+                      options={YES_NO}
+                    />
+                    <QuestionSelect
+                      id="experienceVehicle"
+                      label="Most of your driving experience is in a"
+                      value={form.experienceVehicle}
+                      onChange={(v) => setForm({ ...form, experienceVehicle: v })}
+                      options={Object.entries(EXPERIENCE_VEHICLES).map(([value, label]) => ({ value, label }))}
+                    />
+                  </div>
+                )}
 
                 <label className="flex items-start gap-2 text-xs text-slate-600">
                   <Checkbox
@@ -713,6 +799,33 @@ function Badge({ children }: { children: React.ReactNode }) {
       <CheckCircle className="h-3.5 w-3.5" />
       {children}
     </span>
+  );
+}
+
+const YES_NO = [
+  { value: "no", label: "No" },
+  { value: "yes", label: "Yes" },
+];
+
+function QuestionSelect({ id, label, value, onChange, options }: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div>
+      <Label htmlFor={id}>{label}</Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={id}><SelectValue placeholder="Choose one" /></SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 

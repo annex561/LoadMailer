@@ -7,6 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { fmtCdlSince } from "@shared/cdl-tenure";
+import { EXPERIENCE_VEHICLES, screenFlags } from "@shared/driver-screen";
+
+const yesNo = (v: boolean | null | undefined) => (v == null ? "Not asked" : v ? "Yes" : "No");
 import {
   ArrowLeft,
   CheckCircle2,
@@ -281,6 +284,19 @@ export default function RecruiterApplicant() {
                 <Field label="License Expiration">{fmtDate(app.driverLicenseExpiration)}</Field>
                 {(app.cdlFirstIssued || app.driverLicenseClass?.startsWith("CDL")) && (
                   <Field label="CDL Since">{fmtCdlSince(app.cdlFirstIssued) ?? "Not given"}</Field>
+                )}
+                {app.experienceVehicle != null && (
+                  <>
+                    <Field label="Tickets, last 3 yrs (self-reported)">{yesNo(app.anyViolations3yr)}</Field>
+                    <Field label="DUI ever (self-reported)">{yesNo(app.anyDuiEver)}</Field>
+                    <Field label="OK 2-3 weeks out">{yesNo(app.okAwayWeeks)}</Field>
+                    <Field label="Experience In">{EXPERIENCE_VEHICLES[app.experienceVehicle] ?? app.experienceVehicle}</Field>
+                    {screenFlags(app).length > 0 && (
+                      <Field label="Screen Flags" wide>
+                        <span className="text-red-700 font-semibold">{screenFlags(app).join(" · ")}</span>
+                      </Field>
+                    )}
+                  </>
                 )}
                 <Field label="Current Address" wide>
                   {app.currentAddress}, {app.currentCity}, {app.currentState} {app.currentZip}

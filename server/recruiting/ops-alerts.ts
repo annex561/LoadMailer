@@ -4,6 +4,7 @@
 // DB / Twilio / Vite import chain. Imported by server/recruiting/notifications.ts.
 // Regression test: server/__tests__/recruiting-ops-alerts.test.ts
 import type { TemplateRender } from "./sms-templates";
+import { screenFlags } from "@shared/driver-screen";
 
 type Env = Record<string, string | undefined>;
 export type OpsAlert = { channel: "SMS" | "EMAIL"; templateKey: string };
@@ -39,8 +40,15 @@ export function renderOpsAlert(templateKey: string, p: Record<string, any>): Tem
     p.years != null ? `${p.years} yrs` : null,
     p.owner_operator ? "owner-operator" : null,
   ].filter(Boolean).join(", ");
+  const flags = screenFlags({
+    anyViolations3yr: p.any_violations_3yr,
+    anyDuiEver: p.any_dui_ever,
+    okAwayWeeks: p.ok_away_weeks,
+    experienceVehicle: p.experience_vehicle,
+  });
+  const flagText = flags.length ? ` FLAG: ${flags.join(", ")}.` : "";
   return {
     subject: `Driver ready: ${who} ${what}`,
-    text: `LAMP driver alert: ${who} ${what} (${profile}). Call ${p.phone || "no phone on file"}. Review: ${p.review_url}`,
+    text: `LAMP driver alert: ${who} ${what} (${profile}).${flagText} Call ${p.phone || "no phone on file"}. Review: ${p.review_url}`,
   };
 }
