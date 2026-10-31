@@ -867,6 +867,10 @@ export async function ensureSchema(): Promise<void> {
         )
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_sms_delivery_log_sid ON sms_delivery_log(sid)`);
+      // S-audio: track MMS attachment count + message kind so the numMedia=0
+      // monitor can flag audio-flag-on sends that arrived without the attachment.
+      await pool.query(`ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS num_media INTEGER DEFAULT 0`);
+      await pool.query(`ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS kind TEXT`);
       log('✅ sms_delivery_log table ready');
     } catch (e: any) {
       log(`⚠️ sms_delivery_log: ${e.message}`);

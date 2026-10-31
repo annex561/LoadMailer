@@ -177,13 +177,15 @@ export class SMSLoadService {
   }
 
   async sendSMS(
-    toOrParams: string | { to: string, body: string, skipFooter?: boolean },
+    toOrParams: string | { to: string, body: string, skipFooter?: boolean, mediaUrls?: string[], kind?: string },
     bodyParam?: string,
   ): Promise<{ success: boolean, error?: string, messageSid?: string }> {
-    // Handle both calling patterns: sendSMS(to, body) or sendSMS({ to, body, skipFooter? })
+    // Handle both calling patterns: sendSMS(to, body) or sendSMS({ to, body, skipFooter?, mediaUrls?, kind? })
     const to = typeof toOrParams === 'string' ? toOrParams : toOrParams.to;
     let body = typeof toOrParams === 'string' ? bodyParam! : toOrParams.body;
     const skipFooter = typeof toOrParams === 'object' && !!toOrParams.skipFooter;
+    const mediaUrls = typeof toOrParams === 'object' ? (toOrParams.mediaUrls ?? []) : [];
+    const kind = typeof toOrParams === 'object' ? (toOrParams.kind ?? null) : null;
 
     // KILL SWITCH — set SMS_DISABLED=true on Railway to instantly halt every
     // outbound SMS without removing Twilio credentials. Hits BEFORE any other
@@ -241,7 +243,8 @@ export class SMSLoadService {
       // Build message params - use Messaging Service SID if available, otherwise use phone number
       const messageParams: any = {
         body: body,
-        to: normalizedPhone
+        to: normalizedPhone,
+        ...(mediaUrls.length > 0 ? { mediaUrl: mediaUrls } : {}),
       };
 
       // Get the base URL for status callbacks
@@ -269,11 +272,60 @@ export class SMSLoadService {
       const message = await this.twilioClient.messages.create(messageParams);
 
       console.log(`✅ SMS sent to ${normalizedPhone} (SID: ${message.sid}): ${body.substring(0, 50)}...`);
+
+      // Persist num_media + kind to sms_delivery_log so the numMedia=0 monitor
+      // can flag audio-flag-on sends that arrived without the attachment.
+      if ((mediaUrls.length > 0 || kind) && process.env.DATABASE_URL) {
+        try {
+          const { pool } = await import('./db');
+          await pool.query(
+            `INSERT INTO sms_delivery_log (sid, to_phone, status, num_media, kind)
+             VALUES ($1, $2, 'sent', $3, $4)
+             ON CONFLICT (sid) DO UPDATE SET
+               num_media = EXCLUDED.num_media,
+               kind      = EXCLUDED.kind,
+               updated_at = NOW()`,
+            [message.sid, normalizedPhone, mediaUrls.length, kind],
+          );
+        } catch {
+          // non-fatal — delivery log is best-effort
+        }
+      }
+
       return { success: true, messageSid: message.sid };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       console.error(`❌ Failed to send SMS to ${to}:`, error);
       return { success: false, error: errorMsg };
+    }
+  }
+
+  /**
+   * Voice fallback: call `to` and read `text` aloud via Amazon Polly <Say>.
+   * Used when an MMS send fails and DRIVER_TEXT_VOICE_FALLBACK_ENABLED=true.
+   * Never from the messaging service SID — voice needs a real E.164 from number.
+   */
+  async callWithSay(
+    to: string,
+    text: string,
+  ): Promise<{ success: boolean; error?: string; callSid?: string }> {
+    if (!this.isConfigured || !this.twilioClient) {
+      return { success: false, error: 'SMS service not configured' };
+    }
+    const from = this.twilioPhoneNumber;
+    if (!from) {
+      return { success: false, error: 'TWILIO_PHONE_NUMBER not set — cannot make voice calls' };
+    }
+    try {
+      const { escapeTwimlText } = await import('./driver-text-audio');
+      const normalizedTo = to.startsWith('+') ? to : `+1${to.replace(/\D/g, '')}`;
+      const twiml = `<Response><Say voice="Polly.Joanna">${escapeTwimlText(text)}</Say></Response>`;
+      const call = await this.twilioClient.calls.create({ to: normalizedTo, from, twiml });
+      console.log(`📞 Voice fallback call placed to ${normalizedTo} (SID: ${call.sid})`);
+      return { success: true, callSid: call.sid };
+    } catch (err: any) {
+      console.error(`❌ Voice fallback call failed to ${to}:`, err?.message || err);
+      return { success: false, error: err?.message || 'Unknown error' };
     }
   }
 

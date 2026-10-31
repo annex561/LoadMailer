@@ -8121,6 +8121,7 @@ TRAQ IQ Dispatch Team
           to: msg.to,
           from: msg.from,
           dateSent: msg.dateSent,
+          numMedia: Number(msg.numMedia ?? 0),
         };
       } catch (twilioErr: any) {
         // Non-fatal — return local data if Twilio unreachable
