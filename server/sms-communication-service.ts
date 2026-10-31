@@ -367,8 +367,57 @@ export class SMSCommunicationService {
         }
       }
 
-      // Send acknowledgment to driver
-      await this.sendSMS(fromPhone, "✅ Message received. Dispatch has been notified.");
+      // Relay inbound message to dispatcher / owner when flag is on.
+      // Only send the "Dispatch has been notified" ack AFTER the relay succeeds.
+      // If the flag is off (or no relay phone is configured), be truthful.
+      const relayEnabled = process.env.DRIVER_INBOUND_RELAY_ENABLED === 'true';
+      let relaySucceeded = false;
+      if (relayEnabled) {
+        const relayPhone = (process.env.DISPATCHER_PHONE_NUMBER || process.env.OWNER_ALERT_PHONE || '').trim();
+        if (relayPhone) {
+          try {
+            const driverLabel = driver.name || fromPhone;
+            const relayBody = `[Driver ${driverLabel}] ${message || ''}`.trim();
+            // Pass through any MMS media URLs from the inbound message as-is.
+            const inboundMediaUrls: string[] = mediaUrls.length > 0 ? [...mediaUrls] : [];
+            // Optionally attach a TTS audio summary when text-only relay is sent.
+            let relayMediaUrls: string[] | undefined = inboundMediaUrls.length > 0
+              ? inboundMediaUrls
+              : undefined;
+            if (
+              process.env.OWNER_RELAY_AUDIO_ENABLED === 'true' &&
+              !relayMediaUrls &&
+              message?.trim()
+            ) {
+              const { audioUrlForText } = await import('./driver-text-audio');
+              const url = await audioUrlForText(relayBody, `inbound_relay_${smsId}`);
+              if (url) relayMediaUrls = [url];
+            }
+            const relayResult = await smsService.sendSMS({
+              to: relayPhone,
+              body: relayBody,
+              skipFooter: true,
+              mediaUrls: relayMediaUrls,
+              kind: 'inbound_relay',
+            });
+            if (relayResult.success) {
+              relaySucceeded = true;
+            } else {
+              console.error(`[inbound-relay] relay to ${relayPhone} failed:`, relayResult.error);
+            }
+          } catch (relayErr: any) {
+            console.error('[inbound-relay] relay threw:', relayErr?.message || relayErr);
+          }
+        } else {
+          console.warn('[inbound-relay] DRIVER_INBOUND_RELAY_ENABLED=true but no DISPATCHER_PHONE_NUMBER or OWNER_ALERT_PHONE set');
+        }
+      }
+
+      // Send acknowledgment to driver — truthful about whether dispatch was reached.
+      const ack = relaySucceeded
+        ? '✅ Message received. Dispatch has been notified.'
+        : '✅ Message received.';
+      await this.sendSMS(fromPhone, ack);
       
       // Log communication activity for primary load context (only when load is present)
       const primaryContext = loadContexts[0];

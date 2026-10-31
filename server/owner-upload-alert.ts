@@ -126,10 +126,17 @@ export async function notifyOwnerOfUpload(p: {
     const what = p.confirm ? `submitted ${phase} photos` : `uploaded ${stageLabel}`;
     const msg = `LAMP ${load.loadNumber}${brokerPart}: driver ${driverName} ${what} [${n} of ${m}]. View: ${viewUrl}`;
 
+    let mediaUrls: string[] | undefined;
+    if (process.env.OWNER_RELAY_AUDIO_ENABLED === 'true') {
+      const { audioUrlForText } = await import('./driver-text-audio');
+      const url = await audioUrlForText(msg, `owner_alert_${p.loadId}_${phase}`);
+      if (url) mediaUrls = [url];
+    }
+
     // skipFooter: the owner's number is also a driver record, so the default
     // footer would append his own /driver/<token> portal link to every alert
     // and double the segment count. Same as the other admin alert crons.
-    await smsLoadService.sendSMS({ to: phone, body: msg, skipFooter: true });
+    await smsLoadService.sendSMS({ to: phone, body: msg, skipFooter: true, mediaUrls, kind: 'owner_alert' });
   } catch (err: any) {
     // Non-blocking: log only; upload result is already returned to driver
     console.error('[owner-alert] alert failed (non-blocking):', err?.message || err);

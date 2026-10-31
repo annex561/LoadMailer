@@ -241,9 +241,33 @@ export async function sendDriverLoadText1(
   const fields = buildText1Fields(load);
   const body = renderText1(fields);
 
+  // ONE audio for the whole Text 1 body. Attached to the first (and only, until
+  // PR #164 lands) SMS part. If #164 merges after this PR and splits the body
+  // into N parts, its send loop must pass mediaUrls only on the first iteration
+  // and omit it on subsequent parts — see PR body for the merge note.
+  let mediaUrls: string[] | undefined;
+  if (process.env.DRIVER_TEXT_AUDIO_ENABLED === 'true') {
+    const { audioUrlForText } = await import("./driver-text-audio");
+    const url = await audioUrlForText(body, `text1_${loadId}`);
+    if (url) mediaUrls = [url];
+    else console.warn("[driver-load-texts] Text 1 audio generation failed — sending text-only");
+  }
+
   const { smsService } = await import("./sms-service");
-  const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
-  if (!result.success) return { ok: false, error: result.error };
+  const result = await smsService.sendSMS({ to: phone, body, skipFooter: true, mediaUrls, kind: 'driver_text' });
+
+  // Voice fallback: if MMS failed (likely due to mediaUrl) and fallback is enabled, call.
+  if (!result.success && mediaUrls && process.env.DRIVER_TEXT_VOICE_FALLBACK_ENABLED === 'true') {
+    console.log("[driver-load-texts] MMS failed — trying voice fallback");
+    await smsService.callWithSay(phone, body).catch((err: any) =>
+      console.error("[driver-load-texts] voice fallback failed:", err?.message || err),
+    );
+  }
+
+  if (!result.success && !mediaUrls) return { ok: false, error: result.error };
+  // If MMS failed but audio was attached, still treat as sent so Text 1 flow continues.
+  // (The driver may still receive the text body; the audio is best-effort.)
+  if (!result.success && mediaUrls) return { ok: false, error: result.error };
 
   // Persist text1SentAt on the load.
   try {
@@ -327,10 +351,19 @@ export async function handleText1ConfirmIfPending(
       if (alertPhone) {
         const { smsService } = await import("./sms-service");
         const etaPart = eta ? ` ETA: ${eta}` : "";
+        const alertBody = `LAMP #${pending.loadNumber}: driver confirmed Text 1.${etaPart} Reply: "${rawBody.slice(0, 80)}"`;
+        let alertMediaUrls: string[] | undefined;
+        if (process.env.OWNER_RELAY_AUDIO_ENABLED === 'true') {
+          const { audioUrlForText } = await import("./driver-text-audio");
+          const url = await audioUrlForText(alertBody, `confirm_${pending.id}`);
+          if (url) alertMediaUrls = [url];
+        }
         await smsService.sendSMS({
           to: alertPhone,
-          body: `LAMP #${pending.loadNumber}: driver confirmed Text 1.${etaPart} Reply: "${rawBody.slice(0, 80)}"`,
+          body: alertBody,
           skipFooter: true,
+          mediaUrls: alertMediaUrls,
+          kind: 'owner_alert',
         });
       }
     } catch (err: any) {
@@ -366,8 +399,24 @@ export async function sendDriverLoadText2(
     dropFullAddress: (load.deliveryAddress as string | undefined) ?? `${fields.dropCity}, ${fields.dropState}`,
   });
 
+  let mediaUrls: string[] | undefined;
+  if (process.env.DRIVER_TEXT_AUDIO_ENABLED === 'true') {
+    const { audioUrlForText } = await import("./driver-text-audio");
+    const url = await audioUrlForText(body, `text2_${loadId}`);
+    if (url) mediaUrls = [url];
+    else console.warn("[driver-load-texts] Text 2 audio generation failed — sending text-only");
+  }
+
   const { smsService } = await import("./sms-service");
-  const result = await smsService.sendSMS({ to: phone, body, skipFooter: true });
+  const result = await smsService.sendSMS({ to: phone, body, skipFooter: true, mediaUrls, kind: 'driver_text' });
+
+  if (!result.success && mediaUrls && process.env.DRIVER_TEXT_VOICE_FALLBACK_ENABLED === 'true') {
+    console.log("[driver-load-texts] Text 2 MMS failed — trying voice fallback");
+    await smsService.callWithSay(phone, body).catch((err: any) =>
+      console.error("[driver-load-texts] Text 2 voice fallback failed:", err?.message || err),
+    );
+  }
+
   if (!result.success) return { ok: false, error: result.error };
 
   // Persist text2SentAt.
