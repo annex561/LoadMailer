@@ -1691,6 +1691,28 @@
       "date": "2026-10-30",
       "verdict": "unverified",
       "notes": "Ran 11 WebSearch queries (core 7 + variations incl. Chattanooga-region and secondary-make queries) plus 1 WebFetch test (dtitrucks.com - EGRESS_BLOCKED/DNS failure, consistent with prior runs). No truck cleared verification gate (a) live URL or (b) dealer+phone for an otherwise-unseen match. No push sent."
+    },
+    {
+      "id": "DTITrucks-18242743",
+      "source": "DTI Trucks, Denver/Wheat Ridge CO",
+      "date": "2026-10-31",
+      "verdict": "unverified",
+      "notes": "Re-checked. Still the same 2025 M2-106 ext cab w/ sleeper/bunk, ~31,422 mi, 26ft/102in/103in box, 2500lb Dhollandia liftgate, 26,000 GVWR non-CDL, $94,500 list per prior snippets. WebFetch to dtitrucks.com direct listing URL failed again this run (getaddrinfo ENOTFOUND www.dtitrucks.com - egress still blocked). A Mascus.es (EU aggregator) mirror of the same unit also surfaced again (78,802 EUR, ~50,569 km) - same truck, not distinct. No live URL opened, no fresh phone call made. Held per seed instruction. Not reported, not pushed.",
+      "listing_url": "https://www.dtitrucks.com/USED-Inventory-2025-Freightliner-Medium-Duty-Truck-M2-106-Extended-Cab-With-Sleeper-bunk-26-Box-Truck-For-Sale-Lease-Steele-St-18242743"
+    },
+    {
+      "id": "DTITrucks-KenworthT280-WheatRidge-69500-83909mi",
+      "source": "Comvoy.com / DTI Trucks, Wheat Ridge CO",
+      "date": "2026-10-31",
+      "verdict": "wrong_spec",
+      "notes": "SECONDARY-family lead (Kenworth T280, listed internally as a 2022 T270 26' box truck). $69,500, 83,909 mi, 26,000 lb GVWR (No CDL Required), 26ft box. Rejected: no sleeper or extended-cab mention anywhere in listing snippets, and general research confirms the T280/T270 is a straight-cab medium-duty chassis with no factory sleeper/extended-cab option - mileage, price, and GVWR all fit but the required berth does not exist on this model. https://www.comvoy.com/work-truck/wheat-ridge-co/used-2022-kenworth-t280-box-truck-19659299"
+    },
+    {
+      "id": "sweep-2026-10-31-no-new-verified",
+      "source": "WebSearch sweep (15 queries) + 1 WebFetch egress test",
+      "date": "2026-10-31",
+      "verdict": "unverified",
+      "notes": "Ran 15 WebSearch queries covering primary M2-106 spec variations, secondary MV607/Hino L6-L7/Kenworth T280 specs, site-specific searches on commercialtrucktrader.com/truckpaper.com/mhc.com/comvoy.com, Facebook Marketplace, and a Chattanooga/Knoxville/Nashville/Atlanta regional sweep. 1 WebFetch test (dtitrucks.com direct listing) failed with getaddrinfo ENOTFOUND - egress to direct dealer/aggregator sites still fully blocked, rest of sweep WebSearch-only per instructions. All hits mapped to previously tracked units with no material change (DTI 18242743/Mascus mirror - no fresh price/status; MHC non-sleeper inventory; Rush Truck Centers 22ft Morgan unit re-surfaced, already logged 2026-10-28 as wrong_spec for box length; Velocity/CTT new 2027 M2 106 Plus units) or were new leads rejected as wrong_spec (DTI/Comvoy Kenworth T280 Wheat Ridge - no sleeper option on this model despite good price/mileage/GVWR). No unit cleared verification gate (a) or (b) for a new PRIMARY or SECONDARY match. No push sent."
     }
   ]
 }
